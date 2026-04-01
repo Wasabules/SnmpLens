@@ -53,6 +53,11 @@
 </p>
 
 <p align="center">
+  <img src="screenshots/anonymous-mode.png" alt="Anonymous Mode" width="90%" />
+  <br /><em>Anonymous Mode — sensitive data hidden for safe screenshots</em>
+</p>
+
+<p align="center">
   <img src="screenshots/operations-light.png" alt="Light Theme" width="90%" />
   <br /><em>Light Theme</em>
 </p>
@@ -111,9 +116,19 @@
 - **Per-target Overrides** — custom SNMP version, community, port per device
 - **Connection Testing** — verify reachability before operations
 
+### Anonymous Mode
+
+- **One-click privacy** — hide all sensitive data for safe screenshots and demos
+- **Stable aliases** — IPs become `Device-1`, `Device-2`, etc. (consistent within a session)
+- **Comprehensive masking** — covers IP addresses, community strings, SNMPv3 credentials, hostnames, device descriptions, trap sources, debug logs
+- **Quick toggle** — `Ctrl+Shift+A` or checkbox in Settings > Privacy
+- **Visual indicator** — pulsing `ANON` badge in the tab bar when active
+- **Non-persistent** — automatically disabled on restart to prevent accidental data hiding
+
 ### UI / UX
 
 - **Dark / Light Theme** with system detection or manual toggle
+- **Anonymous Mode** — hide sensitive data (IPs, credentials) for screenshots (`Ctrl+Shift+A`)
 - **5 Languages** — English, French, German, Spanish, Chinese (auto-detected)
 - **Resizable Panels** — adjustable MIB browser width (persisted)
 - **Keyboard Shortcuts** — see table below
@@ -131,6 +146,7 @@
 | `Ctrl + 4`        | Monitor tab             |
 | `Ctrl + 5`        | Network / Discovery tab |
 | `Ctrl + ,`        | Open Settings           |
+| `Ctrl + Shift + A` | Toggle Anonymous Mode  |
 | `F5`              | Reload MIB files        |
 | `Esc`             | Close modal             |
 
