@@ -73,7 +73,11 @@
         <span>Community</span>
       </label>
       {#if enabled.community}
-        <input type={$anonMode ? 'password' : 'text'} bind:value={local.community} placeholder={$anonMode ? maskString(globalSettings.community) : globalSettings.community} />
+        {#if $anonMode}
+          <input type="password" bind:value={local.community} placeholder={maskString(globalSettings.community)} />
+        {:else}
+          <input type="text" bind:value={local.community} placeholder={globalSettings.community} />
+        {/if}
       {:else}
         <span class="default-value">{$anonMode ? maskString(globalSettings.community) : globalSettings.community}</span>
       {/if}

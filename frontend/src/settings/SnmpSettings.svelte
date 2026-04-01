@@ -46,7 +46,11 @@
   <div class="settings-grid single-column">
     <div class="form-group">
       <label for="community">{$_('settings.snmp.community')}</label>
-      <input id="community" type={$anonMode ? 'password' : 'text'} bind:value={settings.community} />
+      {#if $anonMode}
+        <input id="community" type="password" bind:value={settings.community} />
+      {:else}
+        <input id="community" type="text" bind:value={settings.community} />
+      {/if}
     </div>
   </div>
 </fieldset>
@@ -56,7 +60,11 @@
   <div class="settings-grid">
     <div class="form-group">
       <label for="v3-user">{$_('settings.snmp.username')}</label>
-      <input id="v3-user" type={$anonMode ? 'password' : 'text'} bind:value={settings.v3.user} />
+      {#if $anonMode}
+        <input id="v3-user" type="password" bind:value={settings.v3.user} />
+      {:else}
+        <input id="v3-user" type="text" bind:value={settings.v3.user} />
+      {/if}
     </div>
     <div class="form-group">
       <label for="v3-secLevel">{$_('settings.snmp.securityLevel')}</label>
