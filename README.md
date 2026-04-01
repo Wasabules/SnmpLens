@@ -70,9 +70,13 @@
 
 - **GET / SET / GETNEXT / GETBULK / WALK** with concurrent multi-target execution
 - **Smart Table View** — auto-detects SNMP tables and renders structured columns with sorting and CSV export
+- **Smart Value Formatting** — TimeTicks displayed as human-readable duration (e.g. `127d 3h 46m`), large numbers with thousand separators
+- **Result Filtering** — regex-capable filter bar on WALK/GETBULK results to search across OIDs, names, types, and values
+- **One-click Copy** — copy any OID, value, or target to clipboard with a single click
 - **Device Comparison** — side-by-side multi-target comparison with delta and percentage differences
-- **SNMPv3 Full Support** — authentication (MD5, SHA, SHA-256, SHA-512) and privacy (DES, AES)
-- **SNMP Debug** — live packet inspection for troubleshooting
+- **Double-click GET** — double-click any MIB tree node to instantly perform a GET operation
+- **SNMPv3 Full Support** — authentication (MD5, SHA, SHA-256, SHA-512) and privacy (DES, AES, AES-256)
+- **SNMP Debug** — live packet inspection with auto-refresh
 
 ### MIB Browser
 
@@ -88,7 +92,7 @@
 
 - **Real-time OID Polling** with interactive Chart.js graphs
 - **Multiple View Modes** — raw values, delta, rate (per-second), and latency
-- **Threshold Alerts** — configurable min/max with desktop notifications and sound
+- **Threshold Alerts** — configurable min/max with native OS notifications (Windows toast, macOS, Linux)
 - **Session Management** — create, pause, resume, and delete monitoring sessions
 - **Historical Data** — SQLite storage for long-term trending with time-range queries
 
@@ -96,6 +100,7 @@
 
 - **Trap Listener** — receive SNMPv1/v2c/v3 traps on configurable port
 - **Trap Sender** — send custom traps for testing
+- **Native OS Notifications** — Windows toast / macOS / Linux notifications with MIB-resolved trap names
 - **Filtering & Export** — filter received traps and export to CSV
 
 ### Network Tools
@@ -130,6 +135,7 @@
 
 - **Dark / Light Theme** with system detection or manual toggle
 - **Anonymous Mode** — hide sensitive data (IPs, credentials) for screenshots (`Ctrl+Shift+A`)
+- **Native Desktop Notifications** — configurable per feature (traps, monitoring alerts)
 - **5 Languages** — English, French, German, Spanish, Chinese (auto-detected)
 - **Resizable Panels** — adjustable MIB browser width (persisted)
 - **Keyboard Shortcuts** — see table below
@@ -253,6 +259,37 @@ MIB files and the monitoring database are stored in the user config directory:
 | Windows | `%APPDATA%\SnmpLens\`             |
 | macOS   | `~/.config/SnmpLens/`             |
 | Linux   | `~/.config/SnmpLens/`             |
+
+---
+
+## Test Agent
+
+A built-in Python SNMP agent simulator is provided in `tools/snmp_test_agent.py` for testing without real network equipment. It requires no external dependencies beyond `pycryptodome` (for SNMPv3 AES).
+
+```bash
+pip install pycryptodome
+python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10
+```
+
+### Features
+
+- Pure Python — no pysnmp dependency, works on Python 3.10+
+- SNMPv1, v2c, and full v3 support (discovery, authentication, encryption)
+- 5 simulated interfaces with dynamic traffic counters
+- Realistic OIDs: system, ifTable, ifXTable, IP, SNMP stats, hrSystem, hrStorage
+- Periodic trap sending (v2c and v3) with linkDown, linkUp, coldStart, customAlert
+- Recursive folder import support
+
+### Credentials
+
+| Version | User | Auth | Priv |
+| ------- | ---- | ---- | ---- |
+| v1/v2c | — | community `public` | — |
+| v3 | `snmplens` | SHA / `authpass123` | AES-128 / `privpass123` |
+| v3 | `sha256user` | SHA-256 / `authpass123` | AES-128 / `privpass123` |
+| v3 | `sha512user` | SHA-512 / `authpass123` | AES-256 / `privpass123` |
+| v3 | `authonly` | SHA / `authpass123` | — |
+| v3 | `noauthuser` | — | — |
 
 ---
 

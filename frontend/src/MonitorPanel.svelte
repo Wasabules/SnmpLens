@@ -11,6 +11,7 @@
   import { getTargetsAsArray } from './utils/targets';
   import { formatTimeShort } from './utils/formatting';
   import { anonMode, anonymizeIp } from './utils/anonymize';
+  import { copyToClipboard } from './utils/clipboard';
 
   Chart.register(...registerables);
 
@@ -390,9 +391,6 @@
               checked={$settingsStore.monitor?.systemNotifications}
               on:change={(e) => {
                 const enabled = e.target.checked;
-                if (enabled && 'Notification' in window && Notification.permission === 'default') {
-                  Notification.requestPermission();
-                }
                 settingsStore.save({
                   ...$settingsStore,
                   monitor: { ...$settingsStore.monitor, systemNotifications: enabled }
@@ -429,6 +427,7 @@
           <div class="session-header">
             <div class="session-info">
               <span class="session-oid">{session.oid}</span>
+              <button class="btn-copy-small" on:click|stopPropagation={() => copyToClipboard(session.oid, 'OID')} title="Copy OID">📋</button>
               <span class="session-status" class:running={session.running}>
                 {session.running ? $_('monitor.running') : $_('monitor.stopped')}
               </span>
@@ -526,7 +525,12 @@
                     <tr class:error-row={point.error}>
                       <td class="mono">{formatTimeShort(point.timestamp)}</td>
                       <td>{$anonMode ? anonymizeIp(point.target) : point.target}</td>
-                      <td class="mono">{point.value !== null ? point.value : '-'}</td>
+                      <td class="mono">
+                        {point.value !== null ? point.value : '-'}
+                        {#if point.value !== null}
+                          <button class="btn-copy-small" on:click={() => copyToClipboard(String(point.value), $_('monitor.tableValue'))} title={$_('monitor.tableValue')}>📋</button>
+                        {/if}
+                      </td>
                       <td class="mono">{point.delta !== null ? point.delta : '-'}</td>
                       <td class="mono">{point.rate !== null ? point.rate.toFixed(2) : '-'}</td>
                       <td class="mono">{point.responseTimeMs}</td>
@@ -556,7 +560,12 @@
                     <tr class:error-row={point.error}>
                       <td class="mono">{formatTimeShort(point.timestamp)}</td>
                       <td>{$anonMode ? anonymizeIp(point.target) : point.target}</td>
-                      <td class="mono">{point.value !== null ? point.value : '-'}</td>
+                      <td class="mono">
+                        {point.value !== null ? point.value : '-'}
+                        {#if point.value !== null}
+                          <button class="btn-copy-small" on:click={() => copyToClipboard(String(point.value), $_('monitor.tableValue'))} title={$_('monitor.tableValue')}>📋</button>
+                        {/if}
+                      </td>
                       <td class="mono">{point.delta !== null ? point.delta : '-'}</td>
                       <td class="mono">{point.rate !== null ? point.rate.toFixed(2) : '-'}</td>
                       <td class="mono">{point.responseTimeMs}</td>

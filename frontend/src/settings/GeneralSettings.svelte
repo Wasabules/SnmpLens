@@ -67,6 +67,14 @@
       <input type="checkbox" bind:checked={settings.traps.persist} />
       {$_('settings.general.trapPersist')}
     </label>
+    <label class="toggle-row">
+      <input type="checkbox" bind:checked={settings.traps.nativeNotifications} />
+      {$_('settings.general.nativeNotifications')}
+    </label>
+    <label class="toggle-row">
+      <input type="checkbox" bind:checked={settings.monitor.systemNotifications} />
+      {$_('settings.general.monitorNotifications')}
+    </label>
     <div class="cleanup-row">
       <button class="btn btn-small" on:click={handleCleanup} disabled={cleaningUp}>
         {cleaningUp ? '...' : $_('settings.general.cleanupNow')}

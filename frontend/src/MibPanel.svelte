@@ -149,6 +149,15 @@
     contextMenu.visible = true;
   }
 
+  function handleDblClickNode(event) {
+    const { node } = event.detail;
+    dispatch('snmpAction', {
+      type: 'GET',
+      oid: node.oid,
+      name: node.name
+    });
+  }
+
   function closeContextMenu() {
     contextMenu.visible = false;
     contextMenu.node = null;
@@ -664,6 +673,7 @@
         {searchTerm}
         bind:selectedNode
         on:contextmenu={handleContextMenu}
+        on:dblclicknode={handleDblClickNode}
         on:showtooltip={handleShowTooltip}
         on:hidetooltip={handleHideTooltip}
       />

@@ -4,6 +4,7 @@ import { SnmpGet, MonitorCreateSession, MonitorSaveDataPoints, MonitorLoadSessio
 import { settingsStore } from './settingsStore';
 import { notificationStore } from './notifications';
 import { buildSnmpRequest } from '../utils/snmpParams';
+import { sendNativeNotification } from '../utils/nativeNotify';
 
 const MAX_DATA_POINTS = 500;
 const ALERT_COOLDOWN_MS = 30000;
@@ -26,12 +27,11 @@ function playAlertSound() {
   } catch (e) { /* ignore */ }
 }
 
-// Send browser desktop notification
+// Send native OS notification for threshold alerts
 function sendDesktopNotification(title, body) {
   const settings = get(settingsStore);
   if (!settings.monitor?.systemNotifications) return;
-  if (!('Notification' in window) || Notification.permission !== 'granted') return;
-  new Notification(title, { body });
+  sendNativeNotification(title, body);
   if (settings.monitor?.alertSound) playAlertSound();
 }
 

@@ -8,6 +8,7 @@
   import { findNodeByOid, findMibNameByOid, formatValueWithEnum } from './utils/mibTree';
   import { formatTimestamp, formatDuration } from './utils/formatting';
   import { anonMode, anonymizeIp } from './utils/anonymize';
+  import { copyToClipboard } from './utils/clipboard';
 
   let searchTerm = '';
   let operationFilter = 'all'; // 'all', 'GET', 'SET', 'WALK'
@@ -262,6 +263,7 @@
             <span class="operation-type">{entry.operation}</span>
             <span class="timestamp">{formatTimestamp(entry.timestamp)}</span>
             <span class="mib-name" title={entry.oid}>{getDisplayName(entry.oid)}</span>
+            <button class="btn-copy-small" on:click|stopPropagation={() => copyToClipboard(entry.oid, $_('common.oid'))} title={$_('common.oid')}>📋</button>
             {#if getDisplayValue(entry)}
               <span class="value-display" title={getDisplayValue(entry)}>→ {getDisplayValue(entry)}</span>
             {/if}
@@ -286,6 +288,7 @@
               </div>
               <div class="detail-row">
                 <strong>{$_('nodeDetails.oid')}</strong> <code>{entry.oid}</code>
+                <button class="btn-copy-small" on:click={() => copyToClipboard(entry.oid, $_('common.oid'))} title={$_('common.oid')}>📋</button>
               </div>
               <div class="detail-row">
                 <strong>{$_('history.targets')}:</strong> <code>{$anonMode ? entry.targets?.map(t => anonymizeIp(t)).join(', ') : entry.targets?.join(', ')}</code>
@@ -297,6 +300,7 @@
               {#if entry.operation === 'SET'}
                 <div class="detail-row">
                   <strong>{$_('common.value')}:</strong> <code>{entry.value}</code>
+                  <button class="btn-copy-small" on:click={() => copyToClipboard(String(entry.value), $_('common.value'))} title={$_('common.value')}>📋</button>
                 </div>
                 <div class="detail-row">
                   <strong>{$_('common.type')}:</strong> <span>{entry.valueType}</span>
@@ -326,7 +330,10 @@
                       {:else if result.result?.type === 'WalkResponse'}
                         <div>{result.result.value?.length || 0} items</div>
                       {:else if result.result}
-                        <div>{result.result.type}: {JSON.stringify(result.result.value)}</div>
+                        <div>
+                          {result.result.type}: {JSON.stringify(result.result.value)}
+                          <button class="btn-copy-small" on:click={() => copyToClipboard(JSON.stringify(result.result.value), $_('common.value'))} title={$_('common.value')}>📋</button>
+                        </div>
                       {/if}
                     </div>
                   {/each}
@@ -456,7 +463,7 @@
 
   .entry-header {
     display: grid;
-    grid-template-columns: 20px 30px 60px 140px minmax(150px, 1fr) minmax(100px, 200px) 80px 80px 30px 30px;
+    grid-template-columns: 20px 30px 60px 140px minmax(150px, 1fr) auto minmax(100px, 200px) 80px 80px 30px 30px;
     align-items: center;
     gap: 10px;
     padding: 12px;

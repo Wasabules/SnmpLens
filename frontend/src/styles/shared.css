@@ -127,3 +127,20 @@
 .mono {
   font-family: 'Courier New', monospace;
 }
+
+/* Copy button */
+.btn-copy-small {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.8em;
+  opacity: 0.4;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: opacity 0.15s;
+}
+
+.btn-copy-small:hover {
+  opacity: 1;
+  background-color: var(--hover-overlay);
+}

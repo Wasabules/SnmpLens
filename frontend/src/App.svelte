@@ -3,6 +3,7 @@
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
   import { notificationStore } from './stores/notifications';
+  import { initNotifications } from './utils/nativeNotify';
   import MibPanel from './MibPanel.svelte';
   import OperationsPanel from './OperationsPanel.svelte';
   import TrapPanel from './TrapPanel.svelte';
@@ -214,6 +215,9 @@
   onMount(async () => {
     // Load saved panel width
     loadPanelWidth();
+
+    // Initialize native OS notifications
+    initNotifications();
 
     // Register Wails file drop handler
     OnFileDrop(handleFileDrop, true);

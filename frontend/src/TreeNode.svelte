@@ -40,6 +40,12 @@
     dispatch('contextmenu', { node, x: event.clientX, y: event.clientY });
   }
 
+  function handleDblClick(event) {
+    event.stopPropagation();
+    // Only trigger GET on leaf nodes (no children = scalar OID)
+    dispatch('dblclicknode', { node });
+  }
+
   // Tooltip handlers - dispatch events to parent
   function handleMouseEnter(event) {
     event.stopPropagation(); // Prevent bubbling to parent nodes
@@ -151,6 +157,7 @@
     role="button"
     tabindex="0"
     on:click={toggle}
+    on:dblclick={handleDblClick}
     on:keydown={(e) => e.key === 'Enter' && toggle()}
     class="node-label"
   >
@@ -192,13 +199,13 @@
         <!-- In compact mode, show children of the END node (skip intermediate single-child nodes) -->
         {#if endNode.children}
           {#each endNode.children as child}
-            <svelte:self node={child} {onNodeClick} {compactMode} {searchTerm} bind:selectedNode on:contextmenu on:showtooltip on:hidetooltip />
+            <svelte:self node={child} {onNodeClick} {compactMode} {searchTerm} bind:selectedNode on:contextmenu on:dblclicknode on:showtooltip on:hidetooltip />
           {/each}
         {/if}
       {:else}
         <!-- Normal mode: show direct children -->
         {#each node.children as child}
-          <svelte:self node={child} {onNodeClick} {compactMode} {searchTerm} bind:selectedNode on:contextmenu on:showtooltip on:hidetooltip />
+          <svelte:self node={child} {onNodeClick} {compactMode} {searchTerm} bind:selectedNode on:contextmenu on:dblclicknode on:showtooltip on:hidetooltip />
         {/each}
       {/if}
     </div>

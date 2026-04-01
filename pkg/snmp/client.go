@@ -237,6 +237,11 @@ func formatSnmpValue(variable gosnmp.SnmpPDU) interface{} {
 	switch variable.Type {
 	case gosnmp.OctetString:
 		return string(variable.Value.([]byte))
+	case gosnmp.ObjectIdentifier:
+		// OID values are strings (e.g. ".1.3.6.1.6.3.1.1.5.3") — return as-is
+		return fmt.Sprintf("%v", variable.Value)
+	case gosnmp.IPAddress:
+		return fmt.Sprintf("%v", variable.Value)
 	case gosnmp.NoSuchObject:
 		return "noSuchObject"
 	case gosnmp.NoSuchInstance:

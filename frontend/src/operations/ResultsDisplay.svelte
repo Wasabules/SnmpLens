@@ -33,6 +33,30 @@
   let compareEnabled = false;
   let compareSortKey = 'oid'; // 'oid', 'delta', 'percent'
   let compareSortAsc = true;
+  let walkFilter = '';
+
+  // Reset filter when results change
+  $: if (bulkResults) walkFilter = '';
+
+  /**
+   * Filter WALK items by text or regex against OID, name, type, and value.
+   */
+  function filterWalkItems(items) {
+    if (!walkFilter.trim()) return items;
+    const query = walkFilter.trim();
+    let test;
+    try {
+      const re = new RegExp(query, 'i');
+      test = (str) => re.test(str);
+    } catch {
+      const lower = query.toLowerCase();
+      test = (str) => str.toLowerCase().includes(lower);
+    }
+    return items.filter(item => {
+      const name = oidInfoCache[item.oid]?.name || '';
+      return test(item.oid) || test(name) || test(item.type) || test(String(item.value));
+    });
+  }
 
   // Reactive: reset table view when operation changes away from WALK/GETBULK
   $: if (activeOperation !== 'WALK' && activeOperation !== 'GETBULK') {
@@ -47,8 +71,8 @@
   $: canCompare = uniqueTargets.length >= 2;
 
   // Wrapper: resolves oidInfoCache entry then delegates to shared util
-  function formatValueWithEnum(value, oid) {
-    return _formatValueWithEnum(value, oidInfoCache[oid]);
+  function formatValueWithEnum(value, oid, snmpType) {
+    return _formatValueWithEnum(value, oidInfoCache[oid], snmpType);
   }
 
   // Build comparison data from multi-target WALK/GETBULK results (legacy)
@@ -627,7 +651,7 @@
                           on:click={() => row.cells[col.oid] && dispatch('walkResultClick', {oid: row.cells[col.oid].fullOid, value: row.cells[col.oid].value, type: row.cells[col.oid].type})}
                           on:keydown={(e) => e.key === 'Enter' && row.cells[col.oid] && dispatch('walkResultClick', {oid: row.cells[col.oid].fullOid, value: row.cells[col.oid].value, type: row.cells[col.oid].type})}
                         >
-                          {row.cells[col.oid]?.value !== undefined ? formatValueWithEnum(row.cells[col.oid].value, row.cells[col.oid].fullOid || '') : '-'}
+                          {row.cells[col.oid]?.value !== undefined ? formatValueWithEnum(row.cells[col.oid].value, row.cells[col.oid].fullOid || '', row.cells[col.oid].type) : '-'}
                         </td>
                       {/each}
                     </tr>
@@ -638,6 +662,19 @@
             <p class="table-info">{$_('results.tableInfo', { values: { rows: tableData.rows.length, cols: tableData.columns.length } })}</p>
           {:else}
             <!-- Raw WALK results table -->
+            {@const filtered = filterWalkItems(res.result.value)}
+            <div class="walk-filter-bar">
+              <input
+                type="text"
+                class="walk-filter-input"
+                bind:value={walkFilter}
+                placeholder={$_('results.filterPlaceholder')}
+              />
+              {#if walkFilter.trim()}
+                <span class="walk-filter-count">{filtered.length} / {res.result.value.length}</span>
+                <button class="btn-copy-small" on:click={() => walkFilter = ''} title={$_('common.clear')}>&times;</button>
+              {/if}
+            </div>
             <div class="walk-results">
               <table>
                 <thead>
@@ -649,7 +686,7 @@
                   </tr>
                 </thead>
                 <tbody>
-                  {#each res.result.value as walkItem}
+                  {#each filtered as walkItem}
                     <tr
                       class="walk-result-row clickable"
                       on:click={() => dispatch('walkResultClick', walkItem)}
@@ -665,7 +702,7 @@
                         {walkItem.oid}
                       </td>
                       <td>{walkItem.type}</td>
-                      <td class="value-cell" title={JSON.stringify(walkItem.value)}>{formatValueWithEnum(walkItem.value, walkItem.oid)}</td>
+                      <td class="value-cell" title={JSON.stringify(walkItem.value)}>{formatValueWithEnum(walkItem.value, walkItem.oid, walkItem.type)}</td>
                       <td class="copy-cell">
                         <button
                           class="btn-copy-small"
@@ -693,7 +730,7 @@
           </p>
           <p class="result-line">
             <strong>{$_('common.value')}:</strong>
-            <span class="result-value">{formatValueWithEnum(res.result.value, res.result.oid)}</span>
+            <span class="result-value">{formatValueWithEnum(res.result.value, res.result.oid, res.result.type)}</span>
             <button class="btn-copy-small" on:click={() => copyToClipboard(String(res.result.value), $_('common.value'))} title={$_('common.copyValue')}>📋</button>
           </p>
         {/if}
@@ -731,8 +768,38 @@
     color: var(--error-color);
   }
 
-  .walk-results {
+  .walk-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     margin-top: 10px;
+    margin-bottom: 6px;
+  }
+
+  .walk-filter-input {
+    flex: 1;
+    max-width: 350px;
+    padding: 5px 10px;
+    font-size: 0.85em;
+    background-color: var(--bg-lighter-color);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-color);
+  }
+
+  .walk-filter-input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+  }
+
+  .walk-filter-count {
+    font-size: 0.8em;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  .walk-results {
+    margin-top: 0;
     max-height: 400px;
     overflow-y: auto;
     border: 1px solid var(--border-color);

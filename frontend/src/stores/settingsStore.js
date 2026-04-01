@@ -22,6 +22,7 @@ const defaults = {
   traps: {
     persist: false,
     maxCount: 1000,
+    nativeNotifications: true,
   },
   polling: {
     retentionDays: 30,
@@ -44,7 +45,7 @@ const defaults = {
 
 // Load synchronously with defaults, then decrypt async
 const raw = JSON.parse(localStorage.getItem('settings') || 'null');
-const initialSettings = raw ? { ...defaults, ...raw, v3: { ...defaults.v3, ...(raw.v3 || {}) }, monitor: { ...defaults.monitor, ...(raw.monitor || {}) } } : defaults;
+const initialSettings = raw ? { ...defaults, ...raw, v3: { ...defaults.v3, ...(raw.v3 || {}) }, monitor: { ...defaults.monitor, ...(raw.monitor || {}) }, traps: { ...defaults.traps, ...(raw.traps || {}) } } : defaults;
 // Anonymous mode is always off on startup (intentionally non-persistent)
 initialSettings.anonymousMode = false;
 

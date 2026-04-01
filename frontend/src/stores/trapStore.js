@@ -1,24 +1,14 @@
 import { writable, get } from 'svelte/store';
 import { _ } from 'svelte-i18n';
-import { StartTrapListener, StopTrapListener } from '../../wailsjs/go/main/App';
+import { StartTrapListener, StopTrapListener, GetOidDetails } from '../../wailsjs/go/main/App';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
 import { notificationStore } from './notifications';
 import { settingsStore } from './settingsStore';
 import { buildTrapListenerRequest } from '../utils/snmpParams';
+import { sendNativeNotification } from '../utils/nativeNotify';
 
 const STORAGE_KEY = 'trapHistory';
 const MAX_TRAPS_DEFAULT = 1000;
-
-// Helper function to request notification permission
-async function requestNotificationPermission() {
-  if (!('Notification' in window)) {
-    notificationStore.add('This browser does not support desktop notification', 'error');
-    return;
-  }
-  if (Notification.permission === 'default') {
-    await Notification.requestPermission();
-  }
-}
 
 function loadPersistedTraps() {
   const settings = get(settingsStore);
@@ -55,7 +45,6 @@ function createTrapStore() {
   });
 
   async function start() {
-    await requestNotificationPermission();
     const currentSettings = get(settingsStore);
 
     try {
@@ -101,13 +90,31 @@ function createTrapStore() {
       notificationStore.add(t('traps.newTrapReceived', { values: { type: trap.pduType || 'Trap', source: trap.source } }), 'info');
     }
 
-    // Show DESKTOP notification if window is not focused
-    if (!storeState.isWindowFocused && Notification.permission === 'granted') {
-      const trapOidVar = trap.variables.find(v => v.oid === 'snmpTrapOID.0');
-      const body = trapOidVar ? `OID: ${trapOidVar.value}` : 'Check application for details.';
-      new Notification(`SNMP ${trap.pduType || 'Trap'} from ${trap.source}`, {
-        body: body,
-      });
+    // Send native OS notification (Windows toast / macOS / Linux)
+    const settings = get(settingsStore);
+    if (settings.traps?.nativeNotifications && !storeState.isWindowFocused) {
+      (async () => {
+        const trapOidVar = trap.variables?.find(v =>
+          v.oid === 'snmpTrapOID.0' ||
+          v.oid === '.1.3.6.1.6.3.1.1.4.1.0' ||
+          v.oid === '1.3.6.1.6.3.1.1.4.1.0' ||
+          (v.oid && v.oid.endsWith('.1.6.3.1.1.4.1.0'))
+        );
+        let body = '';
+        if (trapOidVar) {
+          const oidValue = String(trapOidVar.value).replace(/^\./, '');
+          try {
+            const details = await GetOidDetails(oidValue);
+            body = details.name ? `${details.name} (${oidValue})` : oidValue;
+          } catch {
+            body = oidValue;
+          }
+        }
+        sendNativeNotification(
+          `SNMP ${trap.pduType || 'Trap'} from ${trap.source}`,
+          body || 'Check application for details.'
+        );
+      })();
     }
 
     const enrichedTrap = {

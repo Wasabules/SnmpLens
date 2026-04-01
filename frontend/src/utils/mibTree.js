@@ -1,3 +1,5 @@
+import { formatBySnmpType as _formatBySnmpType } from './formatting';
+
 /**
  * Recursively find a MIB node by OID in the tree.
  * Strips trailing .0 for scalar comparison.
@@ -36,12 +38,14 @@ export function findMibNameByOid(oid, nodes) {
 }
 
 /**
- * Format a value using enum decoding from an OID info object.
+ * Format a value using enum decoding and smart type-based formatting.
  * @param {*} value
  * @param {{ enumValues?: Record<string, number> }|null} info - node or oidInfoCache entry
+ * @param {string} [snmpType] - optional SNMP type (e.g. "TimeTicks", "Counter32")
  * @returns {string}
  */
-export function formatValueWithEnum(value, info) {
+export function formatValueWithEnum(value, info, snmpType) {
+  // Enum decoding takes priority
   if (info && info.enumValues) {
     const numValue = Number(value);
     if (!isNaN(numValue)) {
@@ -50,6 +54,13 @@ export function formatValueWithEnum(value, info) {
       }
     }
   }
+
+  // Smart type-based formatting
+  if (snmpType) {
+    const formatted = _formatBySnmpType(value, snmpType);
+    if (formatted !== null) return formatted;
+  }
+
   return typeof value === 'string' ? value : JSON.stringify(value);
 }
 
