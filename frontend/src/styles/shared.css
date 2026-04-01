@@ -1,0 +1,129 @@
+/* ============================================
+   Shared CSS — imported globally via main.js
+   ============================================ */
+
+/* --- Buttons --- */
+
+.btn {
+  border: none;
+  border-radius: 4px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.btn:hover {
+  background-color: var(--accent-hover-color);
+}
+
+.btn:disabled {
+  background-color: var(--bg-disabled);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.btn-primary {
+  flex-shrink: 0;
+}
+
+.btn-danger {
+  background-color: var(--error-dark);
+}
+
+.btn-danger:hover {
+  background-color: var(--error-hover);
+}
+
+.btn.secondary {
+  background-color: var(--bg-disabled);
+  color: var(--text-color);
+}
+
+.btn.secondary:hover {
+  background-color: var(--bg-disabled-hover);
+}
+
+.btn.tertiary {
+  background-color: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-color);
+}
+
+.btn.tertiary:hover {
+  background-color: var(--bg-lighter-color);
+  border-color: var(--border-hover);
+}
+
+.btn.danger {
+  background-color: var(--error-color);
+}
+
+.btn.danger:hover {
+  background-color: var(--error-dark);
+}
+
+.btn-small {
+  padding: 4px 10px;
+  font-size: 0.85em;
+}
+
+.btn-export {
+  padding: 4px 10px;
+  font-size: 0.85em;
+}
+
+/* --- Panel --- */
+
+.panel {
+  background-color: var(--bg-light-color);
+  border-radius: 8px;
+  padding: 15px;
+  border: 1px solid var(--border-color);
+}
+
+/* --- Form --- */
+
+.form-group {
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+}
+
+.form-group label {
+  margin-right: 10px;
+  min-width: 80px;
+  font-weight: 500;
+}
+
+.form-group input,
+.form-group select {
+  flex-grow: 1;
+  padding: 8px 10px;
+  background-color: var(--bg-lighter-color);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-color);
+  font-family: inherit;
+}
+
+.form-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+/* --- Focus --- */
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* --- Mono --- */
+
+.mono {
+  font-family: 'Courier New', monospace;
+}

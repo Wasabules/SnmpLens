@@ -1,0 +1,200 @@
+/* ============================================
+   Design Tokens & CSS Reset
+   Loaded first via main.js — before Svelte components
+   ============================================ */
+
+:root {
+  /* --- Font --- */
+  --font-family: "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+
+  /* --- Background --- */
+  --bg-color: #1e1e1e;
+  --bg-light-color: #2a2a2a;
+  --bg-lighter-color: #333;
+  --bg-disabled: #555;
+  --bg-disabled-hover: #666;
+
+  /* --- Border --- */
+  --border-color: #444;
+  --border-hover: #777;
+
+  /* --- Text --- */
+  --text-color: #e0e0e0;
+  --text-light: #ccc;
+  --text-muted: #888;
+  --text-dimmed: #aaa;
+
+  /* --- Overlay (theme-sensitive: white in dark, black in light) --- */
+  --hover-overlay: rgba(255, 255, 255, 0.05);
+  --hover-overlay-medium: rgba(255, 255, 255, 0.1);
+  --hover-overlay-strong: rgba(255, 255, 255, 0.15);
+  --text-on-dark: rgba(255, 255, 255, 0.7);
+  --text-on-dark-dim: rgba(255, 255, 255, 0.5);
+  --backdrop-color: rgba(0, 0, 0, 0.6);
+  --backdrop-color-strong: rgba(0, 0, 0, 0.7);
+  --shadow-color: rgba(0, 0, 0, 0.2);
+  --shadow-color-strong: rgba(0, 0, 0, 0.3);
+  --shadow-color-intense: rgba(0, 0, 0, 0.4);
+
+  /* --- Accent --- */
+  --accent-color: #007acc;
+  --accent-hover-color: #0098ff;
+  --accent-subtle: rgba(0, 122, 204, 0.06);
+  --accent-subtle-medium: rgba(0, 122, 204, 0.1);
+  --accent-subtle-strong: rgba(0, 122, 204, 0.15);
+  --accent-subtle-intense: rgba(0, 122, 204, 0.25);
+  --accent-border: rgba(0, 122, 204, 0.3);
+  --accent-border-strong: rgba(0, 122, 204, 0.4);
+
+  /* --- Semantic --- */
+  --success-color: #4caf50;
+  --success-subtle: rgba(76, 175, 80, 0.08);
+  --success-subtle-medium: rgba(76, 175, 80, 0.15);
+  --success-subtle-strong: rgba(76, 175, 80, 0.2);
+  --success-border: rgba(76, 175, 80, 0.3);
+  --success-border-strong: rgba(76, 175, 80, 0.4);
+  --error-color: #f44336;
+  --error-dark: #c62828;
+  --error-dark-subtle: rgba(198, 40, 40, 0.2);
+  --error-hover: #e53935;
+  --error-subtle: rgba(244, 67, 54, 0.08);
+  --error-subtle-medium: rgba(244, 67, 54, 0.1);
+  --error-subtle-strong: rgba(244, 67, 54, 0.2);
+  --error-border: rgba(244, 67, 54, 0.3);
+  --error-border-strong: rgba(244, 67, 54, 0.4);
+  --warning-color: #ff9800;
+  --warning-subtle: rgba(255, 152, 0, 0.1);
+  --warning-border: rgba(255, 152, 0, 0.3);
+
+  /* --- Data / Syntax --- */
+  --oid-color: #61afef;
+  --oid-subtle: rgba(97, 175, 239, 0.1);
+  --name-color: #e5c07b;
+  --favorites-color: #ffd700;
+  --favorites-subtle: rgba(255, 215, 0, 0.1);
+  --favorites-subtle-strong: rgba(255, 215, 0, 0.2);
+  --favorites-border: rgba(255, 215, 0, 0.3);
+  --favorites-border-strong: rgba(255, 215, 0, 0.4);
+
+  /* --- Spacing (base 4px) --- */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+
+  /* --- Typography --- */
+  --text-xs: 0.75rem;
+  --text-sm: 0.85rem;
+  --text-base: 1rem;
+  --text-lg: 1.15rem;
+  --text-xl: 1.3rem;
+
+  /* --- Border Radius --- */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-full: 9999px;
+
+  /* --- Focus --- */
+  --focus-ring: 0 0 0 2px var(--accent-color);
+}
+
+/* ============================================
+   Light Theme
+   ============================================ */
+
+[data-theme="light"] {
+  /* --- Background --- */
+  --bg-color: #ffffff;
+  --bg-light-color: #f5f5f5;
+  --bg-lighter-color: #e8e8e8;
+  --bg-disabled: #bdbdbd;
+  --bg-disabled-hover: #a0a0a0;
+
+  /* --- Border --- */
+  --border-color: #d0d0d0;
+  --border-hover: #999;
+
+  /* --- Text --- */
+  --text-color: #1a1a1a;
+  --text-light: #333;
+  --text-muted: #666;
+  --text-dimmed: #555;
+
+  /* --- Overlay --- */
+  --hover-overlay: rgba(0, 0, 0, 0.04);
+  --hover-overlay-medium: rgba(0, 0, 0, 0.07);
+  --hover-overlay-strong: rgba(0, 0, 0, 0.1);
+  --text-on-dark: rgba(255, 255, 255, 0.9);
+  --text-on-dark-dim: rgba(255, 255, 255, 0.7);
+  --backdrop-color: rgba(0, 0, 0, 0.4);
+  --backdrop-color-strong: rgba(0, 0, 0, 0.55);
+  --shadow-color: rgba(0, 0, 0, 0.08);
+  --shadow-color-strong: rgba(0, 0, 0, 0.15);
+  --shadow-color-intense: rgba(0, 0, 0, 0.25);
+
+  /* --- Accent --- */
+  --accent-color: #0969da;
+  --accent-hover-color: #0550ae;
+  --accent-subtle: rgba(9, 105, 218, 0.06);
+  --accent-subtle-medium: rgba(9, 105, 218, 0.1);
+  --accent-subtle-strong: rgba(9, 105, 218, 0.15);
+  --accent-subtle-intense: rgba(9, 105, 218, 0.25);
+  --accent-border: rgba(9, 105, 218, 0.3);
+  --accent-border-strong: rgba(9, 105, 218, 0.4);
+
+  /* --- Semantic --- */
+  --success-color: #2e7d32;
+  --success-subtle: rgba(46, 125, 50, 0.08);
+  --success-subtle-medium: rgba(46, 125, 50, 0.12);
+  --success-subtle-strong: rgba(46, 125, 50, 0.18);
+  --success-border: rgba(46, 125, 50, 0.3);
+  --success-border-strong: rgba(46, 125, 50, 0.4);
+  --error-color: #d32f2f;
+  --error-dark: #b71c1c;
+  --error-dark-subtle: rgba(183, 28, 28, 0.15);
+  --error-hover: #e53935;
+  --error-subtle: rgba(211, 47, 47, 0.06);
+  --error-subtle-medium: rgba(211, 47, 47, 0.1);
+  --error-subtle-strong: rgba(211, 47, 47, 0.18);
+  --error-border: rgba(211, 47, 47, 0.3);
+  --error-border-strong: rgba(211, 47, 47, 0.4);
+  --warning-color: #e65100;
+  --warning-subtle: rgba(230, 81, 0, 0.08);
+  --warning-border: rgba(230, 81, 0, 0.3);
+
+  /* --- Data / Syntax --- */
+  --oid-color: #0550ae;
+  --oid-subtle: rgba(5, 80, 174, 0.08);
+  --name-color: #7c4d00;
+  --favorites-color: #b8860b;
+  --favorites-subtle: rgba(184, 134, 11, 0.08);
+  --favorites-subtle-strong: rgba(184, 134, 11, 0.15);
+  --favorites-border: rgba(184, 134, 11, 0.3);
+  --favorites-border-strong: rgba(184, 134, 11, 0.4);
+}
+
+@font-face {
+  font-family: "Nunito";
+  font-style: normal;
+  font-weight: 400;
+  src: local(""),
+    url("assets/fonts/nunito-v16-latin-regular.woff2") format("woff2");
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  font-family: var(--font-family);
+}
+
+#app {
+  height: 100vh;
+}
