@@ -82,6 +82,7 @@
 - **Favorites** — bookmark frequently used OIDs
 - **Node Details** panel with full OID metadata (syntax, access, status, description)
 - **Custom MIBs** — load your own MIB files from a persistent directory
+- **Drag & Drop Import** — drop MIB files or folders anywhere in the app to import them instantly. Supports recursive folder scanning, duplicate detection, and shows a detailed error report if any files fail to load
 
 ### Monitoring & Alerting
 
