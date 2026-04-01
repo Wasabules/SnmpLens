@@ -1,7 +1,7 @@
 <script>
   import { _ } from 'svelte-i18n';
   import { get } from 'svelte/store';
-  import { onDestroy, afterUpdate } from 'svelte';
+  import { onDestroy, afterUpdate, tick } from 'svelte';
   import { Chart, registerables } from 'chart.js';
   import 'chartjs-adapter-date-fns';
   import { MonitorGetStats, MonitorLoadHistoricalData } from '../wailsjs/go/main/App';
@@ -18,12 +18,16 @@
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   }
 
-  // Destroy and recreate charts when theme changes
-  $: if ($settingsStore.theme) {
-    // Theme changed — destroy existing charts so afterUpdate recreates them with new colors
-    for (const id of Object.keys(charts)) {
-      charts[id].destroy();
-      delete charts[id];
+  // Destroy and recreate charts only when the THEME actually changes
+  let lastTheme = $settingsStore.theme;
+  $: {
+    const currentTheme = $settingsStore.theme;
+    if (currentTheme !== lastTheme) {
+      lastTheme = currentTheme;
+      for (const id of Object.keys(charts)) {
+        charts[id].destroy();
+        delete charts[id];
+      }
     }
   }
 
@@ -172,6 +176,98 @@
     return { datasets };
   }
 
+  // Build threshold line plugin for a session
+  function buildThresholdPlugin(session, mode) {
+    return {
+      id: 'thresholdLines_' + session.id,
+      afterDraw(chart) {
+        if (!session.thresholds || mode !== 'raw') return;
+        const { min, max } = session.thresholds;
+        const yScale = chart.scales.y;
+        const ctx = chart.ctx;
+        ctx.save();
+        ctx.setLineDash([6, 4]);
+        ctx.lineWidth = 1.5;
+
+        if (min !== null && min !== undefined) {
+          const yPos = yScale.getPixelForValue(Number(min));
+          if (yPos >= yScale.top && yPos <= yScale.bottom) {
+            ctx.strokeStyle = getCssVar('--warning-color');
+            ctx.beginPath();
+            ctx.moveTo(chart.chartArea.left, yPos);
+            ctx.lineTo(chart.chartArea.right, yPos);
+            ctx.stroke();
+            ctx.fillStyle = getCssVar('--warning-color');
+            ctx.font = '10px sans-serif';
+            ctx.fillText(`min: ${min}`, chart.chartArea.left + 4, yPos - 4);
+          }
+        }
+        if (max !== null && max !== undefined) {
+          const yPos = yScale.getPixelForValue(Number(max));
+          if (yPos >= yScale.top && yPos <= yScale.bottom) {
+            ctx.strokeStyle = getCssVar('--error-color');
+            ctx.beginPath();
+            ctx.moveTo(chart.chartArea.left, yPos);
+            ctx.lineTo(chart.chartArea.right, yPos);
+            ctx.stroke();
+            ctx.fillStyle = getCssVar('--error-color');
+            ctx.font = '10px sans-serif';
+            ctx.fillText(`max: ${max}`, chart.chartArea.left + 4, yPos - 4);
+          }
+        }
+        ctx.restore();
+      }
+    };
+  }
+
+  // Create a new Chart.js instance on a canvas
+  function createChart(canvas, data, mode, session) {
+    // Ensure canvas has actual dimensions (Chart.js needs them for responsive mode)
+    const container = canvas.parentElement;
+    if (!container || container.clientWidth === 0 || container.clientHeight === 0) {
+      console.warn('Chart container has no dimensions, deferring creation');
+      return null;
+    }
+
+    try {
+      return new Chart(canvas, {
+        type: 'line',
+        data,
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          scales: {
+            x: {
+              type: 'time',
+              time: { tooltipFormat: 'HH:mm:ss' },
+              title: { display: true, text: get(_)('monitor.tableTime'), color: getCssVar('--text-muted') },
+              ticks: { color: getCssVar('--text-muted') },
+              grid: { color: getCssVar('--bg-lighter-color') },
+            },
+            y: {
+              title: { display: true, text: get(_)('monitor.chartValue'), color: getCssVar('--text-muted') },
+              ticks: { color: getCssVar('--text-muted') },
+              grid: { color: getCssVar('--bg-lighter-color') },
+            }
+          },
+          plugins: {
+            legend: {
+              labels: { color: getCssVar('--text-light') },
+            }
+          }
+        },
+        plugins: [buildThresholdPlugin(session, mode)],
+      });
+    } catch (e) {
+      console.error('Failed to create chart:', e);
+      return null;
+    }
+  }
+
+  // Pending chart creations deferred to next frame
+  let pendingChartCreations = new Set();
+
   // Update or create charts after data changes
   afterUpdate(() => {
     for (const session of $pollingStore) {
@@ -190,81 +286,34 @@
       const mode = viewModes[session.id] || 'raw';
       const data = getChartData(session, mode);
 
-      // Build threshold line plugin for this session
-      const thresholdPlugin = {
-        id: 'thresholdLines',
-        afterDraw(chart) {
-          if (!session.thresholds || mode !== 'raw') return;
-          const { min, max } = session.thresholds;
-          const yScale = chart.scales.y;
-          const ctx = chart.ctx;
-          ctx.save();
-          ctx.setLineDash([6, 4]);
-          ctx.lineWidth = 1.5;
-
-          if (min !== null && min !== undefined) {
-            const yPos = yScale.getPixelForValue(Number(min));
-            if (yPos >= yScale.top && yPos <= yScale.bottom) {
-              ctx.strokeStyle = getCssVar('--warning-color');
-              ctx.beginPath();
-              ctx.moveTo(chart.chartArea.left, yPos);
-              ctx.lineTo(chart.chartArea.right, yPos);
-              ctx.stroke();
-              ctx.fillStyle = getCssVar('--warning-color');
-              ctx.font = '10px sans-serif';
-              ctx.fillText(`min: ${min}`, chart.chartArea.left + 4, yPos - 4);
-            }
-          }
-          if (max !== null && max !== undefined) {
-            const yPos = yScale.getPixelForValue(Number(max));
-            if (yPos >= yScale.top && yPos <= yScale.bottom) {
-              ctx.strokeStyle = getCssVar('--error-color');
-              ctx.beginPath();
-              ctx.moveTo(chart.chartArea.left, yPos);
-              ctx.lineTo(chart.chartArea.right, yPos);
-              ctx.stroke();
-              ctx.fillStyle = getCssVar('--error-color');
-              ctx.font = '10px sans-serif';
-              ctx.fillText(`max: ${max}`, chart.chartArea.left + 4, yPos - 4);
-            }
-          }
-          ctx.restore();
-        }
-      };
-
       if (charts[session.id]) {
-        charts[session.id].data = data;
-        charts[session.id].options.scales.y.title.text = mode === 'rate' ? get(_)('monitor.chartRate') : mode === 'delta' ? get(_)('monitor.chartDelta') : mode === 'latency' ? get(_)('monitor.chartLatency') : get(_)('monitor.chartValue');
-        charts[session.id].update('none');
-      } else {
-        charts[session.id] = new Chart(canvas, {
-          type: 'line',
-          data,
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: false,
-            scales: {
-              x: {
-                type: 'time',
-                time: { tooltipFormat: 'HH:mm:ss' },
-                title: { display: true, text: get(_)('monitor.tableTime'), color: getCssVar('--text-muted') },
-                ticks: { color: getCssVar('--text-muted') },
-                grid: { color: getCssVar('--bg-lighter-color') },
-              },
-              y: {
-                title: { display: true, text: get(_)('monitor.chartValue'), color: getCssVar('--text-muted') },
-                ticks: { color: getCssVar('--text-muted') },
-                grid: { color: getCssVar('--bg-lighter-color') },
-              }
-            },
-            plugins: {
-              legend: {
-                labels: { color: getCssVar('--text-light') },
-              }
-            }
-          },
-          plugins: [thresholdPlugin],
+        // Update existing chart — mutate datasets in place for reliable Chart.js update
+        try {
+          const chart = charts[session.id];
+          chart.data.datasets = data.datasets;
+          chart.options.scales.y.title.text = mode === 'rate' ? get(_)('monitor.chartRate') : mode === 'delta' ? get(_)('monitor.chartDelta') : mode === 'latency' ? get(_)('monitor.chartLatency') : get(_)('monitor.chartValue');
+          chart.update('none');
+        } catch (e) {
+          console.error('Failed to update chart:', e);
+          // Destroy broken chart so it gets recreated
+          charts[session.id].destroy();
+          delete charts[session.id];
+        }
+      } else if (!pendingChartCreations.has(session.id)) {
+        // Defer initial chart creation to next animation frame so the canvas
+        // has had a full layout pass and has real dimensions.
+        pendingChartCreations.add(session.id);
+        const sessionSnapshot = { ...session };
+        requestAnimationFrame(() => {
+          pendingChartCreations.delete(sessionSnapshot.id);
+          const c = canvasElements[sessionSnapshot.id];
+          if (!c || charts[sessionSnapshot.id] || displayModes[sessionSnapshot.id] === 'table') return;
+          const currentMode = viewModes[sessionSnapshot.id] || 'raw';
+          // Re-read latest session data from the store
+          const currentSessions = get(pollingStore);
+          const latestSession = currentSessions.find(s => s.id === sessionSnapshot.id);
+          const latestData = latestSession ? getChartData(latestSession, currentMode) : data;
+          charts[sessionSnapshot.id] = createChart(c, latestData, currentMode, latestSession || sessionSnapshot);
         });
       }
     }
@@ -655,6 +704,12 @@
     height: 250px;
     padding: 10px 15px;
     position: relative;
+  }
+
+  .chart-container canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
   }
 
   /* Threshold UI */

@@ -237,7 +237,24 @@ func formatSnmpValue(variable gosnmp.SnmpPDU) interface{} {
 	switch variable.Type {
 	case gosnmp.OctetString:
 		return string(variable.Value.([]byte))
+	case gosnmp.NoSuchObject:
+		return "noSuchObject"
+	case gosnmp.NoSuchInstance:
+		return "noSuchInstance"
+	case gosnmp.EndOfMibView:
+		return "endOfMibView"
 	default:
-		return gosnmp.ToBigInt(variable.Value)
+		// Convert *big.Int to primitive types for reliable JSON serialization
+		// through the Wails bridge. *big.Int can serialize as an object instead
+		// of a number, breaking frontend numeric parsing and chart rendering.
+		bi := gosnmp.ToBigInt(variable.Value)
+		if bi.IsInt64() {
+			return bi.Int64()
+		}
+		if bi.IsUint64() {
+			return bi.Uint64()
+		}
+		// Fallback for extremely large values
+		return bi.String()
 	}
 }

@@ -1,26 +1,48 @@
 <script>
   import { _ } from 'svelte-i18n';
+  import { onDestroy } from 'svelte';
   import { SnmpSetDebug, SnmpGetDebugLog, SnmpClearDebugLog } from '../wailsjs/go/main/App';
 
   let entries = [];
   let debugEnabled = false;
   let logContainer;
+  let pollTimer = null;
 
   async function toggleDebug() {
     debugEnabled = !debugEnabled;
     await SnmpSetDebug(debugEnabled);
     if (debugEnabled) {
-      await refreshLog();
+      startPolling();
+    } else {
+      stopPolling();
+    }
+  }
+
+  function startPolling() {
+    stopPolling();
+    refreshLog();
+    pollTimer = setInterval(refreshLog, 1000);
+  }
+
+  function stopPolling() {
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
     }
   }
 
   async function refreshLog() {
     try {
-      entries = await SnmpGetDebugLog() || [];
-      // Auto-scroll to bottom
-      setTimeout(() => {
-        if (logContainer) logContainer.scrollTop = logContainer.scrollHeight;
-      }, 50);
+      const newEntries = await SnmpGetDebugLog() || [];
+      if (newEntries.length !== entries.length) {
+        const wasAtBottom = logContainer && (logContainer.scrollHeight - logContainer.scrollTop - logContainer.clientHeight < 30);
+        entries = newEntries;
+        if (wasAtBottom) {
+          setTimeout(() => {
+            if (logContainer) logContainer.scrollTop = logContainer.scrollHeight;
+          }, 20);
+        }
+      }
     } catch (e) {
       console.warn('Failed to get debug log:', e);
     }
@@ -30,6 +52,10 @@
     await SnmpClearDebugLog();
     entries = [];
   }
+
+  onDestroy(() => {
+    stopPolling();
+  });
 </script>
 
 <div class="debug-panel">

@@ -46,48 +46,58 @@ function createPollingStore() {
         const bulkResults = await SnmpGet(buildSnmpRequest({...settings, snmpVersion}, targets, oid));
         const timestamp = new Date().toISOString();
 
+        // Non-numeric SNMP types that should not be graphed
+        const nonNumericTypes = ['OctetString', 'ObjectIdentifier', 'IPAddress', 'Opaque', 'NsapAddress', 'BitString'];
+        // Error-like sentinel values returned by the backend for missing OIDs
+        const errorSentinels = ['noSuchObject', 'noSuchInstance', 'endOfMibView'];
+
+        // Build data points outside update() so we can persist them to SQLite
+        let newDataPoints = [];
+        const currentSessions = get({ subscribe });
+        const currentSession = currentSessions.find(s => s.id === id);
+
+        for (const res of bulkResults) {
+          const rawValue = res.error ? null : res.result?.value;
+          const snmpType = res.result?.type || '';
+          const isNonNumericType = nonNumericTypes.some(t => snmpType.toLowerCase().includes(t.toLowerCase()));
+          const isErrorSentinel = rawValue !== null && errorSentinels.includes(rawValue);
+
+          let value = null;
+          if (rawValue !== null && !isNonNumericType && !isErrorSentinel) {
+            const numValue = Number(rawValue);
+            value = isNaN(numValue) ? null : numValue;
+          }
+
+          if (rawValue !== null && (isNonNumericType || isErrorSentinel) && !warnedNonNumeric.has(id)) {
+            warnedNonNumeric.add(id);
+            const t = get(_);
+            notificationStore.add(
+              t('monitor.nonNumericWarning', { values: { oid, type: snmpType } }),
+              'warning'
+            );
+          }
+
+          const prevResults = currentSession ? currentSession.results : [];
+          const prevPoint = [...prevResults].reverse().find(
+            p => p.target === res.target && p.value !== null
+          );
+
+          const delta = prevPoint && value !== null ? value - prevPoint.value : null;
+          const rate = delta !== null && intervalMs > 0 ? delta / (intervalMs / 1000) : null;
+
+          newDataPoints.push({
+            target: res.target,
+            timestamp,
+            value,
+            delta,
+            rate,
+            responseTimeMs: res.responseTimeMs || 0,
+            error: isErrorSentinel ? String(rawValue) : (res.error || null),
+          });
+        }
+
         update(sessions => sessions.map(s => {
           if (s.id !== id || !s.running) return s;
-
-          const nonNumericTypes = ['OctetString', 'ObjectIdentifier', 'IPAddress', 'Opaque', 'NsapAddress', 'BitString'];
-          const newDataPoints = [];
-          for (const res of bulkResults) {
-            const rawValue = res.error ? null : res.result?.value;
-            const snmpType = res.result?.type || '';
-            const isNonNumericType = nonNumericTypes.some(t => snmpType.toLowerCase().includes(t.toLowerCase()));
-
-            let value = null;
-            if (rawValue !== null && !isNonNumericType) {
-              const numValue = Number(rawValue);
-              value = isNaN(numValue) ? null : numValue;
-            }
-
-            if (rawValue !== null && isNonNumericType && !warnedNonNumeric.has(id)) {
-              warnedNonNumeric.add(id);
-              const t = get(_);
-              notificationStore.add(
-                t('monitor.nonNumericWarning', { values: { oid, type: snmpType } }),
-                'warning'
-              );
-            }
-
-            const prevPoint = [...s.results].reverse().find(
-              p => p.target === res.target && p.value !== null
-            );
-
-            const delta = prevPoint && value !== null ? value - prevPoint.value : null;
-            const rate = delta !== null && intervalMs > 0 ? delta / (intervalMs / 1000) : null;
-
-            newDataPoints.push({
-              target: res.target,
-              timestamp,
-              value,
-              delta,
-              rate,
-              responseTimeMs: res.responseTimeMs || 0,
-              error: res.error || null,
-            });
-          }
 
           // Threshold alert checks
           if (s.thresholds && s.thresholds.alertEnabled) {
