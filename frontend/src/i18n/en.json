@@ -18,6 +18,20 @@
       "trap": "Trap",
       "trapOff": "OFF",
       "snmpVersionTitle": "Default SNMP version"
+    },
+    "mibDrop": {
+      "overlay": "Drop MIB files here",
+      "overlayHint": "Files will be imported into the MIB directory and loaded automatically",
+      "success": "{count} MIB file(s) imported and loaded",
+      "noFiles": "No files could be imported",
+      "error": "Failed to import MIB files",
+      "errorTitle": "MIB Import Errors",
+      "errorDesc": "The following files could not be imported:",
+      "colFile": "File",
+      "colError": "Error",
+      "parseError": "Failed to parse MIB file",
+      "skipped": "{count} already present (skipped)",
+      "allSkipped": "All {count} file(s) already present — nothing to import"
     }
   },
 

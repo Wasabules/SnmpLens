@@ -1,6 +1,8 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
+  import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
+  import { notificationStore } from './stores/notifications';
   import MibPanel from './MibPanel.svelte';
   import OperationsPanel from './OperationsPanel.svelte';
   import TrapPanel from './TrapPanel.svelte';
@@ -13,10 +15,11 @@
   import DebugPanel from './DebugPanel.svelte';
   import { trapStore } from './stores/trapStore';
   import { mibPathsStore } from './stores/mibPathsStore';
-  import { mibStore } from './stores/mibStore';
+  import { mibStore, mibDiagnostics } from './stores/mibStore';
   import { settingsStore } from './stores/settingsStore';
   import { pollingStore } from './stores/pollingStore';
-  import { GetPersistentMibDirectory, ListMibFiles } from '../wailsjs/go/main/App';
+  import { GetPersistentMibDirectory, ListMibFiles, ImportMibFiles } from '../wailsjs/go/main/App';
+  import { OnFileDrop, OnFileDropOff } from '../wailsjs/runtime/runtime';
 
   let activeTab = 'operations'; // 'operations', 'traps', or 'history'
 
@@ -111,21 +114,118 @@
     }
   }
   systemDarkQuery.addEventListener('change', onSystemThemeChange);
-  onDestroy(() => systemDarkQuery.removeEventListener('change', onSystemThemeChange));
+  onDestroy(() => {
+    systemDarkQuery.removeEventListener('change', onSystemThemeChange);
+    OnFileDropOff();
+  });
+
+  // --- Drag-and-drop MIB import ---
+  let dragOver = false;
+  let dragLeaveTimer = null;
+
+  function handleDragOver() {
+    clearTimeout(dragLeaveTimer);
+    dragOver = true;
+  }
+  function handleDragLeave() {
+    // Small delay to avoid flicker when moving between child elements
+    dragLeaveTimer = setTimeout(() => { dragOver = false; }, 80);
+  }
+  function handleDragEnd() {
+    dragOver = false;
+  }
+
+  // MIB import result modal state
+  let importErrors = [];   // [{ fileName, error }]
+  let showImportErrors = false;
+
+  async function handleFileDrop(_x, _y, paths) {
+    dragOver = false;
+    if (!paths || paths.length === 0) return;
+
+    const t = get(_);
+    const droppedNames = paths.map(p => p.replace(/.*[/\\]/, ''));
+
+    try {
+      // 1. Copy files to MIB directory
+      const copyResults = await ImportMibFiles(paths);
+      const copyFailed = copyResults.filter(r => !r.success);
+      const skipped = copyResults.filter(r => r.success && r.skipped);
+      const newlyImported = copyResults.filter(r => r.success && !r.skipped);
+      const copiedNames = newlyImported.map(r => r.fileName);
+
+      if (newlyImported.length === 0 && copyFailed.length === 0) {
+        // Everything was skipped (already exists)
+        notificationStore.add(t('app.mibDrop.allSkipped', { values: { count: skipped.length } }), 'info');
+        return;
+      }
+
+      if (newlyImported.length === 0 && copyFailed.length > 0) {
+        // All new files failed, only skips otherwise
+        importErrors = copyFailed;
+        showImportErrors = true;
+        return;
+      }
+
+      // 2. Re-scan and reload MIBs (suppress default notification via silent flag)
+      const defaultPath = await GetPersistentMibDirectory();
+      const mibFiles = await ListMibFiles(defaultPath);
+      mibPathsStore.setDetectedMibs(defaultPath, mibFiles);
+      await mibStore.loadSilent();
+
+      // 3. Check load diagnostics for the files we just dropped
+      const diag = get(mibDiagnostics);
+      const loadFailed = diag
+        .filter(d => !d.success && copiedNames.includes(d.fileName))
+        .map(d => ({ fileName: d.fileName, error: d.error || t('app.mibDrop.parseError') }));
+
+      // 4. Combine copy failures + load/parse failures
+      const allErrors = [...copyFailed, ...loadFailed];
+      const fullySucceeded = copiedNames.length - loadFailed.length;
+
+      // 5. Build notification message
+      let msg = '';
+      if (fullySucceeded > 0) {
+        msg = t('app.mibDrop.success', { values: { count: fullySucceeded } });
+      }
+      if (skipped.length > 0) {
+        const skipMsg = t('app.mibDrop.skipped', { values: { count: skipped.length } });
+        msg = msg ? msg + ' — ' + skipMsg : skipMsg;
+      }
+      if (msg) {
+        notificationStore.add(msg, allErrors.length > 0 ? 'info' : 'success');
+      }
+
+      if (allErrors.length > 0) {
+        importErrors = allErrors;
+        showImportErrors = true;
+        if (fullySucceeded === 0 && !msg) {
+          notificationStore.add(t('app.mibDrop.noFiles'), 'error');
+        }
+      }
+    } catch (e) {
+      console.error('MIB drop import failed:', e);
+      importErrors = [{ fileName: droppedNames.join(', '), error: String(e) }];
+      showImportErrors = true;
+    }
+  }
 
   // Initialize MIB paths store on startup
   onMount(async () => {
     // Load saved panel width
     loadPanelWidth();
-    
+
+    // Register Wails file drop handler
+    OnFileDrop(handleFileDrop, true);
+
     mibPathsStore.load();
-    
+
     // Scan default MIB directory
     try {
       const defaultPath = await GetPersistentMibDirectory();
       const mibFiles = await ListMibFiles(defaultPath);
       mibPathsStore.setDetectedMibs(defaultPath, mibFiles);
-      
+
       // Now load the MIBs after paths are initialized
       await mibStore.load();
     } catch (e) {
@@ -200,12 +300,56 @@
   on:keydown={handleGlobalKeydown}
   on:mousemove={handleMouseMove}
   on:mouseup={stopResize}
+  on:dragover|preventDefault={handleDragOver}
+  on:dragleave={handleDragLeave}
+  on:drop={handleDragEnd}
+  on:dragend={handleDragEnd}
 />
 
-<main>
+{#if dragOver}
+  <div class="drop-overlay">
+    <div class="drop-content">
+      <div class="drop-icon">📄</div>
+      <div class="drop-text">{$_('app.mibDrop.overlay')}</div>
+      <div class="drop-hint">{$_('app.mibDrop.overlayHint')}</div>
+    </div>
+  </div>
+{/if}
+
+<main style="--wails-drop-target:drop">
   <Notifications />
   {#if showSettings}
     <SettingsModal on:close={() => showSettings = false} />
+  {/if}
+
+  {#if showImportErrors}
+    <div class="modal-backdrop" on:click={() => showImportErrors = false}>
+      <div class="import-error-modal" on:click|stopPropagation>
+        <div class="import-error-header">
+          <span class="import-error-title">{$_('app.mibDrop.errorTitle')}</span>
+          <button class="btn btn-small" on:click={() => showImportErrors = false}>&times;</button>
+        </div>
+        <div class="import-error-body">
+          <p class="import-error-desc">{$_('app.mibDrop.errorDesc')}</p>
+          <table class="import-error-table">
+            <thead>
+              <tr>
+                <th>{$_('app.mibDrop.colFile')}</th>
+                <th>{$_('app.mibDrop.colError')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each importErrors as err}
+                <tr>
+                  <td class="mono">{err.fileName}</td>
+                  <td class="error-cell">{err.error}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   {/if}
 
   {#if showTargets}
@@ -633,6 +777,108 @@
   @keyframes anon-pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.7; }
+  }
+
+  /* Drop overlay */
+  :global(.drop-overlay) {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: var(--backdrop-color-strong);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  :global(.drop-content) {
+    text-align: center;
+    padding: 40px 60px;
+    border: 3px dashed var(--accent-color);
+    border-radius: 16px;
+    background: var(--bg-lighter-color);
+  }
+
+  :global(.drop-icon) {
+    font-size: 3em;
+    margin-bottom: 12px;
+  }
+
+  :global(.drop-text) {
+    font-size: 1.3em;
+    font-weight: 700;
+    color: var(--text-color);
+  }
+
+  :global(.drop-hint) {
+    font-size: 0.9em;
+    color: var(--text-muted);
+    margin-top: 6px;
+  }
+
+  /* Import error modal */
+  .import-error-modal {
+    background: var(--bg-light-color);
+    border: 1px solid var(--error-border);
+    border-radius: var(--radius-lg);
+    width: 520px;
+    max-width: 90vw;
+    max-height: 70vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .import-error-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--error-subtle);
+  }
+
+  .import-error-title {
+    font-weight: 700;
+    color: var(--error-color);
+  }
+
+  .import-error-body {
+    padding: 16px;
+    overflow-y: auto;
+  }
+
+  .import-error-desc {
+    margin: 0 0 12px;
+    font-size: 0.9em;
+    color: var(--text-muted);
+  }
+
+  .import-error-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85em;
+  }
+
+  .import-error-table th,
+  .import-error-table td {
+    padding: 6px 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .import-error-table th {
+    font-weight: 600;
+    background: var(--shadow-color);
+  }
+
+  .import-error-table .mono {
+    font-family: 'Courier New', monospace;
+  }
+
+  .import-error-table .error-cell {
+    color: var(--error-color);
+    word-break: break-word;
   }
 
   /* Targets Modal */

@@ -52,7 +52,7 @@ function createMibStore() {
     return enabledFiles;
   }
 
-  async function load() {
+  async function loadInternal(silent = false) {
     update(store => ({ ...store, isLoading: true, error: null }));
     try {
       const enabledFiles = await getEnabledMibFiles();
@@ -70,28 +70,33 @@ function createMibStore() {
       addParentReferences(tree);
       set({ tree, isLoading: false, error: null });
 
-      const successCount = diagnostics.filter(d => d.success).length;
-      const failCount = diagnostics.filter(d => !d.success).length;
+      if (!silent) {
+        const successCount = diagnostics.filter(d => d.success).length;
+        const failCount = diagnostics.filter(d => !d.success).length;
 
-      if (tree.length > 0) {
-        let msg = `${successCount} MIB(s) loaded successfully.`;
-        if (failCount > 0) {
-          msg += ` ${failCount} failed.`;
+        if (tree.length > 0) {
+          let msg = `${successCount} MIB(s) loaded successfully.`;
+          if (failCount > 0) {
+            msg += ` ${failCount} failed.`;
+          }
+          notificationStore.add(msg, failCount > 0 ? 'info' : 'success');
+        } else {
+          notificationStore.add('No MIBs found or loaded from the directory.', 'info');
         }
-        notificationStore.add(msg, failCount > 0 ? 'info' : 'success');
-      } else {
-        notificationStore.add('No MIBs found or loaded from the directory.', 'info');
       }
     } catch (err) {
       set({ tree: [], isLoading: false, error: err });
       mibDiagnostics.set([]);
-      notificationStore.add(`Error loading MIBs: ${err}`, 'error');
+      if (!silent) {
+        notificationStore.add(`Error loading MIBs: ${err}`, 'error');
+      }
     }
   }
 
   return {
     subscribe,
-    load,
+    load: () => loadInternal(false),
+    loadSilent: () => loadInternal(true),
   };
 }
 

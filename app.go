@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"fmt"
@@ -205,6 +206,75 @@ func (a *App) StopTrapListener() {
 // ListMibFiles returns a list of MIB file names in the specified directory.
 func (a *App) ListMibFiles(dirPath string) ([]string, error) {
 	return mib.ListMibFiles(dirPath)
+}
+
+// MibImportResult holds per-file results for a MIB import operation.
+type MibImportResult struct {
+	FileName string `json:"fileName"`
+	Success  bool   `json:"success"`
+	Skipped  bool   `json:"skipped,omitempty"`
+	Error    string `json:"error,omitempty"`
+}
+
+// ImportMibFiles copies the given files (or directories, recursively) into the
+// persistent MIB directory. It returns per-file results so the frontend can
+// report failures.
+func (a *App) ImportMibFiles(filePaths []string) []MibImportResult {
+	var results []MibImportResult
+
+	for _, src := range filePaths {
+		info, err := os.Stat(src)
+		if err != nil {
+			results = append(results, MibImportResult{
+				FileName: filepath.Base(src),
+				Success:  false,
+				Error:    fmt.Sprintf("stat error: %v", err),
+			})
+			continue
+		}
+
+		if info.IsDir() {
+			// Walk the directory recursively, importing regular files only
+			filepath.WalkDir(src, func(path string, d os.DirEntry, err error) error {
+				if err != nil || d.IsDir() {
+					return nil // skip dirs and errors silently
+				}
+				results = append(results, a.importSingleFile(path))
+				return nil
+			})
+		} else {
+			results = append(results, a.importSingleFile(src))
+		}
+	}
+	return results
+}
+
+// importSingleFile copies one file into the persistent MIB directory.
+// If an identical file already exists, it is skipped.
+func (a *App) importSingleFile(src string) MibImportResult {
+	name := filepath.Base(src)
+	dst := filepath.Join(a.persistentMibDir, name)
+
+	srcData, err := os.ReadFile(src)
+	if err != nil {
+		log.Printf("ImportMibFiles: failed to read %s: %v", src, err)
+		return MibImportResult{FileName: name, Success: false, Error: fmt.Sprintf("read error: %v", err)}
+	}
+
+	// Check if the destination already has an identical file
+	if dstData, err := os.ReadFile(dst); err == nil {
+		if bytes.Equal(srcData, dstData) {
+			log.Printf("ImportMibFiles: skipped %s (already exists)", name)
+			return MibImportResult{FileName: name, Success: true, Skipped: true}
+		}
+	}
+
+	if err := os.WriteFile(dst, srcData, 0644); err != nil {
+		log.Printf("ImportMibFiles: failed to write %s: %v", dst, err)
+		return MibImportResult{FileName: name, Success: false, Error: fmt.Sprintf("write error: %v", err)}
+	}
+	log.Printf("ImportMibFiles: imported %s", name)
+	return MibImportResult{FileName: name, Success: true}
 }
 
 // BrowseDialog opens a directory picker dialog and returns the selected path.

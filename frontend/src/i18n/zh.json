@@ -18,6 +18,20 @@
       "trap": "Trap",
       "trapOff": "关闭",
       "snmpVersionTitle": "默认 SNMP 版本"
+    },
+    "mibDrop": {
+      "overlay": "将 MIB 文件拖放到此处",
+      "overlayHint": "文件将被导入到 MIB 目录并自动加载",
+      "success": "已导入并加载 {count} 个 MIB 文件",
+      "noFiles": "没有文件可以导入",
+      "error": "导入 MIB 文件失败",
+      "errorTitle": "MIB 导入错误",
+      "errorDesc": "以下文件无法导入：",
+      "colFile": "文件",
+      "colError": "错误",
+      "parseError": "MIB 文件解析失败",
+      "skipped": "{count} 个已存在（已跳过）",
+      "allSkipped": "所有 {count} 个文件已存在 — 无需导入"
     }
   },
 
