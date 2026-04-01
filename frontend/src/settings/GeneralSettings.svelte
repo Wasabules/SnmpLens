@@ -115,6 +115,20 @@
   </div>
 </fieldset>
 
+<fieldset>
+  <legend>🔒 {$_('settings.general.anonymousTitle')}</legend>
+  <div class="persist-section">
+    <label class="toggle-row">
+      <input type="checkbox" bind:checked={settings.anonymousMode} />
+      {$_('settings.general.anonymousMode')}
+    </label>
+    <span class="anon-hint">{$_('settings.general.anonymousHint')}</span>
+    {#if settings.anonymousMode}
+      <div class="anon-active">{$_('settings.general.anonymousActive')}</div>
+    {/if}
+  </div>
+</fieldset>
+
 <style>
   fieldset {
     border: 1px solid var(--border-color);
@@ -253,6 +267,21 @@
     margin-bottom: 5px;
     font-size: 0.9em;
     color: var(--text-light);
+  }
+
+  .anon-hint {
+    font-size: 0.82em;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  .anon-active {
+    font-size: 0.85em;
+    color: var(--warning-color);
+    padding: 6px 10px;
+    background-color: var(--warning-subtle);
+    border-radius: 4px;
+    border-left: 3px solid var(--warning-color);
   }
 
   input, select {

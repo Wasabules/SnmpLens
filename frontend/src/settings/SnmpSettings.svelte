@@ -4,6 +4,7 @@
   import { notificationStore } from '../stores/notifications';
   import { TestConnection } from '../../wailsjs/go/main/App';
   import { buildTestRequest } from '../utils/snmpParams';
+  import { anonMode, maskString, maskSysDescr } from '../utils/anonymize';
 
   export let settings;
 
@@ -45,7 +46,7 @@
   <div class="settings-grid single-column">
     <div class="form-group">
       <label for="community">{$_('settings.snmp.community')}</label>
-      <input id="community" type="text" bind:value={settings.community} />
+      <input id="community" type={$anonMode ? 'password' : 'text'} bind:value={settings.community} />
     </div>
   </div>
 </fieldset>
@@ -55,7 +56,7 @@
   <div class="settings-grid">
     <div class="form-group">
       <label for="v3-user">{$_('settings.snmp.username')}</label>
-      <input id="v3-user" type="text" bind:value={settings.v3.user} />
+      <input id="v3-user" type={$anonMode ? 'password' : 'text'} bind:value={settings.v3.user} />
     </div>
     <div class="form-group">
       <label for="v3-secLevel">{$_('settings.snmp.securityLevel')}</label>
@@ -137,7 +138,7 @@
         <span class="result-text">{testResult.error}</span>
       {:else}
         <span class="result-icon">✅</span>
-        <span class="result-text">sysDescr: {testResult.result?.value || 'OK'}</span>
+        <span class="result-text">sysDescr: {$anonMode ? maskSysDescr(testResult.result?.value || 'OK') : (testResult.result?.value || 'OK')}</span>
       {/if}
     </div>
   {/if}

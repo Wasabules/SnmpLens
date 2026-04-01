@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { _ } from 'svelte-i18n';
   import { GetOidDetails } from '../wailsjs/go/main/App';
+  import { anonMode, anonymizeIp } from './utils/anonymize';
 
   export let trap;
 
@@ -48,7 +49,7 @@
   <div class="trap-summary" on:click={toggle} on:keydown={(e) => e.key === 'Enter' && toggle()} role="button" tabindex="0">
     <span class="chevron">{isOpen ? '▼' : '►'}</span>
     <span class="timestamp">{trap.timestamp ? new Date(trap.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString()}</span>
-    <span class="source">{trap.source}</span>
+    <span class="source">{$anonMode ? anonymizeIp(trap.source) : trap.source}</span>
     <span class="version">{trap.version}</span>
     <span class="pdu-type-badge" class:inform={trap.pduType === 'Inform'}>{trap.pduType || 'Trap'}</span>
     <span class="main-oid" title={mainTrapMessage}>{mainTrapMessage}</span>

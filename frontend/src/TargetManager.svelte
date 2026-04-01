@@ -8,6 +8,7 @@
   import { buildTestRequest } from './utils/snmpParams';
   import { getEffectiveSettings } from './utils/targets';
   import TargetOverrideForm from './TargetOverrideForm.svelte';
+  import { anonMode, anonymizeIp } from './utils/anonymize';
 
   const dispatch = createEventDispatcher();
 
@@ -276,7 +277,7 @@
             </label>
             <div class="target-info">
               <span class="target-address" class:disabled={!target.enabled}>
-                {target.address}
+                {$anonMode ? anonymizeIp(target.address) : target.address}
                 {#if hasOverrides(target.address)}
                   <span class="override-badge" title={$_('targets.overrides.badge')}>⚙</span>
                 {/if}

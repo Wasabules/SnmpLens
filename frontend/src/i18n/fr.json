@@ -457,7 +457,11 @@
       "retentionDays": "Rétention des données (jours) :",
       "retentionHint": "0 = conserver indéfiniment",
       "cleanupNow": "Nettoyer maintenant",
-      "cleanupResult": "{count} ancien(s) point(s) de données supprimé(s)"
+      "cleanupResult": "{count} ancien(s) point(s) de données supprimé(s)",
+      "anonymousTitle": "Confidentialité",
+      "anonymousMode": "Mode anonyme",
+      "anonymousHint": "Masquer les informations sensibles (IPs, identifiants) pour les captures d'écran (Ctrl+Shift+A)",
+      "anonymousActive": "Le mode anonyme est actif — les données sensibles sont masquées"
     },
     "mibs": {
       "directoriesTitle": "Répertoires MIB",

@@ -8,6 +8,7 @@
   import { SendTrap } from '../wailsjs/go/main/App';
   import Trap from './Trap.svelte';
   import { escapeCSV, downloadFile } from './utils/csv';
+  import { anonMode, anonymizeIp, maskString } from './utils/anonymize';
 
   let searchTerm = '';
   let filterVersion = 'All';
@@ -172,7 +173,7 @@
             <option value="v2c">v2c</option>
           </select>
           <label for="send-community">{$_('traps.communityLabel')}</label>
-          <input id="send-community" type="text" bind:value={sendCommunity} placeholder={$settingsStore.community} />
+          <input id="send-community" type="text" bind:value={sendCommunity} placeholder={$anonMode ? maskString($settingsStore.community) : $settingsStore.community} />
         </div>
         <div class="send-row">
           <label for="send-oid">{$_('traps.trapOidLabel')}</label>

@@ -457,7 +457,11 @@
       "retentionDays": "数据保留（天）：",
       "retentionHint": "0 = 永久保留",
       "cleanupNow": "立即清理",
-      "cleanupResult": "已删除 {count} 个旧数据点"
+      "cleanupResult": "已删除 {count} 个旧数据点",
+      "anonymousTitle": "隐私",
+      "anonymousMode": "匿名模式",
+      "anonymousHint": "隐藏敏感信息（IP、凭据）以便截图 (Ctrl+Shift+A)",
+      "anonymousActive": "匿名模式已激活 — 敏感数据已隐藏"
     },
     "mibs": {
       "directoriesTitle": "MIB 目录",

@@ -7,6 +7,7 @@
   import DiffModal from './DiffModal.svelte';
   import { findNodeByOid, findMibNameByOid, formatValueWithEnum } from './utils/mibTree';
   import { formatTimestamp, formatDuration } from './utils/formatting';
+  import { anonMode, anonymizeIp } from './utils/anonymize';
 
   let searchTerm = '';
   let operationFilter = 'all'; // 'all', 'GET', 'SET', 'WALK'
@@ -287,7 +288,7 @@
                 <strong>{$_('nodeDetails.oid')}</strong> <code>{entry.oid}</code>
               </div>
               <div class="detail-row">
-                <strong>{$_('history.targets')}:</strong> <code>{entry.targets?.join(', ')}</code>
+                <strong>{$_('history.targets')}:</strong> <code>{$anonMode ? entry.targets?.map(t => anonymizeIp(t)).join(', ') : entry.targets?.join(', ')}</code>
               </div>
               <div class="detail-row">
                 <strong>{$_('common.version')}:</strong> <span>{entry.version}</span>
@@ -319,7 +320,7 @@
                   <strong>{$_('common.results')}:</strong>
                   {#each entry.results as result}
                     <div class="result-item" class:has-error={result.error}>
-                      <div><strong>{result.target}</strong></div>
+                      <div><strong>{$anonMode ? anonymizeIp(result.target) : result.target}</strong></div>
                       {#if result.error}
                         <div class="error-text">{result.error}</div>
                       {:else if result.result?.type === 'WalkResponse'}

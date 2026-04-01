@@ -45,6 +45,8 @@ const defaults = {
 // Load synchronously with defaults, then decrypt async
 const raw = JSON.parse(localStorage.getItem('settings') || 'null');
 const initialSettings = raw ? { ...defaults, ...raw, v3: { ...defaults.v3, ...(raw.v3 || {}) }, monitor: { ...defaults.monitor, ...(raw.monitor || {}) } } : defaults;
+// Anonymous mode is always off on startup (intentionally non-persistent)
+initialSettings.anonymousMode = false;
 
 function createSettingsStore() {
   const { subscribe, set } = writable(initialSettings);

@@ -2,6 +2,7 @@
   import { _ } from 'svelte-i18n';
   import { onDestroy } from 'svelte';
   import { SnmpSetDebug, SnmpGetDebugLog, SnmpClearDebugLog } from '../wailsjs/go/main/App';
+  import { anonMode, anonymizeText } from './utils/anonymize';
 
   let entries = [];
   let debugEnabled = false;
@@ -81,7 +82,7 @@
       {#each entries as entry}
         <div class="debug-entry">
           <span class="debug-ts">{entry.timestamp}</span>
-          <span class="debug-msg">{entry.message}</span>
+          <span class="debug-msg">{$anonMode ? anonymizeText(entry.message) : entry.message}</span>
         </div>
       {/each}
     {/if}

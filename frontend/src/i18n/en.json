@@ -457,7 +457,11 @@
       "retentionDays": "Data retention (days):",
       "retentionHint": "0 = keep forever",
       "cleanupNow": "Cleanup Now",
-      "cleanupResult": "{count} old data point(s) deleted"
+      "cleanupResult": "{count} old data point(s) deleted",
+      "anonymousTitle": "Privacy",
+      "anonymousMode": "Anonymous mode",
+      "anonymousHint": "Hide sensitive information (IPs, credentials) for screenshots (Ctrl+Shift+A)",
+      "anonymousActive": "Anonymous mode is active — sensitive data is hidden"
     },
     "mibs": {
       "directoriesTitle": "MIB Directories",

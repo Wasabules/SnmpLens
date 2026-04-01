@@ -6,6 +6,7 @@
   import { notificationStore } from '../stores/notifications';
   import { _ } from 'svelte-i18n';
   import { get } from 'svelte/store';
+  import { anonMode, anonymizeIp } from '../utils/anonymize';
 
   const dispatch = createEventDispatcher();
 
@@ -487,7 +488,7 @@
                 </th>
                 <th>Name</th>
                 {#each comparisonData.targets as target}
-                  <th class="target-col">{target}</th>
+                  <th class="target-col">{$anonMode ? anonymizeIp(target) : target}</th>
                 {/each}
                 <th class="sortable" on:click={() => toggleCompareSort('delta')}>
                   {$_('results.delta')} {compareSortKey === 'delta' ? (compareSortAsc ? '▲' : '▼') : ''}
@@ -527,7 +528,7 @@
                 <th>{$_('common.oid')}</th>
                 <th>{$_('common.name')}</th>
                 {#each comp.targets as target}
-                  <th class="target-col">{target}</th>
+                  <th class="target-col">{$anonMode ? anonymizeIp(target) : target}</th>
                 {/each}
               </tr>
             </thead>
@@ -557,7 +558,7 @@
       {#each bulkResults as res}
         <div class="result" class:success={!res.error} class:error={res.error}>
           <p class="result-target">
-            {res.target}
+            {$anonMode ? anonymizeIp(res.target) : res.target}
             {#if res.responseTimeMs}
               <span class="response-time-badge">{res.responseTimeMs}ms</span>
             {/if}

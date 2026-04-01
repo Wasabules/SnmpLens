@@ -1,6 +1,7 @@
 <script>
   import { createEventDispatcher } from 'svelte';
   import { _ } from 'svelte-i18n';
+  import { anonMode, maskString } from './utils/anonymize';
 
   const dispatch = createEventDispatcher();
 
@@ -72,9 +73,9 @@
         <span>Community</span>
       </label>
       {#if enabled.community}
-        <input type="text" bind:value={local.community} placeholder={globalSettings.community} />
+        <input type={$anonMode ? 'password' : 'text'} bind:value={local.community} placeholder={$anonMode ? maskString(globalSettings.community) : globalSettings.community} />
       {:else}
-        <span class="default-value">{globalSettings.community}</span>
+        <span class="default-value">{$anonMode ? maskString(globalSettings.community) : globalSettings.community}</span>
       {/if}
     </div>
 

@@ -10,6 +10,7 @@
   import { notificationStore } from './stores/notifications';
   import { getTargetsAsArray } from './utils/targets';
   import { formatTimeShort } from './utils/formatting';
+  import { anonMode, anonymizeIp } from './utils/anonymize';
 
   Chart.register(...registerables);
 
@@ -159,7 +160,7 @@
     const datasets = targets.map((target, idx) => {
       const points = session.results.filter(r => r.target === target);
       return {
-        label: target,
+        label: get(anonMode) ? anonymizeIp(target) : target,
         data: points.map(p => ({
           x: new Date(p.timestamp),
           y: mode === 'delta' ? p.delta : mode === 'rate' ? p.rate : mode === 'latency' ? p.responseTimeMs : p.value,
@@ -524,7 +525,7 @@
                   {#each historicalResults[session.id] as point}
                     <tr class:error-row={point.error}>
                       <td class="mono">{formatTimeShort(point.timestamp)}</td>
-                      <td>{point.target}</td>
+                      <td>{$anonMode ? anonymizeIp(point.target) : point.target}</td>
                       <td class="mono">{point.value !== null ? point.value : '-'}</td>
                       <td class="mono">{point.delta !== null ? point.delta : '-'}</td>
                       <td class="mono">{point.rate !== null ? point.rate.toFixed(2) : '-'}</td>
@@ -554,7 +555,7 @@
                   {#each [...session.results].reverse().slice(0, 100) as point}
                     <tr class:error-row={point.error}>
                       <td class="mono">{formatTimeShort(point.timestamp)}</td>
-                      <td>{point.target}</td>
+                      <td>{$anonMode ? anonymizeIp(point.target) : point.target}</td>
                       <td class="mono">{point.value !== null ? point.value : '-'}</td>
                       <td class="mono">{point.delta !== null ? point.delta : '-'}</td>
                       <td class="mono">{point.rate !== null ? point.rate.toFixed(2) : '-'}</td>

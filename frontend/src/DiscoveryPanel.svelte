@@ -7,6 +7,7 @@
   import { notificationStore } from './stores/notifications';
   import { escapeCSV, downloadFile } from './utils/csv';
   import { buildDiscoverRequest } from './utils/snmpParams';
+  import { anonMode, anonymizeIp, anonymizeHost, maskSysDescr, anonymizeCidr } from './utils/anonymize';
 
   let activeSubTab = 'discovery'; // 'discovery' | 'ping' | 'traceroute'
 
@@ -176,7 +177,7 @@
           <div class="progress-bar-bg">
             <div class="progress-bar-fill" style="width: {(progress.current / progress.total) * 100}%"></div>
           </div>
-          <span class="progress-text">{progress.current}/{progress.total} — {progress.ip}</span>
+          <span class="progress-text">{progress.current}/{progress.total} — {$anonMode ? anonymizeIp(progress.ip) : progress.ip}</span>
         </div>
       {/if}
 
@@ -210,9 +211,9 @@
             <tbody>
               {#each filteredResults as r}
                 <tr class:reachable={r.reachable} class:unreachable={!r.reachable}>
-                  <td class="ip-cell">{r.ip}</td>
-                  <td title={r.sysName}>{r.sysName || '-'}</td>
-                  <td class="descr-cell" title={r.sysDescr}>{r.sysDescr || (r.error ? r.error : '-')}</td>
+                  <td class="ip-cell">{$anonMode ? anonymizeIp(r.ip) : r.ip}</td>
+                  <td title={$anonMode ? anonymizeHost(r.sysName) : r.sysName}>{$anonMode ? (r.sysName ? anonymizeHost(r.sysName) : '-') : (r.sysName || '-')}</td>
+                  <td class="descr-cell" title={$anonMode ? maskSysDescr(r.sysDescr) : r.sysDescr}>{$anonMode ? (r.sysDescr ? maskSysDescr(r.sysDescr) : (r.error ? r.error : '-')) : (r.sysDescr || (r.error ? r.error : '-'))}</td>
                   <td>{r.sysUpTime || '-'}</td>
                   <td class="time-cell">{r.responseTime}ms</td>
                   <td>
@@ -318,7 +319,7 @@
                 <td>{hop.rtt1}</td>
                 <td>{hop.rtt2}</td>
                 <td>{hop.rtt3}</td>
-                <td class="ip-cell">{hop.ip || '*'}</td>
+                <td class="ip-cell">{$anonMode ? (hop.ip ? anonymizeIp(hop.ip) : '*') : (hop.ip || '*')}</td>
               </tr>
             {/each}
           </tbody>

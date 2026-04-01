@@ -175,6 +175,12 @@
       }
     }
 
+    // Ctrl+Shift+A to toggle anonymous mode
+    if (event.ctrlKey && event.shiftKey && event.key === 'A') {
+      event.preventDefault();
+      settingsStore.save({ ...$settingsStore, anonymousMode: !$settingsStore.anonymousMode });
+    }
+
     // Escape to close settings modal
     if (event.key === 'Escape' && showSettings) {
       showSettings = false;
@@ -305,6 +311,9 @@
           {$_('app.tabs.network')}
           <span class="shortcut-hint">5</span>
         </button>
+        {#if $settingsStore.anonymousMode}
+          <span class="anon-badge" title={$_('settings.general.anonymousMode') + ' (Ctrl+Shift+A)'}>ANON</span>
+        {/if}
       </div>
 
       {#if activeTab === 'operations'}
@@ -605,6 +614,25 @@
 
   .tab-btn:hover .shortcut-hint {
     opacity: 0.7;
+  }
+
+  .anon-badge {
+    margin-left: auto;
+    padding: 2px 10px;
+    font-size: 0.75em;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: #fff;
+    background-color: var(--warning-color);
+    border-radius: var(--radius-full);
+    cursor: default;
+    user-select: none;
+    animation: anon-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes anon-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
   }
 
   /* Targets Modal */

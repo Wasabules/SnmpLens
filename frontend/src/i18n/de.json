@@ -457,7 +457,11 @@
       "retentionDays": "Datenaufbewahrung (Tage):",
       "retentionHint": "0 = unbegrenzt aufbewahren",
       "cleanupNow": "Jetzt bereinigen",
-      "cleanupResult": "{count} alte Datenpunkt(e) gelöscht"
+      "cleanupResult": "{count} alte Datenpunkt(e) gelöscht",
+      "anonymousTitle": "Datenschutz",
+      "anonymousMode": "Anonymer Modus",
+      "anonymousHint": "Sensible Informationen (IPs, Zugangsdaten) für Screenshots ausblenden (Ctrl+Shift+A)",
+      "anonymousActive": "Anonymer Modus ist aktiv — sensible Daten sind ausgeblendet"
     },
     "mibs": {
       "directoriesTitle": "MIB-Verzeichnisse",
