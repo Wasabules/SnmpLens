@@ -74,6 +74,13 @@
   },
 
   "operations": {
+    "setConfirm": {
+      "title": "Confirmar operación SET",
+      "message": "Un SET escribe en el dispositivo y puede cambiar su configuración. Revise los detalles antes de continuar.",
+      "targets": "Objetivos",
+      "dontAskAgain": "No volver a preguntar (reactivable en Ajustes)",
+      "confirm": "Confirmar y enviar"
+    },
     "get": "GET",
     "set": "SET",
     "getNext": "GETNEXT",
@@ -428,6 +435,19 @@
     "deleteTooltip": "Eliminar",
     "statusSuccess": "Conexión exitosa",
     "statusError": "Conexión fallida",
+    "editTooltip": "Editar dirección",
+    "deleteAll": "Eliminar todo",
+    "deleteAllTooltip": "Eliminar todos los objetivos mostrados",
+    "deleteAllConfirm": "¿Eliminar {count} objetivo(s)? Esta acción no se puede deshacer.",
+    "duplicateAddress": "{address} ya existe",
+    "import": {
+      "button": "Importar",
+      "tooltip": "Importar una lista de direcciones",
+      "title": "Importar objetivos",
+      "hint": "Pegue una dirección por línea. Opcionalmente añada una etiqueta tras un # (p. ej. 10.0.0.1 # Router). Los duplicados se omiten.",
+      "placeholder": "192.168.1.1\n192.168.1.2 # Switch\n10.0.0.1",
+      "result": "{added} añadido(s), {skipped} omitido(s)"
+    },
     "groups": {
       "all": "Todos",
       "addGroup": "Añadir grupo",
@@ -453,6 +473,7 @@
       "snmp": "SNMP"
     },
     "general": {
+      "confirmBeforeSet": "Confirmar antes de un SET",
       "networkTitle": "Configuración de red",
       "pollingPort": "Puerto de sondeo:",
       "trapPort": "Puerto de Trap:",

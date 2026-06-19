@@ -12,6 +12,7 @@ const defaults = {
   community: 'public',
   autoGetEnabled: false,
   autoFillSetEnabled: false,
+  skipSetConfirm: false,
   locale: '',
   theme: 'system',
   targetOverrides: {},

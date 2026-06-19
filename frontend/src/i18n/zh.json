@@ -74,6 +74,13 @@
   },
 
   "operations": {
+    "setConfirm": {
+      "title": "确认 SET 操作",
+      "message": "SET 操作会写入设备并可能更改其配置。请在继续前核对详细信息。",
+      "targets": "目标",
+      "dontAskAgain": "不再询问（可在设置中重新启用）",
+      "confirm": "确认并发送"
+    },
     "get": "GET",
     "set": "SET",
     "getNext": "GETNEXT",
@@ -428,6 +435,19 @@
     "deleteTooltip": "删除",
     "statusSuccess": "连接成功",
     "statusError": "连接失败",
+    "editTooltip": "编辑地址",
+    "deleteAll": "全部删除",
+    "deleteAllTooltip": "删除所有显示的目标",
+    "deleteAllConfirm": "删除 {count} 个目标？此操作无法撤销。",
+    "duplicateAddress": "{address} 已存在",
+    "import": {
+      "button": "导入",
+      "tooltip": "导入地址列表",
+      "title": "导入目标",
+      "hint": "每行粘贴一个地址。可在 # 后添加标签（例如 10.0.0.1 # 路由器）。重复项将被跳过。",
+      "placeholder": "192.168.1.1\n192.168.1.2 # Switch\n10.0.0.1",
+      "result": "已添加 {added} 个，跳过 {skipped} 个"
+    },
     "groups": {
       "all": "全部",
       "addGroup": "添加分组",
@@ -453,6 +473,7 @@
       "snmp": "SNMP"
     },
     "general": {
+      "confirmBeforeSet": "发送 SET 前确认",
       "networkTitle": "网络设置",
       "pollingPort": "轮询端口：",
       "trapPort": "Trap 端口：",

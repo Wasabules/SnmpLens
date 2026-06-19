@@ -74,6 +74,13 @@
   },
 
   "operations": {
+    "setConfirm": {
+      "title": "Confirm SET operation",
+      "message": "A SET writes to the device and may change its configuration. Review the details before continuing.",
+      "targets": "Targets",
+      "dontAskAgain": "Don't ask again (re-enable in Settings)",
+      "confirm": "Confirm & Send"
+    },
     "get": "GET",
     "set": "SET",
     "getNext": "GETNEXT",
@@ -428,6 +435,19 @@
     "deleteTooltip": "Delete",
     "statusSuccess": "Connection successful",
     "statusError": "Connection failed",
+    "editTooltip": "Edit address",
+    "deleteAll": "Delete all",
+    "deleteAllTooltip": "Delete all targets shown",
+    "deleteAllConfirm": "Delete {count} target(s)? This cannot be undone.",
+    "duplicateAddress": "{address} already exists",
+    "import": {
+      "button": "Import",
+      "tooltip": "Import a list of addresses",
+      "title": "Import targets",
+      "hint": "Paste one address per line. Optionally add a label after a # (e.g. 10.0.0.1 # Router). Duplicates are skipped.",
+      "placeholder": "192.168.1.1\n192.168.1.2 # Switch\n10.0.0.1",
+      "result": "{added} added, {skipped} skipped"
+    },
     "groups": {
       "all": "All",
       "addGroup": "Add group",
@@ -453,6 +473,7 @@
       "snmp": "SNMP"
     },
     "general": {
+      "confirmBeforeSet": "Confirm before sending a SET",
       "networkTitle": "Network Settings",
       "pollingPort": "Polling Port:",
       "trapPort": "Trap Port:",

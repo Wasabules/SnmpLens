@@ -74,6 +74,13 @@
   },
 
   "operations": {
+    "setConfirm": {
+      "title": "SET-Vorgang bestätigen",
+      "message": "Ein SET schreibt auf das Gerät und kann dessen Konfiguration ändern. Prüfen Sie die Details, bevor Sie fortfahren.",
+      "targets": "Ziele",
+      "dontAskAgain": "Nicht mehr fragen (in den Einstellungen reaktivierbar)",
+      "confirm": "Bestätigen & Senden"
+    },
     "get": "GET",
     "set": "SET",
     "getNext": "GETNEXT",
@@ -428,6 +435,19 @@
     "deleteTooltip": "Löschen",
     "statusSuccess": "Verbindung erfolgreich",
     "statusError": "Verbindung fehlgeschlagen",
+    "editTooltip": "Adresse bearbeiten",
+    "deleteAll": "Alle löschen",
+    "deleteAllTooltip": "Alle angezeigten Ziele löschen",
+    "deleteAllConfirm": "{count} Ziel(e) löschen? Dies kann nicht rückgängig gemacht werden.",
+    "duplicateAddress": "{address} existiert bereits",
+    "import": {
+      "button": "Importieren",
+      "tooltip": "Eine Adressliste importieren",
+      "title": "Ziele importieren",
+      "hint": "Fügen Sie eine Adresse pro Zeile ein. Optional kann nach einem # eine Bezeichnung angegeben werden (z. B. 10.0.0.1 # Router). Duplikate werden übersprungen.",
+      "placeholder": "192.168.1.1\n192.168.1.2 # Switch\n10.0.0.1",
+      "result": "{added} hinzugefügt, {skipped} übersprungen"
+    },
     "groups": {
       "all": "Alle",
       "addGroup": "Gruppe hinzufügen",
@@ -453,6 +473,7 @@
       "snmp": "SNMP"
     },
     "general": {
+      "confirmBeforeSet": "Vor einem SET bestätigen",
       "networkTitle": "Netzwerkeinstellungen",
       "pollingPort": "Abfrage-Port:",
       "trapPort": "Trap-Port:",

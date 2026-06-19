@@ -47,6 +47,10 @@
       <input id="retries" type="number" bind:value={settings.retries} min="0" />
     </div>
   </div>
+  <label class="toggle-row" style="margin-top: 14px;">
+    <input type="checkbox" checked={!settings.skipSetConfirm} on:change={(e) => settings.skipSetConfirm = !e.target.checked} />
+    {$_('settings.general.confirmBeforeSet')}
+  </label>
 </fieldset>
 
 <fieldset>

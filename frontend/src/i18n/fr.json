@@ -74,6 +74,13 @@
   },
 
   "operations": {
+    "setConfirm": {
+      "title": "Confirmer l'opération SET",
+      "message": "Un SET écrit sur l'équipement et peut modifier sa configuration. Vérifiez les détails avant de continuer.",
+      "targets": "Cibles",
+      "dontAskAgain": "Ne plus afficher (réactivable dans les Réglages)",
+      "confirm": "Confirmer et envoyer"
+    },
     "get": "GET",
     "set": "SET",
     "getNext": "GETNEXT",
@@ -428,6 +435,19 @@
     "deleteTooltip": "Supprimer",
     "statusSuccess": "Connexion réussie",
     "statusError": "Échec de connexion",
+    "editTooltip": "Modifier l'adresse",
+    "deleteAll": "Tout supprimer",
+    "deleteAllTooltip": "Supprimer toutes les cibles affichées",
+    "deleteAllConfirm": "Supprimer {count} cible(s) ? Cette action est irréversible.",
+    "duplicateAddress": "{address} existe déjà",
+    "import": {
+      "button": "Importer",
+      "tooltip": "Importer une liste d'adresses",
+      "title": "Importer des cibles",
+      "hint": "Collez une adresse par ligne. Vous pouvez ajouter un label après un # (ex. 10.0.0.1 # Routeur). Les doublons sont ignorés.",
+      "placeholder": "192.168.1.1\n192.168.1.2 # Switch\n10.0.0.1",
+      "result": "{added} ajoutée(s), {skipped} ignorée(s)"
+    },
     "groups": {
       "all": "Tous",
       "addGroup": "Ajouter un groupe",
@@ -453,6 +473,7 @@
       "snmp": "SNMP"
     },
     "general": {
+      "confirmBeforeSet": "Confirmer avant un SET",
       "networkTitle": "Paramètres réseau",
       "pollingPort": "Port de polling :",
       "trapPort": "Port Trap :",

@@ -49,13 +49,16 @@ func (a *App) startup(ctx context.Context) {
 	}
 	a.persistentMibDir = filepath.Join(configDir, "SnmpLens", "mibs")
 
-	if _, err := os.Stat(a.persistentMibDir); os.IsNotExist(err) {
-		log.Printf("Creating persistent MIB directory at: %s", a.persistentMibDir)
-		if err := os.MkdirAll(a.persistentMibDir, 0755); err != nil {
-			log.Fatalf("Failed to create persistent MIB directory: %v", err)
-		}
-		a.extractInitialMibs()
+	if err := os.MkdirAll(a.persistentMibDir, 0755); err != nil {
+		log.Fatalf("Failed to create persistent MIB directory: %v", err)
 	}
+
+	// Always make sure the bundled standard MIBs are present. They define the
+	// base types (SNMPv2-SMI, SNMPv2-TC, ...) that nearly every other MIB
+	// IMPORTS from, so without them user-supplied MIBs fail to load. Running
+	// this on every startup (not just first run) self-heals an empty or
+	// partially-populated MIB directory.
+	a.ensureStandardMibs()
 
 	// 2. Initialize gosmi and our MIB service
 	gosmi.Init()
@@ -83,25 +86,42 @@ func (a *App) startup(ctx context.Context) {
 	}
 }
 
-// extractInitialMibs copies the embedded MIBs to the persistent directory.
-func (a *App) extractInitialMibs() {
-	log.Println("First run: extracting standard MIBs...")
+// ensureStandardMibs copies any bundled standard MIB that is missing from the
+// persistent directory. Files that already exist are left untouched so user
+// edits and additions are preserved.
+func (a *App) ensureStandardMibs() {
 	mibFiles, err := a.mibs.ReadDir("mibs")
 	if err != nil {
-		log.Fatalf("Failed to read embedded mibs directory: %v", err)
+		log.Printf("ERROR: Failed to read embedded mibs directory: %v", err)
+		return
 	}
+
+	var extracted []string
 	for _, mibFile := range mibFiles {
+		if mibFile.IsDir() {
+			continue
+		}
 		fileName := mibFile.Name()
-		filePath := filepath.Join("mibs", fileName)
-		content, err := a.mibs.ReadFile(filePath)
+		destPath := filepath.Join(a.persistentMibDir, fileName)
+		if _, err := os.Stat(destPath); err == nil {
+			continue // already present
+		}
+
+		// embed.FS always uses forward slashes, even on Windows — never filepath.Join here.
+		content, err := a.mibs.ReadFile("mibs/" + fileName)
 		if err != nil {
 			log.Printf("Warning: Failed to read embedded MIB file %s: %v", fileName, err)
 			continue
 		}
-		destPath := filepath.Join(a.persistentMibDir, fileName)
 		if err := os.WriteFile(destPath, content, 0644); err != nil {
-			log.Printf("Warning: Failed to write initial MIB file %s: %v", fileName, err)
+			log.Printf("Warning: Failed to write standard MIB file %s: %v", fileName, err)
+			continue
 		}
+		extracted = append(extracted, fileName)
+	}
+
+	if len(extracted) > 0 {
+		log.Printf("Extracted %d standard MIB(s) to %s: %v", len(extracted), a.persistentMibDir, extracted)
 	}
 }
 

@@ -44,6 +44,16 @@
   let selectedGroupId = 'all';
   let showGroupMenu = false;
   let newGroupName = '';
+  let editingId = null;
+  let editAddressValue = '';
+  let showImport = false;
+  let importText = '';
+
+  // Focus + select an input when it mounts (avoids the autofocus a11y warning)
+  function focusOnMount(node) {
+    node.focus();
+    node.select?.();
+  }
 
   $: {
     const parsed = parseTargets($settingsStore.targets);
@@ -111,6 +121,85 @@
   function updateLabel(id, label) {
     targets = targets.map(t => t.id === id ? { ...t, label } : t);
     saveTargets();
+  }
+
+  function startEditAddress(target) {
+    editingId = target.id;
+    editAddressValue = target.address;
+  }
+
+  function cancelEditAddress() {
+    editingId = null;
+    editAddressValue = '';
+  }
+
+  function saveEditAddress(target) {
+    const newAddr = editAddressValue.trim();
+    if (!newAddr || newAddr === target.address) {
+      cancelEditAddress();
+      return;
+    }
+    if (targets.some(t => t.id !== target.id && t.address === newAddr)) {
+      notificationStore.add(get(_)('targets.duplicateAddress', { values: { address: newAddr } }), 'error');
+      return;
+    }
+    const oldAddr = target.address;
+    targets = targets.map(t => t.id === target.id ? { ...t, address: newAddr, status: null } : t);
+    // Migrate overrides and group assignment (both keyed by address)
+    const overrides = { ...($settingsStore.targetOverrides || {}) };
+    const assigns = { ...($settingsStore.targetGroupAssignments || {}) };
+    if (overrides[oldAddr] !== undefined) { overrides[newAddr] = overrides[oldAddr]; delete overrides[oldAddr]; }
+    if (assigns[oldAddr] !== undefined) { assigns[newAddr] = assigns[oldAddr]; delete assigns[oldAddr]; }
+    settingsStore.save({ ...$settingsStore, targets: serializeTargets(targets), targetOverrides: overrides, targetGroupAssignments: assigns });
+    cancelEditAddress();
+  }
+
+  // Delete every target currently shown (respects the selected group filter).
+  function deleteAllInGroup() {
+    const toDelete = filteredTargets;
+    if (toDelete.length === 0) return;
+    const t = get(_);
+    if (!confirm(t('targets.deleteAllConfirm', { values: { count: toDelete.length } }))) return;
+    const idsToDelete = new Set(toDelete.map(x => x.id));
+    const addrsToDelete = new Set(toDelete.map(x => x.address));
+    targets = targets.filter(x => !idsToDelete.has(x.id));
+    const overrides = { ...($settingsStore.targetOverrides || {}) };
+    const assigns = { ...($settingsStore.targetGroupAssignments || {}) };
+    for (const addr of addrsToDelete) { delete overrides[addr]; delete assigns[addr]; }
+    settingsStore.save({ ...$settingsStore, targets: serializeTargets(targets), targetOverrides: overrides, targetGroupAssignments: assigns });
+  }
+
+  function openImport() {
+    importText = '';
+    showImport = true;
+  }
+
+  // Import a newline-separated list of addresses (optional "address # label" per line).
+  // Duplicates are skipped; new targets are assigned to the currently selected group.
+  function importTargets() {
+    const lines = importText.split('\n').map(l => l.trim()).filter(Boolean);
+    if (lines.length === 0) { showImport = false; return; }
+    const existing = new Set(targets.map(t => t.address));
+    const groupId = selectedGroupId === 'all' ? 'default' : selectedGroupId;
+    const assigns = { ...($settingsStore.targetGroupAssignments || {}) };
+    const newTargets = [...targets];
+    let added = 0, skipped = 0;
+    lines.forEach((line, i) => {
+      const parts = line.split('#');
+      const address = parts[0].trim();
+      const label = parts[1]?.trim() || '';
+      if (!address) return;
+      if (existing.has(address)) { skipped++; return; }
+      existing.add(address);
+      newTargets.push({ id: Date.now() + i, address, label, enabled: true, testing: false, status: null });
+      assigns[address] = groupId;
+      added++;
+    });
+    targets = newTargets;
+    settingsStore.save({ ...$settingsStore, targets: serializeTargets(targets), targetGroupAssignments: assigns });
+    notificationStore.add(get(_)('targets.import.result', { values: { added, skipped } }), added > 0 ? 'success' : 'info');
+    importText = '';
+    showImport = false;
   }
 
   async function testTarget(id) {
@@ -251,6 +340,12 @@
       <button class="btn-sm" on:click={testAllTargets} disabled={enabledCount === 0} title={$_('targets.testAllTooltip')}>
         🔍 {$_('targets.testAll')}
       </button>
+      <button class="btn-sm" on:click={openImport} title={$_('targets.import.tooltip')}>
+        📋 {$_('targets.import.button')}
+      </button>
+      <button class="btn-sm danger" on:click={deleteAllInGroup} disabled={filteredTargets.length === 0} title={$_('targets.deleteAllTooltip')}>
+        🗑️ {$_('targets.deleteAll')}
+      </button>
       <button class="btn-sm primary" on:click={() => showAddForm = !showAddForm}>
         {showAddForm ? '✕' : $_('targets.addButton')}
       </button>
@@ -276,18 +371,32 @@
               <input type="checkbox" checked={target.enabled} on:change={() => toggleTarget(target.id)} />
             </label>
             <div class="target-info">
-              <span class="target-address" class:disabled={!target.enabled}>
-                {$anonMode ? anonymizeIp(target.address) : target.address}
-                {#if hasOverrides(target.address)}
-                  <span class="override-badge" title={$_('targets.overrides.badge')}>⚙</span>
-                {/if}
-              </span>
-              <input
-                type="text" class="target-label-input" value={target.label}
-                placeholder={$_('targets.labelPlaceholder')}
-                on:blur={(e) => updateLabel(target.id, e.target.value)}
-                on:keydown={(e) => e.key === 'Enter' && e.target.blur()}
-              />
+              {#if editingId === target.id}
+                <input
+                  type="text" class="target-address-input"
+                  bind:value={editAddressValue}
+                  use:focusOnMount
+                  on:keydown={(e) => {
+                    if (e.key === 'Enter') saveEditAddress(target);
+                    else if (e.key === 'Escape') cancelEditAddress();
+                  }}
+                />
+                <button class="btn-icon" on:click={() => saveEditAddress(target)} title={$_('common.save')}>✔️</button>
+                <button class="btn-icon" on:click={cancelEditAddress} title={$_('common.cancel')}>✖️</button>
+              {:else}
+                <span class="target-address" class:disabled={!target.enabled}>
+                  {$anonMode ? anonymizeIp(target.address) : target.address}
+                  {#if hasOverrides(target.address)}
+                    <span class="override-badge" title={$_('targets.overrides.badge')}>⚙</span>
+                  {/if}
+                </span>
+                <input
+                  type="text" class="target-label-input" value={target.label}
+                  placeholder={$_('targets.labelPlaceholder')}
+                  on:blur={(e) => updateLabel(target.id, e.target.value)}
+                  on:keydown={(e) => e.key === 'Enter' && e.target.blur()}
+                />
+              {/if}
             </div>
             <div class="target-status">
               {#if target.testing}
@@ -311,6 +420,8 @@
                   {/each}
                 </select>
               {/if}
+              <button class="btn-icon" on:click={() => startEditAddress(target)}
+                disabled={editingId === target.id} title={$_('targets.editTooltip')}>✏️</button>
               <button class="btn-icon" class:active={expandedOverrideId === target.id}
                 on:click={() => toggleOverrides(target.id)} title={$_('targets.overrides.title')}>
                 {hasOverrides(target.address) ? '⚙️' : '⚙'}
@@ -333,6 +444,31 @@
       {/each}
     {/if}
   </div>
+
+  {#if showImport}
+    <div class="import-backdrop" on:mousedown={() => showImport = false}>
+      <div class="import-modal" on:mousedown|stopPropagation>
+        <div class="import-modal-header">
+          <h3>📋 {$_('targets.import.title')}</h3>
+          <button class="import-close" on:click={() => showImport = false} title={$_('common.close')}>&times;</button>
+        </div>
+        <p class="import-hint">{$_('targets.import.hint')}</p>
+        <textarea
+          class="import-textarea"
+          bind:value={importText}
+          placeholder={$_('targets.import.placeholder')}
+          rows="10"
+          use:focusOnMount
+        ></textarea>
+        <div class="import-actions">
+          <button class="btn-sm" on:click={() => showImport = false}>{$_('common.cancel')}</button>
+          <button class="btn-sm primary" on:click={importTargets} disabled={!importText.trim()}>
+            📋 {$_('targets.import.button')}
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -429,6 +565,8 @@
   .btn-sm:hover:not(:disabled) { background-color: var(--bg-color); }
   .btn-sm.primary { background-color: var(--accent-color); border-color: var(--accent-color); color: white; }
   .btn-sm.primary:hover:not(:disabled) { background-color: var(--accent-hover-color); }
+  .btn-sm.danger { color: var(--error-color); border-color: var(--error-border); }
+  .btn-sm.danger:hover:not(:disabled) { background-color: var(--error-color); border-color: var(--error-color); color: white; }
   .btn-sm:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .add-form { display: flex; gap: 8px; margin-bottom: 10px; padding: 10px; background-color: var(--bg-color); border-radius: 4px; }
@@ -452,6 +590,20 @@
   .target-label-input:hover, .target-label-input:focus { border-color: var(--border-color); background-color: var(--bg-lighter-color); }
   .target-label-input:focus { outline: none; border-color: var(--accent-color); }
 
+  .target-address-input {
+    flex: 1;
+    padding: 4px 8px;
+    border: 1px solid var(--accent-color);
+    border-radius: 3px;
+    background-color: var(--bg-lighter-color);
+    color: var(--text-color);
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+    font-weight: 500;
+    min-width: 120px;
+  }
+  .target-address-input:focus { outline: none; }
+
   .target-status { width: 24px; text-align: center; }
   .status-icon { font-size: 0.9em; }
   .status-icon.testing { animation: pulse 1s infinite; }
@@ -466,4 +618,54 @@
   .empty-state { text-align: center; padding: 20px; color: var(--text-muted); font-size: 0.9em; }
 
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  /* Import modal */
+  .import-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1100;
+  }
+  .import-modal {
+    background-color: var(--bg-light-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 16px;
+    width: min(520px, 90vw);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .import-modal-header { display: flex; justify-content: space-between; align-items: center; }
+  .import-modal-header h3 { margin: 0; font-size: 1.05em; }
+  .import-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.4em;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+  }
+  .import-close:hover { color: var(--text-color); }
+  .import-hint { margin: 0; font-size: 0.82em; color: var(--text-muted); }
+  .import-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+    padding: 8px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--bg-lighter-color);
+    color: var(--text-color);
+    font-family: 'Courier New', monospace;
+    font-size: 0.88em;
+    line-height: 1.5;
+  }
+  .import-textarea:focus { outline: none; border-color: var(--accent-color); }
+  .import-actions { display: flex; justify-content: flex-end; gap: 8px; }
 </style>

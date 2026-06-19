@@ -29,6 +29,8 @@
   let snmpSetOid = '';
   let snmpSetValue = '';
   let snmpSetType = 'string';
+  let showSetConfirm = false;
+  let dontAskSetAgain = false;
   let snmpGetNextOid = '';
   let snmpGetBulkOid = '';
   let snmpWalkOid = '';
@@ -441,6 +443,8 @@
     }
   }
 
+  // Entry point for the SET button: validates, then either asks for
+  // confirmation (default) or executes directly when the user opted out.
   async function handleSnmpSet() {
     const t = get(_);
     // Check if the node is writable before attempting SET
@@ -448,7 +452,29 @@
       notificationStore.add(setDisabledReason, 'error');
       return;
     }
+    if (getTargetsAsArray($settingsStore.targets).length === 0) {
+      notificationStore.add(t('operations.enterTarget'), 'error');
+      return;
+    }
+    if ($settingsStore.skipSetConfirm) {
+      await performSnmpSet();
+    } else {
+      dontAskSetAgain = false;
+      showSetConfirm = true;
+    }
+  }
 
+  // Confirm handler: optionally persists the opt-out, then runs the SET.
+  async function confirmSetAndExecute() {
+    showSetConfirm = false;
+    if (dontAskSetAgain) {
+      await settingsStore.save({ ...$settingsStore, skipSetConfirm: true });
+    }
+    await performSnmpSet();
+  }
+
+  async function performSnmpSet() {
+    const t = get(_);
     bulkResults = [];
     isLoading = true;
     const startTime = Date.now();
@@ -859,6 +885,33 @@
           {isLoading ? '⏳ ' + $_('common.working') : '📤 ' + $_('operations.executeSet')}
         </button>
       </div>
+
+      {#if showSetConfirm}
+        <div class="set-confirm-backdrop" on:mousedown={() => showSetConfirm = false}>
+          <div class="set-confirm-modal" on:mousedown|stopPropagation>
+            <h3>⚠️ {$_('operations.setConfirm.title')}</h3>
+            <p class="set-confirm-warning">{$_('operations.setConfirm.message')}</p>
+            <dl class="set-confirm-details">
+              <dt>{$_('common.oid')}</dt>
+              <dd>{snmpSetOid}{selectedNode?.name ? ` (${selectedNode.name})` : ''}</dd>
+              <dt>{$_('common.value')}</dt>
+              <dd>{snmpSetValue}</dd>
+              <dt>{$_('common.type')}</dt>
+              <dd>{snmpSetType}</dd>
+              <dt>{$_('operations.setConfirm.targets')}</dt>
+              <dd>{getTargetsAsArray($settingsStore.targets).join(', ')}</dd>
+            </dl>
+            <label class="set-confirm-dontask">
+              <input type="checkbox" bind:checked={dontAskSetAgain} />
+              {$_('operations.setConfirm.dontAskAgain')}
+            </label>
+            <div class="set-confirm-actions">
+              <button class="btn" on:click={() => showSetConfirm = false}>{$_('common.cancel')}</button>
+              <button class="btn btn-primary" on:click={confirmSetAndExecute}>📤 {$_('operations.setConfirm.confirm')}</button>
+            </div>
+          </div>
+        </div>
+      {/if}
     {/if}
 
     {#if activeOperation === 'GETNEXT'}
@@ -1239,5 +1292,49 @@
     opacity: 0.4;
     cursor: not-allowed;
   }
+
+  /* SET confirmation modal */
+  .set-confirm-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1100;
+  }
+  .set-confirm-modal {
+    background-color: var(--bg-light-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
+    width: min(480px, 90vw);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+  }
+  .set-confirm-modal h3 { margin: 0 0 8px; font-size: 1.1em; }
+  .set-confirm-warning { margin: 0 0 14px; font-size: 0.88em; color: var(--text-muted); }
+  .set-confirm-details {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 14px;
+    margin: 0 0 16px;
+    padding: 12px;
+    background-color: var(--bg-color);
+    border-radius: 6px;
+    font-size: 0.88em;
+  }
+  .set-confirm-details dt { color: var(--text-muted); font-weight: 600; }
+  .set-confirm-details dd { margin: 0; font-family: 'Courier New', monospace; word-break: break-all; }
+  .set-confirm-dontask {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    font-size: 0.85em;
+    color: var(--text-dimmed);
+    cursor: pointer;
+  }
+  .set-confirm-dontask input { width: auto; cursor: pointer; }
+  .set-confirm-actions { display: flex; justify-content: flex-end; gap: 10px; }
 
 </style>
