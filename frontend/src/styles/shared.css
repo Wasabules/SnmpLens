@@ -122,6 +122,41 @@
   box-shadow: var(--focus-ring);
 }
 
+/* --- Icons --- */
+
+svg.icon {
+  display: inline-block;
+  vertical-align: -0.125em;
+  flex-shrink: 0;
+}
+
+/* Semantic state colors (override inherited text color) */
+.icon-success {
+  color: var(--success-color);
+}
+
+.icon-error {
+  color: var(--error-color);
+}
+
+.icon-warning {
+  color: var(--warning-color);
+}
+
+.icon-accent {
+  color: var(--accent-color);
+}
+
+/* Loading spinner */
+.icon-spin {
+  animation: icon-spin 0.8s linear infinite;
+}
+
+@keyframes icon-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* --- Mono --- */
 
 .mono {

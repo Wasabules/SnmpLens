@@ -1,6 +1,7 @@
 <script>
   import { createEventDispatcher } from 'svelte';
   import { _ } from 'svelte-i18n';
+  import Icon from './Icon.svelte';
 
   export let node;
   export let onNodeClick;
@@ -70,17 +71,17 @@
     event.stopPropagation();
   }
 
-  // Get icon for node type
+  // Get icon name (Lucide) for node type
   function getNodeIcon(type) {
     const icons = {
-      'Scalar': '📊',
-      'Column': '📑',
-      'Table': '📋',
-      'Notification': '🔔',
-      'Node': '📁',
-      'Group': '📦',
+      'Scalar': 'circle-dot',
+      'Column': 'columns-3',
+      'Table': 'table',
+      'Notification': 'bell',
+      'Node': 'folder',
+      'Group': 'layers',
     };
-    return icons[type] || '📄';
+    return icons[type] || 'file';
   }
 
   // Build compact path: traverse single-child nodes and return array of nodes
@@ -166,7 +167,7 @@
     {:else}
       <span class="icon leaf">●</span>
     {/if}
-    <span class="icon-visual" title={node.mibType}>{getNodeIcon(node.mibType)}</span>
+    <span class="icon-visual" title={node.mibType}><Icon name={getNodeIcon(node.mibType)} size={15} /></span>
     
     {#if compactMode && compactPath.length > 1}
       <!-- Compact mode: show full path -->

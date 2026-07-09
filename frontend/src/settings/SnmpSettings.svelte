@@ -5,6 +5,7 @@
   import { TestConnection } from '../../wailsjs/go/main/App';
   import { buildTestRequest } from '../utils/snmpParams';
   import { anonMode, maskString, maskSysDescr } from '../utils/anonymize';
+  import Icon from '../Icon.svelte';
 
   export let settings;
 
@@ -112,7 +113,7 @@
 </fieldset>
 
 <fieldset class="test-connection">
-  <legend>🔌 {$_('settings.snmp.testTitle')}</legend>
+  <legend><Icon name="plug" size={15} /> {$_('settings.snmp.testTitle')}</legend>
   <div class="test-form">
     <div class="form-group">
       <label for="test-target">{$_('settings.snmp.testTarget')}</label>
@@ -136,16 +137,16 @@
       on:click={handleTestConnection}
       disabled={isTesting || !testTarget.trim()}
     >
-      {isTesting ? '⏳ ' + $_('settings.snmp.testing') : '🔍 ' + $_('settings.snmp.testButton')}
+      {#if isTesting}<Icon name="loader-circle" class="icon-spin" /> {$_('settings.snmp.testing')}{:else}<Icon name="plug" /> {$_('settings.snmp.testButton')}{/if}
     </button>
   </div>
   {#if testResult}
     <div class="test-result" class:success={!testResult.error} class:error={testResult.error}>
       {#if testResult.error}
-        <span class="result-icon">❌</span>
+        <span class="result-icon"><Icon name="circle-x" class="icon-error" size={16} /></span>
         <span class="result-text">{testResult.error}</span>
       {:else}
-        <span class="result-icon">✅</span>
+        <span class="result-icon"><Icon name="circle-check" class="icon-success" size={16} /></span>
         <span class="result-text">sysDescr: {$anonMode ? maskSysDescr(testResult.result?.value || 'OK') : (testResult.result?.value || 'OK')}</span>
       {/if}
     </div>

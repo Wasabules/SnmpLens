@@ -5,6 +5,7 @@
   import GeneralSettings from './settings/GeneralSettings.svelte';
   import MibSettings from './settings/MibSettings.svelte';
   import SnmpSettings from './settings/SnmpSettings.svelte';
+  import Icon from './Icon.svelte';
 
   const dispatch = createEventDispatcher();
 
@@ -38,7 +39,7 @@
 <div class="modal-backdrop" on:mousedown={handleCancel}>
   <div class="modal" on:mousedown|stopPropagation>
     <div class="modal-header">
-      <h2>⚙️ {$_('settings.title')}</h2>
+      <h2><Icon name="settings" size={20} /> {$_('settings.title')}</h2>
       <button class="close-btn" on:click={handleCancel}>&times;</button>
     </div>
 
@@ -49,21 +50,21 @@
         class:active={activeTab === 'general'}
         on:click={() => activeTab = 'general'}
       >
-        🔧 {$_('settings.tabs.general')}
+        <Icon name="sliders-horizontal" size={15} /> {$_('settings.tabs.general')}
       </button>
       <button
         class="tab"
         class:active={activeTab === 'mibs'}
         on:click={() => activeTab = 'mibs'}
       >
-        📚 {$_('settings.tabs.mibs')}
+        <Icon name="book-marked" size={15} /> {$_('settings.tabs.mibs')}
       </button>
       <button
         class="tab"
         class:active={activeTab === 'snmp'}
         on:click={() => activeTab = 'snmp'}
       >
-        🌐 {$_('settings.tabs.snmp')}
+        <Icon name="globe" size={15} /> {$_('settings.tabs.snmp')}
       </button>
     </div>
 

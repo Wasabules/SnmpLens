@@ -5,6 +5,7 @@
   import { mibStore, mibDiagnostics } from '../stores/mibStore';
   import { mibPathsStore } from '../stores/mibPathsStore';
   import { notificationStore } from '../stores/notifications';
+  import Icon from '../Icon.svelte';
 
   export let defaultMibPath;
 
@@ -61,7 +62,7 @@
 </script>
 
 <fieldset>
-  <legend>📂 {$_('settings.mibs.directoriesTitle')}</legend>
+  <legend><Icon name="folder" size={15} /> {$_('settings.mibs.directoriesTitle')}</legend>
 
   <!-- Default MIB Path -->
   <div class="mib-path-item default">
@@ -100,7 +101,7 @@
       <div class="path-header">
         <span class="path-badge custom">{$_('settings.mibs.custom')}</span>
         <span class="path-text">{customPath}</span>
-        <button class="btn-remove" on:click={() => handleRemovePath(customPath)} title={$_('common.remove')}>✕</button>
+        <button class="btn-remove" on:click={() => handleRemovePath(customPath)} title={$_('common.remove')}><Icon name="x" size={14} /></button>
       </div>
       {#if $mibPathsStore.detectedMibs[customPath]}
         <div class="mib-list">
@@ -138,8 +139,8 @@
         bind:value={newMibPath}
         on:keydown={(e) => e.key === 'Enter' && handleAddPath()}
       />
-      <button class="btn secondary" on:click={handleBrowseFolder}>📁 {$_('common.browse')}</button>
-      <button class="btn" on:click={handleAddPath} disabled={!newMibPath.trim()}>➕ {$_('common.add')}</button>
+      <button class="btn secondary" on:click={handleBrowseFolder}><Icon name="folder-open" size={15} /> {$_('common.browse')}</button>
+      <button class="btn" on:click={handleAddPath} disabled={!newMibPath.trim()}><Icon name="plus" size={15} /> {$_('common.add')}</button>
     </div>
   </div>
 
@@ -151,7 +152,7 @@
       disabled={$mibStore.isLoading}
       style="width: 100%;"
     >
-      {$mibStore.isLoading ? '⏳ ' + $_('settings.mibs.reloadingAll') : '🔄 ' + $_('settings.mibs.reloadAll')}
+      {#if $mibStore.isLoading}<Icon name="loader-circle" class="icon-spin" /> {$_('settings.mibs.reloadingAll')}{:else}<Icon name="refresh-cw" /> {$_('settings.mibs.reloadAll')}{/if}
     </button>
     <small class="mib-empty-text">
       {$_('settings.mibs.reloadHint')}
@@ -169,7 +170,7 @@
       <div class="diagnostics-list">
         {#each $mibDiagnostics as diag}
           <div class="diag-item" class:diag-error={!diag.success}>
-            <span class="diag-icon">{diag.success ? '✅' : '❌'}</span>
+            <span class="diag-icon">{#if diag.success}<Icon name="circle-check" class="icon-success" size={14} />{:else}<Icon name="circle-x" class="icon-error" size={14} />{/if}</span>
             <span class="diag-filename">{diag.fileName}</span>
             {#if diag.error}
               <span class="diag-error-msg" title={diag.error}>{diag.error}</span>

@@ -1,5 +1,6 @@
 <script>
   import { createEventDispatcher } from 'svelte';
+  import Icon from '../Icon.svelte';
   import { copyToClipboard } from '../utils/clipboard';
   import { escapeCSV, downloadFile } from '../utils/csv';
   import { formatValueWithEnum as _formatValueWithEnum, findTableParentNode } from '../utils/mibTree';
@@ -708,7 +709,7 @@
                           class="btn-copy-small"
                           on:click|stopPropagation={() => copyToClipboard(String(walkItem.value), $_('common.value'))}
                           title={$_('common.copyValue')}
-                        >📋</button>
+                        ><Icon name="copy" size={13} /></button>
                       </td>
                     </tr>
                   {/each}
@@ -721,7 +722,7 @@
           <p class="result-line">
             <strong>{$_('common.oid')}:</strong>
             <span class="result-oid">{res.result.oid}</span>
-            <button class="btn-copy-small" on:click={() => copyToClipboard(res.result.oid, $_('common.oid'))} title={$_('common.copyOid')}>📋</button>
+            <button class="btn-copy-small" on:click={() => copyToClipboard(res.result.oid, $_('common.oid'))} title={$_('common.copyOid')}><Icon name="copy" size={13} /></button>
           </p>
           <p><strong>{$_('common.type')}:</strong> {res.result.type}
             {#if oidInfoCache[res.result.oid]?.name}
@@ -731,7 +732,7 @@
           <p class="result-line">
             <strong>{$_('common.value')}:</strong>
             <span class="result-value">{formatValueWithEnum(res.result.value, res.result.oid, res.result.type)}</span>
-            <button class="btn-copy-small" on:click={() => copyToClipboard(String(res.result.value), $_('common.value'))} title={$_('common.copyValue')}>📋</button>
+            <button class="btn-copy-small" on:click={() => copyToClipboard(String(res.result.value), $_('common.value'))} title={$_('common.copyValue')}><Icon name="copy" size={13} /></button>
           </p>
         {/if}
         </div>

@@ -2,6 +2,7 @@
   import { _, locale } from 'svelte-i18n';
   import { SUPPORTED_LOCALES } from '../i18n/index.js';
   import { MonitorCleanup } from '../../wailsjs/go/main/App';
+  import Icon from '../Icon.svelte';
   export let settings;
 
   let cleanupResult = null;
@@ -54,7 +55,7 @@
 </fieldset>
 
 <fieldset>
-  <legend>📊 {$_('settings.general.persistenceTitle')}</legend>
+  <legend><Icon name="database" size={15} /> {$_('settings.general.persistenceTitle')}</legend>
   <div class="persist-section">
     <div class="form-group compact">
       <label for="retention-days">{$_('settings.general.retentionDays')}</label>
@@ -91,7 +92,7 @@
 </fieldset>
 
 <fieldset>
-  <legend>🎨 {$_('settings.general.theme')}</legend>
+  <legend><Icon name="palette" size={15} /> {$_('settings.general.theme')}</legend>
   <div class="theme-section">
     <div class="form-group">
       <label for="theme">{$_('settings.general.themeHint')}</label>
@@ -103,7 +104,7 @@
             on:click={() => settings.theme = themeOption}
           >
             <span class="theme-icon">
-              {themeOption === 'system' ? '💻' : themeOption === 'dark' ? '🌙' : '☀️'}
+              <Icon name={themeOption === 'system' ? 'monitor' : themeOption === 'dark' ? 'moon' : 'sun'} size={15} />
             </span>
             {$_(`settings.general.theme${themeOption.charAt(0).toUpperCase() + themeOption.slice(1)}`)}
           </button>
@@ -114,7 +115,7 @@
 </fieldset>
 
 <fieldset>
-  <legend>🌐 {$_('settings.general.language')}</legend>
+  <legend><Icon name="globe" size={15} /> {$_('settings.general.language')}</legend>
   <div class="language-section">
     <div class="form-group">
       <label for="locale">{$_('settings.general.languageHint')}</label>
@@ -128,7 +129,7 @@
 </fieldset>
 
 <fieldset>
-  <legend>🔒 {$_('settings.general.anonymousTitle')}</legend>
+  <legend><Icon name="eye-off" size={15} /> {$_('settings.general.anonymousTitle')}</legend>
   <div class="persist-section">
     <label class="toggle-row">
       <input type="checkbox" bind:checked={settings.anonymousMode} />

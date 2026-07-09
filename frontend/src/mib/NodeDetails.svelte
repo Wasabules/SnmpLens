@@ -1,6 +1,7 @@
 <script>
   import { copyToClipboard } from '../utils/clipboard';
   import { _ } from 'svelte-i18n';
+  import Icon from '../Icon.svelte';
 
   export let selectedNode = null;
 
@@ -10,7 +11,7 @@
 {#if selectedNode}
   <div class="node-details" class:collapsed>
     <div class="node-details-header">
-      <h4>📋 {$_('nodeDetails.title')}</h4>
+      <h4><Icon name="clipboard-list" size={15} /> {$_('nodeDetails.title')}</h4>
       <button
         class="btn-collapse"
         on:click={() => collapsed = !collapsed}
@@ -34,7 +35,7 @@
             class="btn-copy"
             on:click={() => copyToClipboard(selectedNode.oid, 'OID')}
             title={$_('common.copyOid')}
-          >📋</button>
+          ><Icon name="copy" size={13} /></button>
         </div>
 
         {#if selectedNode.mibType}

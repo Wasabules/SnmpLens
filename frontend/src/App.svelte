@@ -14,6 +14,7 @@
   import SettingsModal from './SettingsModal.svelte';
   import TargetManager from './TargetManager.svelte';
   import DebugPanel from './DebugPanel.svelte';
+  import Icon from './Icon.svelte';
   import { trapStore } from './stores/trapStore';
   import { mibPathsStore } from './stores/mibPathsStore';
   import { mibStore, mibDiagnostics } from './stores/mibStore';
@@ -313,7 +314,7 @@
 {#if dragOver}
   <div class="drop-overlay">
     <div class="drop-content">
-      <div class="drop-icon">📄</div>
+      <div class="drop-icon"><Icon name="file-plus" size={48} strokeWidth={1.5} /></div>
       <div class="drop-text">{$_('app.mibDrop.overlay')}</div>
       <div class="drop-hint">{$_('app.mibDrop.overlayHint')}</div>
     </div>
@@ -360,7 +361,7 @@
     <div class="modal-backdrop" on:mousedown={() => showTargets = false}>
       <div class="targets-modal" on:mousedown|stopPropagation>
         <div class="targets-modal-header">
-          <h2>🎯 {$_('targets.title', { values: { count: targetCount } })}</h2>
+          <h2><Icon name="target" size={20} /> {$_('targets.title', { values: { count: targetCount } })}</h2>
           <button class="close-btn" on:click={() => showTargets = false}>&times;</button>
         </div>
         <div class="targets-modal-body">
@@ -374,7 +375,7 @@
     <div class="top-bar-left">
       <h1>{$_('app.title')}</h1>
       <button class="targets-btn" on:click={() => showTargets = true} title={$_('app.status.targetsTitle')}>
-        🎯 {$_('common.target')}
+        <Icon name="target" size={15} /> {$_('common.target')}
         <span class="targets-badge">{targetCount}</span>
       </button>
     </div>
@@ -384,7 +385,7 @@
         class:active={$trapStore.isListening}
         title={$trapStore.isListening ? $_('app.status.trapListening', { values: { port: $settingsStore.trapPort } }) : $_('app.status.trapInactive')}
       >
-        <span class="status-icon">📡</span>
+        <span class="status-icon"><Icon name="radio" size={14} /></span>
         <span class="status-label">{$_('app.status.trap')}</span>
         <span class="status-indicator" class:listening={$trapStore.isListening}>
           {$trapStore.isListening ? $settingsStore.trapPort : $_('app.status.trapOff')}
@@ -404,10 +405,10 @@
       </div>
     </div>
     <button class="btn debug-toggle-btn" class:active={showDebug} on:click={() => showDebug = !showDebug} title={$_('debug.title')}>
-      🔍 Debug
+      <Icon name="bug" size={15} /> Debug
     </button>
     <button class="btn settings-btn" on:click={() => showSettings = true} title={$_('app.settingsTooltip')}>
-      ⚙️ {$_('app.settings')}
+      <Icon name="settings" size={15} /> {$_('app.settings')}
     </button>
   </div>
 

@@ -3,6 +3,7 @@
   import { GetPersistentMibDirectory } from '../wailsjs/go/main/App';
   import { mibStore } from './stores/mibStore';
   import TreeNode from './TreeNode.svelte';
+  import Icon from './Icon.svelte';
   import ContextMenu from './ContextMenu.svelte';
   import Breadcrumb from './Breadcrumb.svelte';
   import Tooltip from './Tooltip.svelte';
@@ -56,9 +57,9 @@
   function buildContextMenuItems(node) {
     const t = get(_);
     const items = [
-      { label: '📋 ' + t('mib.contextMenu.copyOid'), action: 'copyOid' },
-      { label: '📝 ' + t('mib.contextMenu.copyName'), action: 'copyName' },
-      { label: '📄 ' + t('mib.contextMenu.copyPath'), action: 'copyPath' },
+      { label: t('mib.contextMenu.copyOid'), icon: 'copy', action: 'copyOid' },
+      { label: t('mib.contextMenu.copyName'), icon: 'tag', action: 'copyName' },
+      { label: t('mib.contextMenu.copyPath'), icon: 'route', action: 'copyPath' },
     ];
 
     // Add separator
@@ -66,13 +67,14 @@
 
     // Add SNMP operations for Scalar and Column types
     if (node.mibType === 'Scalar' || node.mibType === 'Column') {
-      items.push({ label: '📥 ' + t('mib.contextMenu.snmpGet'), action: 'snmpGet' });
-      items.push({ label: '📥 ' + t('mib.contextMenu.snmpGetNext'), action: 'snmpGetNext' });
+      items.push({ label: t('mib.contextMenu.snmpGet'), icon: 'download', action: 'snmpGet' });
+      items.push({ label: t('mib.contextMenu.snmpGetNext'), icon: 'arrow-right-to-line', action: 'snmpGetNext' });
 
       // Check if node is writable
       const writable = isWritable(node);
       items.push({
-        label: '📤 ' + t('mib.contextMenu.snmpSet'),
+        label: t('mib.contextMenu.snmpSet'),
+        icon: 'upload',
         action: 'snmpSet',
         disabled: !writable,
         disabledReason: !writable ? t('mib.contextMenu.objectIs', { values: { access: node.access || 'read-only' } }) : ''
@@ -81,13 +83,13 @@
 
     // Add SNMP Walk and GETBULK for Table, Row, Node, and Group types
     if (node.mibType === 'Table' || node.mibType === 'Row' || node.mibType === 'Node' || node.mibType === 'Group') {
-      items.push({ label: '🚶 ' + t('mib.contextMenu.snmpWalk'), action: 'snmpWalk' });
-      items.push({ label: '📦 ' + t('mib.contextMenu.snmpGetBulk'), action: 'snmpGetBulk' });
+      items.push({ label: t('mib.contextMenu.snmpWalk'), icon: 'footprints', action: 'snmpWalk' });
+      items.push({ label: t('mib.contextMenu.snmpGetBulk'), icon: 'layers', action: 'snmpGetBulk' });
     }
 
     // Add "Walk as Table" for Table and Row nodes
     if (node.mibType === 'Table' || node.mibType === 'Row') {
-      items.push({ label: '📊 ' + t('mib.walkAsTable'), action: 'walkAsTable' });
+      items.push({ label: t('mib.walkAsTable'), icon: 'table', action: 'walkAsTable' });
     }
 
     // Add separator
@@ -96,9 +98,9 @@
     // Add/Remove favorite
     const isFav = favoritesStore.isFavorite(node.oid, $favoritesStore);
     if (isFav) {
-      items.push({ label: '⭐ ' + t('mib.contextMenu.removeFavorite'), action: 'removeFavorite' });
+      items.push({ label: t('mib.contextMenu.removeFavorite'), icon: 'star', iconFilled: true, action: 'removeFavorite' });
     } else {
-      items.push({ label: '☆ ' + t('mib.contextMenu.addFavorite'), action: 'addFavorite' });
+      items.push({ label: t('mib.contextMenu.addFavorite'), icon: 'star', action: 'addFavorite' });
     }
 
     return items;
@@ -633,14 +635,14 @@
       on:click={() => compactMode = !compactMode}
       title={compactMode ? $_('mib.compactDisable') : $_('mib.compactEnable')}
     >
-      {compactMode ? '📐' : '📏'}
+      <Icon name={compactMode ? 'chevrons-down-up' : 'chevrons-up-down'} />
     </button>
-    <button 
-      class="btn tertiary keyboard-help-btn" 
+    <button
+      class="btn tertiary keyboard-help-btn"
       on:click={() => showKeyboardHelp = !showKeyboardHelp}
       title={$_('mib.keyboardTooltip')}
     >
-      ⌨️
+      <Icon name="keyboard" />
     </button>
   </div>
 

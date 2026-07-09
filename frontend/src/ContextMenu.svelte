@@ -1,9 +1,10 @@
 <script>
   import { createEventDispatcher, onDestroy } from 'svelte';
+  import Icon from './Icon.svelte';
 
   export let x;
   export let y;
-  export let items; // [{ label: 'Copy OID', action: 'copyOid', disabled: false }]
+  export let items; // [{ label: 'Copy OID', icon: 'copy', action: 'copyOid', disabled: false }]
 
   const dispatch = createEventDispatcher();
 
@@ -42,13 +43,14 @@
       {#if item.label === '---'}
         <li class="separator"></li>
       {:else}
-        <li 
+        <li
           class:disabled={item.disabled}
-          on:click={() => handleClick(item)} 
+          on:click={() => handleClick(item)}
           on:keydown|preventDefault|stopPropagation
           title={item.disabled ? item.disabledReason || 'This action is not available' : ''}
         >
-          {item.label}
+          {#if item.icon}<Icon name={item.icon} size={14} filled={item.iconFilled} class="menu-icon" />{/if}
+          <span>{item.label}</span>
         </li>
       {/if}
     {/each}
@@ -75,6 +77,12 @@
     cursor: pointer;
     font-size: 0.9em;
     white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+  li :global(.menu-icon) {
+    opacity: 0.75;
   }
   li:hover {
     background-color: var(--accent-color);

@@ -4,6 +4,7 @@
   import { anonMode, anonymizeIp } from './utils/anonymize';
   import { copyToClipboard } from './utils/clipboard';
   import { formatBySnmpType } from './utils/formatting';
+  import Icon from './Icon.svelte';
 
   export let trap;
 
@@ -81,7 +82,7 @@
     <span class="chevron">{isOpen ? '▼' : '►'}</span>
     <span class="timestamp">{trap.timestamp ? new Date(trap.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString()}</span>
     <span class="source">{$anonMode ? anonymizeIp(trap.source) : trap.source}</span>
-    <button class="btn-copy-small" on:click|stopPropagation={() => copyToClipboard(trap.source, 'Source')} title="Copy source">📋</button>
+    <button class="btn-copy-small" on:click|stopPropagation={() => copyToClipboard(trap.source, 'Source')} title="Copy source"><Icon name="copy" size={13} /></button>
     <span class="version">{trap.version}</span>
     <span class="pdu-type-badge" class:inform={trap.pduType === 'Inform'}>{trap.pduType || 'Trap'}</span>
     <span class="main-oid" title={mainTrapMessage}>{mainTrapMessage}</span>
@@ -104,12 +105,12 @@
               <td class="name" title={v.name}>{v.name}</td>
               <td class="oid" title={v.oid}>
                 {v.oid}
-                <button class="btn-copy-small" on:click={() => copyToClipboard(v.oid, $_('common.oid'))} title={$_('common.oid')}>📋</button>
+                <button class="btn-copy-small" on:click={() => copyToClipboard(v.oid, $_('common.oid'))} title={$_('common.oid')}><Icon name="copy" size={13} /></button>
               </td>
               <td class="type">{v.type}</td>
               <td class="value" title={String(v.value)}>
                 {formatTrapValue(v)}
-                <button class="btn-copy-small" on:click={() => copyToClipboard(String(v.value), $_('common.value'))} title={$_('common.value')}>📋</button>
+                <button class="btn-copy-small" on:click={() => copyToClipboard(String(v.value), $_('common.value'))} title={$_('common.value')}><Icon name="copy" size={13} /></button>
               </td>
             </tr>
           {/each}

@@ -1,6 +1,7 @@
 <script>
   import { createEventDispatcher } from 'svelte';
   import { _ } from 'svelte-i18n';
+  import Icon from '../Icon.svelte';
 
   export let visible = false;
 
@@ -10,8 +11,8 @@
 {#if visible}
   <div class="keyboard-help">
     <div class="keyboard-help-header">
-      <h4>⌨️ {$_('keyboard.title')}</h4>
-      <button class="close-btn" on:click={() => dispatch('close')}>✕</button>
+      <h4><Icon name="keyboard" size={16} /> {$_('keyboard.title')}</h4>
+      <button class="close-btn" on:click={() => dispatch('close')}><Icon name="x" size={15} /></button>
     </div>
     <div class="shortcuts-grid">
       <div class="shortcut">

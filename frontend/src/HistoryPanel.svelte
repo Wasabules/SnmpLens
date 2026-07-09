@@ -5,6 +5,7 @@
   import { notificationStore } from './stores/notifications';
   import { mibStore } from './stores/mibStore';
   import DiffModal from './DiffModal.svelte';
+  import Icon from './Icon.svelte';
   import { findNodeByOid, findMibNameByOid, formatValueWithEnum } from './utils/mibTree';
   import { formatTimestamp, formatDuration } from './utils/formatting';
   import { anonMode, anonymizeIp } from './utils/anonymize';
@@ -135,10 +136,12 @@
 
   function getOperationIcon(operation) {
     switch (operation) {
-      case 'GET': return '📥';
-      case 'SET': return '📤';
-      case 'WALK': return '🚶';
-      default: return '📋';
+      case 'GET': return 'download';
+      case 'SET': return 'upload';
+      case 'GETNEXT': return 'arrow-right-to-line';
+      case 'GETBULK': return 'layers';
+      case 'WALK': return 'footprints';
+      default: return 'file';
     }
   }
 
@@ -259,25 +262,25 @@
               </span>
             {/if}
             <span class="chevron">{expandedIds.has(entry.id) ? '▼' : '▶'}</span>
-            <span class="operation-icon">{getOperationIcon(entry.operation)}</span>
+            <span class="operation-icon"><Icon name={getOperationIcon(entry.operation)} size={14} /></span>
             <span class="operation-type">{entry.operation}</span>
             <span class="timestamp">{formatTimestamp(entry.timestamp)}</span>
             <span class="mib-name" title={entry.oid}>{getDisplayName(entry.oid)}</span>
-            <button class="btn-copy-small" on:click|stopPropagation={() => copyToClipboard(entry.oid, $_('common.oid'))} title={$_('common.oid')}>📋</button>
+            <button class="btn-copy-small" on:click|stopPropagation={() => copyToClipboard(entry.oid, $_('common.oid'))} title={$_('common.oid')}><Icon name="copy" size={13} /></button>
             {#if getDisplayValue(entry)}
               <span class="value-display" title={getDisplayValue(entry)}>→ {getDisplayValue(entry)}</span>
             {/if}
             <span class="targets-count">{entry.targets?.length || 0} target(s)</span>
             <span class="duration">{formatDuration(entry.duration)}</span>
             <span class="status" style="color: {getStatusColor(entry.success)}">
-              {entry.success ? '✓' : '✗'}
+              {#if entry.success}<Icon name="check" size={15} />{:else}<Icon name="x" size={15} />{/if}
             </span>
             <button 
               class="btn-icon delete-btn" 
               on:click|stopPropagation={() => handleDeleteEntry(entry.id)}
               title={$_('history.deleteEntry')}
             >
-              🗑️
+              <Icon name="trash-2" size={15} />
             </button>
           </div>
           
@@ -288,7 +291,7 @@
               </div>
               <div class="detail-row">
                 <strong>{$_('nodeDetails.oid')}</strong> <code>{entry.oid}</code>
-                <button class="btn-copy-small" on:click={() => copyToClipboard(entry.oid, $_('common.oid'))} title={$_('common.oid')}>📋</button>
+                <button class="btn-copy-small" on:click={() => copyToClipboard(entry.oid, $_('common.oid'))} title={$_('common.oid')}><Icon name="copy" size={13} /></button>
               </div>
               <div class="detail-row">
                 <strong>{$_('history.targets')}:</strong> <code>{$anonMode ? entry.targets?.map(t => anonymizeIp(t)).join(', ') : entry.targets?.join(', ')}</code>
@@ -300,7 +303,7 @@
               {#if entry.operation === 'SET'}
                 <div class="detail-row">
                   <strong>{$_('common.value')}:</strong> <code>{entry.value}</code>
-                  <button class="btn-copy-small" on:click={() => copyToClipboard(String(entry.value), $_('common.value'))} title={$_('common.value')}>📋</button>
+                  <button class="btn-copy-small" on:click={() => copyToClipboard(String(entry.value), $_('common.value'))} title={$_('common.value')}><Icon name="copy" size={13} /></button>
                 </div>
                 <div class="detail-row">
                   <strong>{$_('common.type')}:</strong> <span>{entry.valueType}</span>
@@ -332,7 +335,7 @@
                       {:else if result.result}
                         <div>
                           {result.result.type}: {JSON.stringify(result.result.value)}
-                          <button class="btn-copy-small" on:click={() => copyToClipboard(JSON.stringify(result.result.value), $_('common.value'))} title={$_('common.value')}>📋</button>
+                          <button class="btn-copy-small" on:click={() => copyToClipboard(JSON.stringify(result.result.value), $_('common.value'))} title={$_('common.value')}><Icon name="copy" size={13} /></button>
                         </div>
                       {/if}
                     </div>

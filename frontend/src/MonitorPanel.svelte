@@ -12,6 +12,7 @@
   import { formatTimeShort } from './utils/formatting';
   import { anonMode, anonymizeIp } from './utils/anonymize';
   import { copyToClipboard } from './utils/clipboard';
+  import Icon from './Icon.svelte';
 
   Chart.register(...registerables);
 
@@ -427,7 +428,7 @@
           <div class="session-header">
             <div class="session-info">
               <span class="session-oid">{session.oid}</span>
-              <button class="btn-copy-small" on:click|stopPropagation={() => copyToClipboard(session.oid, 'OID')} title="Copy OID">📋</button>
+              <button class="btn-copy-small" on:click|stopPropagation={() => copyToClipboard(session.oid, 'OID')} title="Copy OID"><Icon name="copy" size={13} /></button>
               <span class="session-status" class:running={session.running}>
                 {session.running ? $_('monitor.running') : $_('monitor.stopped')}
               </span>
@@ -528,7 +529,7 @@
                       <td class="mono">
                         {point.value !== null ? point.value : '-'}
                         {#if point.value !== null}
-                          <button class="btn-copy-small" on:click={() => copyToClipboard(String(point.value), $_('monitor.tableValue'))} title={$_('monitor.tableValue')}>📋</button>
+                          <button class="btn-copy-small" on:click={() => copyToClipboard(String(point.value), $_('monitor.tableValue'))} title={$_('monitor.tableValue')}><Icon name="copy" size={13} /></button>
                         {/if}
                       </td>
                       <td class="mono">{point.delta !== null ? point.delta : '-'}</td>
@@ -563,7 +564,7 @@
                       <td class="mono">
                         {point.value !== null ? point.value : '-'}
                         {#if point.value !== null}
-                          <button class="btn-copy-small" on:click={() => copyToClipboard(String(point.value), $_('monitor.tableValue'))} title={$_('monitor.tableValue')}>📋</button>
+                          <button class="btn-copy-small" on:click={() => copyToClipboard(String(point.value), $_('monitor.tableValue'))} title={$_('monitor.tableValue')}><Icon name="copy" size={13} /></button>
                         {/if}
                       </td>
                       <td class="mono">{point.delta !== null ? point.delta : '-'}</td>

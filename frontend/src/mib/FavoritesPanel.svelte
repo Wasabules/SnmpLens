@@ -4,27 +4,28 @@
   import { createEventDispatcher } from 'svelte';
   import { _ } from 'svelte-i18n';
   import { get } from 'svelte/store';
+  import Icon from '../Icon.svelte';
 
   const dispatch = createEventDispatcher();
 
-  // Get icon from type string (for favorites)
+  // Get icon name (Lucide) from type string (for favorites)
   function getNodeIconFromType(type) {
     const icons = {
-      'Scalar': '📊',
-      'Column': '📑',
-      'Table': '📋',
-      'Notification': '🔔',
-      'Node': '📁',
-      'Group': '📦',
+      'Scalar': 'circle-dot',
+      'Column': 'columns-3',
+      'Table': 'table',
+      'Notification': 'bell',
+      'Node': 'folder',
+      'Group': 'layers',
     };
-    return icons[type] || '📄';
+    return icons[type] || 'file';
   }
 </script>
 
 {#if $favoritesStore.length > 0}
   <div class="favorites-panel">
     <div class="favorites-header">
-      <span class="favorites-title">⭐ {$_('favorites.title', { values: { count: $favoritesStore.length } })}</span>
+      <span class="favorites-title"><Icon name="star" filled={true} size={14} /> {$_('favorites.title', { values: { count: $favoritesStore.length } })}</span>
       <button
         class="btn-icon"
         on:click={() => {
@@ -35,7 +36,7 @@
         }}
         title={$_('favorites.clearAll')}
       >
-        🗑️
+        <Icon name="trash-2" size={15} />
       </button>
     </div>
     <div class="favorites-list">
@@ -48,14 +49,14 @@
           tabindex="0"
           title="{favorite.path}\nOID: {favorite.oid}"
         >
-          <span class="favorite-icon">{getNodeIconFromType(favorite.type)}</span>
+          <span class="favorite-icon"><Icon name={getNodeIconFromType(favorite.type)} size={14} /></span>
           <span class="favorite-name">{favorite.name}</span>
           <button
             class="btn-remove"
             on:click|stopPropagation={() => favoritesStore.remove(favorite.oid)}
             title={$_('favorites.removeFrom')}
           >
-            ✕
+            <Icon name="x" size={14} />
           </button>
         </div>
       {/each}

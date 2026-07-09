@@ -2,6 +2,7 @@
   import { historyStore } from '../stores/historyStore';
   import { mibStore } from '../stores/mibStore';
   import { findMibNameByOid } from '../utils/mibTree';
+  import Icon from '../Icon.svelte';
   import { _ } from 'svelte-i18n';
 
   // Get display name for history entry (MIB name or OID)
@@ -34,7 +35,7 @@
 <!-- Recent History -->
 <div class="history-section">
   <div class="history-header">
-    <h4>📜 {$_('recentHistory.title')}</h4>
+    <h4><Icon name="history" size={15} /> {$_('recentHistory.title')}</h4>
     <span class="history-count">{$_('recentHistory.recent', { values: { count: $historyStore.slice(0, 5).length } })}</span>
   </div>
   {#if $historyStore.length > 0}
@@ -43,7 +44,7 @@
         <div class="history-item" class:success={entry.success} class:error={!entry.success}>
           <div class="history-item-header">
             <span class="history-operation">{entry.operation}</span>
-            <span class="history-status">{entry.success ? '✅' : '❌'}</span>
+            <span class="history-status">{#if entry.success}<Icon name="circle-check" class="icon-success" size={14} />{:else}<Icon name="circle-x" class="icon-error" size={14} />{/if}</span>
             <span class="history-time">{new Date(entry.timestamp).toLocaleTimeString()}</span>
           </div>
           <div class="history-item-main">
@@ -53,9 +54,9 @@
             {/if}
           </div>
           <div class="history-item-details">
-            <span class="history-targets">🎯 {entry.targets.length} target(s)</span>
+            <span class="history-targets"><Icon name="target" size={12} /> {entry.targets.length} target(s)</span>
             {#if entry.duration}
-              <span class="history-duration">⏱️ {entry.duration}ms</span>
+              <span class="history-duration"><Icon name="timer" size={12} /> {entry.duration}ms</span>
             {/if}
           </div>
         </div>

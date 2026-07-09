@@ -1,6 +1,7 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
   import { _ } from 'svelte-i18n';
+  import Icon from './Icon.svelte';
 
   /** @type {any} */
   export let node = null;
@@ -44,17 +45,17 @@
     setTimeout(adjustPosition, 0);
   }
 
-  // Get icon for node type
+  // Get icon name (Lucide) for node type
   function getNodeIcon(type) {
     const icons = {
-      'Scalar': '📊',
-      'Column': '📑',
-      'Table': '📋',
-      'Notification': '🔔',
-      'Node': '📁',
-      'Group': '📦',
+      'Scalar': 'circle-dot',
+      'Column': 'columns-3',
+      'Table': 'table',
+      'Notification': 'bell',
+      'Node': 'folder',
+      'Group': 'layers',
     };
-    return icons[type] || '📄';
+    return icons[type] || 'file';
   }
 
   // Get color for node type
@@ -97,7 +98,7 @@
   >
     <div class="tooltip-header">
       <span class="tooltip-icon" style="color: {getTypeColor(node.mibType)}">
-        {getNodeIcon(node.mibType)}
+        <Icon name={getNodeIcon(node.mibType)} size={16} />
       </span>
       <span class="tooltip-name">{node.name}</span>
     </div>

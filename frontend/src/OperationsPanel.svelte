@@ -8,6 +8,7 @@
   import { isNodeWritable } from './utils/mibTree';
   import { mibStore } from './stores/mibStore';
   import ResultsDisplay from './operations/ResultsDisplay.svelte';
+  import Icon from './Icon.svelte';
   import SavedQueries from './operations/SavedQueries.svelte';
   import RecentHistory from './operations/RecentHistory.svelte';
   import { _ } from 'svelte-i18n';
@@ -710,21 +711,21 @@
       class:active={activeOperation === 'GET'}
       on:click={() => activeOperation = 'GET'}
     >
-      📥 {$_('operations.get')}
+      <Icon name="download" /> {$_('operations.get')}
     </button>
     <button
       class="tab-btn"
       class:active={activeOperation === 'SET'}
       on:click={() => activeOperation = 'SET'}
     >
-      📤 {$_('operations.set')}
+      <Icon name="upload" /> {$_('operations.set')}
     </button>
     <button
       class="tab-btn"
       class:active={activeOperation === 'GETNEXT'}
       on:click={() => activeOperation = 'GETNEXT'}
     >
-      📥 {$_('operations.getNext')}
+      <Icon name="arrow-right-to-line" /> {$_('operations.getNext')}
     </button>
     <button
       class="tab-btn"
@@ -733,14 +734,14 @@
       disabled={$settingsStore.snmpVersion === 'v1'}
       title={$settingsStore.snmpVersion === 'v1' ? $_('operations.getBulkV1Warning') : ''}
     >
-      📦 {$_('operations.getBulk')}
+      <Icon name="layers" /> {$_('operations.getBulk')}
     </button>
     <button
       class="tab-btn"
       class:active={activeOperation === 'WALK'}
       on:click={() => activeOperation = 'WALK'}
     >
-      🚶 {$_('operations.walk')}
+      <Icon name="footprints" /> {$_('operations.walk')}
     </button>
   </div>
 
@@ -771,7 +772,7 @@
               checked={$settingsStore.autoGetEnabled}
               on:change={(e) => settingsStore.save({...$settingsStore, autoGetEnabled: /** @type {HTMLInputElement} */(e.target).checked})}
             />
-            ⚡ {$_('operations.autoGet')}
+            <Icon name="zap" size={14} /> {$_('operations.autoGet')}
           </label>
           <label class="auto-toggle" title={$_('operations.autoFillSetHint')}>
             <input
@@ -779,7 +780,7 @@
               checked={$settingsStore.autoFillSetEnabled}
               on:change={(e) => settingsStore.save({...$settingsStore, autoFillSetEnabled: /** @type {HTMLInputElement} */(e.target).checked})}
             />
-            🔄 {$_('operations.autoFillSet')}
+            <Icon name="refresh-cw" size={14} /> {$_('operations.autoFillSet')}
           </label>
         </div>
         {#if selectedNode && selectedNode.mibType === 'Column'}
@@ -798,7 +799,7 @@
           </div>
         {/if}
         <button class="btn btn-primary" on:click={handleSnmpGet} disabled={isLoading}>
-          {isLoading ? '⏳ ' + $_('common.working') : '📥 ' + $_('operations.executeGet')}
+          {#if isLoading}<Icon name="loader-circle" class="icon-spin" /> {$_('common.working')}{:else}<Icon name="download" /> {$_('operations.executeGet')}{/if}
         </button>
       </div>
     {/if}
@@ -807,7 +808,7 @@
       <div class="form-content">
         {#if selectedNode && !isCurrentNodeWritable}
           <div class="warning-banner">
-            ⚠️ {setDisabledReason}
+            <Icon name="triangle-alert" class="icon-warning" size={15} /> {setDisabledReason}
           </div>
         {/if}
         <div class="form-group">
@@ -882,14 +883,14 @@
           disabled={isLoading || !selectedNode || !isCurrentNodeWritable}
           title={!isCurrentNodeWritable ? setDisabledReason : ''}
         >
-          {isLoading ? '⏳ ' + $_('common.working') : '📤 ' + $_('operations.executeSet')}
+          {#if isLoading}<Icon name="loader-circle" class="icon-spin" /> {$_('common.working')}{:else}<Icon name="upload" /> {$_('operations.executeSet')}{/if}
         </button>
       </div>
 
       {#if showSetConfirm}
         <div class="set-confirm-backdrop" on:mousedown={() => showSetConfirm = false}>
           <div class="set-confirm-modal" on:mousedown|stopPropagation>
-            <h3>⚠️ {$_('operations.setConfirm.title')}</h3>
+            <h3><Icon name="triangle-alert" class="icon-warning" size={18} /> {$_('operations.setConfirm.title')}</h3>
             <p class="set-confirm-warning">{$_('operations.setConfirm.message')}</p>
             <dl class="set-confirm-details">
               <dt>{$_('common.oid')}</dt>
@@ -907,7 +908,7 @@
             </label>
             <div class="set-confirm-actions">
               <button class="btn" on:click={() => showSetConfirm = false}>{$_('common.cancel')}</button>
-              <button class="btn btn-primary" on:click={confirmSetAndExecute}>📤 {$_('operations.setConfirm.confirm')}</button>
+              <button class="btn btn-primary" on:click={confirmSetAndExecute}><Icon name="upload" /> {$_('operations.setConfirm.confirm')}</button>
             </div>
           </div>
         </div>
@@ -922,7 +923,7 @@
         </div>
         <p class="form-hint">{$_('operations.getNextHint')}</p>
         <button class="btn btn-primary" on:click={handleSnmpGetNext} disabled={isLoading}>
-          {isLoading ? '⏳ ' + $_('common.working') : '📥 ' + $_('operations.executeGetNext')}
+          {#if isLoading}<Icon name="loader-circle" class="icon-spin" /> {$_('common.working')}{:else}<Icon name="arrow-right-to-line" /> {$_('operations.executeGetNext')}{/if}
         </button>
       </div>
     {/if}
@@ -949,7 +950,7 @@
           </div>
         {/if}
         <button class="btn btn-primary" on:click={handleSnmpGetBulk} disabled={isLoading || $settingsStore.snmpVersion === 'v1'}>
-          {isLoading ? '⏳ ' + $_('common.working') : '📦 ' + $_('operations.executeGetBulk')}
+          {#if isLoading}<Icon name="loader-circle" class="icon-spin" /> {$_('common.working')}{:else}<Icon name="layers" /> {$_('operations.executeGetBulk')}{/if}
         </button>
       </div>
     {/if}
@@ -961,7 +962,7 @@
           <input id="walk-oid" type="text" value={snmpWalkOid} on:input={handleWalkOidInput} placeholder={$_('operations.walkOidPlaceholder')} />
         </div>
         <button class="btn btn-primary" on:click={handleSnmpWalk} disabled={isLoading}>
-          {isLoading ? '⏳ ' + $_('common.working') : '🚶 ' + $_('operations.executeWalk')}
+          {#if isLoading}<Icon name="loader-circle" class="icon-spin" /> {$_('common.working')}{:else}<Icon name="footprints" /> {$_('operations.executeWalk')}{/if}
         </button>
       </div>
     {/if}

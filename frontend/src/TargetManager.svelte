@@ -9,6 +9,7 @@
   import { getEffectiveSettings } from './utils/targets';
   import TargetOverrideForm from './TargetOverrideForm.svelte';
   import { anonMode, anonymizeIp } from './utils/anonymize';
+  import Icon from './Icon.svelte';
 
   const dispatch = createEventDispatcher();
 
@@ -314,7 +315,7 @@
       >
         {group.name} <span class="group-count">{getGroupTargetCount(group.id)}</span>
         {#if group.id !== 'default'}
-          <button class="group-delete" on:click|stopPropagation={() => deleteGroup(group.id)} title={$_('common.delete')}>✕</button>
+          <button class="group-delete" on:click|stopPropagation={() => deleteGroup(group.id)} title={$_('common.delete')}><Icon name="x" size={12} /></button>
         {/if}
       </button>
     {/each}
@@ -338,16 +339,16 @@
   <div class="target-header">
     <div class="target-actions">
       <button class="btn-sm" on:click={testAllTargets} disabled={enabledCount === 0} title={$_('targets.testAllTooltip')}>
-        🔍 {$_('targets.testAll')}
+        <Icon name="plug" size={14} /> {$_('targets.testAll')}
       </button>
       <button class="btn-sm" on:click={openImport} title={$_('targets.import.tooltip')}>
-        📋 {$_('targets.import.button')}
+        <Icon name="clipboard-list" size={14} /> {$_('targets.import.button')}
       </button>
       <button class="btn-sm danger" on:click={deleteAllInGroup} disabled={filteredTargets.length === 0} title={$_('targets.deleteAllTooltip')}>
-        🗑️ {$_('targets.deleteAll')}
+        <Icon name="trash-2" size={14} /> {$_('targets.deleteAll')}
       </button>
       <button class="btn-sm primary" on:click={() => showAddForm = !showAddForm}>
-        {showAddForm ? '✕' : $_('targets.addButton')}
+        {#if showAddForm}<Icon name="x" size={14} />{:else}{$_('targets.addButton')}{/if}
       </button>
     </div>
   </div>
@@ -381,13 +382,13 @@
                     else if (e.key === 'Escape') cancelEditAddress();
                   }}
                 />
-                <button class="btn-icon" on:click={() => saveEditAddress(target)} title={$_('common.save')}>✔️</button>
-                <button class="btn-icon" on:click={cancelEditAddress} title={$_('common.cancel')}>✖️</button>
+                <button class="btn-icon" on:click={() => saveEditAddress(target)} title={$_('common.save')}><Icon name="check" class="icon-success" size={15} /></button>
+                <button class="btn-icon" on:click={cancelEditAddress} title={$_('common.cancel')}><Icon name="x" size={15} /></button>
               {:else}
                 <span class="target-address" class:disabled={!target.enabled}>
                   {$anonMode ? anonymizeIp(target.address) : target.address}
                   {#if hasOverrides(target.address)}
-                    <span class="override-badge" title={$_('targets.overrides.badge')}>⚙</span>
+                    <span class="override-badge" title={$_('targets.overrides.badge')}><Icon name="sliders-horizontal" size={11} /></span>
                   {/if}
                 </span>
                 <input
@@ -400,11 +401,11 @@
             </div>
             <div class="target-status">
               {#if target.testing}
-                <span class="status-icon testing">⏳</span>
+                <span class="status-icon testing"><Icon name="loader-circle" class="icon-spin" size={15} /></span>
               {:else if target.status === 'success'}
-                <span class="status-icon success" title={$_('targets.statusSuccess')}>✅</span>
+                <span class="status-icon success" title={$_('targets.statusSuccess')}><Icon name="circle-check" class="icon-success" size={15} /></span>
               {:else if target.status === 'error'}
-                <span class="status-icon error" title={$_('targets.statusError')}>❌</span>
+                <span class="status-icon error" title={$_('targets.statusError')}><Icon name="circle-x" class="icon-error" size={15} /></span>
               {/if}
             </div>
             <div class="target-buttons">
@@ -421,15 +422,15 @@
                 </select>
               {/if}
               <button class="btn-icon" on:click={() => startEditAddress(target)}
-                disabled={editingId === target.id} title={$_('targets.editTooltip')}>✏️</button>
+                disabled={editingId === target.id} title={$_('targets.editTooltip')}><Icon name="pencil" size={15} /></button>
               <button class="btn-icon" class:active={expandedOverrideId === target.id}
                 on:click={() => toggleOverrides(target.id)} title={$_('targets.overrides.title')}>
-                {hasOverrides(target.address) ? '⚙️' : '⚙'}
+                <Icon name="settings" size={15} />
               </button>
               <button class="btn-icon" on:click={() => testTarget(target.id)}
-                disabled={target.testing || !target.enabled} title={$_('targets.testTooltip')}>🔍</button>
+                disabled={target.testing || !target.enabled} title={$_('targets.testTooltip')}><Icon name="plug" size={15} /></button>
               <button class="btn-icon danger" on:click={() => removeTarget(target.id)}
-                title={$_('targets.deleteTooltip')}>🗑️</button>
+                title={$_('targets.deleteTooltip')}><Icon name="trash-2" size={15} /></button>
             </div>
           </div>
           {#if expandedOverrideId === target.id}
@@ -449,7 +450,7 @@
     <div class="import-backdrop" on:mousedown={() => showImport = false}>
       <div class="import-modal" on:mousedown|stopPropagation>
         <div class="import-modal-header">
-          <h3>📋 {$_('targets.import.title')}</h3>
+          <h3><Icon name="clipboard-list" size={16} /> {$_('targets.import.title')}</h3>
           <button class="import-close" on:click={() => showImport = false} title={$_('common.close')}>&times;</button>
         </div>
         <p class="import-hint">{$_('targets.import.hint')}</p>
@@ -463,7 +464,7 @@
         <div class="import-actions">
           <button class="btn-sm" on:click={() => showImport = false}>{$_('common.cancel')}</button>
           <button class="btn-sm primary" on:click={importTargets} disabled={!importText.trim()}>
-            📋 {$_('targets.import.button')}
+            <Icon name="clipboard-list" size={14} /> {$_('targets.import.button')}
           </button>
         </div>
       </div>
