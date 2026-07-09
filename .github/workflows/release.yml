@@ -56,11 +56,11 @@ jobs:
       # Build
       - name: Build (Linux)
         if: runner.os == 'Linux'
-        run: wails build -platform ${{ matrix.platform }} -tags webkit2_41
+        run: wails build -platform ${{ matrix.platform }} -tags webkit2_41 -ldflags "-X SnmpLens/pkg/updater.Version=${{ github.ref_name }}"
 
       - name: Build (non-Linux)
         if: runner.os != 'Linux'
-        run: wails build -platform ${{ matrix.platform }}
+        run: wails build -platform ${{ matrix.platform }} -ldflags "-X SnmpLens/pkg/updater.Version=${{ github.ref_name }}"
 
       # ── Windows packaging ──
 
@@ -79,6 +79,8 @@ jobs:
           $version = "${{ github.ref_name }}".TrimStart("v")
           Compress-Archive -Path build/bin/SnmpLens.exe -DestinationPath SnmpLens-windows-amd64-portable.zip
           Move-Item "SnmpLens-${version}-setup.exe" "SnmpLens-windows-amd64-setup.exe"
+          # Raw executable for the in-app self-update path
+          Copy-Item build/bin/SnmpLens.exe SnmpLens-windows-amd64.exe
         shell: pwsh
 
       # ── macOS packaging ──
@@ -99,7 +101,10 @@ jobs:
 
       - name: Package (Linux .tar.gz)
         if: runner.os == 'Linux'
-        run: tar -czf SnmpLens-linux-amd64.tar.gz -C build/bin SnmpLens
+        run: |
+          tar -czf SnmpLens-linux-amd64.tar.gz -C build/bin SnmpLens
+          # Raw binary for the in-app self-update path
+          cp build/bin/SnmpLens SnmpLens-linux-amd64
 
       - name: Package (Linux .deb)
         if: runner.os == 'Linux'
@@ -151,6 +156,8 @@ jobs:
             SnmpLens-*.zip
             SnmpLens-*.tar.gz
             SnmpLens-*-setup.exe
+            SnmpLens-windows-amd64.exe
+            SnmpLens-linux-amd64
             SnmpLens-*.dmg
             SnmpLens-*.deb
 
@@ -161,11 +168,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
           merge-multiple: true
+
+      # SHA-256 manifest consumed by the in-app updater to verify downloads.
+      - name: Generate checksums
+        run: cd artifacts && sha256sum SnmpLens-* > SnmpLens-checksums.txt
+
+      # Ed25519-sign the manifest so the updater can authenticate it against the
+      # public key embedded in the app. No-op when the secret is unset.
+      - name: Sign checksums
+        env:
+          UPDATER_PRIVATE_KEY: ${{ secrets.UPDATER_PRIVATE_KEY }}
+        run: go run ./tools/updatersign sign artifacts/SnmpLens-checksums.txt
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -174,7 +197,11 @@ jobs:
           files: |
             artifacts/SnmpLens-windows-amd64-portable.zip
             artifacts/SnmpLens-windows-amd64-setup.exe
+            artifacts/SnmpLens-windows-amd64.exe
             artifacts/SnmpLens-macos-universal.zip
             artifacts/SnmpLens-macos-universal.dmg
             artifacts/SnmpLens-linux-amd64.tar.gz
             artifacts/SnmpLens-linux-amd64.deb
+            artifacts/SnmpLens-linux-amd64
+            artifacts/SnmpLens-checksums.txt
+            artifacts/SnmpLens-checksums.txt.sig

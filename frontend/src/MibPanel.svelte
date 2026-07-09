@@ -721,6 +721,7 @@
 
   .search-bar {
     margin-bottom: 10px;
+    flex-shrink: 0;
   }
 
   .search-bar input {
@@ -737,6 +738,7 @@
     gap: 10px;
     margin-bottom: 10px;
     flex-wrap: wrap;
+    flex-shrink: 0;
   }
 
   .compact-mode-btn.active {
@@ -747,6 +749,9 @@
 
   .tree-container {
     flex-grow: 1;
+    /* Allow the tree to scroll inside its own area instead of growing the
+       whole panel and crushing the fixed elements above it (breadcrumb…). */
+    min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
     margin-bottom: 10px;

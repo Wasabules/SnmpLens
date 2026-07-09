@@ -20,6 +20,7 @@
     } else {
       node.expanded = !node.expanded;
     }
+    node = node; // force Svelte reactivity (compact path mutates via fn param alias)
     onNodeClick(node);
   }
 
@@ -163,7 +164,7 @@
     class="node-label"
   >
     {#if node.children && node.children.length > 0}
-      <span class="icon">{node.expanded ? '▼' : '►'}</span>
+      <span class="icon chevron"><Icon name={node.expanded ? 'chevron-down' : 'chevron-right'} size={14} /></span>
     {:else}
       <span class="icon leaf">●</span>
     {/if}
@@ -245,6 +246,12 @@
   }
   .icon.leaf {
     font-size: 0.6em;
+  }
+  /* Expand/collapse chevron: points right when collapsed, down when expanded */
+  .chevron {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
   .tree-node.selected .icon {
     color: white;

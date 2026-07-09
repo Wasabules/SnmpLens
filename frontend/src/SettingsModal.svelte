@@ -9,6 +9,8 @@
 
   const dispatch = createEventDispatcher();
 
+  export let showDebug = false;
+
   let activeTab = 'general';
   let settings;
   let defaultMibPath = '';
@@ -83,7 +85,17 @@
     </div>
 
     <div class="modal-actions">
-      <button class="btn tertiary" on:click={settingsStore.reset}>{$_('common.reset')}</button>
+      <div class="left-actions">
+        <button class="btn tertiary" on:click={settingsStore.reset}>{$_('common.reset')}</button>
+        <button
+          class="btn tertiary debug-toggle"
+          class:active={showDebug}
+          on:click={() => dispatch('toggleDebug')}
+          title={$_('debug.title')}
+        >
+          <Icon name="bug" size={15} /> Debug
+        </button>
+      </div>
       <div class="main-actions">
         <button class="btn secondary" on:click={handleCancel}>{$_('common.cancel')}</button>
         <button class="btn" on:click={handleSave}>{$_('common.save')}</button>
@@ -187,6 +199,23 @@
   .main-actions {
     display: flex;
     gap: 10px;
+  }
+
+  .left-actions {
+    display: flex;
+    gap: 10px;
+  }
+
+  .debug-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .debug-toggle.active {
+    background-color: var(--success-subtle-medium);
+    border-color: var(--success-border);
+    color: var(--success-color);
   }
 
   /* Secondary action button */

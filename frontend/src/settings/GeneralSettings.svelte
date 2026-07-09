@@ -3,10 +3,24 @@
   import { SUPPORTED_LOCALES } from '../i18n/index.js';
   import { MonitorCleanup } from '../../wailsjs/go/main/App';
   import Icon from '../Icon.svelte';
+  import { updateStore } from '../stores/updateStore';
+  import { notificationStore } from '../stores/notifications';
+  import { get } from 'svelte/store';
   export let settings;
 
   let cleanupResult = null;
   let cleaningUp = false;
+
+  async function checkForUpdatesNow() {
+    const t = get(_);
+    const info = await updateStore.check({ silent: false }).catch((e) => {
+      notificationStore.add(t('update.checkFailed', { values: { error: String(e) } }), 'error');
+      return null;
+    });
+    if (info && !info.available) {
+      notificationStore.add(t('update.upToDate'), 'success');
+    }
+  }
 
   function handleLocaleChange(event) {
     const newLocale = event.target.value;
@@ -92,6 +106,22 @@
 </fieldset>
 
 <fieldset>
+  <legend><Icon name="refresh-cw" size={15} /> {$_('settings.general.updatesTitle')}</legend>
+  <div class="update-section">
+    <div class="version-row">
+      <span class="version-label">{$_('update.currentVersion', { values: { version: $updateStore.currentVersion || '—' } })}</span>
+      <button class="btn btn-small" on:click={checkForUpdatesNow} disabled={$updateStore.checking}>
+        {#if $updateStore.checking}<Icon name="loader-circle" class="icon-spin" size={14} /> {$_('update.checking')}{:else}<Icon name="refresh-cw" size={14} /> {$_('settings.general.checkNow')}{/if}
+      </button>
+    </div>
+    <label class="toggle-row">
+      <input type="checkbox" bind:checked={settings.updates.autoCheck} />
+      {$_('settings.general.autoCheck')}
+    </label>
+  </div>
+</fieldset>
+
+<fieldset>
   <legend><Icon name="palette" size={15} /> {$_('settings.general.theme')}</legend>
   <div class="theme-section">
     <div class="form-group">
@@ -169,6 +199,31 @@
     flex-direction: column;
     gap: 10px;
     margin-top: 10px;
+  }
+
+  .update-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .version-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .version-label {
+    color: var(--text-light);
+    font-size: 0.92em;
+  }
+
+  .version-row .btn-small {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
   }
 
   .toggle-row {

@@ -33,6 +33,9 @@ const defaults = {
     systemNotifications: false,
     alertSound: false,
   },
+  updates: {
+    autoCheck: true,
+  },
   v3: {
     user: '',
     authProto: 'MD5',
@@ -46,7 +49,7 @@ const defaults = {
 
 // Load synchronously with defaults, then decrypt async
 const raw = JSON.parse(localStorage.getItem('settings') || 'null');
-const initialSettings = raw ? { ...defaults, ...raw, v3: { ...defaults.v3, ...(raw.v3 || {}) }, monitor: { ...defaults.monitor, ...(raw.monitor || {}) }, traps: { ...defaults.traps, ...(raw.traps || {}) } } : defaults;
+const initialSettings = raw ? { ...defaults, ...raw, v3: { ...defaults.v3, ...(raw.v3 || {}) }, monitor: { ...defaults.monitor, ...(raw.monitor || {}) }, traps: { ...defaults.traps, ...(raw.traps || {}) }, updates: { ...defaults.updates, ...(raw.updates || {}) } } : defaults;
 // Anonymous mode is always off on startup (intentionally non-persistent)
 initialSettings.anonymousMode = false;
 

@@ -15,7 +15,9 @@
   import TargetManager from './TargetManager.svelte';
   import DebugPanel from './DebugPanel.svelte';
   import Icon from './Icon.svelte';
+  import UpdateBanner from './UpdateBanner.svelte';
   import { trapStore } from './stores/trapStore';
+  import { updateStore } from './stores/updateStore';
   import { mibPathsStore } from './stores/mibPathsStore';
   import { mibStore, mibDiagnostics } from './stores/mibStore';
   import { settingsStore } from './stores/settingsStore';
@@ -236,6 +238,13 @@
     } catch (e) {
       console.error('Failed to scan default MIB directory:', e);
     }
+
+    // Load the current version and, if enabled, check for updates in the
+    // background (non-blocking, failures are swallowed).
+    updateStore.loadVersion();
+    if ($settingsStore.updates?.autoCheck) {
+      updateStore.check();
+    }
   });
 
   // Handle SNMP action from context menu
@@ -324,7 +333,7 @@
 <main style="--wails-drop-target:drop">
   <Notifications />
   {#if showSettings}
-    <SettingsModal on:close={() => showSettings = false} />
+    <SettingsModal {showDebug} on:toggleDebug={() => showDebug = !showDebug} on:close={() => showSettings = false} />
   {/if}
 
   {#if showImportErrors}
@@ -371,9 +380,10 @@
     </div>
   {/if}
 
+  <UpdateBanner />
+
   <div class="top-bar">
     <div class="top-bar-left">
-      <h1>{$_('app.title')}</h1>
       <button class="targets-btn" on:click={() => showTargets = true} title={$_('app.status.targetsTitle')}>
         <Icon name="target" size={15} /> {$_('common.target')}
         <span class="targets-badge">{targetCount}</span>
@@ -404,9 +414,6 @@
         {/each}
       </div>
     </div>
-    <button class="btn debug-toggle-btn" class:active={showDebug} on:click={() => showDebug = !showDebug} title={$_('debug.title')}>
-      <Icon name="bug" size={15} /> Debug
-    </button>
     <button class="btn settings-btn" on:click={() => showSettings = true} title={$_('app.settingsTooltip')}>
       <Icon name="settings" size={15} /> {$_('app.settings')}
     </button>
@@ -496,6 +503,13 @@
 </main>
 
 <style>
+  main {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+
   .top-bar {
     display: flex;
     justify-content: space-between;
@@ -504,13 +518,8 @@
     background-color: var(--bg-lighter-color);
     color: white;
     height: 50px;
+    flex-shrink: 0;
     border-bottom: 1px solid var(--border-color);
-  }
-
-  .top-bar h1 {
-    font-size: 1.2em;
-    font-weight: 500;
-    margin: 0;
   }
 
   .top-bar-left {
@@ -642,15 +651,6 @@
     animation: pulse 2s infinite;
   }
 
-  .debug-toggle-btn {
-    font-size: 0.85em;
-    padding: 6px 12px;
-  }
-
-  .debug-toggle-btn.active {
-    background-color: var(--success-color);
-  }
-
   .settings-btn {
     display: flex;
     align-items: center;
@@ -659,7 +659,8 @@
 
   .container {
     display: flex;
-    height: calc(100vh - 50px);
+    flex: 1;
+    min-height: 0;
     position: relative;
   }
 

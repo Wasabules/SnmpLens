@@ -4,13 +4,17 @@ go 1.25.0
 
 require (
 	github.com/gosnmp/gosnmp v1.43.2
+	github.com/minio/selfupdate v0.6.0
 	github.com/prometheus-community/pro-bing v0.8.0
 	github.com/sleepinggenius2/gosmi v0.4.4
 	github.com/wailsapp/wails/v2 v2.12.0
+	golang.org/x/mod v0.38.0
+	golang.org/x/sys v0.42.0
 	modernc.org/sqlite v1.48.0
 )
 
 require (
+	aead.dev/minisign v0.2.0 // indirect
 	git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3 // indirect
 	github.com/alecthomas/participle v0.4.1 // indirect
 	github.com/bep/debounce v1.2.1 // indirect
@@ -42,7 +46,6 @@ require (
 	golang.org/x/crypto v0.47.0 // indirect
 	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.33.0 // indirect
 	modernc.org/libc v1.70.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect

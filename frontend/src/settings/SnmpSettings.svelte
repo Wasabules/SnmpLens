@@ -183,6 +183,9 @@
   .form-group {
     flex-direction: column;
     align-items: stretch;
+    /* Allow grid/flex items to shrink below the intrinsic width of long
+       <select> options instead of forcing the column wider. */
+    min-width: 0;
   }
 
   .form-group label {

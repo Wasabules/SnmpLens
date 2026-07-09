@@ -86,6 +86,15 @@
 
 /* --- Form --- */
 
+/* Form controls include their padding/border in width:100% so they never
+   overflow their grid cell / flex track. */
+input,
+select,
+textarea,
+button {
+  box-sizing: border-box;
+}
+
 .form-group {
   margin-bottom: 10px;
   display: flex;

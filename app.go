@@ -13,6 +13,7 @@ import (
 	"SnmpLens/pkg/network"
 	"SnmpLens/pkg/snmp"
 	"SnmpLens/pkg/storage"
+	"SnmpLens/pkg/updater"
 
 	"time"
 
@@ -28,12 +29,14 @@ type App struct {
 	mibService       *mib.Service
 	snmpClient       *snmp.Client
 	storage          *storage.Storage
+	updater          *updater.Service
 }
 
 // NewApp creates a new App application struct.
 func NewApp(mibs embed.FS) *App {
 	return &App{
-		mibs: mibs,
+		mibs:    mibs,
+		updater: updater.NewService("Wasabules", "SnmpLens"),
 	}
 }
 
@@ -41,6 +44,7 @@ func NewApp(mibs embed.FS) *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.snmpClient = snmp.NewClient(ctx)
+	a.updater.SetContext(ctx)
 
 	// 1. Determine/Create the persistent MIB directory
 	configDir, err := os.UserConfigDir()
@@ -335,6 +339,33 @@ func (a *App) SnmpGetDebugLog() []snmp.DebugEntry {
 // SnmpClearDebugLog clears the SNMP debug log buffer.
 func (a *App) SnmpClearDebugLog() {
 	a.snmpClient.ClearDebugLog()
+}
+
+// --- Auto-update Methods ---
+
+// GetAppVersion returns the running application version (or "dev" for local builds).
+func (a *App) GetAppVersion() string {
+	return updater.Version
+}
+
+// CheckForUpdate queries GitHub Releases and reports whether a newer version exists.
+func (a *App) CheckForUpdate() updater.UpdateInfo {
+	info, err := a.updater.CheckForUpdate()
+	if err != nil {
+		log.Printf("Update check failed: %v", err)
+	}
+	return info
+}
+
+// DownloadAndApplyUpdate downloads, verifies and applies the pending update. On a
+// successful self-apply the app relaunches and exits, so this may not return.
+func (a *App) DownloadAndApplyUpdate() error {
+	return a.updater.DownloadAndApply()
+}
+
+// OpenURL opens a URL in the user's default browser.
+func (a *App) OpenURL(url string) {
+	runtime.BrowserOpenURL(a.ctx, url)
 }
 
 // shutdown is called when the app is closing.

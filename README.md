@@ -214,6 +214,37 @@ wails build -platform darwin/universal       # macOS (Intel + Apple Silicon)
 
 ---
 
+## Auto-Update
+
+SnmpLens updates itself from GitHub Releases. On startup (and via **Settings → General → Updates → Check now**) it queries the latest release and, if a newer version exists, shows a banner with the release notes.
+
+**Applying an update** depends on how the app was installed:
+
+| Platform / install | Action |
+| --- | --- |
+| Windows (installer) | downloads and runs `SnmpLens-windows-amd64-setup.exe`, then relaunches |
+| Windows / Linux (portable binary) | replaces the running executable in place, then relaunches |
+| macOS, Linux `.deb` | opens the download in the browser (manual install) |
+
+The running version is embedded at build time via ldflags; local (`wails build`) builds report `dev`, which disables the update check.
+
+### Release integrity & authenticity
+
+Every release includes `SnmpLens-checksums.txt` (SHA-256 of all assets) and its Ed25519 signature `SnmpLens-checksums.txt.sig`. Before applying an update the app verifies the signature against the public key embedded in `pkg/updater/verify.go`, then verifies the asset's SHA-256 against the (now-authenticated) manifest. This is the same "signed manifest" model used by Linux package repositories.
+
+**Setting up / rotating the signing key:**
+
+```bash
+go run ./tools/updatersign keygen
+```
+
+1. Paste the printed **public key** into `pkg/updater/verify.go` (`updaterPublicKey`).
+2. Store the printed **private key** in the GitHub Actions secret `UPDATER_PRIVATE_KEY`.
+
+Do both together in the same release: if a build embeds a public key but the secret is missing, CI produces no signature and that build will (correctly) refuse the unsigned update. While `updaterPublicKey` is empty, downloads are still integrity-checked with SHA-256 but not authenticated.
+
+---
+
 ## Architecture
 
 ```

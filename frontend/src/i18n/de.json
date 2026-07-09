@@ -465,6 +465,18 @@
     }
   },
 
+  "update": {
+    "available": "SnmpLens {version} ist verfügbar",
+    "currentVersion": "Aktuelle Version: {version}",
+    "releaseNotes": "Versionshinweise",
+    "install": "Installieren & neu starten",
+    "download": "Herunterladen",
+    "later": "Später",
+    "checking": "Suche…",
+    "downloading": "Wird heruntergeladen…",
+    "upToDate": "Sie haben die neueste Version",
+    "checkFailed": "Update-Prüfung fehlgeschlagen: {error}"
+  },
   "settings": {
     "title": "Einstellungen",
     "tabs": {
@@ -473,6 +485,9 @@
       "snmp": "SNMP"
     },
     "general": {
+      "updatesTitle": "Updates",
+      "autoCheck": "Beim Start nach Updates suchen",
+      "checkNow": "Jetzt suchen",
       "confirmBeforeSet": "Vor einem SET bestätigen",
       "networkTitle": "Netzwerkeinstellungen",
       "pollingPort": "Abfrage-Port:",

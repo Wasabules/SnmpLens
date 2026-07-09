@@ -69,6 +69,8 @@
     overflow-y: hidden;
     white-space: nowrap;
     font-size: 0.9em;
+    /* Never let the expanded tree crush the breadcrumb in the flex column. */
+    flex-shrink: 0;
   }
 
   .breadcrumb-list {
