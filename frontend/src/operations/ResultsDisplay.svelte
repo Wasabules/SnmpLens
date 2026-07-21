@@ -330,7 +330,7 @@
     const firstRes = bulkResults.find(r => !r.error && Array.isArray(r.result?.value));
     if (!firstRes) return;
 
-    const tableData = buildTableData(firstRes.result.value, colDefs);
+    const tableData = buildTableData(firstRes.result.value, colDefs, sortColumn, sortAscending);
     const lines = [];
 
     // Header
@@ -366,7 +366,7 @@
     if (colDefs.length === 0) return;
     const firstRes = bulkResults.find(r => !r.error && Array.isArray(r.result?.value));
     if (!firstRes) return;
-    const td = buildTableData(firstRes.result.value, colDefs);
+    const td = buildTableData(firstRes.result.value, colDefs, sortColumn, sortAscending);
 
     const headers = [get(_)('results.index'), ...td.columns.map(c => c.name)];
     let html = '<table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse">';
@@ -452,7 +452,7 @@
   }
 
   // Reconstruct WALK results into a structured table
-  function buildTableData(walkResults, columnDefs) {
+  function buildTableData(walkResults, columnDefs, sortCol = null, sortAsc = true) {
     const columns = columnDefs.map(col => ({ name: col.name, oid: col.oid, syntax: col.syntax || '' }));
     const rowMap = {};
 
@@ -487,15 +487,15 @@
     let rows = Object.entries(rowMap).map(([index, cells]) => ({ index, cells }));
 
     // Apply sorting
-    if (sortColumn) {
+    if (sortCol) {
       rows.sort((a, b) => {
         let aVal, bVal;
-        if (sortColumn === '__index') {
+        if (sortCol === '__index') {
           aVal = a.index;
           bVal = b.index;
         } else {
-          aVal = a.cells[sortColumn]?.value ?? '';
-          bVal = b.cells[sortColumn]?.value ?? '';
+          aVal = a.cells[sortCol]?.value ?? '';
+          bVal = b.cells[sortCol]?.value ?? '';
         }
         const aNum = Number(aVal);
         const bNum = Number(bVal);
@@ -505,7 +505,7 @@
         } else {
           cmp = String(aVal).localeCompare(String(bVal));
         }
-        return sortAscending ? cmp : -cmp;
+        return sortAsc ? cmp : -cmp;
       });
     }
 
@@ -709,7 +709,7 @@
 
           {#if tableViewEnabled && canShowTableView(effectiveTableNode, bulkResults)}
             {@const colDefs = getTableColumnDefs(effectiveTableNode)}
-            {@const tableData = buildTableData(res.result.value, colDefs)}
+            {@const tableData = buildTableData(res.result.value, colDefs, sortColumn, sortAscending)}
             <div class="table-view-results">
               <table>
                 <thead>
