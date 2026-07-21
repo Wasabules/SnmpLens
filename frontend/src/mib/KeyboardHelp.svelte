@@ -55,6 +55,7 @@
     margin-bottom: 10px;
     font-size: 0.85em;
     box-shadow: 0 2px 8px var(--shadow-color);
+    flex-shrink: 0;
   }
 
   .keyboard-help-header {

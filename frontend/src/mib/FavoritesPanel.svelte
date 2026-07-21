@@ -71,6 +71,9 @@
     border-radius: 4px;
     margin-bottom: 10px;
     overflow: hidden;
+    /* Sits in the MIB panel's flex column above the tree; without this the
+       expanded tree crushes it to nothing and the favorites become invisible. */
+    flex-shrink: 0;
   }
 
   .favorites-header {

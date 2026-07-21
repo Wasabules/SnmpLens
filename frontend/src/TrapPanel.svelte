@@ -258,7 +258,7 @@
         <span class="pdu-type">{$_('traps.tableType')}</span>
         <span class="main-oid">{$_('traps.tableMessage')}</span>
       </div>
-      {#each filteredTraps as trap (trap.timestamp + '-' + trap.source + '-' + filteredTraps.indexOf(trap))}
+      {#each filteredTraps as trap (trap.id)}
         <Trap {trap} />
       {/each}
     {/if}

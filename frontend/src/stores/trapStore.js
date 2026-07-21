@@ -10,12 +10,22 @@ import { sendNativeNotification } from '../utils/nativeNotify';
 const STORAGE_KEY = 'trapHistory';
 const MAX_TRAPS_DEFAULT = 1000;
 
+// Stable, unique id per trap — used as the {#each} key so expanding a trap
+// survives new traps arriving (which are prepended, shifting every index).
+let trapSeq = 0;
+function nextTrapId() {
+  return `t${Date.now().toString(36)}-${trapSeq++}`;
+}
+
 function loadPersistedTraps() {
   const settings = get(settingsStore);
   if (settings.traps?.persist) {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) return JSON.parse(stored);
+      if (stored) {
+        // Ensure older persisted traps (saved before ids existed) get one.
+        return JSON.parse(stored).map(t => (t && t.id ? t : { ...t, id: nextTrapId() }));
+      }
     } catch (e) {
       console.warn('Failed to load persisted traps:', e);
     }
@@ -119,6 +129,7 @@ function createTrapStore() {
 
     const enrichedTrap = {
       ...trap,
+      id: trap.id || nextTrapId(),
       pduType: trap.pduType || 'Trap',
       timestamp: trap.timestamp || new Date().toISOString(),
     };
