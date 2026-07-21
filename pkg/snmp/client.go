@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/gosnmp/gosnmp"
 )
@@ -236,7 +238,11 @@ func getPrivProtocol(proto string) (gosnmp.SnmpV3PrivProtocol, error) {
 func formatSnmpValue(variable gosnmp.SnmpPDU) interface{} {
 	switch variable.Type {
 	case gosnmp.OctetString:
-		return string(variable.Value.([]byte))
+		b, ok := variable.Value.([]byte)
+		if !ok {
+			return fmt.Sprintf("%v", variable.Value)
+		}
+		return formatOctetString(b)
 	case gosnmp.ObjectIdentifier:
 		// OID values are strings (e.g. ".1.3.6.1.6.3.1.1.5.3") — return as-is
 		return fmt.Sprintf("%v", variable.Value)
@@ -262,4 +268,42 @@ func formatSnmpValue(variable gosnmp.SnmpPDU) interface{} {
 		// Fallback for extremely large values
 		return bi.String()
 	}
+}
+
+// formatOctetString renders an OCTET STRING as text when it is printable, or as
+// colon-separated uppercase hex otherwise (the convention for MAC/PhysAddress
+// and other binary values) — mirroring what snmpwalk does for strings without a
+// DISPLAY-HINT. The raw bytes are only available here, so this decision must be
+// made on the Go side: once the value crosses the bridge as a mangled string the
+// original bytes cannot be recovered.
+func formatOctetString(b []byte) string {
+	if isPrintableOctet(b) {
+		return string(b)
+	}
+	parts := make([]string, len(b))
+	for i, c := range b {
+		parts[i] = fmt.Sprintf("%02X", c)
+	}
+	return strings.Join(parts, ":")
+}
+
+// isPrintableOctet reports whether b is valid UTF-8 containing only printable
+// runes (common whitespace allowed). Non-printable bytes — as in a MAC address —
+// make it false so the value is shown as hex.
+func isPrintableOctet(b []byte) bool {
+	if len(b) == 0 {
+		return true
+	}
+	if !utf8.Valid(b) {
+		return false
+	}
+	for _, r := range string(b) {
+		if r == utf8.RuneError {
+			return false
+		}
+		if !unicode.IsPrint(r) && r != '\t' && r != '\n' && r != '\r' {
+			return false
+		}
+	}
+	return true
 }
