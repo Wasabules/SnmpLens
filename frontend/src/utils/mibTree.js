@@ -83,8 +83,11 @@ export function isNodeWritable(node) {
  * @returns {object|null} Table node or null
  */
 export function findTableParentNode(oid, nodes) {
+  // Walk OIDs come from gosnmp with a leading dot (".1.3.6…"); strip it so the
+  // prefixes match the dot-less OIDs stored in the MIB tree.
+  const normalized = oid && oid.charAt(0) === '.' ? oid.slice(1) : oid;
   // Try progressively shorter OID prefixes to find a matching node
-  const parts = oid.split('.');
+  const parts = normalized.split('.');
   for (let len = parts.length; len >= 1; len--) {
     const prefix = parts.slice(0, len).join('.');
     const node = findNodeByOid(prefix, nodes);

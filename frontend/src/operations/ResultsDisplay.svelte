@@ -380,14 +380,19 @@
     const columns = columnDefs.map(col => ({ name: col.name, oid: col.oid, syntax: col.syntax || '' }));
     const rowMap = {};
 
+    // gosnmp returns walk OIDs with a leading dot (".1.3.6...") while MIB column
+    // OIDs do not, so normalize both sides before matching — otherwise no cell
+    // matches its column and the table renders headers with no rows.
+    const stripDot = (o) => (o && o.charAt(0) === '.' ? o.slice(1) : o);
     for (const item of walkResults) {
-      const itemOid = item.oid;
+      const itemOid = stripDot(item.oid);
       let matchedCol = null;
       let instanceIdx = '';
       for (const col of columnDefs) {
-        if (itemOid.startsWith(col.oid + '.')) {
+        const colOid = stripDot(col.oid);
+        if (itemOid.startsWith(colOid + '.')) {
           matchedCol = col;
-          instanceIdx = itemOid.substring(col.oid.length + 1);
+          instanceIdx = itemOid.substring(colOid.length + 1);
           break;
         }
       }
