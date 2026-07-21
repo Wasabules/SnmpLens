@@ -126,6 +126,12 @@
   },
 
   "results": {
+    "copyForWord": "复制到 Word",
+    "copyForWordHint": "以 HTML 复制表格 — 可粘贴到 Word、Google 文档或 Outlook 为表格",
+    "copyOidValue": "复制 OID = 值",
+    "copyIndex": "复制索引",
+    "copyRow": "复制行",
+    "copyColumn": "复制列名",
     "title": "结果",
     "comparison": "对比",
     "csv": "CSV",

@@ -126,6 +126,12 @@
   },
 
   "results": {
+    "copyForWord": "Für Word kopieren",
+    "copyForWordHint": "Tabelle als HTML kopieren — in Word, Google Docs oder Outlook als Tabelle einfügen",
+    "copyOidValue": "OID = Wert kopieren",
+    "copyIndex": "Index kopieren",
+    "copyRow": "Zeile kopieren",
+    "copyColumn": "Spaltenname kopieren",
     "title": "Ergebnisse",
     "comparison": "Vergleich",
     "csv": "CSV",

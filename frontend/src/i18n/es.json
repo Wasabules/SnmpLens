@@ -126,6 +126,12 @@
   },
 
   "results": {
+    "copyForWord": "Copiar para Word",
+    "copyForWordHint": "Copiar la tabla como HTML — pegar en Word, Google Docs u Outlook como tabla",
+    "copyOidValue": "Copiar OID = valor",
+    "copyIndex": "Copiar índice",
+    "copyRow": "Copiar fila",
+    "copyColumn": "Copiar nombre de columna",
     "title": "Resultados",
     "comparison": "Comparación",
     "csv": "CSV",

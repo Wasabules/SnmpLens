@@ -1,7 +1,8 @@
 <script>
   import { createEventDispatcher } from 'svelte';
   import Icon from '../Icon.svelte';
-  import { copyToClipboard } from '../utils/clipboard';
+  import ContextMenu from '../ContextMenu.svelte';
+  import { copyToClipboard, copyRich } from '../utils/clipboard';
   import { escapeCSV, downloadFile } from '../utils/csv';
   import { formatValueWithEnum as _formatValueWithEnum, findTableParentNode } from '../utils/mibTree';
   import { notificationStore } from '../stores/notifications';
@@ -30,6 +31,10 @@
   let tableViewEnabled = false;
   let sortColumn = null;
   let sortAscending = true;
+
+  // Table cell context menu
+  let cellMenu = { visible: false, x: 0, y: 0, items: [] };
+  let cellMenuCtx = null;
   let comparisonViewEnabled = false;
   let compareEnabled = false;
   let compareSortKey = 'oid'; // 'oid', 'delta', 'percent'
@@ -346,6 +351,77 @@
     notificationStore.add(get(_)('results.exportedTable'), 'success');
   }
 
+  // Display value of a table cell (enum-decoded / formatted, like the rendered cell).
+  function cellText(cell) {
+    return cell && cell.value !== undefined ? formatValueWithEnum(cell.value, cell.fullOid || '', cell.type) : '';
+  }
+
+  const htmlEscape = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  // Copy the whole table as an HTML table (pastes into Word/Docs/Outlook as a
+  // real table) with a TSV plain-text fallback for editors and spreadsheets.
+  function copyTableForWord() {
+    if (bulkResults.length === 0 || !effectiveTableNode) return;
+    const colDefs = getTableColumnDefs(effectiveTableNode);
+    if (colDefs.length === 0) return;
+    const firstRes = bulkResults.find(r => !r.error && Array.isArray(r.result?.value));
+    if (!firstRes) return;
+    const td = buildTableData(firstRes.result.value, colDefs);
+
+    const headers = [get(_)('results.index'), ...td.columns.map(c => c.name)];
+    let html = '<table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse">';
+    html += '<thead><tr>' + headers.map(h => `<th>${htmlEscape(h)}</th>`).join('') + '</tr></thead><tbody>';
+    const tsv = [headers.join('\t')];
+    for (const row of td.rows) {
+      const cells = [row.index, ...td.columns.map(col => cellText(row.cells[col.oid]))];
+      html += '<tr>' + cells.map(c => `<td>${htmlEscape(c)}</td>`).join('') + '</tr>';
+      tsv.push(cells.join('\t'));
+    }
+    html += '</tbody></table>';
+    copyRich(html, tsv.join('\n'), get(_)('results.tableView'));
+  }
+
+  // Right-click a table cell → context menu with copy actions.
+  function openCellMenu(event, row, col, columns) {
+    event.preventDefault();
+    event.stopPropagation();
+    const cell = row.cells[col.oid];
+    cellMenuCtx = { row, col, columns, cell };
+    const t = get(_);
+    cellMenu = {
+      visible: true,
+      x: event.clientX,
+      y: event.clientY,
+      items: [
+        { label: t('common.copyValue'), icon: 'copy', action: 'value', disabled: !cell },
+        { label: t('common.copyOid'), icon: 'route', action: 'oid', disabled: !cell },
+        { label: t('results.copyOidValue'), icon: 'copy', action: 'oidValue', disabled: !cell },
+        { label: '---', action: 'sep' },
+        { label: t('results.copyRow'), icon: 'table', action: 'row' },
+        { label: t('results.copyIndex'), icon: 'copy', action: 'index' },
+        { label: t('results.copyColumn'), icon: 'columns-3', action: 'column' },
+      ],
+    };
+  }
+
+  function handleCellMenuAction(e) {
+    const action = e.detail.action;
+    const ctx = cellMenuCtx;
+    cellMenu = { ...cellMenu, visible: false };
+    if (!ctx) return;
+    const { row, col, columns, cell } = ctx;
+    const t = get(_);
+    if (action === 'value') copyToClipboard(cellText(cell), t('common.value'));
+    else if (action === 'oid') copyToClipboard(cell?.fullOid || '', t('common.oid'));
+    else if (action === 'oidValue') copyToClipboard(`${cell?.fullOid || ''} = ${cellText(cell)}`, t('common.value'));
+    else if (action === 'index') copyToClipboard(String(row.index), t('results.index'));
+    else if (action === 'column') copyToClipboard(col.name, col.name);
+    else if (action === 'row') {
+      const cells = [row.index, ...columns.map(c => cellText(row.cells[c.oid]))];
+      copyToClipboard(cells.join('\t'), t('results.tableView'));
+    }
+  }
+
   // ============ TABLE VIEW FUNCTIONS ============
 
   // Get column definitions from the MIB tree for a Table or Row node
@@ -472,6 +548,15 @@
 
 {#if bulkResults.length > 0}
   <div class="results-container">
+    {#if cellMenu.visible}
+      <ContextMenu
+        x={cellMenu.x}
+        y={cellMenu.y}
+        items={cellMenu.items}
+        on:action={handleCellMenuAction}
+        on:close={() => (cellMenu = { ...cellMenu, visible: false })}
+      />
+    {/if}
     <div class="results-header">
       <h4>{$_('results.title')}</h4>
       <div class="export-buttons">
@@ -493,6 +578,9 @@
         <button class="btn-export" on:click={exportAsText} title={$_('results.txt')}>{$_('results.txt')}</button>
         {#if tableViewEnabled && canShowTableView(effectiveTableNode, bulkResults)}
           <button class="btn-export" on:click={exportTableAsCSV} title={$_('results.tableCsv')}>{$_('results.tableCsv')}</button>
+          <button class="btn-export" on:click={copyTableForWord} title={$_('results.copyForWordHint')}>
+            <Icon name="copy" size={13} /> {$_('results.copyForWord')}
+          </button>
         {/if}
         {#if comparisonViewEnabled && canShowComparison}
           <button class="btn-export" on:click={exportComparisonCSV} title={$_('results.compCsv')}>{$_('results.compCsv')}</button>
@@ -656,6 +744,7 @@
                           title={row.cells[col.oid]?.fullOid || ''}
                           on:click={() => row.cells[col.oid] && dispatch('walkResultClick', {oid: row.cells[col.oid].fullOid, value: row.cells[col.oid].value, type: row.cells[col.oid].type})}
                           on:keydown={(e) => e.key === 'Enter' && row.cells[col.oid] && dispatch('walkResultClick', {oid: row.cells[col.oid].fullOid, value: row.cells[col.oid].value, type: row.cells[col.oid].type})}
+                          on:contextmenu={(e) => openCellMenu(e, row, col, tableData.columns)}
                         >
                           {row.cells[col.oid]?.value !== undefined ? formatValueWithEnum(row.cells[col.oid].value, row.cells[col.oid].fullOid || '', row.cells[col.oid].type) : '-'}
                         </td>
