@@ -135,6 +135,21 @@ func (c *Client) newGoSNMP(target, community, version string, port, timeoutSec, 
 			return nil, err
 		}
 
+		// Privacy only applies at AuthPriv, authentication only at Auth* levels.
+		// The UI keeps its default protocols even when the corresponding fields
+		// are disabled, so a stale PrivProto (DES by default) — or AuthProto —
+		// can be sent with a lower security level. gosnmp then rejects the
+		// request ("PrivacyPassphrase is required when a privacy protocol is
+		// specified"), which surfaced as SNMPv3 auth failures. Force the
+		// protocols to match the security level. Fixes #3 (reported by
+		// @JessonJiang).
+		if secLevel != gosnmp.AuthPriv {
+			privProto = gosnmp.NoPriv
+		}
+		if secLevel == gosnmp.NoAuthNoPriv {
+			authProto = gosnmp.NoAuth
+		}
+
 		g.SecurityModel = gosnmp.UserSecurityModel
 		g.MsgFlags = secLevel
 		g.SecurityParameters = &gosnmp.UsmSecurityParameters{
