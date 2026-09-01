@@ -62,7 +62,12 @@ func Build(cfg SinkConfig, secret string) (Sink, bool) {
 	}
 	switch cfg.Kind {
 	case SinkSyslog:
-		return SyslogSink{Config: cfg.Syslog}, true
+		sc := cfg.Syslog
+		// For a syslog sink the credential is the mutual-TLS private key. A
+		// sink has exactly one secret, so this reuses the same slot rather
+		// than inventing a second storage path per kind.
+		sc.ClientKey = secret
+		return SyslogSink{Config: sc}, true
 	case SinkWebhook:
 		wc := cfg.Webhook
 		wc.Token = secret

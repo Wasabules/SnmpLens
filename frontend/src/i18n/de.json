@@ -816,7 +816,17 @@
     "secretSet": "Zugangsdaten gesetzt",
     "secretCleared": "Zugangsdaten entfernt.",
     "clearSecret": "Gespeicherte Zugangsdaten entfernen",
-    "secretHint": "Außerhalb der Datenbank gespeichert, geschützt durch: {backend}"
+    "secretHint": "Außerhalb der Datenbank gespeichert, geschützt durch: {backend}",
+    "tlsNote": "Syslog über TLS (RFC 5425), auf Port 6514, sofern die Adresse keinen anderen nennt. Die Nachrichten werden per Oktettzählung gerahmt, wie der Kollektor es erwartet.",
+    "caCert": "CA-Zertifikat (PEM)",
+    "caCertHint": "Leer lassen, um den Systemzertifikatspeicher zu verwenden. Ein Zertifikat einfügen, um einer internen CA zu vertrauen.",
+    "serverName": "Erwarteter Zertifikatsname",
+    "serverNameHint": "Nur nötig, wenn der Kollektor über eine IP oder einen Lastverteiler erreicht wird.",
+    "insecureSkipVerify": "Zertifikat des Kollektors nicht prüfen",
+    "insecureWarning": "Die Verbindung bleibt verschlüsselt, aber nichts belegt, wer am anderen Ende ist. Nur für einen Testkollektor verwenden.",
+    "clientCert": "Client-Zertifikat (PEM)",
+    "clientCertHint": "Für gegenseitiges TLS, wenn der Kollektor eine Authentifizierung des Senders verlangt.",
+    "clientKey": "Privater Client-Schlüssel (PEM)"
   },
   "tray": {
     "show": "SnmpLens öffnen",

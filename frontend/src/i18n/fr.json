@@ -816,7 +816,17 @@
     "secretSet": "identifiant enregistré",
     "secretCleared": "Identifiant supprimé.",
     "clearSecret": "Supprimer l'identifiant enregistré",
-    "secretHint": "Stocké hors de la base, protégé par : {backend}"
+    "secretHint": "Stocké hors de la base, protégé par : {backend}",
+    "tlsNote": "Syslog sur TLS (RFC 5425), sur le port 6514 sauf si l'adresse en précise un autre. Les messages sont délimités par comptage d'octets, comme le collecteur l'attend.",
+    "caCert": "Certificat de CA (PEM)",
+    "caCertHint": "Laisser vide pour utiliser le magasin de confiance du système. Coller un certificat pour faire confiance à une CA interne.",
+    "serverName": "Nom attendu dans le certificat",
+    "serverNameHint": "Nécessaire seulement si le collecteur est joint par IP ou via un répartiteur de charge.",
+    "insecureSkipVerify": "Ne pas vérifier le certificat du collecteur",
+    "insecureWarning": "La connexion reste chiffrée mais rien ne prouve qui se trouve en face. À réserver à un collecteur de laboratoire.",
+    "clientCert": "Certificat client (PEM)",
+    "clientCertHint": "Pour le TLS mutuel, quand le collecteur exige que l'émetteur s'authentifie.",
+    "clientKey": "Clé privée du client (PEM)"
   },
   "tray": {
     "show": "Ouvrir SnmpLens",

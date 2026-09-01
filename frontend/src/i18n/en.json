@@ -816,7 +816,17 @@
     "secretSet": "credential set",
     "secretCleared": "Credential removed.",
     "clearSecret": "Remove the stored credential",
-    "secretHint": "Stored outside the database, protected by: {backend}"
+    "secretHint": "Stored outside the database, protected by: {backend}",
+    "tlsNote": "Syslog over TLS (RFC 5425), on port 6514 unless the address names another. Messages are framed by octet count, as the collector expects.",
+    "caCert": "CA certificate (PEM)",
+    "caCertHint": "Leave empty to use the system trust store. Paste a certificate to trust an internal CA.",
+    "serverName": "Expected certificate name",
+    "serverNameHint": "Only needed when the collector is reached by IP or through a load balancer.",
+    "insecureSkipVerify": "Do not verify the collector certificate",
+    "insecureWarning": "The connection stays encrypted but nothing proves who is on the other end. Use this only against a lab collector.",
+    "clientCert": "Client certificate (PEM)",
+    "clientCertHint": "For mutual TLS, when the collector requires the sender to authenticate.",
+    "clientKey": "Client private key (PEM)"
   },
   "tray": {
     "show": "Open SnmpLens",

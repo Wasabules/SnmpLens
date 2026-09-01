@@ -261,7 +261,14 @@ func TestSinkConfigNeverPersistsCredentials(t *testing.T) {
 			Username: "svc", Password: "TOP-SECRET-PASSWORD",
 		},
 		Webhook: notify.WebhookConfig{URL: "https://example.com", Token: "TOP-SECRET-TOKEN"},
-		Secret:  "TOP-SECRET-TRANSPORT",
+		Syslog: notify.SyslogConfig{
+			Address: "collector:6514", Protocol: notify.SyslogTLS,
+			// The certificate is public and SHOULD be stored; the private key
+			// must not be.
+			ClientCert: "-----BEGIN CERTIFICATE-----PUBLIC-----END CERTIFICATE-----",
+			ClientKey:  "TOP-SECRET-CLIENT-KEY",
+		},
+		Secret: "TOP-SECRET-TRANSPORT",
 	}
 	saved, err := st.SaveSink(cfg)
 	if err != nil {
@@ -272,7 +279,7 @@ func TestSinkConfigNeverPersistsCredentials(t *testing.T) {
 	if err := st.db.QueryRow(`SELECT config FROM notify_sinks WHERE id = ?`, saved.ID).Scan(&raw); err != nil {
 		t.Fatalf("read back the stored config: %v", err)
 	}
-	for _, forbidden := range []string{"TOP-SECRET-PASSWORD", "TOP-SECRET-TOKEN"} {
+	for _, forbidden := range []string{"TOP-SECRET-PASSWORD", "TOP-SECRET-TOKEN", "TOP-SECRET-CLIENT-KEY"} {
 		if strings.Contains(raw, forbidden) {
 			t.Errorf("credential %q was persisted into notify_sinks.config: %s", forbidden, raw)
 		}
@@ -287,7 +294,12 @@ func TestSinkConfigNeverPersistsCredentials(t *testing.T) {
 	if len(back) != 1 || back[0].Email.Host != "smtp.example.com" || back[0].Email.Username != "svc" {
 		t.Fatalf("sink configuration did not round-trip: %+v", back)
 	}
-	if back[0].Email.Password != "" || back[0].Webhook.Token != "" {
+	if back[0].Email.Password != "" || back[0].Webhook.Token != "" || back[0].Syslog.ClientKey != "" {
 		t.Error("a credential came back out of the database")
+	}
+	// The mutual-TLS certificate is public: dropping it would break the sink
+	// just as surely as leaking the key would compromise it.
+	if !strings.Contains(back[0].Syslog.ClientCert, "PUBLIC") {
+		t.Errorf("the client certificate was lost: %q", back[0].Syslog.ClientCert)
 	}
 }

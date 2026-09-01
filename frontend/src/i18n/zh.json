@@ -816,7 +816,17 @@
     "secretSet": "已设置凭据",
     "secretCleared": "凭据已删除。",
     "clearSecret": "删除已保存的凭据",
-    "secretHint": "存储在数据库之外，保护方式：{backend}"
+    "secretHint": "存储在数据库之外，保护方式：{backend}",
+    "tlsNote": "Syslog over TLS（RFC 5425），除非地址另行指定，否则使用 6514 端口。消息按八位字节计数分帧，符合收集器的预期。",
+    "caCert": "CA 证书（PEM）",
+    "caCertHint": "留空则使用系统信任库。粘贴证书以信任内部 CA。",
+    "serverName": "证书中应有的名称",
+    "serverNameHint": "仅在通过 IP 或负载均衡器访问收集器时需要。",
+    "insecureSkipVerify": "不验证收集器证书",
+    "insecureWarning": "连接仍然加密，但无法证明对端是谁。仅可用于实验环境的收集器。",
+    "clientCert": "客户端证书（PEM）",
+    "clientCertHint": "用于双向 TLS，即收集器要求发送方进行身份验证时。",
+    "clientKey": "客户端私钥（PEM）"
   },
   "tray": {
     "show": "打开 SnmpLens",

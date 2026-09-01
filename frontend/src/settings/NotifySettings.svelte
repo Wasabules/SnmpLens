@@ -53,7 +53,10 @@
       redact: false,
       secret: '',
       hasSecret: false,
-      syslog: { address: '', protocol: 'udp', facility: 16, hostname: '', appName: 'SnmpLens', timeout: 5 },
+      syslog: {
+        address: '', protocol: 'udp', facility: 16, hostname: '', appName: 'SnmpLens', timeout: 5,
+        caCert: '', serverName: '', insecureSkipVerify: false, clientCert: '',
+      },
       webhook: { url: '', method: 'POST', headers: {}, token: '', timeout: 10 },
       email: {
         host: '', port: 587, username: '', from: '', to: [],
@@ -270,13 +273,46 @@
             <select bind:value={editingSink.syslog.protocol}>
               <option value="udp">UDP</option>
               <option value="tcp">TCP</option>
+              <option value="tls">TLS (RFC 5425)</option>
             </select>
           </label>
           <label class="fld"><span>{$_('notify.facility')}</span>
             <input type="number" min="0" max="23" bind:value={editingSink.syslog.facility} />
           </label>
         </div>
-        <p class="note">{$_('notify.udpNote')}</p>
+        {#if editingSink.syslog.protocol === 'tls'}
+          <p class="note">{$_('notify.tlsNote')}</p>
+          <label class="fld"><span>{$_('notify.caCert')}</span>
+            <textarea rows="3" bind:value={editingSink.syslog.caCert}
+              placeholder={'-----BEGIN CERTIFICATE-----'}></textarea>
+            <span class="sub">{$_('notify.caCertHint')}</span>
+          </label>
+          <label class="fld"><span>{$_('notify.serverName')}</span>
+            <input type="text" bind:value={editingSink.syslog.serverName} placeholder="collector.example.com" />
+            <span class="sub">{$_('notify.serverNameHint')}</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" bind:checked={editingSink.syslog.insecureSkipVerify} />
+            <span>{$_('notify.insecureSkipVerify')}</span>
+          </label>
+          {#if editingSink.syslog.insecureSkipVerify}
+            <p class="note warn">
+              <Icon name="triangle-alert" size={14} /> {$_('notify.insecureWarning')}
+            </p>
+          {/if}
+          <label class="fld"><span>{$_('notify.clientCert')}</span>
+            <textarea rows="3" bind:value={editingSink.syslog.clientCert}
+              placeholder={'-----BEGIN CERTIFICATE-----'}></textarea>
+            <span class="sub">{$_('notify.clientCertHint')}</span>
+          </label>
+          <label class="fld"><span>{$_('notify.clientKey')}</span>
+            <textarea rows="3" bind:value={editingSink.secret}
+              placeholder={editingSink.hasSecret ? $_('notify.secretOnFile') : '-----BEGIN PRIVATE KEY-----'}></textarea>
+            <span class="sub">{$_('notify.secretHint', { values: { backend } })}</span>
+          </label>
+        {:else}
+          <p class="note">{$_('notify.udpNote')}</p>
+        {/if}
       {:else if editingSink.kind === 'webhook'}
         <label class="fld"><span>URL</span>
           <input type="text" bind:value={editingSink.webhook.url} placeholder="https://hooks.example.com/snmplens" />
@@ -575,13 +611,24 @@
   }
 
   .fld input,
-  .fld select {
+  .fld select,
+  .fld textarea {
     width: 100%;
     padding: 6px 8px;
     background-color: var(--bg-lighter-color);
     border: 1px solid var(--border-color);
     border-radius: 4px;
     color: var(--text-color);
+  }
+
+  /* PEM blocks are long, fixed-width and meant to be pasted, not typed. */
+  .fld textarea {
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 0.72em;
+    resize: vertical;
+    white-space: pre;
+    overflow-wrap: normal;
+    overflow-x: auto;
   }
 
   .fld-row {

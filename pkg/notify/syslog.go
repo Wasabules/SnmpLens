@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net"
 	"strings"
@@ -25,12 +26,32 @@ const (
 
 // SyslogConfig describes one syslog destination.
 type SyslogConfig struct {
-	Address  string `json:"address"`  // host:port
-	Protocol string `json:"protocol"` // "udp" or "tcp"
+	Address  string `json:"address"`  // host:port; the port may be omitted for TLS
+	Protocol string `json:"protocol"` // "udp", "tcp" or "tls" (RFC5425)
 	Facility int    `json:"facility"` // 0-23; 16 (local0) is the usual choice
 	Hostname string `json:"hostname"` // ours; empty means ask the OS
 	AppName  string `json:"appName"`  // defaults to SnmpLens
 	Timeout  int    `json:"timeout"`  // seconds; 0 means 5
+
+	// --- TLS, used when Protocol is "tls" ---
+
+	// CACert is a PEM bundle trusting a private CA. Empty means the system
+	// trust store, which is right for a publicly-signed collector.
+	CACert string `json:"caCert,omitempty"`
+	// ServerName overrides the name checked against the certificate, for a
+	// collector reached by IP or through a load balancer.
+	ServerName string `json:"serverName,omitempty"`
+	// InsecureSkipVerify disables certificate verification entirely. It is
+	// offered because a lab collector with a self-signed certificate is a real
+	// situation, and named so nobody can enable it by accident.
+	InsecureSkipVerify bool `json:"insecureSkipVerify,omitempty"`
+	// ClientCert is the PEM certificate for mutual TLS. It is public and lives
+	// with the config; its private key is a credential and travels through
+	// SinkConfig.Secret into pkg/secrets, hence json:"-" below.
+	ClientCert string `json:"clientCert,omitempty"`
+	// ClientKey is the PEM private key, supplied at Build time from secure
+	// storage and never serialised. See EmailConfig.Password for the reasoning.
+	ClientKey string `json:"-"`
 }
 
 // sanitizePrintUSASCII enforces the header grammar: printable US-ASCII with no
@@ -126,34 +147,64 @@ type SyslogSink struct {
 // stateless: a desktop app can be suspended, moved between networks or offline
 // for hours, and a long-lived socket would simply be dead by then.
 func (s SyslogSink) Send(e events.Event, subject, body string) error {
-	proto := strings.ToLower(strings.TrimSpace(s.Config.Protocol))
-	if proto != "tcp" {
-		proto = "udp"
-	}
+	proto := normaliseProtocol(s.Config.Protocol)
 	timeout := time.Duration(s.Config.Timeout) * time.Second
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
 
-	conn, err := net.DialTimeout(proto, s.Config.Address, timeout)
+	address := s.Config.Address
+	if proto == SyslogTLS {
+		address = withDefaultPort(address, DefaultSyslogTLSPort)
+	}
+
+	conn, err := s.dial(proto, address, timeout)
 	if err != nil {
-		return fmt.Errorf("dial %s %s: %w", proto, s.Config.Address, err)
+		return err
 	}
 	defer conn.Close()
 
 	conn.SetWriteDeadline(time.Now().Add(timeout))
 	line := FormatRFC5424(s.Config, e, body)
 
-	if proto == "tcp" {
-		// RFC6587 octet counting: without a framing rule a collector cannot
-		// tell where one message ends on a stream.
+	if proto != SyslogUDP {
+		// RFC6587 octet counting, which RFC5425 mandates for TLS: without a
+		// framing rule a collector cannot tell where one message ends on a
+		// stream. The count is in OCTETS, so len() on the byte string — a
+		// rune count would desynchronise the collector on any non-ASCII
+		// summary, and every one of our five locales can produce one.
 		line = fmt.Sprintf("%d %s", len(line), line)
 	}
 	_, err = conn.Write([]byte(line))
 	return err
 }
 
+// dial opens the transport.
+func (s SyslogSink) dial(proto, address string, timeout time.Duration) (net.Conn, error) {
+	if proto != SyslogTLS {
+		conn, err := net.DialTimeout(proto, address, timeout)
+		if err != nil {
+			return nil, fmt.Errorf("dial %s %s: %w", proto, address, err)
+		}
+		return conn, nil
+	}
+
+	tlsCfg, err := tlsConfigFor(s.Config, s.Config.ClientKey)
+	if err != nil {
+		return nil, fmt.Errorf("syslog TLS configuration: %w", err)
+	}
+	// Dial and handshake share one deadline: a collector that accepts the
+	// connection and then never completes the handshake would otherwise hold
+	// the dispatcher goroutine for as long as the OS allows.
+	dialer := &net.Dialer{Timeout: timeout}
+	conn, err := tls.DialWithDialer(dialer, "tcp", address, tlsCfg)
+	if err != nil {
+		return nil, fmt.Errorf("dial tls %s: %w", address, err)
+	}
+	return conn, nil
+}
+
 // Describe names the destination for the delivery log.
 func (s SyslogSink) Describe() string {
-	return "syslog " + s.Config.Protocol + "://" + s.Config.Address
+	return "syslog " + normaliseProtocol(s.Config.Protocol) + "://" + s.Config.Address
 }
