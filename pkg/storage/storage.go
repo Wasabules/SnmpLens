@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,24 +23,58 @@ type Storage struct {
 	batchTicker  *time.Ticker
 	done         chan struct{}
 	historySaves int // counter to trim query_history only periodically
+	eventWrites  int // counter to trim the event journal only periodically
 }
 
 type Session struct {
-	ID          string      `json:"id"`
-	OID         string      `json:"oid"`
-	Targets     []string    `json:"targets"`
-	IntervalMs  int         `json:"intervalMs"`
-	SnmpVersion string      `json:"snmpVersion"`
-	StartedAt   string      `json:"startedAt"`
-	StoppedAt   string      `json:"stoppedAt,omitempty"`
-	Thresholds  *Thresholds `json:"thresholds,omitempty"`
-	Active      bool        `json:"active"`
+	ID string `json:"id"`
+	// Name is the operator's label for this monitoring ("Trafic WAN Paris").
+	// Optional: the UI falls back to the polled OIDs when it is empty.
+	Name        string   `json:"name,omitempty"`
+	OID         string   `json:"oid"`
+	Targets     []string `json:"targets"`
+	IntervalMs  int      `json:"intervalMs"`
+	SnmpVersion string   `json:"snmpVersion"`
+	StartedAt   string   `json:"startedAt"`
+	StoppedAt   string   `json:"stoppedAt,omitempty"`
+	// Thresholds keyed by OID.
+	Thresholds map[string]*Thresholds `json:"thresholds,omitempty"`
+	Active     bool                   `json:"active"`
+	// Conn is how to reach the targets. It is persisted because the poll clock
+	// now lives in Go: a background poll has no renderer to ask for the
+	// connection settings, and after a restart there is no renderer at all.
+	Conn *SessionConn `json:"conn,omitempty"`
 }
 
+// SessionConn holds the NON-SECRET SNMP connection parameters of a session.
+//
+// The community string and the v3 passphrases are deliberately absent: they go
+// to pkg/secrets under SessionRef(id). Everything in this struct is written to
+// monitoring.db in the clear, so anything added here must be safe to read in a
+// backup copy of that file.
+type SessionConn struct {
+	Port       int `json:"port"`
+	TimeoutSec int `json:"timeoutSec"`
+	Retries    int `json:"retries"`
+	// V3 identity and algorithm choice. The passphrases live in pkg/secrets.
+	V3User        string `json:"v3User,omitempty"`
+	V3AuthProto   string `json:"v3AuthProtocol,omitempty"`
+	V3PrivProto   string `json:"v3PrivProtocol,omitempty"`
+	V3SecLevel    string `json:"v3SecurityLevel,omitempty"`
+	V3ContextName string `json:"v3ContextName,omitempty"`
+}
+
+// Thresholds is the alert band for ONE monitored OID. Different OIDs on the
+// same session rarely share bounds (a link rate and an uptime have nothing in
+// common), so thresholds are keyed by OID on the session.
 type Thresholds struct {
-	Min          *float64 `json:"min,omitempty"`
-	Max          *float64 `json:"max,omitempty"`
-	AlertEnabled bool     `json:"alertEnabled"`
+	Min *float64 `json:"min,omitempty"`
+	Max *float64 `json:"max,omitempty"`
+	// ForSeconds requires the breach to persist this long before alerting.
+	// 0 alerts on the first sample outside the band. This is what separates a
+	// real incident from a single noisy poll.
+	ForSeconds   int  `json:"forSeconds,omitempty"`
+	AlertEnabled bool `json:"alertEnabled"`
 }
 
 type DataPoint struct {
@@ -51,6 +86,27 @@ type DataPoint struct {
 	Rate           *float64 `json:"rate"`
 	ResponseTimeMs int      `json:"responseTimeMs"`
 	Error          string   `json:"error,omitempty"`
+	// SnmpType is the SNMP syntax of the sampled value (Counter32, Gauge32,
+	// TimeTicks…). Kept so the UI can correct counter wraps and pick a unit.
+	SnmpType string `json:"snmpType,omitempty"`
+	// OID this sample came from. A session may poll several OIDs, each charted
+	// as its own small multiple, so points must say which one they belong to.
+	OID string `json:"oid,omitempty"`
+}
+
+// Bucket is an aggregated slice of data points over a time window, used to
+// render long time ranges without shipping every raw sample to the frontend.
+type Bucket struct {
+	Target     string   `json:"target"`
+	OID        string   `json:"oid"`
+	Timestamp  string   `json:"timestamp"`
+	AvgValue   *float64 `json:"avgValue"`
+	MinValue   *float64 `json:"minValue"`
+	MaxValue   *float64 `json:"maxValue"`
+	AvgRate    *float64 `json:"avgRate"`
+	AvgLatency *float64 `json:"avgLatency"`
+	Count      int      `json:"count"`
+	ErrorCount int      `json:"errorCount"`
 }
 
 type SessionStats struct {
@@ -76,28 +132,27 @@ func Init(dbPath string) (*Storage, error) {
 		return nil, fmt.Errorf("create storage directory: %w", err)
 	}
 
-	db, err := sql.Open("sqlite", dbPath)
+	// Pragmas MUST travel in the DSN, not through db.Exec. They are
+	// connection-scoped, and *sql.DB is a pool: an Exec configures whichever
+	// single connection it happens to grab, leaving every later one with
+	// foreign_keys=OFF (so ON DELETE CASCADE silently does nothing) and
+	// busy_timeout=0 (so concurrent writes fail with SQLITE_BUSY instead of
+	// waiting). The DSN form is applied to every connection the pool opens.
+	dsn := dbPath + "?_pragma=busy_timeout(5000)&_pragma=foreign_keys(ON)&_pragma=journal_mode(WAL)"
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
-
-	// Configure SQLite for concurrent access
-	pragmas := []string{
-		"PRAGMA journal_mode=WAL",
-		"PRAGMA busy_timeout=5000",
-		"PRAGMA foreign_keys=ON",
-	}
-	for _, p := range pragmas {
-		if _, err := db.Exec(p); err != nil {
-			db.Close()
-			return nil, fmt.Errorf("exec %s: %w", p, err)
-		}
-	}
+	// WAL serialises writers anyway; a small pool bounds memory and keeps the
+	// number of connections that must be configured predictable.
+	db.SetMaxOpenConns(4)
+	db.SetMaxIdleConns(4)
 
 	// Create tables
 	schema := `
 	CREATE TABLE IF NOT EXISTS sessions (
 		id           TEXT PRIMARY KEY,
+		name         TEXT,
 		oid          TEXT NOT NULL,
 		targets      TEXT NOT NULL,
 		interval_ms  INTEGER NOT NULL,
@@ -117,7 +172,9 @@ func Init(dbPath string) (*Storage, error) {
 		delta            REAL,
 		rate             REAL,
 		response_time_ms INTEGER,
-		error            TEXT
+		error            TEXT,
+		snmp_type        TEXT,
+		oid              TEXT
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_dp_session_ts ON data_points(session_id, timestamp);
@@ -131,11 +188,116 @@ func Init(dbPath string) (*Storage, error) {
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_qh_timestamp ON query_history(timestamp);
+
+	-- ===================== EVENT JOURNAL =====================
+	-- Separate from query_history on purpose: that table records what the
+	-- operator ASKED for (renderer-owned, one big results blob per row); this
+	-- one records what HAPPENED (Go-owned, routable, must work with no window).
+	--
+	-- seq is a named INTEGER PRIMARY KEY, i.e. a rowid ALIAS, because SQLite
+	-- cannot index the implicit rowid: "CREATE INDEX ... ON events(category, rowid)"
+	-- fails outright. The whole schema runs as ONE Exec and a failure leaves
+	-- storage nil (app.go only logs a warning), which would silently disable
+	-- ALL persistence -- sessions and query history included.
+	CREATE TABLE IF NOT EXISTS events (
+		seq          INTEGER PRIMARY KEY AUTOINCREMENT,
+		id           TEXT    NOT NULL UNIQUE,
+		ts           TEXT    NOT NULL,
+		category     TEXT    NOT NULL,
+		kind         TEXT    NOT NULL,
+		severity     INTEGER NOT NULL,
+		state        TEXT    NOT NULL DEFAULT 'oneshot',
+		source       TEXT,
+		oid          TEXT,
+		session_id   TEXT,
+		session_name TEXT,
+		dedup_key    TEXT,
+		corr_id      TEXT,
+		title_key    TEXT    NOT NULL,
+		params       TEXT    NOT NULL DEFAULT '{}',
+		summary      TEXT    NOT NULL,
+		value        REAL,
+		payload_size INTEGER NOT NULL DEFAULT 0,
+		acked        INTEGER NOT NULL DEFAULT 0
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_ev_cat_seq ON events(category, seq);
+	CREATE INDEX IF NOT EXISTS idx_ev_ts      ON events(ts);
+	CREATE INDEX IF NOT EXISTS idx_ev_unacked ON events(category) WHERE acked = 0;
+
+	-- Bulk detail kept out of the spine so listing the journal never reads a
+	-- 1500-varbind trap. No FOREIGN KEY: reaping is explicit, because we refuse
+	-- to bet deletion on a connection-scoped pragma.
+	CREATE TABLE IF NOT EXISTS event_payloads (
+		event_id TEXT PRIMARY KEY,
+		body     TEXT NOT NULL
+	);
+
+	-- Restart-safe dwell state for "out of band for N seconds". Held in memory
+	-- today, so an in-progress episode is lost on reload and re-fires as new.
+	-- ===================== NOTIFICATION ROUTING =====================
+	CREATE TABLE IF NOT EXISTS notify_sinks (
+		id      TEXT PRIMARY KEY,
+		name    TEXT NOT NULL,
+		kind    TEXT NOT NULL,
+		enabled INTEGER NOT NULL DEFAULT 1,
+		config  TEXT NOT NULL DEFAULT '{}'
+	);
+
+	CREATE TABLE IF NOT EXISTS notify_routes (
+		id       TEXT PRIMARY KEY,
+		name     TEXT NOT NULL,
+		enabled  INTEGER NOT NULL DEFAULT 1,
+		priority INTEGER NOT NULL DEFAULT 100,
+		stop     INTEGER NOT NULL DEFAULT 0,
+		match    TEXT NOT NULL DEFAULT '{}',
+		sink_ids TEXT NOT NULL DEFAULT '[]'
+	);
+
+	-- The outbox is SELF-CONTAINED: subject and body are rendered at enqueue
+	-- time. The dispatcher therefore never joins back to events, the two tables
+	-- trim on independent schedules, and -- the real prize -- event retention
+	-- can never blank or strand the dead-letter list, which is the only
+	-- feedback channel once the window is closed.
+	CREATE TABLE IF NOT EXISTS notify_outbox (
+		id          INTEGER PRIMARY KEY AUTOINCREMENT,
+		event_id    TEXT NOT NULL,
+		sink_id     TEXT NOT NULL,
+		event_json  TEXT NOT NULL,
+		subject     TEXT NOT NULL DEFAULT '',
+		body        TEXT NOT NULL DEFAULT '',
+		attempts    INTEGER NOT NULL DEFAULT 0,
+		next_try_at TEXT NOT NULL,
+		last_error  TEXT,
+		state       TEXT NOT NULL DEFAULT 'pending',  -- pending|sent|dead
+		created_at  TEXT NOT NULL,
+		UNIQUE(event_id, sink_id)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_ob_due ON notify_outbox(state, next_try_at);
+
+	CREATE TABLE IF NOT EXISTS event_episodes (
+		dedup_key  TEXT PRIMARY KEY,
+		kind       TEXT NOT NULL,
+		session_id TEXT,
+		target     TEXT NOT NULL,
+		oid        TEXT,
+		first_seen TEXT NOT NULL,
+		fired_at   TEXT,
+		corr_id    TEXT
+	);
 	`
 	if _, err := db.Exec(schema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("create schema: %w", err)
 	}
+
+	// Migrate databases created before a column existed. CREATE TABLE IF NOT
+	// EXISTS leaves older tables untouched, so add missing columns explicitly.
+	ensureColumn(db, "data_points", "snmp_type", "TEXT")
+	ensureColumn(db, "data_points", "oid", "TEXT")
+	ensureColumn(db, "sessions", "name", "TEXT")
+	ensureColumn(db, "sessions", "conn", "TEXT")
 
 	s := &Storage{
 		db:          db,
@@ -168,17 +330,21 @@ func (s *Storage) Close() error {
 }
 
 // CreateSession inserts a new monitoring session and returns its UUID.
-func (s *Storage) CreateSession(oid string, targets []string, intervalMs int, snmpVersion, startedAt string, thresholds *Thresholds) (string, error) {
+func (s *Storage) CreateSession(name, oid string, targets []string, intervalMs int, snmpVersion, startedAt string, thresholds map[string]*Thresholds, conn *SessionConn) (string, error) {
 	id := generateUUID()
 	targetsJSON, _ := json.Marshal(targets)
 	var thresholdsJSON []byte
-	if thresholds != nil {
+	if len(thresholds) > 0 {
 		thresholdsJSON, _ = json.Marshal(thresholds)
 	}
+	var connJSON []byte
+	if conn != nil {
+		connJSON, _ = json.Marshal(conn)
+	}
 	_, err := s.db.Exec(
-		`INSERT INTO sessions (id, oid, targets, interval_ms, snmp_version, started_at, thresholds, active)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
-		id, oid, string(targetsJSON), intervalMs, snmpVersion, startedAt, nullableString(thresholdsJSON),
+		`INSERT INTO sessions (id, name, oid, targets, interval_ms, snmp_version, started_at, thresholds, active, conn)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+		id, nullableString([]byte(name)), oid, string(targetsJSON), intervalMs, snmpVersion, startedAt, nullableString(thresholdsJSON), nullableString(connJSON),
 	)
 	if err != nil {
 		return "", fmt.Errorf("create session: %w", err)
@@ -203,6 +369,16 @@ func (s *Storage) UpdateSession(id string, active bool, stoppedAt string) error 
 	return err
 }
 
+// UpdateSessionConn replaces the stored connection profile of a session.
+func (s *Storage) UpdateSessionConn(id string, conn *SessionConn) error {
+	var connJSON []byte
+	if conn != nil {
+		connJSON, _ = json.Marshal(conn)
+	}
+	_, err := s.db.Exec(`UPDATE sessions SET conn = ? WHERE id = ?`, nullableString(connJSON), id)
+	return err
+}
+
 // DeleteSession removes a session and all its data points (via CASCADE).
 func (s *Storage) DeleteSession(id string) error {
 	_, err := s.db.Exec(`DELETE FROM sessions WHERE id = ?`, id)
@@ -211,7 +387,7 @@ func (s *Storage) DeleteSession(id string) error {
 
 // ListSessions returns all persisted sessions.
 func (s *Storage) ListSessions() ([]Session, error) {
-	rows, err := s.db.Query(`SELECT id, oid, targets, interval_ms, snmp_version, started_at, stopped_at, thresholds, active FROM sessions ORDER BY started_at DESC`)
+	rows, err := s.db.Query(`SELECT id, COALESCE(name, ''), oid, targets, interval_ms, snmp_version, started_at, stopped_at, thresholds, active, conn FROM sessions ORDER BY started_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -223,9 +399,10 @@ func (s *Storage) ListSessions() ([]Session, error) {
 		var targetsJSON string
 		var stoppedAt sql.NullString
 		var thresholdsJSON sql.NullString
+		var connJSON sql.NullString
 		var active int
 
-		if err := rows.Scan(&sess.ID, &sess.OID, &targetsJSON, &sess.IntervalMs, &sess.SnmpVersion, &sess.StartedAt, &stoppedAt, &thresholdsJSON, &active); err != nil {
+		if err := rows.Scan(&sess.ID, &sess.Name, &sess.OID, &targetsJSON, &sess.IntervalMs, &sess.SnmpVersion, &sess.StartedAt, &stoppedAt, &thresholdsJSON, &active, &connJSON); err != nil {
 			return nil, err
 		}
 
@@ -233,8 +410,24 @@ func (s *Storage) ListSessions() ([]Session, error) {
 		if stoppedAt.Valid {
 			sess.StoppedAt = stoppedAt.String
 		}
-		if thresholdsJSON.Valid {
-			json.Unmarshal([]byte(thresholdsJSON.String), &sess.Thresholds)
+		if thresholdsJSON.Valid && thresholdsJSON.String != "" {
+			if err := json.Unmarshal([]byte(thresholdsJSON.String), &sess.Thresholds); err != nil {
+				// Sessions created before thresholds were per-OID stored a single
+				// object; attach it to the session's first OID.
+				var legacy Thresholds
+				if json.Unmarshal([]byte(thresholdsJSON.String), &legacy) == nil {
+					first := strings.TrimSpace(strings.Split(sess.OID, ",")[0])
+					if first != "" {
+						sess.Thresholds = map[string]*Thresholds{first: &legacy}
+					}
+				}
+			}
+		}
+		if connJSON.Valid && connJSON.String != "" {
+			var c SessionConn
+			if json.Unmarshal([]byte(connJSON.String), &c) == nil {
+				sess.Conn = &c
+			}
 		}
 		sess.Active = active == 1
 		sessions = append(sessions, sess)
@@ -268,7 +461,7 @@ func (s *Storage) flushBatch() {
 		return
 	}
 
-	stmt, err := tx.Prepare(`INSERT INTO data_points (session_id, target, timestamp, value, delta, rate, response_time_ms, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+	stmt, err := tx.Prepare(`INSERT INTO data_points (session_id, target, timestamp, value, delta, rate, response_time_ms, error, snmp_type, oid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		tx.Rollback()
 		log.Printf("storage: prepare insert: %v", err)
@@ -277,7 +470,7 @@ func (s *Storage) flushBatch() {
 	defer stmt.Close()
 
 	for _, p := range points {
-		_, err := stmt.Exec(p.SessionID, p.Target, p.Timestamp, p.Value, p.Delta, p.Rate, p.ResponseTimeMs, nullableString([]byte(p.Error)))
+		_, err := stmt.Exec(p.SessionID, p.Target, p.Timestamp, p.Value, p.Delta, p.Rate, p.ResponseTimeMs, nullableString([]byte(p.Error)), nullableString([]byte(p.SnmpType)), nullableString([]byte(p.OID)))
 		if err != nil {
 			log.Printf("storage: insert point: %v", err)
 		}
@@ -290,7 +483,7 @@ func (s *Storage) flushBatch() {
 
 // QueryDataPoints retrieves data points for a session, optionally filtered by time range and limited.
 func (s *Storage) QueryDataPoints(sessionID, from, to string, limit int) ([]DataPoint, error) {
-	query := `SELECT session_id, target, timestamp, value, delta, rate, response_time_ms, error FROM data_points WHERE session_id = ?`
+	query := `SELECT session_id, target, timestamp, value, delta, rate, response_time_ms, error, snmp_type, oid FROM data_points WHERE session_id = ?`
 	args := []interface{}{sessionID}
 
 	if from != "" {
@@ -305,7 +498,7 @@ func (s *Storage) QueryDataPoints(sessionID, from, to string, limit int) ([]Data
 	if limit > 0 {
 		// For "last N points", use a subquery to get the tail
 		query = fmt.Sprintf(`SELECT * FROM (%s ORDER BY timestamp DESC LIMIT ?) ORDER BY timestamp ASC`,
-			`SELECT session_id, target, timestamp, value, delta, rate, response_time_ms, error FROM data_points WHERE session_id = ?`+
+			`SELECT session_id, target, timestamp, value, delta, rate, response_time_ms, error, snmp_type, oid FROM data_points WHERE session_id = ?`+
 				timeFilter(from, to))
 		args = []interface{}{sessionID}
 		if from != "" {
@@ -327,11 +520,17 @@ func (s *Storage) QueryDataPoints(sessionID, from, to string, limit int) ([]Data
 	for rows.Next() {
 		var p DataPoint
 		var value, delta, rate sql.NullFloat64
-		var errStr sql.NullString
+		var errStr, snmpType, oid sql.NullString
 		var respTime sql.NullInt64
 
-		if err := rows.Scan(&p.SessionID, &p.Target, &p.Timestamp, &value, &delta, &rate, &respTime, &errStr); err != nil {
+		if err := rows.Scan(&p.SessionID, &p.Target, &p.Timestamp, &value, &delta, &rate, &respTime, &errStr, &snmpType, &oid); err != nil {
 			return nil, err
+		}
+		if snmpType.Valid {
+			p.SnmpType = snmpType.String
+		}
+		if oid.Valid {
+			p.OID = oid.String
 		}
 		if value.Valid {
 			p.Value = &value.Float64
@@ -402,14 +601,14 @@ func (s *Storage) ImportLocalStorageData(sessions []Session, points map[string][
 		return err
 	}
 
-	sessStmt, err := tx.Prepare(`INSERT OR IGNORE INTO sessions (id, oid, targets, interval_ms, snmp_version, started_at, thresholds, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+	sessStmt, err := tx.Prepare(`INSERT OR IGNORE INTO sessions (id, name, oid, targets, interval_ms, snmp_version, started_at, thresholds, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
 	defer sessStmt.Close()
 
-	dpStmt, err := tx.Prepare(`INSERT INTO data_points (session_id, target, timestamp, value, delta, rate, response_time_ms, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+	dpStmt, err := tx.Prepare(`INSERT INTO data_points (session_id, target, timestamp, value, delta, rate, response_time_ms, error, snmp_type, oid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -419,7 +618,7 @@ func (s *Storage) ImportLocalStorageData(sessions []Session, points map[string][
 	for _, sess := range sessions {
 		targetsJSON, _ := json.Marshal(sess.Targets)
 		var thresholdsJSON interface{}
-		if sess.Thresholds != nil {
+		if len(sess.Thresholds) > 0 {
 			b, _ := json.Marshal(sess.Thresholds)
 			thresholdsJSON = string(b)
 		}
@@ -427,11 +626,11 @@ func (s *Storage) ImportLocalStorageData(sessions []Session, points map[string][
 		if sess.Active {
 			active = 1
 		}
-		sessStmt.Exec(sess.ID, sess.OID, string(targetsJSON), sess.IntervalMs, sess.SnmpVersion, sess.StartedAt, thresholdsJSON, active)
+		sessStmt.Exec(sess.ID, nullableString([]byte(sess.Name)), sess.OID, string(targetsJSON), sess.IntervalMs, sess.SnmpVersion, sess.StartedAt, thresholdsJSON, active)
 
 		if pts, ok := points[sess.ID]; ok {
 			for _, p := range pts {
-				dpStmt.Exec(p.SessionID, p.Target, p.Timestamp, p.Value, p.Delta, p.Rate, p.ResponseTimeMs, nullableString([]byte(p.Error)))
+				dpStmt.Exec(p.SessionID, p.Target, p.Timestamp, p.Value, p.Delta, p.Rate, p.ResponseTimeMs, nullableString([]byte(p.Error)), nullableString([]byte(p.SnmpType)), nullableString([]byte(p.OID)))
 			}
 		}
 	}
@@ -600,6 +799,91 @@ func (s *Storage) ImportHistoryEntries(entries []map[string]interface{}) error {
 	}
 	s.trimHistory()
 	return nil
+}
+
+// ensureColumn adds a column to an existing table when it is missing. Errors
+// are logged, not fatal: a failure here only means the extra data is unavailable.
+func ensureColumn(db *sql.DB, table, column, ddl string) {
+	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		log.Printf("storage: inspect %s: %v", table, err)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return
+		}
+		if name == column {
+			return // already present
+		}
+	}
+	if _, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, ddl)); err != nil {
+		log.Printf("storage: add %s.%s: %v", table, column, err)
+	}
+}
+
+// QueryBuckets aggregates a session's data points into fixed-width time buckets
+// so long ranges render from a bounded number of points instead of every raw
+// sample. bucketSec is the window width in seconds; from/to are optional
+// RFC3339 bounds. Buckets are returned per target, oldest first.
+func (s *Storage) QueryBuckets(sessionID, from, to string, bucketSec int) ([]Bucket, error) {
+	if bucketSec <= 0 {
+		bucketSec = 60
+	}
+	// strftime('%s', timestamp) gives epoch seconds; integer-divide to bucket,
+	// then multiply back to get the bucket's start time.
+	query := `SELECT target, COALESCE(oid, ''),
+		       strftime('%Y-%m-%dT%H:%M:%SZ', datetime((CAST(strftime('%s', timestamp) AS INTEGER) / ?) * ?, 'unixepoch')) AS bucket_ts,
+		       AVG(value), MIN(value), MAX(value), AVG(rate), AVG(response_time_ms),
+		       COUNT(*), SUM(CASE WHEN error IS NOT NULL AND error != '' THEN 1 ELSE 0 END)
+		FROM data_points WHERE session_id = ?`
+	args := []interface{}{bucketSec, bucketSec, sessionID}
+	if from != "" {
+		query += ` AND timestamp >= ?`
+		args = append(args, from)
+	}
+	if to != "" {
+		query += ` AND timestamp <= ?`
+		args = append(args, to)
+	}
+	query += ` GROUP BY target, oid, bucket_ts ORDER BY bucket_ts ASC`
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	buckets := []Bucket{}
+	for rows.Next() {
+		var b Bucket
+		var avg, min, max, rate, lat sql.NullFloat64
+		if err := rows.Scan(&b.Target, &b.OID, &b.Timestamp, &avg, &min, &max, &rate, &lat, &b.Count, &b.ErrorCount); err != nil {
+			return nil, err
+		}
+		if avg.Valid {
+			b.AvgValue = &avg.Float64
+		}
+		if min.Valid {
+			b.MinValue = &min.Float64
+		}
+		if max.Valid {
+			b.MaxValue = &max.Float64
+		}
+		if rate.Valid {
+			b.AvgRate = &rate.Float64
+		}
+		if lat.Valid {
+			b.AvgLatency = &lat.Float64
+		}
+		buckets = append(buckets, b)
+	}
+	return buckets, rows.Err()
 }
 
 func nullableString(b []byte) interface{} {

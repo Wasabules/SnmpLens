@@ -3,16 +3,23 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"embed"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 
+	"SnmpLens/pkg/events"
 	"SnmpLens/pkg/mib"
+	"SnmpLens/pkg/monitor"
 	"SnmpLens/pkg/network"
+	"SnmpLens/pkg/notify"
+	"SnmpLens/pkg/secrets"
+	"SnmpLens/pkg/service"
 	"SnmpLens/pkg/snmp"
 	"SnmpLens/pkg/storage"
+	"SnmpLens/pkg/tray"
 	"SnmpLens/pkg/updater"
 
 	"time"
@@ -29,7 +36,20 @@ type App struct {
 	mibService       *mib.Service
 	snmpClient       *snmp.Client
 	storage          *storage.Storage
+	evaluator        *monitor.Evaluator
+	dispatcher       *notify.Dispatcher
+	secrets          secrets.Store
 	updater          *updater.Service
+
+	// Background-mode state. configDir is the SnmpLens directory, kept here
+	// because several subsystems need it after startup.
+	configDir  string
+	serviceCfg service.Config
+	trayIcons  trayIcons
+	tray       *tray.Controller
+	trayLive   bool
+	trapsOn    bool
+	scheduler  *monitor.Scheduler
 }
 
 // NewApp creates a new App application struct.
@@ -77,6 +97,17 @@ func (a *App) startup(ctx context.Context) {
 		log.Printf("WARNING: Failed to initialize monitoring storage: %v", err)
 	} else {
 		a.storage = store
+		// Traps are journalled by the SNMP client itself, in its listener
+		// goroutine, before anything is emitted to the webview.
+		a.snmpClient.SetRecorder(events.RecorderFunc(a.recordEvent))
+		a.initEvaluator()
+		if store, err := secrets.Open(filepath.Join(configDir, "SnmpLens")); err != nil {
+			log.Printf("WARNING: secret storage unavailable, sinks needing a credential will fail: %v", err)
+		} else {
+			a.secrets = store
+			log.Printf("Secret storage backend: %s", store.Backend())
+		}
+		a.initDispatcher()
 	}
 
 	// 4. Load core MIBs
@@ -88,6 +119,18 @@ func (a *App) startup(ctx context.Context) {
 			log.Printf("Successfully loaded core MIB: %s", mibName)
 		}
 	}
+
+	// 5. The poll clock. It lives in Go so that monitoring, thresholds and the
+	// notification routes keep working with the window closed — which is the
+	// entire point of background mode.
+	a.initScheduler()
+
+	// 6. Tray, hide-on-close and the trap listener, in that order: the tray
+	// decides whether closing the window may merely hide it.
+	a.initBackgroundMode()
+
+	// 7. Pick up what was running when we last exited.
+	a.resumeActiveSessions()
 }
 
 // ensureStandardMibs copies any bundled standard MIB that is missing from the
@@ -180,7 +223,45 @@ func (a *App) SnmpGet(req snmp.SnmpRequest) []*snmp.BulkResult {
 
 // SnmpSet performs a concurrent SNMP SET operation.
 func (a *App) SnmpSet(req snmp.SetRequest) []*snmp.BulkResult {
-	return a.snmpClient.Set(req.Targets, req.OID, req.Community, req.Value, req.ValueType, req.Version, req.Port, req.Timeout, req.Retries, req.V3)
+	results := a.snmpClient.Set(req.Targets, req.OID, req.Community, req.Value, req.ValueType, req.Version, req.Port, req.Timeout, req.Retries, req.V3)
+	a.auditFailedSets(req, results)
+	return results
+}
+
+// auditFailedSets journals SETs that were refused.
+//
+// A SET is the one operation that CHANGES a device, so a refused one is worth
+// keeping: it is either a permissions problem or someone attempting a change
+// they should not. Only failures are recorded, and never the value that was
+// being written — an audit trail must not become somewhere passwords or
+// community strings accumulate in the clear.
+func (a *App) auditFailedSets(req snmp.SetRequest, results []*snmp.BulkResult) {
+	if !a.serviceCfg.AuditFailedSets || a.storage == nil {
+		return
+	}
+	for _, r := range results {
+		if r == nil || r.Error == "" {
+			continue
+		}
+		a.journalEvent(events.Event{
+			Category: events.CategoryOperation,
+			Kind:     events.KindOperationFailed,
+			Severity: "warning",
+			Source:   r.Target,
+			OID:      req.OID,
+			TitleKey: "events.kind." + events.KindOperationFailed,
+			Summary:  fmt.Sprintf("SET %s on %s was refused: %s", req.OID, r.Target, r.Error),
+		})
+	}
+}
+
+// journalEvent records an event, logging rather than propagating a failure:
+// every caller is on a path whose real work already succeeded or already
+// reported its own error.
+func (a *App) journalEvent(e events.Event) {
+	if err := a.recordEvent(e, ""); err != nil {
+		log.Printf("WARNING: could not journal a %s event: %v", e.Kind, err)
+	}
 }
 
 // SnmpGetNext performs a concurrent SNMP GETNEXT operation.
@@ -370,6 +451,19 @@ func (a *App) OpenURL(url string) {
 
 // shutdown is called when the app is closing.
 func (a *App) shutdown(ctx context.Context) {
+	// Stop the poll clock first: its goroutines write samples through storage,
+	// so letting them run into a closed database would log failures for work
+	// that was actually fine.
+	if a.scheduler != nil {
+		a.scheduler.StopAll()
+	}
+	a.tray.Stop()
+	// Stop the dispatcher BEFORE closing storage: it queries the outbox on its
+	// own goroutine, and a drain racing a closed database would log spurious
+	// failures against deliveries that are actually fine.
+	if a.dispatcher != nil {
+		a.dispatcher.Stop()
+	}
 	if a.storage != nil {
 		if err := a.storage.Close(); err != nil {
 			log.Printf("Error closing monitoring storage: %v", err)
@@ -378,14 +472,6 @@ func (a *App) shutdown(ctx context.Context) {
 }
 
 // --- Monitoring Storage Methods ---
-
-// MonitorCreateSession creates a persistent monitoring session and returns its UUID.
-func (a *App) MonitorCreateSession(oid string, targets []string, intervalMs int, snmpVersion string, thresholds *storage.Thresholds) (string, error) {
-	if a.storage == nil {
-		return "", fmt.Errorf("storage not initialized")
-	}
-	return a.storage.CreateSession(oid, targets, intervalMs, snmpVersion, time.Now().UTC().Format(time.RFC3339), thresholds)
-}
 
 // MonitorSaveDataPoints queues data points for batch insertion.
 func (a *App) MonitorSaveDataPoints(points []storage.DataPoint) {
@@ -441,6 +527,16 @@ func (a *App) MonitorCleanup(daysToKeep int) (int64, error) {
 		return 0, fmt.Errorf("storage not initialized")
 	}
 	return a.storage.Cleanup(time.Duration(daysToKeep) * 24 * time.Hour)
+}
+
+// MonitorLoadBuckets returns a session's data aggregated into fixed-width time
+// buckets (bucketSec seconds), so long ranges render from a bounded number of
+// points instead of every raw sample.
+func (a *App) MonitorLoadBuckets(sessionID, from, to string, bucketSec int) ([]storage.Bucket, error) {
+	if a.storage == nil {
+		return []storage.Bucket{}, nil
+	}
+	return a.storage.QueryBuckets(sessionID, from, to, bucketSec)
 }
 
 // MonitorImportLegacyData imports data from localStorage migration.
@@ -516,4 +612,396 @@ func (a *App) ImportHistoryEntries(entries []map[string]interface{}) error {
 		return fmt.Errorf("storage not initialized")
 	}
 	return a.storage.ImportHistoryEntries(entries)
+}
+
+// --- Event journal ---
+
+// recordEvent persists an event and tells any open window about it. It is the
+// single Recorder implementation handed to every producer.
+//
+// Persist first, notify second: the runtime event is a UI hint and is dropped
+// when no window is listening, whereas the row is the record of what happened.
+func (a *App) recordEvent(e events.Event, payload string) error {
+	if a.storage == nil {
+		return fmt.Errorf("storage not initialized")
+	}
+	saved, err := a.storage.InsertEvent(e, payload)
+	if err != nil {
+		return err
+	}
+
+	// Route in the same breath as the insert. Queuing is what makes delivery
+	// durable; actually sending happens on the dispatcher goroutine, so a slow
+	// SMTP relay can never stall a trap listener.
+	a.routeEvent(saved)
+
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "event:new", saved)
+	}
+	return nil
+}
+
+// routeEvent matches an event against the rules and queues one delivery per
+// selected sink.
+func (a *App) routeEvent(e events.Event) {
+	routes, err := a.storage.ListRoutes()
+	if err != nil || len(routes) == 0 {
+		return
+	}
+	sinkIDs := notify.Select(routes, e, time.Now())
+	if len(sinkIDs) == 0 {
+		return
+	}
+
+	// Redaction is decided per sink, so group by the rendering it needs rather
+	// than rendering once for everyone.
+	sinks, err := a.storage.ListSinks()
+	if err != nil {
+		return
+	}
+	redactBySink := map[string]bool{}
+	for _, s := range sinks {
+		redactBySink[s.ID] = s.Redact
+	}
+
+	plainSubject, plainBody := notify.Render(e, false)
+	redactedSubject, redactedBody := notify.Render(e, true)
+
+	var plain, redacted []string
+	for _, id := range sinkIDs {
+		if redactBySink[id] {
+			redacted = append(redacted, id)
+		} else {
+			plain = append(plain, id)
+		}
+	}
+
+	if len(plain) > 0 {
+		if err := a.storage.EnqueueDeliveries(e, plain, plainSubject, plainBody); err != nil {
+			log.Printf("notify: could not queue deliveries: %v", err)
+		}
+	}
+	if len(redacted) > 0 {
+		if err := a.storage.EnqueueDeliveries(e, redacted, redactedSubject, redactedBody); err != nil {
+			log.Printf("notify: could not queue redacted deliveries: %v", err)
+		}
+	}
+
+	if a.dispatcher != nil {
+		a.dispatcher.Wake()
+	}
+}
+
+// EventsQuery returns one page of the journal, newest first.
+func (a *App) EventsQuery(filter events.Filter) (events.Page, error) {
+	if a.storage == nil {
+		return events.Page{Items: []events.Event{}}, nil
+	}
+	return a.storage.QueryEvents(filter)
+}
+
+// EventsPayload returns an event's bulk detail, loaded only when opened.
+func (a *App) EventsPayload(id string) (string, error) {
+	if a.storage == nil {
+		return "", nil
+	}
+	return a.storage.EventPayload(id)
+}
+
+// EventsCounts feeds the unacknowledged badge without fetching rows.
+func (a *App) EventsCounts() (events.Counts, error) {
+	if a.storage == nil {
+		return events.Counts{UnackedBySev: map[string]int{}, UnackedByCatego: map[string]int{}}, nil
+	}
+	return a.storage.EventCounts()
+}
+
+// EventsAck acknowledges specific events.
+func (a *App) EventsAck(ids []string) error {
+	if a.storage == nil {
+		return fmt.Errorf("storage not initialized")
+	}
+	return a.storage.AckEvents(ids)
+}
+
+// EventsAckAll acknowledges everything matching a filter.
+func (a *App) EventsAckAll(filter events.Filter) error {
+	if a.storage == nil {
+		return fmt.Errorf("storage not initialized")
+	}
+	return a.storage.AckAllEvents(filter)
+}
+
+// EventsDelete removes events and their payloads.
+func (a *App) EventsDelete(ids []string) error {
+	if a.storage == nil {
+		return fmt.Errorf("storage not initialized")
+	}
+	return a.storage.DeleteEvents(ids)
+}
+
+// EventsClear empties the journal.
+func (a *App) EventsClear() error {
+	if a.storage == nil {
+		return fmt.Errorf("storage not initialized")
+	}
+	return a.storage.ClearEvents()
+}
+
+// --- Threshold and reachability evaluation ---
+
+// generateEventCorrID returns the id that ties a resolution event back to the
+// opening event of the same incident.
+func generateEventCorrID() string {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("corr-%d", time.Now().UnixNano())
+	}
+	return fmt.Sprintf("corr-%x", b)
+}
+
+// initEvaluator wires the breach evaluator to the journal and restores any
+// episode that was still open when the app last closed. Without the restore, a
+// restart would re-announce an incident that had already been reported.
+func (a *App) initEvaluator() {
+	ev := monitor.NewEvaluator()
+	ev.Record = a.recordEvent
+	ev.NewCorrID = func() string { return generateEventCorrID() }
+	ev.SaveEpi = func(r monitor.EpisodeRecord) error {
+		return a.storage.SaveEpisode(storage.Episode{
+			DedupKey:  r.DedupKey,
+			Kind:      r.Kind,
+			SessionID: r.SessionID,
+			Target:    r.Target,
+			OID:       r.OID,
+			FirstSeen: r.FirstSeen,
+			FiredAt:   r.FiredAt,
+			CorrID:    r.CorrID,
+		})
+	}
+	ev.DeleteEpi = a.storage.DeleteEpisode
+
+	if saved, err := a.storage.LoadEpisodes(); err == nil {
+		records := make([]monitor.EpisodeRecord, 0, len(saved))
+		for _, e := range saved {
+			records = append(records, monitor.EpisodeRecord{
+				DedupKey:  e.DedupKey,
+				Kind:      e.Kind,
+				SessionID: e.SessionID,
+				Target:    e.Target,
+				OID:       e.OID,
+				FirstSeen: e.FirstSeen,
+				FiredAt:   e.FiredAt,
+				CorrID:    e.CorrID,
+			})
+		}
+		ev.Restore(records)
+	} else {
+		log.Printf("WARNING: failed to restore open incidents: %v", err)
+	}
+
+	a.evaluator = ev
+}
+
+// --- Notification routing ---
+
+// initDispatcher starts the outbox drain loop.
+func (a *App) initDispatcher() {
+	resolve := func(sinkID string) (notify.Sink, bool) {
+		sinks, err := a.storage.ListSinks()
+		if err != nil {
+			return nil, false
+		}
+		for _, cfg := range sinks {
+			if cfg.ID != sinkID {
+				continue
+			}
+			if !cfg.Enabled {
+				return nil, false
+			}
+			return notify.Build(cfg, a.sinkSecret(cfg.ID))
+		}
+		return nil, false
+	}
+
+	d := notify.NewDispatcher(a.storage, resolve, 15*time.Second)
+	d.OnResult = func(q notify.Queued, err error, dead bool) {
+		if err == nil || !dead {
+			return
+		}
+		// A dead letter is the only signal an operator gets that a
+		// notification never arrived, so it becomes an event of its own.
+		a.recordEvent(events.Event{
+			Category: events.CategorySystem,
+			Kind:     events.KindSystemSinkDeadLetter,
+			Severity: events.SevMajor.String(),
+			TitleKey: "events.kind." + events.KindSystemSinkDeadLetter,
+			Params: map[string]any{
+				"sink":     q.SinkID,
+				"attempts": q.Attempts + 1,
+				"error":    err.Error(),
+			},
+			Summary: "Delivery to " + q.SinkID + " given up: " + err.Error(),
+		}, "")
+	}
+	d.Start()
+	a.dispatcher = d
+}
+
+// sinkSecret returns a sink's credential from secure storage. Secrets are kept
+// out of the sink config so it can be exported, logged or read from the
+// database without leaking one.
+func (a *App) sinkSecret(sinkID string) string {
+	if a.secrets == nil || sinkID == "" {
+		return ""
+	}
+	v, err := a.secrets.Get(secrets.SinkRef(sinkID))
+	if err != nil {
+		return ""
+	}
+	return v
+}
+
+// SecretsBackend names the protection actually in use on this machine, so the
+// settings UI can state what is true here rather than what was hoped for.
+func (a *App) SecretsBackend() string {
+	if a.secrets == nil {
+		return "unavailable"
+	}
+	return a.secrets.Backend()
+}
+
+// NotifyListSinks returns the configured destinations. Credentials are never
+// included — only whether one is on file.
+func (a *App) NotifyListSinks() ([]notify.SinkConfig, error) {
+	if a.storage == nil {
+		return []notify.SinkConfig{}, nil
+	}
+	sinks, err := a.storage.ListSinks()
+	if err != nil {
+		return sinks, err
+	}
+	for i := range sinks {
+		sinks[i].Secret = ""
+		sinks[i].HasSecret = a.sinkSecret(sinks[i].ID) != ""
+	}
+	return sinks, nil
+}
+
+// NotifySaveSink creates or updates a destination.
+//
+// The credential is split off and stored separately: SinkConfig.Secret is
+// write-only transport, and the config that reaches the database must never
+// carry it.
+func (a *App) NotifySaveSink(cfg notify.SinkConfig) (notify.SinkConfig, error) {
+	if a.storage == nil {
+		return cfg, fmt.Errorf("storage not initialized")
+	}
+
+	incoming := cfg.Secret
+	cfg.Secret = ""
+
+	saved, err := a.storage.SaveSink(cfg)
+	if err != nil {
+		return saved, err
+	}
+
+	// An empty field means "leave the stored credential alone", not "clear it":
+	// the UI never receives the current value, so it cannot echo it back.
+	if incoming != "" && a.secrets != nil {
+		if err := a.secrets.Set(secrets.SinkRef(saved.ID), incoming); err != nil {
+			return saved, fmt.Errorf("saved the destination but could not store its credential: %w", err)
+		}
+	}
+	saved.Secret = ""
+	saved.HasSecret = a.sinkSecret(saved.ID) != ""
+	return saved, nil
+}
+
+// NotifyClearSinkSecret removes a destination's stored credential.
+func (a *App) NotifyClearSinkSecret(sinkID string) error {
+	if a.secrets == nil {
+		return fmt.Errorf("secret storage unavailable")
+	}
+	return a.secrets.Delete(secrets.SinkRef(sinkID))
+}
+
+// NotifyDeleteSink removes a destination.
+func (a *App) NotifyDeleteSink(id string) error {
+	if a.storage == nil {
+		return fmt.Errorf("storage not initialized")
+	}
+	return a.storage.DeleteSink(id)
+}
+
+// NotifyTestSink sends a synthetic event so the operator can verify a
+// destination without waiting for a real incident.
+func (a *App) NotifyTestSink(cfg notify.SinkConfig) error {
+	sink, ok := notify.Build(cfg, cfg.Secret)
+	if !ok {
+		return fmt.Errorf("unknown sink kind %q", cfg.Kind)
+	}
+	if cfg.Secret == "" {
+		cfg.Secret = a.sinkSecret(cfg.ID) // testing a saved sink must use its saved credential
+	}
+	sample := events.Event{
+		ID:       "test-" + generateEventCorrID(),
+		Ts:       time.Now().UTC().Format(time.RFC3339),
+		Category: events.CategorySystem,
+		Kind:     events.KindSystemListenerStarted,
+		Severity: events.SevInfo.String(),
+		State:    events.StateOneshot,
+		Source:   "SnmpLens",
+		TitleKey: "events.kind." + events.KindSystemListenerStarted,
+		Summary:  "SnmpLens test notification",
+	}
+	subject, body := notify.Render(sample, cfg.Redact)
+	return sink.Send(sample, subject, body)
+}
+
+// NotifyListRoutes returns the routing rules.
+func (a *App) NotifyListRoutes() ([]notify.Route, error) {
+	if a.storage == nil {
+		return []notify.Route{}, nil
+	}
+	return a.storage.ListRoutes()
+}
+
+// NotifySaveRoute creates or updates a routing rule.
+func (a *App) NotifySaveRoute(r notify.Route) (notify.Route, error) {
+	if a.storage == nil {
+		return r, fmt.Errorf("storage not initialized")
+	}
+	return a.storage.SaveRoute(r)
+}
+
+// NotifyDeleteRoute removes a routing rule.
+func (a *App) NotifyDeleteRoute(id string) error {
+	if a.storage == nil {
+		return fmt.Errorf("storage not initialized")
+	}
+	return a.storage.DeleteRoute(id)
+}
+
+// NotifyListDeliveries returns the delivery log. state may be "", "pending",
+// "sent" or "dead".
+func (a *App) NotifyListDeliveries(state string, limit int) ([]storage.Delivery, error) {
+	if a.storage == nil {
+		return []storage.Delivery{}, nil
+	}
+	return a.storage.ListDeliveries(state, limit)
+}
+
+// NotifyRetryDelivery puts a dead letter back in the queue.
+func (a *App) NotifyRetryDelivery(id int64) error {
+	if a.storage == nil {
+		return fmt.Errorf("storage not initialized")
+	}
+	if err := a.storage.RetryDelivery(id); err != nil {
+		return err
+	}
+	if a.dispatcher != nil {
+		a.dispatcher.Wake()
+	}
+	return nil
 }

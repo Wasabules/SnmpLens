@@ -100,6 +100,25 @@ export function buildTrapListenerRequest(settings) {
 }
 
 /**
+ * Build a MonitorConnection for a Go-side polling session.
+ *
+ * The credential fields travel one way only: the backend moves them into the
+ * OS secret store and never sends them back, so this object must be rebuilt
+ * from settings rather than read back from a session.
+ * @param {object} settings
+ * @returns {object}
+ */
+export function buildMonitorConnection(settings) {
+  return {
+    port: settings.port,
+    timeoutSec: settings.timeout,
+    retries: settings.retries,
+    community: settings.community,
+    v3: buildV3Params(settings),
+  };
+}
+
+/**
  * Extract V3Params from settings.
  * @param {object} settings
  * @returns {object}

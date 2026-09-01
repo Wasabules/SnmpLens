@@ -8,7 +8,8 @@
       "traps": "Traps SNMP",
       "history": "Historial",
       "monitor": "Monitor",
-      "network": "Red"
+      "network": "Red",
+      "events": "Eventos"
     },
     "status": {
       "targetsTitle": "Número de objetivos configurados",
@@ -34,7 +35,6 @@
       "allSkipped": "Los {count} archivo(s) ya están presentes — nada que importar"
     }
   },
-
   "common": {
     "previous": "Anterior",
     "next": "Siguiente",
@@ -72,9 +72,9 @@
     "results": "Resultados",
     "copyOid": "Copiar OID",
     "copyValue": "Copiar valor",
-    "copyName": "Copiar nombre"
+    "copyName": "Copiar nombre",
+    "edit": "Editar"
   },
-
   "operations": {
     "setConfirm": {
       "title": "Confirmar operación SET",
@@ -126,7 +126,6 @@
     "walkOidPlaceholder": "1.3.6.1.2.1",
     "getBulkOidPlaceholder": "1.3.6.1.2.1.2.2.1"
   },
-
   "results": {
     "copyForWord": "Copiar para Word",
     "copyForWordHint": "Copiar la tabla como HTML — pegar en Word, Google Docs u Outlook como tabla",
@@ -162,7 +161,6 @@
     "missing": "Faltante",
     "exportComparison": "Exportar CSV"
   },
-
   "savedQueries": {
     "title": "Consultas guardadas",
     "hide": "Ocultar",
@@ -172,7 +170,6 @@
     "saved": "Consulta \"{name}\" guardada",
     "loaded": "Consulta \"{name}\" cargada"
   },
-
   "recentHistory": {
     "viewAll": "Ver historial",
     "clickToView": "Haga clic para abrir esta entrada en la pestaña Historial",
@@ -181,7 +178,6 @@
     "empty": "Sin historial aún. Ejecute operaciones para verlas aquí.",
     "nResults": "{count} resultados"
   },
-
   "mib": {
     "searchPlaceholder": "Filtrar por nombre o OID... (Presione / para enfocar)",
     "expandAll": "Expandir todo",
@@ -223,7 +219,6 @@
       "objectIs": "Este objeto es {access}"
     }
   },
-
   "nodeDetails": {
     "title": "Detalles del nodo",
     "expand": "Expandir",
@@ -240,7 +235,6 @@
     "description": "Descripción:",
     "nNodes": "{count} nodo(s)"
   },
-
   "favorites": {
     "title": "Favoritos ({count})",
     "clearConfirm": "¿Borrar todos los favoritos?",
@@ -248,7 +242,6 @@
     "clearAll": "Borrar todos los favoritos",
     "removeFrom": "Eliminar de favoritos"
   },
-
   "keyboard": {
     "title": "Atajos de teclado",
     "previousNode": "Nodo anterior",
@@ -261,7 +254,6 @@
     "focusSearch": "Enfocar búsqueda",
     "toggleHelp": "Alternar esta ayuda"
   },
-
   "history": {
     "badgeError": "Error",
     "badgeNoResult": "Sin resultado",
@@ -315,7 +307,6 @@
     "targets": "Objetivos",
     "error": "Error"
   },
-
   "traps": {
     "listeningInfo": "Escuchando Traps en el puerto {port} (configurable en Configuración).",
     "startListening": "Iniciar escucha",
@@ -366,8 +357,39 @@
     "snmpv1Trap": "Trap SNMPv1",
     "snmpv2v3Inform": "Inform SNMPv2/v3"
   },
-
   "monitor": {
+    "live": "LIVE",
+    "liveHint": "Volver a seguir las últimas muestras (ampliar o desplazar pausa el seguimiento)",
+    "timebaseAll": "Todo",
+    "browsing": "Navegando por el búfer — pulse LIVE para reanudar",
+    "multiOidHint": "Vigile varios OID a la vez — hasta 8 curvas, en gráficos separados o apilados.",
+    "aggregatedBy": "agregado por {bucket}s",
+    "alertAbove": "por encima de",
+    "alertBelow": "por debajo de",
+    "alertsMore": "+{count} alerta(s) más",
+    "alertsTitle": "Alertas de umbral ({count})",
+    "hideTable": "Ocultar tabla",
+    "showTable": "Mostrar tabla",
+    "historicalAggregated": "{count} puntos agregados cargados (ventanas de {bucket}s).",
+    "historyFailed": "Error al cargar el historial.",
+    "invalidRange": "La fecha final debe ser posterior a la inicial.",
+    "latencyCompanion": "Tiempo de respuesta (misma ventana temporal)",
+    "latencyCompanionHint": "Mostrar el tiempo de respuesta como segundo gráfico en la misma ventana temporal",
+    "resetZoom": "Restablecer zoom",
+    "scaleLinear": "Lineal",
+    "scaleLog": "Log",
+    "zeroBased": "Desde cero",
+    "zeroBasedHint": "Iniciar el eje Y en cero en lugar de autoescalar",
+    "fullscreen": "Pantalla completa",
+    "csvVisible": "Exportar la ventana visible como CSV",
+    "zoomHint": "Rueda o arrastrar para ampliar · Mayús+arrastrar para desplazar",
+    "seriesCapped": "{count} destino(s) sin trazar (máx. {max}) — ver la vista de tabla",
+    "resizeChart": "Redimensionar el gráfico",
+    "pngExported": "Gráfico exportado como PNG.",
+    "csvExported": "Ventana visible exportada como CSV.",
+    "tileDown": "Sin respuesta",
+    "tileOutOfRange": "Fuera de rango",
+    "tileStable": "Estable",
     "oidLabel": "OID:",
     "oidPlaceholder": "1.3.6.1.2.1.1.3.0 (sysUpTime)",
     "versionLabel": "Versión:",
@@ -424,9 +446,48 @@
     "statsAvgLatency": "Latencia prom:",
     "statsErrorCount": "Errores:",
     "historicalLoaded": "{count} puntos de datos históricos cargados",
-    "noHistoricalData": "No se encontraron datos para el rango seleccionado"
+    "noHistoricalData": "No se encontraron datos para el rango seleccionado",
+    "addOid": "Añadir un OID",
+    "layoutSeparate": "Separar",
+    "layoutStacked": "Apilar",
+    "layoutStackedHint": "Un gráfico, un eje por OID (izquierda/derecha, del color de su curva). Las formas se comparan bien; las alturas no.",
+    "targetsToWatch": "Objetivos a vigilar:",
+    "targetsAll": "Seleccionar todo",
+    "targetsNone": "Deseleccionar todo",
+    "noTargetSelected": "Seleccione al menos un objetivo para monitorizar.",
+    "channels": "Medidas",
+    "channelsTitle": "Medidas mostradas",
+    "channelsHint": "Elija las curvas a trazar — {visible} de {total} visibles. Ocultar una nunca recolorea las demás.",
+    "channelsHintShort": "Elegir las medidas mostradas",
+    "channelAll": "Mostrar todo",
+    "channelOnly": "sola",
+    "channelOnlyHint": "Mostrar solo esta medida",
+    "channelCapped": "más allá del límite de 8 curvas",
+    "statsTitle": "Estadísticas en cada tarjeta",
+    "statsScope": "Calculado sobre:",
+    "statsHint": "Elija qué muestra cada tarjeta. La primera es la cifra grande.",
+    "scopeWindow": "Ventana visible",
+    "scopeAllData": "Todos los datos",
+    "stat": {
+      "last": "Último",
+      "avg": "Media",
+      "min": "Mín",
+      "max": "Máx",
+      "p95": "p95",
+      "stddev": "Desv. típica",
+      "count": "Muestras",
+      "errors": "Errores"
+    },
+    "nameLabel": "Nombre:",
+    "namePlaceholder": "p. ej. Tráfico WAN — París (opcional)",
+    "collapseSession": "Contraer esta monitorización",
+    "expandSession": "Expandir esta monitorización",
+    "thresholds": "Umbrales",
+    "thresholdsHint": "Banda de alerta para este OID",
+    "thresholdFor": "durante",
+    "sustainedFor": "mantenido durante {seconds}s",
+    "thresholdExplain": "Alerta solo si el valor permanece fuera de la banda toda la duración — una muestra aislada no es un incidente."
   },
-
   "discovery": {
     "cidrLabel": "CIDR / IP:",
     "cidrPlaceholder": "192.168.1.0/24 o 10.0.0.1",
@@ -453,7 +514,6 @@
     "reachable": "Accesible",
     "unreachable": "Inaccesible"
   },
-
   "targets": {
     "title": "Objetivos ({count} activos)",
     "testAll": "Probar todos",
@@ -497,7 +557,6 @@
       "badge": "Configuración SNMP personalizada"
     }
   },
-
   "update": {
     "available": "SnmpLens {version} está disponible",
     "currentVersion": "Versión actual: {version}",
@@ -515,7 +574,9 @@
     "tabs": {
       "general": "General",
       "mibs": "MIBs",
-      "snmp": "SNMP"
+      "snmp": "SNMP",
+      "notify": "Notificaciones",
+      "service": "Servicio"
     },
     "general": {
       "updatesTitle": "Actualizaciones",
@@ -588,7 +649,6 @@
       "testError": "Error: {error}"
     }
   },
-
   "diff": {
     "title": "Resultados de Diff",
     "added": "+{count} añadido(s)",
@@ -603,7 +663,6 @@
     "valueBHeader": "Valor B",
     "rowsShown": "{visible} de {total} fila(s) mostrada(s)"
   },
-
   "tooltip": {
     "oid": "OID:",
     "type": "Tipo:",
@@ -613,12 +672,10 @@
     "description": "Descripción:",
     "na": "N/D"
   },
-
   "clipboard": {
     "copied": "{label} copiado al portapapeles",
     "copyError": "Error al copiar al portapapeles"
   },
-
   "network": {
     "discovery": "Descubrimiento",
     "ping": "Ping",
@@ -644,7 +701,6 @@
     "hopRtt2": "RTT 2",
     "hopRtt3": "RTT 3"
   },
-
   "debug": {
     "title": "Debug SNMP",
     "enable": "Activar",
@@ -653,5 +709,141 @@
     "clear": "Limpiar",
     "empty": "Sin entradas de depuración. Active el modo debug y realice operaciones SNMP.",
     "entries": "entradas"
+  },
+  "events": {
+    "title": "Eventos",
+    "empty": "Sin eventos. Los traps y umbrales superados aparecerán aquí.",
+    "searchPlaceholder": "Buscar resumen, origen u OID...",
+    "unackedOnly": "Solo sin confirmar",
+    "unackedCount": "{count} sin confirmar",
+    "matching": "{count} coincidencias",
+    "ack": "Confirmar",
+    "acked": "Confirmado",
+    "ackAll": "Confirmar todo",
+    "selectedCount": "{count} seleccionados",
+    "loadMore": "Cargar más",
+    "clearAll": "Borrar todo",
+    "clearConfirm": "¿Eliminar todos los eventos del diario? Esta acción no se puede deshacer.",
+    "cleared": "Diario vaciado.",
+    "exported": "Eventos exportados como CSV.",
+    "viewPayload": "Ver detalles",
+    "payloadTitle": "Detalles del evento",
+    "category": {
+      "trap": "Trap",
+      "threshold": "Umbral",
+      "reachability": "Alcanzabilidad",
+      "system": "Sistema",
+      "operation": "Operación"
+    },
+    "severity": {
+      "critical": "Crítico",
+      "major": "Mayor",
+      "minor": "Menor",
+      "warning": "Advertencia",
+      "info": "Info"
+    },
+    "kind": {
+      "trap.received": "{pduType} from {source} ({version}, {varbinds} varbinds)",
+      "trap.inform": "Inform from {source} ({version}, {varbinds} varbinds)",
+      "threshold.opened": "{oid} on {target} is {kind} {bound} (held {heldSeconds}s)",
+      "threshold.resolved": "{oid} on {target} is back within range",
+      "reachability.down": "{target} stopped responding",
+      "reachability.up": "{target} is responding again",
+      "system.listener_started": "Trap listener started on port {port}",
+      "system.listener_error": "Trap listener error: {error}",
+      "system.poll_failed": "Polling {target} failed: {error}",
+      "system.sink_failed": "Delivery to {sink} failed: {error}",
+      "system.sink_dead_letter": "Delivery to {sink} given up after {attempts} attempts",
+      "system.mib_load_failed": "MIB {file} failed to load",
+      "system.update_available": "Version {version} is available",
+      "system.retention_ran": "Retention removed {count} events",
+      "operation.failed": "{operation} on {target} failed",
+      "system.info": "Aviso del servicio"
+    }
+  },
+  "notify": {
+    "sinksTitle": "Destinos",
+    "sinksHint": "Where alerts are sent. A destination is reusable across rules.",
+    "noSinks": "No destination yet. Add a syslog collector, a webhook or an email server.",
+    "routesTitle": "Reglas de enrutamiento",
+    "routesHint": "Which events go to which destination. Rules are evaluated by ascending priority.",
+    "noRoutes": "No rule yet — nothing is forwarded.",
+    "sinkFirst": "Add a destination first.",
+    "addRoute": "Añadir regla",
+    "routeEditor": "Routing rule",
+    "sinkEditor": "Destination ({kind})",
+    "name": "Nombre",
+    "nameRequired": "A name is required.",
+    "enabled": "Activada",
+    "sinkSaved": "Destination saved.",
+    "routeSaved": "Rule saved.",
+    "test": "Probar",
+    "testSent": "Test notification sent.",
+    "testFailed": "Test failed: {error}",
+    "address": "Address (host:port)",
+    "protocol": "Protocol",
+    "facility": "Facility",
+    "udpNote": "UDP delivery cannot be confirmed: the app reports it as sent, never as delivered.",
+    "token": "Bearer token",
+    "webhookNote": "Honours HTTP_PROXY, and is the escape hatch for logic the rules cannot express.",
+    "host": "Servidor SMTP",
+    "port": "Puerto",
+    "encryption": "Cifrado",
+    "authMethod": "Autenticación",
+    "username": "Usuario",
+    "password": "Contraseña",
+    "to": "Destinatarios",
+    "none": "Ninguno",
+    "redact": "Mask target addresses",
+    "redacted": "enmascarado",
+    "redactHint": "Anonymous Mode only masks the screen and does not persist, so outbound masking is set per destination.",
+    "matchCategories": "Categorías",
+    "emptyMeansAll": "Leave empty to match everything.",
+    "minSeverity": "Severidad mínima",
+    "any": "Todas",
+    "priority": "Prioridad",
+    "sources": "Orígenes",
+    "sourcesHint": "CIDR (10.0.0.0/8) or glob (sw-*), separated by spaces.",
+    "oidPrefix": "OID prefix",
+    "quietHours": "Horas de silencio",
+    "allCategories": "all categories",
+    "quietHoursHint": "Inside this window the rule does not deliver. May wrap past midnight.",
+    "deliverTo": "Enviar a",
+    "stopAfter": "Stop after this rule",
+    "stops": "detiene",
+    "stopHint": "Stop evaluating further rules when this one matches.",
+    "secretOnFile": "guardada — dejar vacío para conservarla",
+    "secretSet": "credencial guardada",
+    "secretCleared": "Credencial eliminada.",
+    "clearSecret": "Eliminar la credencial guardada",
+    "secretHint": "Almacenada fuera de la base de datos, protegida por: {backend}"
+  },
+  "tray": {
+    "show": "Abrir SnmpLens",
+    "quit": "Salir"
+  },
+  "service": {
+    "saved": "Ajustes del servicio guardados.",
+    "backgroundTitle": "Funcionamiento en segundo plano",
+    "backgroundHint": "Seguir consultando, escuchando traps y enviando notificaciones con la ventana cerrada. Estos ajustes se leen antes de que exista la ventana, por eso se guardan fuera de las preferencias habituales.",
+    "runInBackground": "Seguir en la bandeja del sistema al cerrar la ventana",
+    "noTray": "Este escritorio ({platform}) no ofrece bandeja del sistema, así que cerrar la ventana sigue cerrando SnmpLens. Volver a lanzar la aplicación trae al frente la instancia en ejecución.",
+    "startHidden": "Iniciar minimizado en la bandeja",
+    "startHiddenHint": "Para el inicio de sesión: SnmpLens trabaja sin abrir ninguna ventana.",
+    "unattendedTitle": "Inicio desatendido",
+    "unattendedHint": "Lo que SnmpLens debe hacer por su cuenta al arrancar, sin nadie delante.",
+    "autoResume": "Reanudar las sesiones de monitorización activas al salir",
+    "autoStartTraps": "Iniciar el receptor de traps al arrancar",
+    "trapPort": "Puerto de traps",
+    "trapPortHint": "Los puertos por debajo de 1024 suelen requerir privilegios elevados.",
+    "stateTitle": "Estado actual",
+    "stateTray": "Bandeja del sistema:",
+    "stateTraps": "Receptor de traps:",
+    "active": "activo",
+    "inactive": "inactivo",
+    "restartNote": "El inicio minimizado y el puerto de traps se aplican en el próximo arranque.",
+    "auditTitle": "Auditoría",
+    "auditHint": "El SET es la única operación SNMP que modifica un equipo, así que un SET rechazado merece quedar registrado.",
+    "auditFailedSets": "Registrar las operaciones SNMP SET rechazadas"
   }
 }

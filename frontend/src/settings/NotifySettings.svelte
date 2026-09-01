@@ -1,0 +1,658 @@
+<script>
+  import { onMount } from 'svelte';
+  import { _ } from 'svelte-i18n';
+  import { get } from 'svelte/store';
+  import Icon from '../Icon.svelte';
+  import { notificationStore } from '../stores/notifications';
+  import {
+    NotifyListSinks,
+    NotifySaveSink,
+    NotifyDeleteSink,
+    NotifyTestSink,
+    NotifyListRoutes,
+    NotifySaveRoute,
+    NotifyDeleteRoute,
+    NotifyClearSinkSecret,
+    SecretsBackend,
+  } from '../../wailsjs/go/main/App';
+
+  const CATEGORIES = ['trap', 'threshold', 'reachability', 'system'];
+  const SEVERITIES = ['info', 'warning', 'minor', 'major', 'critical'];
+
+  let sinks = [];
+  let routes = [];
+  let editingSink = null;
+  let editingRoute = null;
+  let testing = null;
+  let backend = '';
+
+  async function reload() {
+    try {
+      sinks = (await NotifyListSinks()) || [];
+      routes = (await NotifyListRoutes()) || [];
+    } catch (e) {
+      notificationStore.add(String(e), 'error');
+    }
+  }
+
+  onMount(async () => {
+    await reload();
+    try {
+      backend = await SecretsBackend();
+    } catch (e) {
+      backend = 'unavailable';
+    }
+  });
+
+  function newSink(kind) {
+    return {
+      id: '',
+      name: '',
+      kind,
+      enabled: true,
+      redact: false,
+      secret: '',
+      hasSecret: false,
+      syslog: { address: '', protocol: 'udp', facility: 16, hostname: '', appName: 'SnmpLens', timeout: 5 },
+      webhook: { url: '', method: 'POST', headers: {}, token: '', timeout: 10 },
+      email: {
+        host: '', port: 587, username: '', from: '', to: [],
+        encryption: 'starttls', authMethod: 'plain', insecureSkipVerify: false, timeout: 20,
+      },
+    };
+  }
+
+  function newRoute() {
+    return {
+      id: '',
+      name: '',
+      enabled: true,
+      priority: 100,
+      stop: false,
+      sinkIds: [],
+      match: { categories: [], kinds: [], minSeverity: '', sources: [], oidPrefix: '', sessionIds: [], states: [], contains: '', quietHours: null },
+    };
+  }
+
+  async function saveSink() {
+    if (!editingSink.name.trim()) {
+      notificationStore.add(get(_)('notify.nameRequired'), 'error');
+      return;
+    }
+    try {
+      // The recipient list is edited as one line, stored as an array.
+      if (typeof editingSink.email.toRaw === 'string') {
+        editingSink.email.to = editingSink.email.toRaw.split(/[,;]+/).map((x) => x.trim()).filter(Boolean);
+        delete editingSink.email.toRaw;
+      }
+      await NotifySaveSink(editingSink);
+      editingSink = null;
+      await reload();
+      notificationStore.add(get(_)('notify.sinkSaved'), 'success');
+    } catch (e) {
+      notificationStore.add(String(e), 'error');
+    }
+  }
+
+  async function clearSecret(id) {
+    if (!id) return;
+    try {
+      await NotifyClearSinkSecret(id);
+      editingSink.hasSecret = false;
+      editingSink.secret = '';
+      notificationStore.add(get(_)('notify.secretCleared'), 'success');
+    } catch (e) {
+      notificationStore.add(String(e), 'error');
+    }
+  }
+
+  async function removeSink(id) {
+    try {
+      await NotifyDeleteSink(id);
+      await reload();
+    } catch (e) {
+      notificationStore.add(String(e), 'error');
+    }
+  }
+
+  async function testSink(cfg) {
+    testing = cfg.id || 'new';
+    try {
+      await NotifyTestSink(cfg);
+      notificationStore.add(get(_)('notify.testSent'), 'success');
+    } catch (e) {
+      // The verbatim error is the whole point of a test button.
+      notificationStore.add(get(_)('notify.testFailed', { values: { error: String(e) } }), 'error');
+    } finally {
+      testing = null;
+    }
+  }
+
+  async function saveRoute() {
+    if (!editingRoute.name.trim()) {
+      notificationStore.add(get(_)('notify.nameRequired'), 'error');
+      return;
+    }
+    try {
+      if (typeof editingRoute.match.sourcesRaw === 'string') {
+        editingRoute.match.sources = editingRoute.match.sourcesRaw.split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean);
+        delete editingRoute.match.sourcesRaw;
+      }
+      editingRoute.priority = Number(editingRoute.priority) || 100;
+      await NotifySaveRoute(editingRoute);
+      editingRoute = null;
+      await reload();
+      notificationStore.add(get(_)('notify.routeSaved'), 'success');
+    } catch (e) {
+      notificationStore.add(String(e), 'error');
+    }
+  }
+
+  async function removeRoute(id) {
+    try {
+      await NotifyDeleteRoute(id);
+      await reload();
+    } catch (e) {
+      notificationStore.add(String(e), 'error');
+    }
+  }
+
+  function toggleIn(list, value) {
+    return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
+  }
+
+  function sinkName(id) {
+    const s = sinks.find((x) => x.id === id);
+    return s ? s.name : id;
+  }
+
+  function describeSink(s) {
+    if (s.kind === 'syslog') return `${s.syslog?.protocol || 'udp'}://${s.syslog?.address || '—'}`;
+    if (s.kind === 'webhook') return s.webhook?.url || '—';
+    if (s.kind === 'email') return `${s.email?.host || '—'} → ${(s.email?.to || []).join(', ') || '—'}`;
+    return '';
+  }
+</script>
+
+<div class="notify-settings">
+  <!-- ================= SINKS ================= -->
+  <section>
+    <div class="sec-head">
+      <h4>{$_('notify.sinksTitle')}</h4>
+      <div class="add-row">
+        <button class="btn btn-small" on:click={() => (editingSink = newSink('syslog'))}>+ Syslog</button>
+        <button class="btn btn-small" on:click={() => (editingSink = newSink('webhook'))}>+ Webhook</button>
+        <button class="btn btn-small" on:click={() => (editingSink = newSink('email'))}>+ Email</button>
+      </div>
+    </div>
+    <p class="hint">{$_('notify.sinksHint')}</p>
+
+    {#if sinks.length === 0}
+      <p class="empty-state">{$_('notify.noSinks')}</p>
+    {:else}
+      <ul class="list">
+        {#each sinks as s (s.id)}
+          <li>
+            <span class="badge kind-{s.kind}">{s.kind}</span>
+            <span class="name" class:off={!s.enabled}>{s.name}</span>
+            <span class="detail" title={describeSink(s)}>{describeSink(s)}</span>
+            {#if s.hasSecret}<span class="chip-flag ok">{$_('notify.secretSet')}</span>{/if}
+            {#if s.redact}<span class="chip-flag">{$_('notify.redacted')}</span>{/if}
+            <button class="btn-copy-small" on:click={() => testSink(s)} title={$_('notify.test')} disabled={testing === s.id}>
+              <Icon name={testing === s.id ? 'loader-circle' : 'zap'} size={13} class={testing === s.id ? 'icon-spin' : ''} />
+            </button>
+            <button class="btn-copy-small" on:click={() => (editingSink = { ...s })} title={$_('common.edit')}>
+              <Icon name="pencil" size={13} />
+            </button>
+            <button class="btn-copy-small" on:click={() => removeSink(s.id)} title={$_('common.delete')}>
+              <Icon name="trash-2" size={13} />
+            </button>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </section>
+
+  <!-- ================= ROUTES ================= -->
+  <section>
+    <div class="sec-head">
+      <h4>{$_('notify.routesTitle')}</h4>
+      <button class="btn btn-small" on:click={() => (editingRoute = newRoute())} disabled={sinks.length === 0}>
+        + {$_('notify.addRoute')}
+      </button>
+    </div>
+    <p class="hint">{$_('notify.routesHint')}</p>
+
+    {#if routes.length === 0}
+      <p class="empty-state">{sinks.length === 0 ? $_('notify.sinkFirst') : $_('notify.noRoutes')}</p>
+    {:else}
+      <ul class="list">
+        {#each routes as r (r.id)}
+          <li>
+            <span class="prio" title={$_('notify.priority')}>{r.priority}</span>
+            <span class="name" class:off={!r.enabled}>{r.name}</span>
+            <span class="detail">
+              {(r.match.categories || []).join(', ') || $_('notify.allCategories')}
+              {#if r.match.minSeverity}· ≥ {$_('events.severity.' + r.match.minSeverity)}{/if}
+              {#if (r.match.sources || []).length}· {(r.match.sources || []).join(' ')}{/if}
+              → {(r.sinkIds || []).map(sinkName).join(', ') || '—'}
+            </span>
+            {#if r.stop}<span class="chip-flag">{$_('notify.stops')}</span>{/if}
+            <button class="btn-copy-small" on:click={() => (editingRoute = JSON.parse(JSON.stringify(r)))} title={$_('common.edit')}>
+              <Icon name="pencil" size={13} />
+            </button>
+            <button class="btn-copy-small" on:click={() => removeRoute(r.id)} title={$_('common.delete')}>
+              <Icon name="trash-2" size={13} />
+            </button>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </section>
+</div>
+
+<!-- ================= SINK EDITOR ================= -->
+{#if editingSink}
+  <div class="editor-overlay" on:click={() => (editingSink = null)} on:keydown={(e) => e.key === 'Escape' && (editingSink = null)} role="button" tabindex="-1">
+    <div class="editor" on:click|stopPropagation on:keydown|stopPropagation role="dialog">
+      <h3>{$_('notify.sinkEditor', { values: { kind: editingSink.kind } })}</h3>
+
+      <label class="fld"><span>{$_('notify.name')}</span>
+        <input type="text" bind:value={editingSink.name} placeholder="NOC syslog" />
+      </label>
+
+      {#if editingSink.kind === 'syslog'}
+        <label class="fld"><span>{$_('notify.address')}</span>
+          <input type="text" bind:value={editingSink.syslog.address} placeholder="10.0.0.50:514" />
+        </label>
+        <div class="fld-row">
+          <label class="fld"><span>{$_('notify.protocol')}</span>
+            <select bind:value={editingSink.syslog.protocol}>
+              <option value="udp">UDP</option>
+              <option value="tcp">TCP</option>
+            </select>
+          </label>
+          <label class="fld"><span>{$_('notify.facility')}</span>
+            <input type="number" min="0" max="23" bind:value={editingSink.syslog.facility} />
+          </label>
+        </div>
+        <p class="note">{$_('notify.udpNote')}</p>
+      {:else if editingSink.kind === 'webhook'}
+        <label class="fld"><span>URL</span>
+          <input type="text" bind:value={editingSink.webhook.url} placeholder="https://hooks.example.com/snmplens" />
+        </label>
+        <label class="fld"><span>{$_('notify.token')}</span>
+          <input type="password" bind:value={editingSink.secret}
+            placeholder={editingSink.hasSecret ? $_('notify.secretOnFile') : ''} />
+          <span class="sub">{$_('notify.secretHint', { values: { backend } })}</span>
+        </label>
+        <p class="note">{$_('notify.webhookNote')}</p>
+      {:else}
+        <div class="fld-row">
+          <label class="fld"><span>{$_('notify.host')}</span>
+            <input type="text" bind:value={editingSink.email.host} placeholder="smtp.example.com" />
+          </label>
+          <label class="fld narrow"><span>{$_('notify.port')}</span>
+            <input type="number" bind:value={editingSink.email.port} />
+          </label>
+        </div>
+        <div class="fld-row">
+          <label class="fld"><span>{$_('notify.encryption')}</span>
+            <select bind:value={editingSink.email.encryption}>
+              <option value="starttls">STARTTLS</option>
+              <option value="tls">TLS</option>
+              <option value="none">{$_('notify.none')}</option>
+            </select>
+          </label>
+          <label class="fld"><span>{$_('notify.authMethod')}</span>
+            <select bind:value={editingSink.email.authMethod}>
+              <option value="plain">PLAIN</option>
+              <option value="login">LOGIN</option>
+              <option value="none">{$_('notify.none')}</option>
+            </select>
+          </label>
+        </div>
+        <div class="fld-row">
+          <label class="fld"><span>{$_('notify.username')}</span>
+            <input type="text" bind:value={editingSink.email.username} />
+          </label>
+          <label class="fld"><span>{$_('notify.password')}</span>
+            <input type="password" bind:value={editingSink.secret}
+              placeholder={editingSink.hasSecret ? $_('notify.secretOnFile') : ''} />
+          </label>
+        </div>
+        <label class="fld"><span>{$_('notify.from')}</span>
+          <input type="text" bind:value={editingSink.email.from} placeholder="snmplens@example.com" />
+        </label>
+        <label class="fld"><span>{$_('notify.to')}</span>
+          <input type="text" value={(editingSink.email.to || []).join(', ')}
+            on:input={(e) => (editingSink.email.toRaw = e.target.value)} placeholder="noc@example.com, oncall@example.com" />
+        </label>
+        <p class="note">{$_('notify.secretHint', { values: { backend } })}</p>
+        {#if editingSink.hasSecret}
+          <button class="btn-mode" on:click={() => clearSecret(editingSink.id)}>{$_('notify.clearSecret')}</button>
+        {/if}
+      {/if}
+
+      <label class="toggle">
+        <input type="checkbox" bind:checked={editingSink.enabled} /> {$_('notify.enabled')}
+      </label>
+      <label class="toggle" title={$_('notify.redactHint')}>
+        <input type="checkbox" bind:checked={editingSink.redact} /> {$_('notify.redact')}
+      </label>
+
+      <div class="editor-actions">
+        <button class="btn tertiary" on:click={() => testSink(editingSink)} disabled={testing === 'new'}>
+          <Icon name="zap" size={13} /> {$_('notify.test')}
+        </button>
+        <span class="spacer"></span>
+        <button class="btn secondary" on:click={() => (editingSink = null)}>{$_('common.cancel')}</button>
+        <button class="btn" on:click={saveSink}>{$_('common.save')}</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- ================= ROUTE EDITOR ================= -->
+{#if editingRoute}
+  <div class="editor-overlay" on:click={() => (editingRoute = null)} on:keydown={(e) => e.key === 'Escape' && (editingRoute = null)} role="button" tabindex="-1">
+    <div class="editor" on:click|stopPropagation on:keydown|stopPropagation role="dialog">
+      <h3>{$_('notify.routeEditor')}</h3>
+
+      <label class="fld"><span>{$_('notify.name')}</span>
+        <input type="text" bind:value={editingRoute.name} placeholder="Critique → NOC" />
+      </label>
+
+      <div class="fld"><span>{$_('notify.matchCategories')}</span>
+        <div class="chips">
+          {#each CATEGORIES as c}
+            <button class="chip" class:on={(editingRoute.match.categories || []).includes(c)}
+              on:click={() => (editingRoute.match.categories = toggleIn(editingRoute.match.categories || [], c))}>
+              {$_('events.category.' + c)}
+            </button>
+          {/each}
+        </div>
+        <span class="sub">{$_('notify.emptyMeansAll')}</span>
+      </div>
+
+      <div class="fld-row">
+        <label class="fld"><span>{$_('notify.minSeverity')}</span>
+          <select bind:value={editingRoute.match.minSeverity}>
+            <option value="">{$_('notify.any')}</option>
+            {#each SEVERITIES as s}<option value={s}>{$_('events.severity.' + s)}</option>{/each}
+          </select>
+        </label>
+        <label class="fld narrow"><span>{$_('notify.priority')}</span>
+          <input type="number" bind:value={editingRoute.priority} />
+        </label>
+      </div>
+
+      <label class="fld"><span>{$_('notify.sources')}</span>
+        <input type="text" value={(editingRoute.match.sources || []).join(' ')}
+          on:input={(e) => (editingRoute.match.sourcesRaw = e.target.value)}
+          placeholder="10.0.0.0/8 sw-*" />
+        <span class="sub">{$_('notify.sourcesHint')}</span>
+      </label>
+
+      <label class="fld"><span>{$_('notify.oidPrefix')}</span>
+        <input type="text" bind:value={editingRoute.match.oidPrefix} placeholder="1.3.6.1.2.1.2" />
+      </label>
+
+      <div class="fld"><span>{$_('notify.quietHours')}</span>
+        <div class="fld-row">
+          <input type="time" value={editingRoute.match.quietHours?.from || ''}
+            on:input={(e) => (editingRoute.match.quietHours = { ...(editingRoute.match.quietHours || {}), from: e.target.value })} />
+          <span class="arrow">→</span>
+          <input type="time" value={editingRoute.match.quietHours?.to || ''}
+            on:input={(e) => (editingRoute.match.quietHours = { ...(editingRoute.match.quietHours || {}), to: e.target.value })} />
+          <button class="btn-mode" on:click={() => (editingRoute.match.quietHours = null)}>{$_('common.clear')}</button>
+        </div>
+        <span class="sub">{$_('notify.quietHoursHint')}</span>
+      </div>
+
+      <div class="fld"><span>{$_('notify.deliverTo')}</span>
+        <div class="chips">
+          {#each sinks as s (s.id)}
+            <button class="chip" class:on={(editingRoute.sinkIds || []).includes(s.id)}
+              on:click={() => (editingRoute.sinkIds = toggleIn(editingRoute.sinkIds || [], s.id))}>
+              {s.name}
+            </button>
+          {/each}
+        </div>
+      </div>
+
+      <label class="toggle"><input type="checkbox" bind:checked={editingRoute.enabled} /> {$_('notify.enabled')}</label>
+      <label class="toggle" title={$_('notify.stopHint')}><input type="checkbox" bind:checked={editingRoute.stop} /> {$_('notify.stopAfter')}</label>
+
+      <div class="editor-actions">
+        <span class="spacer"></span>
+        <button class="btn secondary" on:click={() => (editingRoute = null)}>{$_('common.cancel')}</button>
+        <button class="btn" on:click={saveRoute}>{$_('common.save')}</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<style>
+  .notify-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+
+  .sec-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .sec-head h4 {
+    margin: 0;
+    font-size: 1em;
+  }
+
+  .add-row {
+    display: flex;
+    gap: 6px;
+  }
+
+  .hint,
+  .note,
+  .sub {
+    font-size: 0.78em;
+    color: var(--text-muted);
+    margin: 4px 0 8px;
+  }
+
+  .note.warn {
+    color: var(--warning-color);
+  }
+
+  .list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+  }
+
+  .list li {
+    display: grid;
+    grid-template-columns: auto minmax(90px, 1fr) minmax(0, 2fr) auto auto auto auto auto;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.85em;
+  }
+
+  .list li:last-child {
+    border-bottom: none;
+  }
+
+  .badge {
+    padding: 1px 7px;
+    border-radius: 9px;
+    font-size: 0.82em;
+    font-weight: 600;
+    background-color: var(--bg-lighter-color);
+    color: var(--text-muted);
+  }
+
+  .prio {
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+    font-size: 0.85em;
+    min-width: 26px;
+  }
+
+  .name {
+    font-weight: 600;
+  }
+
+  /* A disabled destination stays visible but must not read as active. */
+  .name.off {
+    opacity: 0.5;
+    text-decoration: line-through;
+  }
+
+  .detail {
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .chip-flag.ok {
+    color: var(--success-color);
+    border-color: var(--success-color);
+  }
+
+  .chip-flag {
+    font-size: 0.72em;
+    padding: 1px 6px;
+    border-radius: 8px;
+    color: var(--warning-color);
+    border: 1px solid var(--warning-color);
+  }
+
+  .editor-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: var(--backdrop-color-strong);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1400;
+  }
+
+  .editor {
+    background-color: var(--bg-light-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
+    width: min(560px, 92vw);
+    max-height: 86vh;
+    overflow-y: auto;
+  }
+
+  .editor h3 {
+    margin: 0 0 14px;
+    font-size: 1.05em;
+  }
+
+  .fld {
+    display: block;
+    margin-bottom: 10px;
+  }
+
+  .fld > span {
+    display: block;
+    font-size: 0.8em;
+    color: var(--text-dimmed);
+    margin-bottom: 3px;
+  }
+
+  .fld input,
+  .fld select {
+    width: 100%;
+    padding: 6px 8px;
+    background-color: var(--bg-lighter-color);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-color);
+  }
+
+  .fld-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+  }
+
+  .fld-row .fld {
+    flex: 1;
+  }
+
+  .fld.narrow {
+    max-width: 110px;
+  }
+
+  .arrow {
+    color: var(--text-muted);
+    padding-bottom: 6px;
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .chip {
+    padding: 3px 10px;
+    font-size: 0.8em;
+    background-color: var(--bg-lighter-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+
+  .chip.on {
+    color: var(--accent-color);
+    border-color: var(--accent-border);
+    background-color: var(--accent-subtle);
+    font-weight: 600;
+  }
+
+  .toggle {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.85em;
+    margin-bottom: 6px;
+    cursor: pointer;
+  }
+
+  .toggle input {
+    width: auto;
+  }
+
+  .editor-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .editor-actions .spacer {
+    flex: 1;
+  }
+
+  .editor-actions .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+</style>

@@ -33,16 +33,14 @@ function loadPersistedTraps() {
   return [];
 }
 
-function persistTraps(traps) {
-  const settings = get(settingsStore);
-  if (settings.traps?.persist) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(traps));
-    } catch (e) {
-      console.warn('Failed to persist traps:', e);
-    }
-  }
-}
+// Traps are now journalled in SQLite by the Go listener, BEFORE anything is
+// emitted to the webview — so they survive a closed window and a restart, which
+// localStorage never did. This store keeps only a live tail for the Traps
+// workbench; the durable record and its search live in the Events tab.
+//
+// Writing up to 1000 traps back to localStorage on EVERY incoming packet was a
+// real cost for a copy that is now redundant, so this is intentionally a no-op.
+function persistTraps() {}
 
 function createTrapStore() {
   const initialTraps = loadPersistedTraps();

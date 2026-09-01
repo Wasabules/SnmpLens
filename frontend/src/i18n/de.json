@@ -8,7 +8,8 @@
       "traps": "SNMP Traps",
       "history": "Verlauf",
       "monitor": "Überwachung",
-      "network": "Netzwerk"
+      "network": "Netzwerk",
+      "events": "Ereignisse"
     },
     "status": {
       "targetsTitle": "Anzahl konfigurierter Ziele",
@@ -34,7 +35,6 @@
       "allSkipped": "Alle {count} Datei(en) bereits vorhanden — nichts zu importieren"
     }
   },
-
   "common": {
     "previous": "Zurück",
     "next": "Weiter",
@@ -72,9 +72,9 @@
     "results": "Ergebnisse",
     "copyOid": "OID kopieren",
     "copyValue": "Wert kopieren",
-    "copyName": "Name kopieren"
+    "copyName": "Name kopieren",
+    "edit": "Bearbeiten"
   },
-
   "operations": {
     "setConfirm": {
       "title": "SET-Vorgang bestätigen",
@@ -97,7 +97,7 @@
     "instanceLabel": "Instanz:",
     "valueLabel": "Wert:",
     "typeLabel": "Typ:",
-    "instanceHint": "Tabellenzeilen-Index (z.\u00A0B. 0, 1, 2 oder komplexer Index wie 1.2.3)",
+    "instanceHint": "Tabellenzeilen-Index (z. B. 0, 1, 2 oder komplexer Index wie 1.2.3)",
     "scalarInstance": ".0 (Skalare verwenden immer .0)",
     "maxRepetitions": "Max. Wiederholungen:",
     "nonRepeaters": "Non Repeaters:",
@@ -126,7 +126,6 @@
     "walkOidPlaceholder": "1.3.6.1.2.1",
     "getBulkOidPlaceholder": "1.3.6.1.2.1.2.2.1"
   },
-
   "results": {
     "copyForWord": "Für Word kopieren",
     "copyForWordHint": "Tabelle als HTML kopieren — in Word, Google Docs oder Outlook als Tabelle einfügen",
@@ -162,7 +161,6 @@
     "missing": "Fehlend",
     "exportComparison": "CSV exportieren"
   },
-
   "savedQueries": {
     "title": "Gespeicherte Abfragen",
     "hide": "Ausblenden",
@@ -172,7 +170,6 @@
     "saved": "Abfrage \"{name}\" gespeichert",
     "loaded": "Abfrage \"{name}\" geladen"
   },
-
   "recentHistory": {
     "viewAll": "Verlauf ansehen",
     "clickToView": "Klicken, um diesen Eintrag im Verlauf zu öffnen",
@@ -181,7 +178,6 @@
     "empty": "Noch kein Verlauf. Führen Sie Operationen aus, um sie hier zu sehen.",
     "nResults": "{count} Ergebnisse"
   },
-
   "mib": {
     "searchPlaceholder": "Nach Name oder OID filtern... (/ zum Fokussieren drücken)",
     "expandAll": "Alle aufklappen",
@@ -223,7 +219,6 @@
       "objectIs": "Dieses Objekt ist {access}"
     }
   },
-
   "nodeDetails": {
     "title": "Knotendetails",
     "expand": "Aufklappen",
@@ -240,7 +235,6 @@
     "description": "Beschreibung:",
     "nNodes": "{count} Knoten"
   },
-
   "favorites": {
     "title": "Favoriten ({count})",
     "clearConfirm": "Alle Favoriten löschen?",
@@ -248,7 +242,6 @@
     "clearAll": "Alle Favoriten löschen",
     "removeFrom": "Aus Favoriten entfernen"
   },
-
   "keyboard": {
     "title": "Tastenkürzel",
     "previousNode": "Vorheriger Knoten",
@@ -261,7 +254,6 @@
     "focusSearch": "Suche fokussieren",
     "toggleHelp": "Diese Hilfe ein-/ausblenden"
   },
-
   "history": {
     "badgeError": "Fehler",
     "badgeNoResult": "Kein Ergebnis",
@@ -315,7 +307,6 @@
     "targets": "Ziele",
     "error": "Fehler"
   },
-
   "traps": {
     "listeningInfo": "Lauscht auf Traps auf Port {port} (konfigurierbar in den Einstellungen).",
     "startListening": "Lauschen starten",
@@ -366,8 +357,39 @@
     "snmpv1Trap": "SNMPv1 Trap",
     "snmpv2v3Inform": "SNMPv2/v3 Inform"
   },
-
   "monitor": {
+    "live": "LIVE",
+    "liveHint": "Wieder den neuesten Messwerten folgen (Zoomen oder Verschieben pausiert die Verfolgung)",
+    "timebaseAll": "Alles",
+    "browsing": "Navigation im Puffer — LIVE klicken, um fortzusetzen",
+    "multiOidHint": "Mehrere OIDs gleichzeitig überwachen — bis zu 8 Kurven, getrennt oder gestapelt.",
+    "aggregatedBy": "aggregiert je {bucket}s",
+    "alertAbove": "über",
+    "alertBelow": "unter",
+    "alertsMore": "+{count} weitere Alarm(e)",
+    "alertsTitle": "Schwellenwert-Alarme ({count})",
+    "hideTable": "Tabelle ausblenden",
+    "showTable": "Tabelle anzeigen",
+    "historicalAggregated": "{count} aggregierte Punkte geladen ({bucket}s-Fenster).",
+    "historyFailed": "Verlauf konnte nicht geladen werden.",
+    "invalidRange": "Das Enddatum muss nach dem Startdatum liegen.",
+    "latencyCompanion": "Antwortzeit (gleiches Zeitfenster)",
+    "latencyCompanionHint": "Antwortzeit als zweites Diagramm im selben Zeitfenster anzeigen",
+    "resetZoom": "Zoom zurücksetzen",
+    "scaleLinear": "Linear",
+    "scaleLog": "Log",
+    "zeroBased": "Ab null",
+    "zeroBasedHint": "Y-Achse bei null beginnen statt automatisch zu skalieren",
+    "fullscreen": "Vollbild",
+    "csvVisible": "Sichtbaren Bereich als CSV exportieren",
+    "zoomHint": "Mausrad oder Ziehen zum Zoomen · Umschalt+Ziehen zum Verschieben",
+    "seriesCapped": "{count} weitere Ziel(e) nicht dargestellt (max. {max}) — siehe Tabellenansicht",
+    "resizeChart": "Diagrammgröße ändern",
+    "pngExported": "Diagramm als PNG exportiert.",
+    "csvExported": "Sichtbarer Bereich als CSV exportiert.",
+    "tileDown": "Keine Antwort",
+    "tileOutOfRange": "Außerhalb des Bereichs",
+    "tileStable": "Stabil",
     "oidLabel": "OID:",
     "oidPlaceholder": "1.3.6.1.2.1.1.3.0 (sysUpTime)",
     "versionLabel": "Version:",
@@ -424,9 +446,48 @@
     "statsAvgLatency": "Durchschn. Latenz:",
     "statsErrorCount": "Fehler:",
     "historicalLoaded": "{count} historische Datenpunkte geladen",
-    "noHistoricalData": "Keine Daten für den ausgewählten Zeitraum gefunden"
+    "noHistoricalData": "Keine Daten für den ausgewählten Zeitraum gefunden",
+    "addOid": "OID hinzufügen",
+    "layoutSeparate": "Getrennt",
+    "layoutStacked": "Gestapelt",
+    "layoutStackedHint": "Ein Diagramm, eine Achse je OID (links/rechts, in der Farbe ihrer Kurve). Verläufe sind vergleichbar, Höhen nicht.",
+    "targetsToWatch": "Zu überwachende Ziele:",
+    "targetsAll": "Alle auswählen",
+    "targetsNone": "Alle abwählen",
+    "noTargetSelected": "Wählen Sie mindestens ein Ziel zur Überwachung aus.",
+    "channels": "Messwerte",
+    "channelsTitle": "Angezeigte Messwerte",
+    "channelsHint": "Kurven zum Zeichnen wählen — {visible} von {total} sichtbar. Ausblenden färbt die übrigen nie um.",
+    "channelsHintShort": "Angezeigte Messwerte wählen",
+    "channelAll": "Alle anzeigen",
+    "channelOnly": "nur",
+    "channelOnlyHint": "Nur diesen Messwert anzeigen",
+    "channelCapped": "jenseits des 8-Kurven-Limits",
+    "statsTitle": "Statistiken je Kachel",
+    "statsScope": "Berechnet über:",
+    "statsHint": "Wählen Sie, was jede Kachel zeigt. Die erste ist die große Zahl.",
+    "scopeWindow": "Sichtbares Fenster",
+    "scopeAllData": "Alle Daten",
+    "stat": {
+      "last": "Letzter",
+      "avg": "Mittelwert",
+      "min": "Min",
+      "max": "Max",
+      "p95": "p95",
+      "stddev": "Std.-Abw.",
+      "count": "Messwerte",
+      "errors": "Fehler"
+    },
+    "nameLabel": "Name:",
+    "namePlaceholder": "z. B. WAN-Verkehr — Paris (optional)",
+    "collapseSession": "Diese Überwachung einklappen",
+    "expandSession": "Diese Überwachung ausklappen",
+    "thresholds": "Schwellenwerte",
+    "thresholdsHint": "Alarmbereich für diese OID",
+    "thresholdFor": "anhaltend für",
+    "sustainedFor": "anhaltend seit {seconds}s",
+    "thresholdExplain": "Alarmiert erst, wenn der Wert die gesamte Dauer außerhalb bleibt — ein einzelner Ausreißer ist kein Vorfall."
   },
-
   "discovery": {
     "cidrLabel": "CIDR / IP:",
     "cidrPlaceholder": "192.168.1.0/24 oder 10.0.0.1",
@@ -438,7 +499,7 @@
     "addAllReachable": "Alle erreichbaren zu Zielen hinzufügen",
     "addToTargets": "+ Ziel",
     "empty": "Keine Scan-Ergebnisse.",
-    "emptyHint": "Geben Sie einen CIDR-Bereich ein (z.\u00A0B. 192.168.1.0/24) und klicken Sie auf \"Scannen\", um SNMP-Geräte zu erkennen.",
+    "emptyHint": "Geben Sie einen CIDR-Bereich ein (z. B. 192.168.1.0/24) und klicken Sie auf \"Scannen\", um SNMP-Geräte zu erkennen.",
     "scanComplete": "Scan abgeschlossen: {count} Gerät(e) von {total} IPs gefunden",
     "scanFailed": "Scan fehlgeschlagen: {error}",
     "addedToTargets": "{ip} zu Zielen hinzugefügt",
@@ -453,7 +514,6 @@
     "reachable": "Erreichbar",
     "unreachable": "Nicht erreichbar"
   },
-
   "targets": {
     "title": "Ziele ({count} aktiv)",
     "testAll": "Alle testen",
@@ -497,7 +557,6 @@
       "badge": "Benutzerdefinierte SNMP-Einstellungen"
     }
   },
-
   "update": {
     "available": "SnmpLens {version} ist verfügbar",
     "currentVersion": "Aktuelle Version: {version}",
@@ -515,7 +574,9 @@
     "tabs": {
       "general": "Allgemein",
       "mibs": "MIBs",
-      "snmp": "SNMP"
+      "snmp": "SNMP",
+      "notify": "Benachrichtigungen",
+      "service": "Dienst"
     },
     "general": {
       "updatesTitle": "Updates",
@@ -575,7 +636,7 @@
       "privProtocol": "Datenschutz-Protokoll:",
       "privPassword": "Datenschutz-Passwort:",
       "contextName": "Kontextname:",
-      "contextPlaceholder": "(optional – z.\u00A0B. vlan-100, vrf-MGMT)",
+      "contextPlaceholder": "(optional – z. B. vlan-100, vrf-MGMT)",
       "testTitle": "Verbindungstest",
       "testTarget": "Ziel:",
       "testTargetPlaceholder": "192.168.1.1 oder Hostname",
@@ -588,7 +649,6 @@
       "testError": "Fehler: {error}"
     }
   },
-
   "diff": {
     "title": "Diff-Ergebnisse",
     "added": "+{count} hinzugefügt",
@@ -603,7 +663,6 @@
     "valueBHeader": "Wert B",
     "rowsShown": "{visible} von {total} Zeile(n) angezeigt"
   },
-
   "tooltip": {
     "oid": "OID:",
     "type": "Typ:",
@@ -611,14 +670,12 @@
     "access": "Zugriff:",
     "values": "Werte:",
     "description": "Beschreibung:",
-    "na": "k.\u00A0A."
+    "na": "k. A."
   },
-
   "clipboard": {
     "copied": "{label} in die Zwischenablage kopiert",
     "copyError": "Fehler beim Kopieren in die Zwischenablage"
   },
-
   "network": {
     "discovery": "Erkennung",
     "ping": "Ping",
@@ -644,7 +701,6 @@
     "hopRtt2": "RTT 2",
     "hopRtt3": "RTT 3"
   },
-
   "debug": {
     "title": "SNMP Debug",
     "enable": "Aktivieren",
@@ -653,5 +709,141 @@
     "clear": "Löschen",
     "empty": "Keine Debug-Einträge. Aktivieren Sie den Debug-Modus und führen Sie SNMP-Operationen aus.",
     "entries": "Einträge"
+  },
+  "events": {
+    "title": "Ereignisse",
+    "empty": "Noch keine Ereignisse. Traps und Schwellenwertverletzungen erscheinen hier.",
+    "searchPlaceholder": "Zusammenfassung, Quelle oder OID suchen...",
+    "unackedOnly": "Nur unbestätigte",
+    "unackedCount": "{count} unbestätigt",
+    "matching": "{count} Treffer",
+    "ack": "Bestätigen",
+    "acked": "Bestätigt",
+    "ackAll": "Alle bestätigen",
+    "selectedCount": "{count} ausgewählt",
+    "loadMore": "Mehr laden",
+    "clearAll": "Alle löschen",
+    "clearConfirm": "Alle Ereignisse löschen? Dies kann nicht rückgängig gemacht werden.",
+    "cleared": "Journal geleert.",
+    "exported": "Ereignisse als CSV exportiert.",
+    "viewPayload": "Details anzeigen",
+    "payloadTitle": "Ereignisdetails",
+    "category": {
+      "trap": "Trap",
+      "threshold": "Schwellenwert",
+      "reachability": "Erreichbarkeit",
+      "system": "System",
+      "operation": "Operation"
+    },
+    "severity": {
+      "critical": "Kritisch",
+      "major": "Schwer",
+      "minor": "Gering",
+      "warning": "Warnung",
+      "info": "Info"
+    },
+    "kind": {
+      "trap.received": "{pduType} from {source} ({version}, {varbinds} varbinds)",
+      "trap.inform": "Inform from {source} ({version}, {varbinds} varbinds)",
+      "threshold.opened": "{oid} on {target} is {kind} {bound} (held {heldSeconds}s)",
+      "threshold.resolved": "{oid} on {target} is back within range",
+      "reachability.down": "{target} stopped responding",
+      "reachability.up": "{target} is responding again",
+      "system.listener_started": "Trap listener started on port {port}",
+      "system.listener_error": "Trap listener error: {error}",
+      "system.poll_failed": "Polling {target} failed: {error}",
+      "system.sink_failed": "Delivery to {sink} failed: {error}",
+      "system.sink_dead_letter": "Delivery to {sink} given up after {attempts} attempts",
+      "system.mib_load_failed": "MIB {file} failed to load",
+      "system.update_available": "Version {version} is available",
+      "system.retention_ran": "Retention removed {count} events",
+      "operation.failed": "{operation} on {target} failed",
+      "system.info": "Diensthinweis"
+    }
+  },
+  "notify": {
+    "sinksTitle": "Ziele",
+    "sinksHint": "Where alerts are sent. A destination is reusable across rules.",
+    "noSinks": "No destination yet. Add a syslog collector, a webhook or an email server.",
+    "routesTitle": "Routing-Regeln",
+    "routesHint": "Which events go to which destination. Rules are evaluated by ascending priority.",
+    "noRoutes": "No rule yet — nothing is forwarded.",
+    "sinkFirst": "Add a destination first.",
+    "addRoute": "Regel hinzufügen",
+    "routeEditor": "Routing rule",
+    "sinkEditor": "Destination ({kind})",
+    "name": "Name",
+    "nameRequired": "A name is required.",
+    "enabled": "Aktiviert",
+    "sinkSaved": "Destination saved.",
+    "routeSaved": "Rule saved.",
+    "test": "Testen",
+    "testSent": "Test notification sent.",
+    "testFailed": "Test failed: {error}",
+    "address": "Address (host:port)",
+    "protocol": "Protocol",
+    "facility": "Facility",
+    "udpNote": "UDP delivery cannot be confirmed: the app reports it as sent, never as delivered.",
+    "token": "Bearer token",
+    "webhookNote": "Honours HTTP_PROXY, and is the escape hatch for logic the rules cannot express.",
+    "host": "SMTP-Server",
+    "port": "Port",
+    "encryption": "Verschlüsselung",
+    "authMethod": "Authentifizierung",
+    "username": "Benutzername",
+    "password": "Passwort",
+    "to": "Empfänger",
+    "none": "Keine",
+    "redact": "Mask target addresses",
+    "redacted": "maskiert",
+    "redactHint": "Anonymous Mode only masks the screen and does not persist, so outbound masking is set per destination.",
+    "matchCategories": "Kategorien",
+    "emptyMeansAll": "Leave empty to match everything.",
+    "minSeverity": "Mindestschweregrad",
+    "any": "Alle",
+    "priority": "Priorität",
+    "sources": "Quellen",
+    "sourcesHint": "CIDR (10.0.0.0/8) or glob (sw-*), separated by spaces.",
+    "oidPrefix": "OID prefix",
+    "quietHours": "Ruhezeiten",
+    "allCategories": "all categories",
+    "quietHoursHint": "Inside this window the rule does not deliver. May wrap past midnight.",
+    "deliverTo": "Senden an",
+    "stopAfter": "Stop after this rule",
+    "stops": "Stopp",
+    "stopHint": "Stop evaluating further rules when this one matches.",
+    "secretOnFile": "gespeichert — leer lassen zum Beibehalten",
+    "secretSet": "Zugangsdaten gesetzt",
+    "secretCleared": "Zugangsdaten entfernt.",
+    "clearSecret": "Gespeicherte Zugangsdaten entfernen",
+    "secretHint": "Außerhalb der Datenbank gespeichert, geschützt durch: {backend}"
+  },
+  "tray": {
+    "show": "SnmpLens öffnen",
+    "quit": "Beenden"
+  },
+  "service": {
+    "saved": "Diensteinstellungen gespeichert.",
+    "backgroundTitle": "Betrieb im Hintergrund",
+    "backgroundHint": "Weiter abfragen, auf Traps hören und Benachrichtigungen senden, während das Fenster geschlossen ist. Diese Einstellungen werden gelesen, bevor das Fenster existiert, und deshalb außerhalb der üblichen Einstellungen gespeichert.",
+    "runInBackground": "Beim Schließen des Fensters im Infobereich weiterlaufen",
+    "noTray": "Diese Arbeitsumgebung ({platform}) stellt keinen Infobereich bereit; das Schließen des Fensters beendet SnmpLens daher weiterhin. Ein erneuter Start holt die laufende Instanz in den Vordergrund.",
+    "startHidden": "Minimiert im Infobereich starten",
+    "startHiddenHint": "Für den Autostart: SnmpLens arbeitet, ohne ein Fenster zu öffnen.",
+    "unattendedTitle": "Unbeaufsichtigter Start",
+    "unattendedHint": "Was SnmpLens beim Start selbstständig tun soll, wenn niemand zusieht.",
+    "autoResume": "Beim Beenden laufende Überwachungen fortsetzen",
+    "autoStartTraps": "Trap-Empfänger beim Start aktivieren",
+    "trapPort": "Trap-Port",
+    "trapPortHint": "Ports unter 1024 erfordern in der Regel erhöhte Rechte.",
+    "stateTitle": "Aktueller Zustand",
+    "stateTray": "Infobereich:",
+    "stateTraps": "Trap-Empfänger:",
+    "active": "aktiv",
+    "inactive": "inaktiv",
+    "restartNote": "Minimierter Start und Trap-Port wirken erst beim nächsten Start.",
+    "auditTitle": "Audit",
+    "auditHint": "Ein SET ist die einzige SNMP-Operation, die ein Gerät verändert; ein abgelehntes SET ist deshalb festhaltenswert.",
+    "auditFailedSets": "Abgelehnte SNMP-SET-Operationen protokollieren"
   }
 }

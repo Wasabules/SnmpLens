@@ -13,6 +13,29 @@ export function getTargetsAsArray(targetsString) {
 }
 
 /**
+ * Map every configured target address to its label, when it has one.
+ * Labels live in the same settings string as the addresses, as
+ * "address # label"; disabled targets (prefixed //) keep their label so a
+ * running session can still name them.
+ * @param {string} targetsString
+ * @returns {Record<string,string>}
+ */
+export function getTargetLabels(targetsString) {
+  const labels = {};
+  if (!targetsString) return labels;
+  for (const raw of targetsString.split('\n')) {
+    const line = raw.trim().replace(/^\/\//, '').trim();
+    if (!line) continue;
+    const hash = line.indexOf('#');
+    if (hash < 0) continue;
+    const address = line.slice(0, hash).trim();
+    const label = line.slice(hash + 1).trim();
+    if (address && label) labels[address] = label;
+  }
+  return labels;
+}
+
+/**
  * Get effective settings for a specific target, merging global settings with per-target overrides.
  * @param {object} settings - The full $settingsStore value
  * @param {string} address - Target address

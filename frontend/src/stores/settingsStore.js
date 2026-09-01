@@ -49,7 +49,22 @@ const defaults = {
 
 // Load synchronously with defaults, then decrypt async
 const raw = JSON.parse(localStorage.getItem('settings') || 'null');
-const initialSettings = raw ? { ...defaults, ...raw, v3: { ...defaults.v3, ...(raw.v3 || {}) }, monitor: { ...defaults.monitor, ...(raw.monitor || {}) }, traps: { ...defaults.traps, ...(raw.traps || {}) }, updates: { ...defaults.updates, ...(raw.updates || {}) } } : defaults;
+
+// Merge saved settings over the defaults, one level deep into EVERY nested
+// object. Listing the sub-objects by hand meant any group added later silently
+// lost its new defaults for existing users — `polling` was already in that
+// state. Arrays and primitives are taken from the saved value as-is.
+function withDefaults(base, saved) {
+  const merged = { ...base, ...saved };
+  for (const [key, value] of Object.entries(base)) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      merged[key] = { ...value, ...(saved && saved[key] ? saved[key] : {}) };
+    }
+  }
+  return merged;
+}
+
+const initialSettings = raw ? withDefaults(defaults, raw) : { ...defaults };
 // Anonymous mode is always off on startup (intentionally non-persistent)
 initialSettings.anonymousMode = false;
 

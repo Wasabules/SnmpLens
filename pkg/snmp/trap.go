@@ -1,6 +1,7 @@
 package snmp
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -8,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"SnmpLens/pkg/events"
 
 	"github.com/gosnmp/gosnmp"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -113,15 +116,74 @@ func (c *Client) handleTrap(packet *gosnmp.SnmpPacket, addr *net.UDPAddr) {
 		pduType = "Inform"
 	}
 
+	source := addr.IP.String()
+	ts := time.Now().UTC().Format(time.RFC3339)
+
 	trapData := map[string]interface{}{
-		"source":    addr.IP.String(),
+		"source":    source,
 		"version":   packet.Version.String(),
 		"variables": vars,
 		"pduType":   pduType,
-		"timestamp": time.Now().Format(time.RFC3339),
+		"timestamp": ts,
 	}
 
+	// Journal FIRST, emit second. EventsEmit only reaches a live webview: with
+	// the window closed — or simply before the frontend has subscribed — every
+	// received trap used to disappear with no error and no trace. Persisting
+	// first is what makes background trap collection possible at all.
+	c.recordTrap(source, ts, pduType, packet, vars)
+
 	runtime.EventsEmit(c.ctx, "newTrap", trapData)
+}
+
+// recordTrap writes a received trap to the event journal. The full varbind list
+// goes to the payload side so listing the journal never reads it.
+func (c *Client) recordTrap(source, ts, pduType string, packet *gosnmp.SnmpPacket, vars []Result) {
+	kind := events.KindTrapReceived
+	if pduType == "Inform" {
+		kind = events.KindTrapInform
+	}
+
+	// A trap's identity for deduplication is its source plus its trap OID.
+	trapOID := ""
+	for _, v := range vars {
+		if strings.Contains(v.Oid, "snmpTrapOID") {
+			trapOID = fmt.Sprintf("%v", v.Value)
+			break
+		}
+	}
+
+	payload, err := json.Marshal(vars)
+	if err != nil {
+		payload = []byte("[]")
+	}
+
+	summary := fmt.Sprintf("%s from %s (%s, %d varbinds)", pduType, source,
+		packet.Version.String(), len(vars))
+
+	ev := events.Event{
+		Ts:       ts,
+		Category: events.CategoryTrap,
+		Kind:     kind,
+		Severity: events.SevMinor.String(),
+		State:    events.StateOneshot,
+		Source:   source,
+		OID:      trapOID,
+		DedupKey: "trap|" + source + "|" + trapOID,
+		TitleKey: "events.kind." + kind,
+		Params: map[string]any{
+			"source":   source,
+			"version":  packet.Version.String(),
+			"pduType":  pduType,
+			"varbinds": len(vars),
+			"trapOid":  trapOID,
+		},
+		Summary: summary,
+	}
+
+	if err := c.recorder.Record(ev, string(payload)); err != nil {
+		log.Printf("Failed to journal trap from %s: %v", source, err)
+	}
 }
 
 // SendTrap sends an SNMP trap to a target.

@@ -10,6 +10,7 @@
   import HistoryPanel from './HistoryPanel.svelte';
   import MonitorPanel from './MonitorPanel.svelte';
   import DiscoveryPanel from './DiscoveryPanel.svelte';
+  import EventsPanel from './EventsPanel.svelte';
   import Notifications from './Notifications.svelte';
   import SettingsModal from './SettingsModal.svelte';
   import TargetManager from './TargetManager.svelte';
@@ -23,7 +24,8 @@
   import { settingsStore } from './stores/settingsStore';
   import { pollingStore } from './stores/pollingStore';
   import { historyStore } from './stores/historyStore';
-  import { GetPersistentMibDirectory, ListMibFiles, ImportMibFiles } from '../wailsjs/go/main/App';
+  import { eventCounts, eventsStore } from './stores/eventsStore';
+  import { GetPersistentMibDirectory, ListMibFiles, ImportMibFiles, TraySetLabels } from '../wailsjs/go/main/App';
   import { OnFileDrop, OnFileDropOff } from '../wailsjs/runtime/runtime';
 
   let activeTab = 'operations'; // 'operations', 'traps', or 'history'
@@ -230,6 +232,11 @@
     // Load saved panel width
     loadPanelWidth();
 
+    // The tray menu is built by Go before any locale is known, so push the
+    // translated wording now. Go keeps no catalogue of its own: a second one
+    // would drift from the five JSON files that are the real source of truth.
+    TraySetLabels($_('tray.show'), $_('tray.quit')).catch(() => {});
+
     // Initialize native OS notifications
     initNotifications();
 
@@ -241,6 +248,11 @@
     // Load persisted query history from SQLite (migrates any legacy
     // localStorage history on first run).
     historyStore.init();
+
+    // The journal keeps recording with the tab closed, so the badge has to
+    // start counting immediately rather than on first visit.
+    eventsStore.listen();
+    eventsStore.refreshCounts();
 
     // Scan default MIB directory
     try {
@@ -297,6 +309,9 @@
       } else if (event.key === '5') {
         event.preventDefault();
         activeTab = 'discovery';
+      } else if (event.key === '6') {
+        event.preventDefault();
+        activeTab = 'events';
       } else if (event.key === ',') {
         // Ctrl+, to open settings (like VS Code)
         event.preventDefault();
@@ -482,6 +497,15 @@
           {$_('app.tabs.network')}
           <span class="shortcut-hint">5</span>
         </button>
+        <button class="tab-btn" class:active={activeTab === 'events'} on:click={() => activeTab = 'events'} title="Ctrl+6">
+          {$_('app.tabs.events')}
+          {#if $eventCounts.unacked > 0}
+            <span class="events-badge" title={$_('events.unackedCount', { values: { count: $eventCounts.unacked } })}>
+              {$eventCounts.unacked > 99 ? '99+' : $eventCounts.unacked}
+            </span>
+          {/if}
+          <span class="shortcut-hint">6</span>
+        </button>
         {#if $settingsStore.anonymousMode}
           <span class="anon-badge" title={$_('settings.general.anonymousMode') + ' (Ctrl+Shift+A)'}>ANON</span>
         {/if}
@@ -510,6 +534,10 @@
 
       {#if activeTab === 'discovery'}
         <DiscoveryPanel />
+      {/if}
+
+      {#if activeTab === 'events'}
+        <EventsPanel />
       {/if}
 
       {#if showDebug}
@@ -767,6 +795,21 @@
   @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.4; }
+  }
+
+  .events-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 4px;
+    margin-left: 5px;
+    border-radius: 9px;
+    font-size: 0.68em;
+    font-weight: 700;
+    color: var(--text-on-accent);
+    background-color: var(--error-color);
   }
 
   .shortcut-hint {

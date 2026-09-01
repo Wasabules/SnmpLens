@@ -1,78 +1,263 @@
 <script>
   import { _ } from 'svelte-i18n';
   import { get } from 'svelte/store';
-  import { onDestroy, afterUpdate, tick } from 'svelte';
-  import { Chart, registerables } from 'chart.js';
-  import 'chartjs-adapter-date-fns';
-  import { MonitorGetStats, MonitorLoadHistoricalData } from '../wailsjs/go/main/App';
+  import { MonitorGetStats, MonitorLoadHistoricalData, MonitorLoadBuckets } from '../wailsjs/go/main/App';
   import { pollingStore } from './stores/pollingStore';
   import { settingsStore } from './stores/settingsStore';
   import { notificationStore } from './stores/notifications';
   import { getTargetsAsArray } from './utils/targets';
   import { formatTimeShort } from './utils/formatting';
   import { anonMode, anonymizeIp } from './utils/anonymize';
+  import { targetLabels } from './stores/targetLabels';
+  import { mibStore } from './stores/mibStore';
+  import { oidName, oidTooltip } from './utils/oidDisplay';
   import { copyToClipboard } from './utils/clipboard';
   import Icon from './Icon.svelte';
+  import MonitorChart from './monitor/MonitorChart.svelte';
+  import MetricTiles from './monitor/MetricTiles.svelte';
+  import AlertTimeline from './monitor/AlertTimeline.svelte';
+  import ChannelsModal from './monitor/ChannelsModal.svelte';
+  import { monitorViewStore } from './stores/monitorViewStore';
+  import { DEFAULT_STATS } from './utils/seriesStats';
 
-  Chart.register(...registerables);
+  // Read once. This panel lives behind {#if activeTab === 'monitor'}, so it is
+  // destroyed whenever the user leaves the tab — every preference below has to
+  // come back from the store rather than from a fresh default.
+  // NOTE: never read $monitorViewStore reactively here; this component writes
+  // to it, and subscribing would loop.
+  const savedMonitorView = monitorViewStore.snapshot();
+  const savedForm = savedMonitorView.form || {};
+  const savedView = savedMonitorView.view || {};
 
-  // Read CSS variables once for Chart.js (which can't use var() directly)
-  function getCssVar(name) {
-    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  // Resolved theme ('dark' | 'light') handed to the chart so it re-themes when
+  // the setting changes — including 'system', which follows the OS.
+  $: resolvedTheme =
+    $settingsStore.theme === 'light' || $settingsStore.theme === 'dark'
+      ? $settingsStore.theme
+      : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+
+  // One entry per OID to watch. Capped at the validated palette size so no two
+  // curves ever end up sharing a colour.
+  const MAX_OIDS = 8;
+  let pollName = savedForm.pollName ?? '';
+  let pollOids = savedForm.pollOids && savedForm.pollOids.length ? [...savedForm.pollOids] : [''];
+  // Alert band per OID row, aligned with pollOids by index. Bounds belong to a
+  // metric, not to a session: a link rate and an uptime share no scale.
+  let pollThresholds = savedForm.pollThresholds && savedForm.pollThresholds.length
+    ? [...savedForm.pollThresholds]
+    : [];
+  let openThreshold = null; // index of the OID row whose band editor is open
+
+  function thresholdAt(list, i) {
+    return list[i] || { min: '', max: '', forSeconds: 0, enabled: true };
   }
 
-  // Destroy and recreate charts only when the THEME actually changes
-  let lastTheme = $settingsStore.theme;
-  $: {
-    const currentTheme = $settingsStore.theme;
-    if (currentTheme !== lastTheme) {
-      lastTheme = currentTheme;
-      for (const id of Object.keys(charts)) {
-        charts[id].destroy();
-        delete charts[id];
+  function patchThreshold(i, changes) {
+    const next = [...pollThresholds];
+    next[i] = { ...thresholdAt(next, i), ...changes };
+    pollThresholds = next;
+  }
+
+  function hasThreshold(list, i) {
+    const t = list[i];
+    return !!(t && t.enabled !== false && ((t.min !== '' && t.min != null) || (t.max !== '' && t.max != null)));
+  }
+
+  // Map the row-indexed bands onto their OIDs for the backend.
+  function buildThresholdMap(oidValues, list) {
+    const map = {};
+    oidValues.forEach((raw, i) => {
+      const oid = String(raw || '').trim();
+      if (!oid || !hasThreshold(list, i)) return;
+      const t = thresholdAt(list, i);
+      map[oid] = {
+        min: t.min === '' || t.min == null ? null : Number(t.min),
+        max: t.max === '' || t.max == null ? null : Number(t.max),
+        forSeconds: Number(t.forSeconds) || 0,
+        alertEnabled: true,
+      };
+    });
+    return map;
+  }
+  let layoutModes = savedView.layoutModes || {};   // sessionId -> 'separate' | 'stacked'
+  let hiddenSeries = savedView.hiddenSeries || {};  // sessionId -> ["target|oid", ...] hidden from the plot
+  let channelsFor = null; // sessionId whose channel picker is open (transient)
+  let chartOpts = savedView.chartOpts || {}; // sessionId -> {windowMs, yScaleType, zeroBased, height}
+  let statsSel = savedView.statsSel || {};   // sessionId -> ['last','avg',...]
+  let statsScope = savedView.statsScope || {}; // sessionId -> 'window' | 'all'
+  let collapsed = savedView.collapsed || {}; // sessionId -> boolean (card folded)
+
+  // Folding a card unmounts its charts, which is also what keeps a page full of
+  // sessions cheap. Their options are persisted, so they come back untouched.
+  function toggleCollapsed(id) {
+    collapsed[id] = !collapsed[id];
+    collapsed = collapsed;
+  }
+  let visibleRanges = {}; // sessionId -> {min,max} reported by its chart (transient)
+
+  const statsFor = (sel, id) => sel[id] || DEFAULT_STATS;
+  const scopeFor = (sc, id) => sc[id] || 'window';
+
+  function setStats(id, list) {
+    statsSel[id] = list;
+    statsSel = statsSel;
+  }
+
+  function setScope(id, value) {
+    statsScope[id] = value;
+    statsScope = statsScope;
+  }
+
+  function noteRange(id, range) {
+    const prev = visibleRanges[id];
+    if (prev && prev.min === range.min && prev.max === range.max) return;
+    visibleRanges[id] = range;
+    visibleRanges = visibleRanges;
+  }
+
+  function saveChartOpts(sessionId, opts) {
+    const prev = chartOpts[sessionId];
+    // Guard against a pointless write loop: the chart re-announces its options
+    // on every reactive pass, not only when they actually change.
+    if (prev && JSON.stringify(prev) === JSON.stringify(opts)) return;
+    chartOpts[sessionId] = opts;
+    chartOpts = chartOpts;
+  }
+
+  // Persist every preference whenever any of them changes. All of them are
+  // referenced here so Svelte actually tracks them.
+  $: monitorViewStore.saveView({
+    viewModes,
+    displayModes,
+    layoutModes,
+    hiddenSeries,
+    showLatency,
+    showStats,
+    showHistoryTable,
+    historyFrom,
+    historyTo,
+    autoModeApplied,
+    chartOpts,
+    statsSel,
+    statsScope,
+    collapsed,
+  });
+
+  $: monitorViewStore.patchForm({
+    pollName,
+    pollOids,
+    pollThresholds,
+    pollInterval,
+    pollVersion,
+    excludedTargets: [...excludedTargets],
+  });
+
+  // Targets available from the settings, minus the ones deselected here. The
+  // exclusion set is keyed by address so it survives edits to the target list.
+  let excludedTargets = new Set(savedForm.excludedTargets || []);
+  $: availableTargets = getTargetsAsArray($settingsStore.targets);
+  $: selectedTargets = availableTargets.filter((t) => !excludedTargets.has(t));
+
+  function toggleTarget(t) {
+    const next = new Set(excludedTargets);
+    if (next.has(t)) next.delete(t);
+    else next.add(t);
+    excludedTargets = next;
+  }
+
+  function setAllTargets(on) {
+    excludedTargets = on ? new Set() : new Set(availableTargets);
+  }
+
+  function setHidden(sessionId, keys) {
+    hiddenSeries[sessionId] = keys;
+    hiddenSeries = hiddenSeries;
+  }
+
+  function addOid() {
+    if (pollOids.length < MAX_OIDS) pollOids = [...pollOids, ''];
+  }
+
+  function removeOid(i) {
+    pollOids = pollOids.filter((_, idx) => idx !== i);
+    pollThresholds = pollThresholds.filter((_, idx) => idx !== i);
+    if (pollOids.length === 0) pollOids = [''];
+    if (openThreshold === i) openThreshold = null;
+  }
+
+  // Tooltip for the session's threshold badge: one line per OID band.
+  function describeThresholds(session, tree) {
+    return Object.entries(session.thresholds || {})
+      .map(([o, t]) => {
+        const parts = [];
+        if (t.min !== null && t.min !== undefined) parts.push('min ' + t.min);
+        if (t.max !== null && t.max !== undefined) parts.push('max ' + t.max);
+        if (t.forSeconds) parts.push(t.forSeconds + 's');
+        return oidName(o, tree) + ' : ' + (parts.join(' · ') || '—');
+      })
+      .join('\n');
+  }
+
+  function setLayout(sessionId, layout) {
+    layoutModes[sessionId] = layout;
+    layoutModes = layoutModes;
+  }
+  let pollInterval = savedForm.pollInterval ?? 5000;
+  let pollVersion = savedForm.pollVersion || 'v2c'; // 'v1', 'v2c', 'v3'
+  let viewModes = savedView.viewModes || {}; // sessionId -> 'raw' | 'delta' | 'rate' | 'latency'
+  let displayModes = savedView.displayModes || {}; // sessionId -> 'graph' | 'table'
+  let sessionStats = {};    // sessionId -> stats object
+  let showStats = savedView.showStats || {};       // sessionId -> boolean
+  let historyFrom = savedView.historyFrom || {};     // sessionId -> datetime string
+  let historyTo = savedView.historyTo || {};       // sessionId -> datetime string
+  let loadingHistory = {};  // sessionId -> boolean
+  let historicalResults = {}; // sessionId -> DataPoint[] (raw, short ranges)
+  let historicalBuckets = {}; // sessionId -> Bucket[] (aggregated, long ranges)
+  let historicalInfo = {};    // sessionId -> { aggregated, bucketSec, count }
+  let showHistoryTable = savedView.showHistoryTable || {};  // sessionId -> boolean
+  let showLatency = savedView.showLatency || {};       // sessionId -> boolean (latency companion chart)
+  let autoModeApplied = savedView.autoModeApplied || {};   // sessionId -> boolean (counter -> rate, once)
+
+  // A counter (ifInOctets and friends) is meaningless as a raw total: what the
+  // operator wants is its rate. Switch once, when the SNMP type first arrives,
+  // and never fight a manual choice afterwards.
+  $: for (const s of $pollingStore) {
+    if (!autoModeApplied[s.id] && (s.results || []).some((r) => r.snmpType)) {
+      autoModeApplied[s.id] = true;
+      autoModeApplied = autoModeApplied;
+      const type = (s.results.find((r) => r.snmpType) || {}).snmpType;
+      if (/counter/i.test(type || '') && (viewModes[s.id] || 'raw') === 'raw') {
+        viewModes[s.id] = 'rate';
+        viewModes = viewModes;
       }
     }
   }
 
-  let pollOid = '';
-  let pollInterval = 5000;
-  let pollVersion = 'v2c'; // 'v1', 'v2c', 'v3'
-  let charts = {};
-  let canvasElements = {};
-  let viewModes = {}; // sessionId -> 'raw' | 'delta' | 'rate' | 'latency'
-  let displayModes = {}; // sessionId -> 'graph' | 'table'
-  let sessionStats = {};    // sessionId -> stats object
-  let showStats = {};       // sessionId -> boolean
-  let historyFrom = {};     // sessionId -> datetime string
-  let historyTo = {};       // sessionId -> datetime string
-  let loadingHistory = {};  // sessionId -> boolean
-  let historicalResults = {}; // sessionId -> DataPoint[]
-
-  // Threshold form state
-  let thresholdEnabled = false;
-  let thresholdMin = '';
-  let thresholdMax = '';
-
-  function handleStartPolling() {
+  async function handleStartPolling() {
     const t = get(_);
-    if (!pollOid.trim()) {
+    const oids = pollOids.map((o) => o.trim()).filter(Boolean);
+    if (oids.length === 0) {
       notificationStore.add(t('monitor.enterOid'), 'error');
       return;
     }
-    const targets = getTargetsAsArray($settingsStore.targets);
-    if (targets.length === 0) {
+    const targets = selectedTargets;
+    if (availableTargets.length === 0) {
       notificationStore.add(t('monitor.configureTarget'), 'error');
       return;
     }
-    const thresholds = thresholdEnabled ? {
-      min: thresholdMin !== '' ? Number(thresholdMin) : null,
-      max: thresholdMax !== '' ? Number(thresholdMax) : null,
-      alertEnabled: true,
-    } : null;
-    const id = pollingStore.startPolling(pollOid.trim(), targets, pollInterval, thresholds, pollVersion);
+    if (targets.length === 0) {
+      notificationStore.add(t('monitor.noTargetSelected'), 'error');
+      return;
+    }
+    const thresholdMap = buildThresholdMap(pollOids, pollThresholds);
+    // startPolling is async: without the await, `id` is a Promise and every
+    // per-session display default below would be filed under "[object Promise]"
+    // instead of the session.
+    const id = await pollingStore.startPolling(oids, targets, pollInterval, thresholdMap, pollVersion, pollName.trim());
     viewModes[id] = 'raw';
     displayModes[id] = 'graph';
-    notificationStore.add(t('monitor.pollingStarted', { values: { oid: pollOid, version: pollVersion, interval: pollInterval/1000, thresholds: thresholds ? t('monitor.withThresholds') : '' } }), 'success');
+    layoutModes[id] = 'separate';
+    notificationStore.add(t('monitor.pollingStarted', { values: { oid: oids.join(', '), version: pollVersion, interval: pollInterval/1000, thresholds: Object.keys(thresholdMap).length ? t('monitor.withThresholds') : '' } }), 'success');
   }
 
   function handleStop(id) {
@@ -84,10 +269,14 @@
   }
 
   function handleRemove(id) {
-    if (charts[id]) {
-      charts[id].destroy();
-      delete charts[id];
-    }
+    monitorViewStore.dropSession(id);
+    delete chartOpts[id];
+    delete collapsed[id];
+    delete statsSel[id];
+    delete statsScope[id];
+    delete visibleRanges[id];
+    delete hiddenSeries[id];
+    delete layoutModes[id];
     delete viewModes[id];
     delete displayModes[id];
     pollingStore.removeSession(id);
@@ -126,224 +315,168 @@
     }
   }
 
+  const TWO_HOURS_MS = 2 * 3600 * 1000;
+  const TARGET_BUCKETS = 500;
+
   async function loadHistorical(sessionId) {
     const from = historyFrom[sessionId];
     const to = historyTo[sessionId];
     if (!from || !to) return;
+    const t = get(_);
+    const spanMs = new Date(to) - new Date(from);
+    if (!(spanMs > 0)) {
+      notificationStore.add(t('monitor.invalidRange'), 'error');
+      return;
+    }
+
     loadingHistory[sessionId] = true;
     loadingHistory = loadingHistory;
+    historicalResults[sessionId] = null;
+    historicalBuckets[sessionId] = null;
+
     try {
-      const points = await MonitorLoadHistoricalData(sessionId, new Date(from).toISOString(), new Date(to).toISOString());
-      if (!points || points.length === 0) {
-        const t = get(_);
-        notificationStore.add(t('monitor.noHistoricalData'), 'info');
-        return;
+      const fromIso = new Date(from).toISOString();
+      const toIso = new Date(to).toISOString();
+
+      if (spanMs > TWO_HOURS_MS) {
+        // Long range: aggregate in SQL. Shipping every raw sample would be slow
+        // and unreadable — buckets keep the shape with a bounded point count.
+        const bucketSec = Math.max(60, Math.round(spanMs / 1000 / TARGET_BUCKETS));
+        const buckets = await MonitorLoadBuckets(sessionId, fromIso, toIso, bucketSec);
+        if (!buckets || buckets.length === 0) {
+          notificationStore.add(t('monitor.noHistoricalData'), 'info');
+          return;
+        }
+        historicalBuckets[sessionId] = buckets;
+        historicalInfo[sessionId] = { aggregated: true, bucketSec, count: buckets.length };
+        notificationStore.add(
+          t('monitor.historicalAggregated', { values: { count: buckets.length, bucket: bucketSec } }),
+          'success'
+        );
+      } else {
+        const points = await MonitorLoadHistoricalData(sessionId, fromIso, toIso);
+        if (!points || points.length === 0) {
+          notificationStore.add(t('monitor.noHistoricalData'), 'info');
+          return;
+        }
+        historicalResults[sessionId] = points;
+        historicalInfo[sessionId] = { aggregated: false, bucketSec: 0, count: points.length };
+        notificationStore.add(t('monitor.historicalLoaded', { values: { count: points.length } }), 'success');
       }
-      historicalResults[sessionId] = points;
-      historicalResults = historicalResults;
-      const t = get(_);
-      notificationStore.add(t('monitor.historicalLoaded', { values: { count: points.length } }), 'success');
     } catch (e) {
       console.warn('Failed to load historical data:', e);
+      notificationStore.add(t('monitor.historyFailed'), 'error');
     } finally {
+      historicalResults = historicalResults;
+      historicalBuckets = historicalBuckets;
+      historicalInfo = historicalInfo;
       loadingHistory[sessionId] = false;
       loadingHistory = loadingHistory;
     }
   }
 
-  // Build chart data from session results
-  function getChartData(session, mode) {
-    const targets = [...new Set(session.results.map(r => r.target))];
-    const colors = [
-      getCssVar('--accent-color'), getCssVar('--success-color'), getCssVar('--warning-color'),
-      '#e91e63', '#9c27b0', '#00bcd4', '#ff5722', '#795548',
-    ];
-
-    const datasets = targets.map((target, idx) => {
-      const points = session.results.filter(r => r.target === target);
-      return {
-        label: get(anonMode) ? anonymizeIp(target) : target,
-        data: points.map(p => ({
-          x: new Date(p.timestamp),
-          y: mode === 'delta' ? p.delta : mode === 'rate' ? p.rate : mode === 'latency' ? p.responseTimeMs : p.value,
-        })).filter(p => p.y !== null),
-        borderColor: colors[idx % colors.length],
-        backgroundColor: colors[idx % colors.length] + '33',
-        fill: false,
-        tension: 0.3,
-        pointRadius: 2,
-        borderWidth: 2,
-      };
-    });
-
-    return { datasets };
+  function clearHistorical(sessionId) {
+    historicalResults[sessionId] = null;
+    historicalBuckets[sessionId] = null;
+    historicalInfo[sessionId] = null;
+    historicalResults = historicalResults;
+    historicalBuckets = historicalBuckets;
+    historicalInfo = historicalInfo;
   }
 
-  // Build threshold line plugin for a session
-  function buildThresholdPlugin(session, mode) {
-    return {
-      id: 'thresholdLines_' + session.id,
-      afterDraw(chart) {
-        if (!session.thresholds || mode !== 'raw') return;
-        const { min, max } = session.thresholds;
-        const yScale = chart.scales.y;
-        const ctx = chart.ctx;
-        ctx.save();
-        ctx.setLineDash([6, 4]);
-        ctx.lineWidth = 1.5;
-
-        if (min !== null && min !== undefined) {
-          const yPos = yScale.getPixelForValue(Number(min));
-          if (yPos >= yScale.top && yPos <= yScale.bottom) {
-            ctx.strokeStyle = getCssVar('--warning-color');
-            ctx.beginPath();
-            ctx.moveTo(chart.chartArea.left, yPos);
-            ctx.lineTo(chart.chartArea.right, yPos);
-            ctx.stroke();
-            ctx.fillStyle = getCssVar('--warning-color');
-            ctx.font = '10px sans-serif';
-            ctx.fillText(`min: ${min}`, chart.chartArea.left + 4, yPos - 4);
-          }
-        }
-        if (max !== null && max !== undefined) {
-          const yPos = yScale.getPixelForValue(Number(max));
-          if (yPos >= yScale.top && yPos <= yScale.bottom) {
-            ctx.strokeStyle = getCssVar('--error-color');
-            ctx.beginPath();
-            ctx.moveTo(chart.chartArea.left, yPos);
-            ctx.lineTo(chart.chartArea.right, yPos);
-            ctx.stroke();
-            ctx.fillStyle = getCssVar('--error-color');
-            ctx.font = '10px sans-serif';
-            ctx.fillText(`max: ${max}`, chart.chartArea.left + 4, yPos - 4);
-          }
-        }
-        ctx.restore();
-      }
-    };
+  function toggleLatency(sessionId) {
+    showLatency[sessionId] = !showLatency[sessionId];
+    showLatency = showLatency;
   }
 
-  // Create a new Chart.js instance on a canvas
-  function createChart(canvas, data, mode, session) {
-    // Ensure canvas has actual dimensions (Chart.js needs them for responsive mode)
-    const container = canvas.parentElement;
-    if (!container || container.clientWidth === 0 || container.clientHeight === 0) {
-      console.warn('Chart container has no dimensions, deferring creation');
-      return null;
-    }
-
-    try {
-      return new Chart(canvas, {
-        type: 'line',
-        data,
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          animation: false,
-          scales: {
-            x: {
-              type: 'time',
-              time: { tooltipFormat: 'HH:mm:ss' },
-              title: { display: true, text: get(_)('monitor.tableTime'), color: getCssVar('--text-muted') },
-              ticks: { color: getCssVar('--text-muted') },
-              grid: { color: getCssVar('--bg-lighter-color') },
-            },
-            y: {
-              title: { display: true, text: get(_)('monitor.chartValue'), color: getCssVar('--text-muted') },
-              ticks: { color: getCssVar('--text-muted') },
-              grid: { color: getCssVar('--bg-lighter-color') },
-            }
-          },
-          plugins: {
-            legend: {
-              labels: { color: getCssVar('--text-light') },
-            }
-          }
-        },
-        plugins: [buildThresholdPlugin(session, mode)],
-      });
-    } catch (e) {
-      console.error('Failed to create chart:', e);
-      return null;
-    }
+  function toggleHistoryTable(sessionId) {
+    showHistoryTable[sessionId] = !showHistoryTable[sessionId];
+    showHistoryTable = showHistoryTable;
   }
 
-  // Pending chart creations deferred to next frame
-  let pendingChartCreations = new Set();
-
-  // Update or create charts after data changes
-  afterUpdate(() => {
-    for (const session of $pollingStore) {
-      // Skip chart creation/update if in table mode
-      if (displayModes[session.id] === 'table') {
-        if (charts[session.id]) {
-          charts[session.id].destroy();
-          delete charts[session.id];
-        }
-        continue;
-      }
-
-      const canvas = canvasElements[session.id];
-      if (!canvas) continue;
-
-      const mode = viewModes[session.id] || 'raw';
-      const data = getChartData(session, mode);
-
-      if (charts[session.id]) {
-        // Update existing chart — mutate datasets in place for reliable Chart.js update
-        try {
-          const chart = charts[session.id];
-          chart.data.datasets = data.datasets;
-          chart.options.scales.y.title.text = mode === 'rate' ? get(_)('monitor.chartRate') : mode === 'delta' ? get(_)('monitor.chartDelta') : mode === 'latency' ? get(_)('monitor.chartLatency') : get(_)('monitor.chartValue');
-          chart.update('none');
-        } catch (e) {
-          console.error('Failed to update chart:', e);
-          // Destroy broken chart so it gets recreated
-          charts[session.id].destroy();
-          delete charts[session.id];
-        }
-      } else if (!pendingChartCreations.has(session.id)) {
-        // Defer initial chart creation to next animation frame so the canvas
-        // has had a full layout pass and has real dimensions.
-        pendingChartCreations.add(session.id);
-        const sessionSnapshot = { ...session };
-        requestAnimationFrame(() => {
-          pendingChartCreations.delete(sessionSnapshot.id);
-          const c = canvasElements[sessionSnapshot.id];
-          if (!c || charts[sessionSnapshot.id] || displayModes[sessionSnapshot.id] === 'table') return;
-          const currentMode = viewModes[sessionSnapshot.id] || 'raw';
-          // Re-read latest session data from the store
-          const currentSessions = get(pollingStore);
-          const latestSession = currentSessions.find(s => s.id === sessionSnapshot.id);
-          const latestData = latestSession ? getChartData(latestSession, currentMode) : data;
-          charts[sessionSnapshot.id] = createChart(c, latestData, currentMode, latestSession || sessionSnapshot);
-        });
-      }
-    }
-
-    // Cleanup charts for removed sessions
-    const activeIds = new Set($pollingStore.map(s => s.id));
-    for (const id of Object.keys(charts)) {
-      if (!activeIds.has(id)) {
-        charts[id].destroy();
-        delete charts[id];
-      }
-    }
-  });
-
-  onDestroy(() => {
-    for (const chart of Object.values(charts)) {
-      chart.destroy();
-    }
-    charts = {};
-  });
 </script>
 
 <div class="panel">
   <div class="setup-form">
     <div class="form-group">
+      <label for="poll-name">{$_('monitor.nameLabel')}</label>
+      <input id="poll-name" type="text" bind:value={pollName} placeholder={$_('monitor.namePlaceholder')} />
+    </div>
+    <div class="form-group">
       <label for="poll-oid">{$_('monitor.oidLabel')}</label>
-      <input id="poll-oid" type="text" bind:value={pollOid} placeholder={$_('monitor.oidPlaceholder')} />
+      <div class="oid-rows">
+        {#each pollOids as oidEntry, i (i)}
+          <div class="oid-row">
+            <input
+              id={i === 0 ? 'poll-oid' : undefined}
+              type="text"
+              bind:value={pollOids[i]}
+              placeholder={$_('monitor.oidPlaceholder')}
+            />
+            <button
+              class="btn-mode threshold-btn"
+              class:on={hasThreshold(pollThresholds, i)}
+              on:click={() => (openThreshold = openThreshold === i ? null : i)}
+              title={$_('monitor.thresholdsHint')}
+            >
+              <Icon name="triangle-alert" size={12} /> {$_('monitor.thresholds')}
+            </button>
+            {#if pollOids.length > 1}
+              <button class="btn-icon" on:click={() => removeOid(i)} title={$_('common.remove')} aria-label={$_('common.remove')}>
+                <Icon name="trash-2" size={14} />
+              </button>
+            {/if}
+          </div>
+
+          {#if openThreshold === i}
+            {@const th = thresholdAt(pollThresholds, i)}
+            <div class="threshold-editor">
+              <div class="th-field">
+                <label for={'th-min-' + i}>{$_('monitor.minLabel')}</label>
+                <input id={'th-min-' + i} type="number" value={th.min} on:input={(e) => patchThreshold(i, { min: e.target.value })} />
+              </div>
+              <div class="th-field">
+                <label for={'th-max-' + i}>{$_('monitor.maxLabel')}</label>
+                <input id={'th-max-' + i} type="number" value={th.max} on:input={(e) => patchThreshold(i, { max: e.target.value })} />
+              </div>
+              <div class="th-field">
+                <label for={'th-for-' + i}>{$_('monitor.thresholdFor')}</label>
+                <input id={'th-for-' + i} type="number" min="0" step="5" value={th.forSeconds ?? 0} on:input={(e) => patchThreshold(i, { forSeconds: e.target.value })} />
+                <span class="th-unit">s</span>
+              </div>
+              <button class="btn-mode" on:click={() => patchThreshold(i, { min: '', max: '', forSeconds: 0 })}>{$_('common.clear')}</button>
+              <span class="th-explain">{$_('monitor.thresholdExplain')}</span>
+            </div>
+          {/if}
+        {/each}
+        <button class="btn-mode add-oid" on:click={addOid} disabled={pollOids.length >= MAX_OIDS}>
+          <Icon name="plus" size={13} /> {$_('monitor.addOid')}
+        </button>
+      </div>
+      <span class="field-hint">{$_('monitor.multiOidHint')}</span>
+    </div>
+    <div class="form-group targets-picker">
+      <label>{$_('monitor.targetsToWatch')}</label>
+      <div class="target-chips">
+        {#each availableTargets as t}
+          <button
+            class="target-chip"
+            class:on={!excludedTargets.has(t)}
+            on:click={() => toggleTarget(t)}
+            title={t}
+          >
+            {#if !excludedTargets.has(t)}<Icon name="check" size={12} />{/if}
+            {$anonMode ? anonymizeIp(t) : $targetLabels[t] || t}
+          </button>
+        {/each}
+        {#if availableTargets.length === 0}
+          <span class="field-hint">{$_('monitor.configureTarget')}</span>
+        {:else}
+          <button class="btn-mode" on:click={() => setAllTargets(excludedTargets.size > 0)}>
+            {excludedTargets.size > 0 ? $_('monitor.targetsAll') : $_('monitor.targetsNone')}
+          </button>
+        {/if}
+      </div>
     </div>
     <div class="form-row">
       <div class="form-group compact">
@@ -370,22 +503,7 @@
       {/if}
     </div>
     <div class="threshold-section">
-      <label class="toggle-label">
-        <input type="checkbox" bind:checked={thresholdEnabled} />
-        <span>{$_('monitor.enableThresholds')}</span>
-      </label>
-      {#if thresholdEnabled}
-        <div class="threshold-inputs">
-          <div class="form-group compact">
-            <label for="threshold-min">{$_('monitor.minLabel')}</label>
-            <input id="threshold-min" type="number" bind:value={thresholdMin} />
-          </div>
-          <div class="form-group compact">
-            <label for="threshold-max">{$_('monitor.maxLabel')}</label>
-            <input id="threshold-max" type="number" bind:value={thresholdMax} />
-          </div>
-        </div>
-        <div class="notification-options">
+      <div class="notification-options">
           <label class="toggle-label">
             <input
               type="checkbox"
@@ -411,8 +529,7 @@
             />
             <span>{$_('monitor.alertSound')}</span>
           </label>
-        </div>
-      {/if}
+      </div>
     </div>
   </div>
 
@@ -427,30 +544,65 @@
         <div class="session-card">
           <div class="session-header">
             <div class="session-info">
-              <span class="session-oid">{session.oid}</span>
+              <button
+                class="collapse-btn"
+                on:click={() => toggleCollapsed(session.id)}
+                title={collapsed[session.id] ? $_('monitor.expandSession') : $_('monitor.collapseSession')}
+                aria-expanded={!collapsed[session.id]}
+              >
+                <Icon name={collapsed[session.id] ? 'chevron-right' : 'chevron-down'} size={14} />
+              </button>
+              {#if session.name}
+                <span class="session-name">{session.name}</span>
+                <span class="session-oid subtle" title={(session.oids || [session.oid]).join('\n')}>
+                  {(session.oids && session.oids.length ? session.oids : [session.oid])
+                    .map((o) => oidName(o, $mibStore.tree))
+                    .join(', ')}
+                </span>
+              {:else}
+                <span class="session-oid" title={(session.oids || [session.oid]).join('\n')}>
+                  {(session.oids && session.oids.length ? session.oids : [session.oid])
+                    .map((o) => oidName(o, $mibStore.tree))
+                    .join(', ')}
+                </span>
+              {/if}
               <button class="btn-copy-small" on:click|stopPropagation={() => copyToClipboard(session.oid, 'OID')} title="Copy OID"><Icon name="copy" size={13} /></button>
               <span class="session-status" class:running={session.running}>
                 {session.running ? $_('monitor.running') : $_('monitor.stopped')}
               </span>
               <span class="session-meta">{session.snmpVersion} / {session.targets.length} target(s) / {session.interval/1000}s</span>
               <span class="session-meta">{session.results.length} data point(s)</span>
-              {#if session.thresholds}
-                <span class="threshold-badge" title="Thresholds: min={session.thresholds.min ?? 'none'}, max={session.thresholds.max ?? 'none'}">
-                  {$_('monitor.thresholdsBadge')}
+              {#if Object.keys(session.thresholds || {}).length}
+                <span class="threshold-badge" title={describeThresholds(session, $mibStore.tree)}>
+                  {$_('monitor.thresholdsBadge')} ({Object.keys(session.thresholds).length})
                 </span>
               {/if}
             </div>
             <div class="session-actions">
-              <div class="display-mode-toggle">
+              <div class="display-mode-toggle" class:hidden-controls={collapsed[session.id]}>
                 <button class="btn-mode" class:active={displayModes[session.id] !== 'table'} on:click={() => setDisplayMode(session.id, 'graph')}>{$_('monitor.graph')}</button>
                 <button class="btn-mode" class:active={displayModes[session.id] === 'table'} on:click={() => setDisplayMode(session.id, 'table')}>{$_('monitor.table')}</button>
               </div>
-              {#if displayModes[session.id] !== 'table'}
+              {#if displayModes[session.id] !== 'table' && !collapsed[session.id]}
                 <div class="view-mode-toggle">
                   <button class="btn-mode" class:active={viewModes[session.id] === 'raw'} on:click={() => setViewMode(session.id, 'raw')}>{$_('monitor.raw')}</button>
                   <button class="btn-mode" class:active={viewModes[session.id] === 'delta'} on:click={() => setViewMode(session.id, 'delta')}>{$_('monitor.delta')}</button>
                   <button class="btn-mode" class:active={viewModes[session.id] === 'rate'} on:click={() => setViewMode(session.id, 'rate')}>{$_('monitor.rate')}</button>
                   <button class="btn-mode" class:active={viewModes[session.id] === 'latency'} on:click={() => setViewMode(session.id, 'latency')}>{$_('monitor.latency')}</button>
+                </div>
+                {#if (session.oids || []).length > 1}
+                  <div class="mode-toggle">
+                    <button class="btn-mode" class:active={(layoutModes[session.id] || 'separate') === 'separate'} on:click={() => setLayout(session.id, 'separate')}>{$_('monitor.layoutSeparate')}</button>
+                    <button class="btn-mode" class:active={layoutModes[session.id] === 'stacked'} on:click={() => setLayout(session.id, 'stacked')} title={$_('monitor.layoutStackedHint')}>{$_('monitor.layoutStacked')}</button>
+                  </div>
+                {/if}
+                <div class="mode-toggle">
+                  <button class="btn-mode" on:click={() => (channelsFor = session.id)} title={$_('monitor.channelsHintShort')}>
+                    <Icon name="activity" size={12} /> {$_('monitor.channels')}
+                  </button>
+                </div>
+                <div class="mode-toggle">
+                  <button class="btn-mode" class:active={showLatency[session.id]} on:click={() => toggleLatency(session.id)} title={$_('monitor.latencyCompanionHint')}>+ {$_('monitor.latency')}</button>
                 </div>
               {/if}
               {#if session.running}
@@ -464,6 +616,8 @@
               </button>
             </div>
           </div>
+
+          {#if !collapsed[session.id]}
           {#if showStats[session.id] && sessionStats[session.id]}
             <div class="stats-panel">
               <div class="stats-grid">
@@ -506,40 +660,80 @@
               {loadingHistory[session.id] ? '...' : $_('monitor.loadHistory')}
             </button>
           </div>
-          {#if historicalResults[session.id] && historicalResults[session.id].length > 0}
-            <div class="table-container">
-              <div class="historical-header">{$_('monitor.historicalData')} ({historicalResults[session.id].length} points)</div>
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>{$_('monitor.tableTime')}</th>
-                    <th>{$_('monitor.tableTarget')}</th>
-                    <th>{$_('monitor.tableValue')}</th>
-                    <th>{$_('monitor.tableDelta')}</th>
-                    <th>{$_('monitor.tableRate')}</th>
-                    <th>{$_('monitor.tableLatency')}</th>
-                    <th>{$_('monitor.tableError')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {#each historicalResults[session.id] as point}
-                    <tr class:error-row={point.error}>
-                      <td class="mono">{formatTimeShort(point.timestamp)}</td>
-                      <td>{$anonMode ? anonymizeIp(point.target) : point.target}</td>
-                      <td class="mono">
-                        {point.value !== null ? point.value : '-'}
-                        {#if point.value !== null}
-                          <button class="btn-copy-small" on:click={() => copyToClipboard(String(point.value), $_('monitor.tableValue'))} title={$_('monitor.tableValue')}><Icon name="copy" size={13} /></button>
-                        {/if}
-                      </td>
-                      <td class="mono">{point.delta !== null ? point.delta : '-'}</td>
-                      <td class="mono">{point.rate !== null ? point.rate.toFixed(2) : '-'}</td>
-                      <td class="mono">{point.responseTimeMs}</td>
-                      <td class="error-cell">{point.error || ''}</td>
-                    </tr>
-                  {/each}
-                </tbody>
-              </table>
+          {#if historicalInfo[session.id]}
+            <div class="historical-block">
+              <div class="historical-header">
+                <span>
+                  {$_('monitor.historicalData')}
+                  {#if historicalInfo[session.id].aggregated}
+                    — {$_('monitor.aggregatedBy', { values: { bucket: historicalInfo[session.id].bucketSec } })}
+                  {/if}
+                  ({historicalInfo[session.id].count})
+                </span>
+                <span class="hist-actions">
+                  <button class="btn-mode" on:click={() => toggleHistoryTable(session.id)}>
+                    {showHistoryTable[session.id] ? $_('monitor.hideTable') : $_('monitor.showTable')}
+                  </button>
+                  <button class="btn-mode" on:click={() => clearHistorical(session.id)}>{$_('common.clear')}</button>
+                </span>
+              </div>
+
+              {#each (session.oids && session.oids.length ? session.oids : [session.oid]) as sessionOid}
+                {#if (session.oids || []).length > 1}
+                  <div class="oid-facet-label" title={oidTooltip(sessionOid, $mibStore.tree)}>
+                    <Icon name="route" size={12} />
+                    {oidName(sessionOid, $mibStore.tree)}
+                    <span class="oid-raw">{sessionOid}</span>
+                  </div>
+                {/if}
+                <MonitorChart
+                  {session}
+                  oid={sessionOid}
+                  mode={viewModes[session.id] || 'raw'}
+                  points={historicalResults[session.id] || null}
+                  buckets={historicalBuckets[session.id] || null}
+                  theme={resolvedTheme}
+                  syncGroup={'hist-' + session.id}
+                  options={chartOpts['hist-' + session.id] || {}}
+                  on:options={(e) => saveChartOpts('hist-' + session.id, e.detail)}
+                />
+              {/each}
+
+              {#if showHistoryTable[session.id] && historicalResults[session.id]}
+                <div class="table-container">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>{$_('monitor.tableTime')}</th>
+                        <th>{$_('monitor.tableTarget')}</th>
+                        <th>{$_('monitor.tableValue')}</th>
+                        <th>{$_('monitor.tableDelta')}</th>
+                        <th>{$_('monitor.tableRate')}</th>
+                        <th>{$_('monitor.tableLatency')}</th>
+                        <th>{$_('monitor.tableError')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {#each historicalResults[session.id] as point}
+                        <tr class:error-row={point.error}>
+                          <td class="mono">{formatTimeShort(point.timestamp)}</td>
+                          <td title={$anonMode ? anonymizeIp(point.target) : point.target}>{$anonMode ? anonymizeIp(point.target) : $targetLabels[point.target] || point.target}</td>
+                          <td class="mono">
+                            {point.value !== null ? point.value : '-'}
+                            {#if point.value !== null}
+                              <button class="btn-copy-small" on:click={() => copyToClipboard(String(point.value), $_('monitor.tableValue'))} title={$_('monitor.tableValue')}><Icon name="copy" size={13} /></button>
+                            {/if}
+                          </td>
+                          <td class="mono">{point.delta !== null ? point.delta : '-'}</td>
+                          <td class="mono">{point.rate !== null ? point.rate.toFixed(2) : '-'}</td>
+                          <td class="mono">{point.responseTimeMs}</td>
+                          <td class="error-cell">{point.error || ''}</td>
+                        </tr>
+                      {/each}
+                    </tbody>
+                  </table>
+                </div>
+              {/if}
             </div>
           {/if}
           {#if displayModes[session.id] === 'table'}
@@ -560,7 +754,7 @@
                   {#each [...session.results].reverse().slice(0, 100) as point}
                     <tr class:error-row={point.error}>
                       <td class="mono">{formatTimeShort(point.timestamp)}</td>
-                      <td>{$anonMode ? anonymizeIp(point.target) : point.target}</td>
+                      <td title={$anonMode ? anonymizeIp(point.target) : point.target}>{$anonMode ? anonymizeIp(point.target) : $targetLabels[point.target] || point.target}</td>
                       <td class="mono">
                         {point.value !== null ? point.value : '-'}
                         {#if point.value !== null}
@@ -580,15 +774,97 @@
               {/if}
             </div>
           {:else}
-            <div class="chart-container">
-              <canvas bind:this={canvasElements[session.id]}></canvas>
-            </div>
+            {#if (session.oids || []).length > 1 && layoutModes[session.id] === 'stacked'}
+              <MetricTiles
+                {session}
+                oids={session.oids}
+                layout="stacked"
+                mode={viewModes[session.id] || 'raw'}
+                theme={resolvedTheme}
+                hidden={hiddenSeries[session.id] || []}
+                stats={statsFor(statsSel, session.id)}
+                scope={scopeFor(statsScope, session.id)}
+                range={visibleRanges[session.id] || null}
+              />
+              <MonitorChart
+                {session}
+                oids={session.oids}
+                mode={viewModes[session.id] || 'raw'}
+                theme={resolvedTheme}
+                hidden={hiddenSeries[session.id] || []}
+                syncGroup={'live-' + session.id}
+                options={chartOpts[session.id] || {}}
+                on:options={(e) => saveChartOpts(session.id, e.detail)}
+                on:range={(e) => noteRange(session.id, e.detail)}
+              />
+            {:else}
+              <MetricTiles
+                {session}
+                oids={session.oids && session.oids.length ? session.oids : [session.oid]}
+                layout="separate"
+                mode={viewModes[session.id] || 'raw'}
+                theme={resolvedTheme}
+                hidden={hiddenSeries[session.id] || []}
+                stats={statsFor(statsSel, session.id)}
+                scope={scopeFor(statsScope, session.id)}
+                range={visibleRanges[session.id] || null}
+              />
+              {#each (session.oids && session.oids.length ? session.oids : [session.oid]) as sessionOid}
+                {#if (session.oids || []).length > 1}
+                  <div class="oid-facet-label" title={oidTooltip(sessionOid, $mibStore.tree)}>
+                    <Icon name="route" size={12} />
+                    {oidName(sessionOid, $mibStore.tree)}
+                    <span class="oid-raw">{sessionOid}</span>
+                  </div>
+                {/if}
+                <MonitorChart
+                  {session}
+                  oid={sessionOid}
+                  mode={viewModes[session.id] || 'raw'}
+                  theme={resolvedTheme}
+                  hidden={hiddenSeries[session.id] || []}
+                  syncGroup={'live-' + session.id}
+                  options={chartOpts[session.id + '|' + sessionOid] || chartOpts[session.id] || {}}
+                  on:options={(e) => saveChartOpts(session.id + '|' + sessionOid, e.detail)}
+                  on:range={(e) => noteRange(session.id, e.detail)}
+                />
+              {/each}
+            {/if}
+            {#if showLatency[session.id] && (viewModes[session.id] || 'raw') !== 'latency'}
+              <div class="companion-label">{$_('monitor.latencyCompanion')}</div>
+              <MonitorChart
+                {session}
+                mode="latency"
+                theme={resolvedTheme}
+                syncGroup={'live-' + session.id}
+              />
+            {/if}
+            <AlertTimeline {session} />
+          {/if}
           {/if}
         </div>
       {/each}
     </div>
   {/if}
 </div>
+
+{#if channelsFor}
+  {@const cs = $pollingStore.find((s) => s.id === channelsFor)}
+  {#if cs}
+    <ChannelsModal
+      session={cs}
+      hidden={hiddenSeries[cs.id] || []}
+      layout={layoutModes[cs.id] || 'separate'}
+      theme={resolvedTheme}
+      stats={statsFor(statsSel, cs.id)}
+      scope={scopeFor(statsScope, cs.id)}
+      on:change={(e) => setHidden(cs.id, e.detail)}
+      on:stats={(e) => setStats(cs.id, e.detail)}
+      on:scope={(e) => setScope(cs.id, e.detail)}
+      on:close={() => (channelsFor = null)}
+    />
+  {/if}
+{/if}
 
 <style>
   .setup-form {
@@ -707,17 +983,7 @@
   .btn-mode:hover { background-color: var(--hover-overlay); color: var(--text-color); }
   .btn-mode.active { background-color: var(--accent-color); color: white; }
 
-  .chart-container {
-    height: 250px;
-    padding: 10px 15px;
-    position: relative;
-  }
-
-  .chart-container canvas {
-    display: block;
-    width: 100% !important;
-    height: 100% !important;
-  }
+  /* Chart styles now live in monitor/MonitorChart.svelte */
 
   /* Threshold UI */
   .threshold-section {
@@ -740,20 +1006,6 @@
     height: 16px;
     accent-color: var(--accent-color);
     cursor: pointer;
-  }
-
-  .threshold-inputs {
-    display: flex;
-    gap: 15px;
-    margin-top: 8px;
-  }
-
-  .threshold-inputs .form-group {
-    flex: 1;
-  }
-
-  .threshold-inputs input[type="number"] {
-    width: 100px;
   }
 
   .threshold-badge {
@@ -900,7 +1152,191 @@
     color: var(--text-muted);
   }
 
+  .historical-block {
+    margin: 10px 15px 0;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .hist-actions {
+    display: inline-flex;
+    gap: 6px;
+  }
+
+  .targets-picker {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .target-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .target-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    font-size: 0.8em;
+    background-color: var(--bg-lighter-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+
+  .target-chip.on {
+    color: var(--accent-color);
+    border-color: var(--accent-border);
+    background-color: var(--accent-subtle);
+    font-weight: 600;
+  }
+
+  .threshold-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+  }
+
+  .threshold-btn.on {
+    color: var(--error-color);
+    border-color: var(--error-color);
+  }
+
+  .threshold-editor {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 2px 0 6px 12px;
+    padding: 8px 12px;
+    border-left: 2px solid var(--error-color);
+    background-color: var(--bg-color);
+    border-radius: 0 4px 4px 0;
+  }
+
+  .th-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .th-field label {
+    font-size: 0.78em;
+    color: var(--text-muted);
+    min-width: auto;
+  }
+
+  .th-field input {
+    width: 90px;
+    padding: 3px 6px;
+  }
+
+  .th-unit {
+    font-size: 0.78em;
+    color: var(--text-muted);
+  }
+
+  .th-explain {
+    font-size: 0.72em;
+    color: var(--text-muted);
+    flex-basis: 100%;
+  }
+
+  .oid-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+  }
+
+  .oid-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .oid-row input {
+    flex: 1;
+  }
+
+  .add-oid {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .field-hint {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.75em;
+    color: var(--text-muted);
+  }
+
+  .collapse-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    padding: 2px;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+
+  .collapse-btn:hover {
+    color: var(--text-color);
+  }
+
+  .hidden-controls {
+    display: none;
+  }
+
+  .session-name {
+    font-weight: 600;
+    color: var(--text-color);
+  }
+
+  .session-oid.subtle {
+    font-weight: 400;
+    opacity: 0.75;
+    font-size: 0.85em;
+  }
+
+  .oid-facet-label .oid-raw {
+    color: var(--text-muted);
+    font-weight: 400;
+    font-size: 0.92em;
+  }
+
+  .oid-facet-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 10px 15px 0;
+    font-family: 'Courier New', monospace;
+    font-size: 0.78em;
+    color: var(--oid-color);
+    font-weight: 600;
+  }
+
+  .companion-label {
+    padding: 8px 15px 0;
+    font-size: 0.78em;
+    color: var(--text-muted);
+  }
+
   .historical-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
     font-size: 0.85em;
     font-weight: 600;
     color: var(--text-muted);

@@ -8,7 +8,8 @@
       "traps": "SNMP Trap",
       "history": "历史记录",
       "monitor": "监控",
-      "network": "网络"
+      "network": "网络",
+      "events": "事件"
     },
     "status": {
       "targetsTitle": "已配置的目标数量",
@@ -34,7 +35,6 @@
       "allSkipped": "所有 {count} 个文件已存在 — 无需导入"
     }
   },
-
   "common": {
     "previous": "上一页",
     "next": "下一页",
@@ -72,9 +72,9 @@
     "results": "结果",
     "copyOid": "复制 OID",
     "copyValue": "复制值",
-    "copyName": "复制名称"
+    "copyName": "复制名称",
+    "edit": "编辑"
   },
-
   "operations": {
     "setConfirm": {
       "title": "确认 SET 操作",
@@ -126,7 +126,6 @@
     "walkOidPlaceholder": "1.3.6.1.2.1",
     "getBulkOidPlaceholder": "1.3.6.1.2.1.2.2.1"
   },
-
   "results": {
     "copyForWord": "复制到 Word",
     "copyForWordHint": "以 HTML 复制表格 — 可粘贴到 Word、Google 文档或 Outlook 为表格",
@@ -162,7 +161,6 @@
     "missing": "缺失",
     "exportComparison": "导出 CSV"
   },
-
   "savedQueries": {
     "title": "已保存的查询",
     "hide": "隐藏",
@@ -172,7 +170,6 @@
     "saved": "查询 \"{name}\" 已保存",
     "loaded": "查询 \"{name}\" 已加载"
   },
-
   "recentHistory": {
     "viewAll": "查看历史",
     "clickToView": "点击在历史记录标签中打开此条目",
@@ -181,7 +178,6 @@
     "empty": "暂无历史记录。执行操作后将在此显示。",
     "nResults": "{count} 条结果"
   },
-
   "mib": {
     "searchPlaceholder": "按名称或 OID 筛选...（按 / 聚焦）",
     "expandAll": "全部展开",
@@ -223,7 +219,6 @@
       "objectIs": "此对象为 {access}"
     }
   },
-
   "nodeDetails": {
     "title": "节点详情",
     "expand": "展开",
@@ -240,7 +235,6 @@
     "description": "描述：",
     "nNodes": "{count} 个节点"
   },
-
   "favorites": {
     "title": "收藏 ({count})",
     "clearConfirm": "清除所有收藏？",
@@ -248,7 +242,6 @@
     "clearAll": "清除所有收藏",
     "removeFrom": "从收藏中移除"
   },
-
   "keyboard": {
     "title": "键盘快捷键",
     "previousNode": "上一个节点",
@@ -261,7 +254,6 @@
     "focusSearch": "聚焦搜索框",
     "toggleHelp": "切换帮助显示"
   },
-
   "history": {
     "badgeError": "失败",
     "badgeNoResult": "无结果",
@@ -315,7 +307,6 @@
     "targets": "目标",
     "error": "错误"
   },
-
   "traps": {
     "listeningInfo": "正在端口 {port} 上监听 Trap（可在设置中配置）。",
     "startListening": "开始监听",
@@ -366,8 +357,39 @@
     "snmpv1Trap": "SNMPv1 Trap",
     "snmpv2v3Inform": "SNMPv2/v3 Inform"
   },
-
   "monitor": {
+    "live": "实时",
+    "liveHint": "重新跟随最新采样（缩放或平移会暂停跟随）",
+    "timebaseAll": "全部",
+    "browsing": "正在浏览缓冲区 — 点击“实时”恢复",
+    "multiOidHint": "同时监控多个 OID — 最多 8 条曲线，可分离或叠加显示。",
+    "aggregatedBy": "按 {bucket} 秒聚合",
+    "alertAbove": "高于",
+    "alertBelow": "低于",
+    "alertsMore": "另有 {count} 条告警",
+    "alertsTitle": "阈值告警（{count}）",
+    "hideTable": "隐藏表格",
+    "showTable": "显示表格",
+    "historicalAggregated": "已加载 {count} 个聚合点（{bucket} 秒窗口）。",
+    "historyFailed": "加载历史数据失败。",
+    "invalidRange": "结束时间必须晚于开始时间。",
+    "latencyCompanion": "响应时间（相同时间窗口）",
+    "latencyCompanionHint": "以第二个图表显示响应时间，使用相同的时间窗口",
+    "resetZoom": "重置缩放",
+    "scaleLinear": "线性",
+    "scaleLog": "对数",
+    "zeroBased": "从零开始",
+    "zeroBasedHint": "Y 轴从零开始，而非自动缩放",
+    "fullscreen": "全屏",
+    "csvVisible": "导出可见区域为 CSV",
+    "zoomHint": "滚轮或拖拽缩放 · Shift+拖拽平移",
+    "seriesCapped": "另有 {count} 个目标未绘制（最多 {max}）— 请查看表格视图",
+    "resizeChart": "调整图表大小",
+    "pngExported": "图表已导出为 PNG。",
+    "csvExported": "可见区域已导出为 CSV。",
+    "tileDown": "无响应",
+    "tileOutOfRange": "超出范围",
+    "tileStable": "稳定",
     "oidLabel": "OID：",
     "oidPlaceholder": "1.3.6.1.2.1.1.3.0 (sysUpTime)",
     "versionLabel": "版本：",
@@ -381,7 +403,7 @@
     "stopped": "已停止",
     "thresholdsBadge": "阈值",
     "empty": "没有活跃的轮询会话。",
-    "emptyHint": "在上方输入 OID 并点击\u201c开始轮询\u201d以开始监控。",
+    "emptyHint": "在上方输入 OID 并点击“开始轮询”以开始监控。",
     "graph": "图表",
     "table": "表格",
     "raw": "原始",
@@ -424,9 +446,48 @@
     "statsAvgLatency": "平均延迟：",
     "statsErrorCount": "错误数：",
     "historicalLoaded": "已加载 {count} 个历史数据点",
-    "noHistoricalData": "所选时间范围内未找到数据"
+    "noHistoricalData": "所选时间范围内未找到数据",
+    "addOid": "添加 OID",
+    "layoutSeparate": "分离",
+    "layoutStacked": "叠加",
+    "layoutStackedHint": "单图表，每个 OID 一个坐标轴（左/右，与曲线同色）。形状可比较，高度不可比较。",
+    "targetsToWatch": "要监控的目标：",
+    "targetsAll": "全选",
+    "targetsNone": "全部取消",
+    "noTargetSelected": "请至少选择一个要监控的目标。",
+    "channels": "测量项",
+    "channelsTitle": "显示的测量项",
+    "channelsHint": "选择要绘制的曲线 — 已显示 {visible}/{total}。隐藏某条曲线不会改变其他曲线的颜色。",
+    "channelsHintShort": "选择要显示的测量项",
+    "channelAll": "全部显示",
+    "channelOnly": "仅此",
+    "channelOnlyHint": "仅显示此测量项",
+    "channelCapped": "超出 8 条曲线上限",
+    "statsTitle": "每个卡片的统计量",
+    "statsScope": "计算范围：",
+    "statsHint": "选择每个卡片显示的内容。第一项为大号数字。",
+    "scopeWindow": "可见窗口",
+    "scopeAllData": "全部数据",
+    "stat": {
+      "last": "最新",
+      "avg": "平均",
+      "min": "最小",
+      "max": "最大",
+      "p95": "p95",
+      "stddev": "标准差",
+      "count": "样本数",
+      "errors": "错误数"
+    },
+    "nameLabel": "名称：",
+    "namePlaceholder": "例如：WAN 流量 — 巴黎（可选）",
+    "collapseSession": "折叠此监控",
+    "expandSession": "展开此监控",
+    "thresholds": "阈值",
+    "thresholdsHint": "此 OID 的告警区间",
+    "thresholdFor": "持续",
+    "sustainedFor": "已持续 {seconds} 秒",
+    "thresholdExplain": "仅当数值在整个时长内持续超出区间时才告警 — 单个抖动样本不算故障。"
   },
-
   "discovery": {
     "cidrLabel": "CIDR / IP：",
     "cidrPlaceholder": "192.168.1.0/24 或 10.0.0.1",
@@ -438,7 +499,7 @@
     "addAllReachable": "将所有可达设备添加到目标",
     "addToTargets": "+ 目标",
     "empty": "无扫描结果。",
-    "emptyHint": "输入 CIDR 范围（例如 192.168.1.0/24）并点击\u201c扫描\u201d以发现 SNMP 设备。",
+    "emptyHint": "输入 CIDR 范围（例如 192.168.1.0/24）并点击“扫描”以发现 SNMP 设备。",
     "scanComplete": "扫描完成：共 {total} 个 IP 中发现 {count} 台设备",
     "scanFailed": "扫描失败：{error}",
     "addedToTargets": "{ip} 已添加到目标",
@@ -453,7 +514,6 @@
     "reachable": "可达",
     "unreachable": "不可达"
   },
-
   "targets": {
     "title": "目标（{count} 个活跃）",
     "testAll": "测试全部",
@@ -461,7 +521,7 @@
     "addButton": "+ 添加",
     "addressPlaceholder": "IP 地址或主机名",
     "labelPlaceholder": "标签（可选）",
-    "empty": "未配置目标。点击\u201c+ 添加\u201d以开始。",
+    "empty": "未配置目标。点击“+ 添加”以开始。",
     "connectionOk": "{address}：连接正常",
     "connectionFailed": "{address}：{error}",
     "testTooltip": "测试此目标",
@@ -497,7 +557,6 @@
       "badge": "已自定义 SNMP 参数"
     }
   },
-
   "update": {
     "available": "SnmpLens {version} 可用",
     "currentVersion": "当前版本：{version}",
@@ -515,7 +574,9 @@
     "tabs": {
       "general": "常规",
       "mibs": "MIB",
-      "snmp": "SNMP"
+      "snmp": "SNMP",
+      "notify": "通知",
+      "service": "服务"
     },
     "general": {
       "updatesTitle": "更新",
@@ -588,7 +649,6 @@
       "testError": "错误：{error}"
     }
   },
-
   "diff": {
     "title": "Diff 结果",
     "added": "+{count} 新增",
@@ -603,7 +663,6 @@
     "valueBHeader": "值 B",
     "rowsShown": "显示 {visible} / {total} 行"
   },
-
   "tooltip": {
     "oid": "OID：",
     "type": "类型：",
@@ -613,12 +672,10 @@
     "description": "描述：",
     "na": "不适用"
   },
-
   "clipboard": {
     "copied": "{label} 已复制到剪贴板",
     "copyError": "复制到剪贴板时出错"
   },
-
   "network": {
     "discovery": "发现",
     "ping": "Ping",
@@ -644,7 +701,6 @@
     "hopRtt2": "RTT 2",
     "hopRtt3": "RTT 3"
   },
-
   "debug": {
     "title": "SNMP 调试",
     "enable": "启用",
@@ -653,5 +709,141 @@
     "clear": "清除",
     "empty": "没有调试条目。启用调试模式并执行 SNMP 操作。",
     "entries": "条目"
+  },
+  "events": {
+    "title": "事件",
+    "empty": "暂无事件。Trap 与阈值告警将显示在这里。",
+    "searchPlaceholder": "搜索摘要、来源或 OID...",
+    "unackedOnly": "仅未确认",
+    "unackedCount": "{count} 条未确认",
+    "matching": "{count} 条匹配",
+    "ack": "确认",
+    "acked": "已确认",
+    "ackAll": "全部确认",
+    "selectedCount": "已选 {count} 条",
+    "loadMore": "加载更多",
+    "clearAll": "清空",
+    "clearConfirm": "删除日志中的所有事件？此操作不可撤销。",
+    "cleared": "日志已清空。",
+    "exported": "事件已导出为 CSV。",
+    "viewPayload": "查看详情",
+    "payloadTitle": "事件详情",
+    "category": {
+      "trap": "Trap",
+      "threshold": "阈值",
+      "reachability": "可达性",
+      "system": "系统",
+      "operation": "操作"
+    },
+    "severity": {
+      "critical": "严重",
+      "major": "重大",
+      "minor": "次要",
+      "warning": "警告",
+      "info": "信息"
+    },
+    "kind": {
+      "trap.received": "{pduType} from {source} ({version}, {varbinds} varbinds)",
+      "trap.inform": "Inform from {source} ({version}, {varbinds} varbinds)",
+      "threshold.opened": "{oid} on {target} is {kind} {bound} (held {heldSeconds}s)",
+      "threshold.resolved": "{oid} on {target} is back within range",
+      "reachability.down": "{target} stopped responding",
+      "reachability.up": "{target} is responding again",
+      "system.listener_started": "Trap listener started on port {port}",
+      "system.listener_error": "Trap listener error: {error}",
+      "system.poll_failed": "Polling {target} failed: {error}",
+      "system.sink_failed": "Delivery to {sink} failed: {error}",
+      "system.sink_dead_letter": "Delivery to {sink} given up after {attempts} attempts",
+      "system.mib_load_failed": "MIB {file} failed to load",
+      "system.update_available": "Version {version} is available",
+      "system.retention_ran": "Retention removed {count} events",
+      "operation.failed": "{operation} on {target} failed",
+      "system.info": "服务通知"
+    }
+  },
+  "notify": {
+    "sinksTitle": "目标",
+    "sinksHint": "Where alerts are sent. A destination is reusable across rules.",
+    "noSinks": "No destination yet. Add a syslog collector, a webhook or an email server.",
+    "routesTitle": "路由规则",
+    "routesHint": "Which events go to which destination. Rules are evaluated by ascending priority.",
+    "noRoutes": "No rule yet — nothing is forwarded.",
+    "sinkFirst": "Add a destination first.",
+    "addRoute": "添加规则",
+    "routeEditor": "Routing rule",
+    "sinkEditor": "Destination ({kind})",
+    "name": "名称",
+    "nameRequired": "A name is required.",
+    "enabled": "已启用",
+    "sinkSaved": "Destination saved.",
+    "routeSaved": "Rule saved.",
+    "test": "测试",
+    "testSent": "Test notification sent.",
+    "testFailed": "Test failed: {error}",
+    "address": "Address (host:port)",
+    "protocol": "Protocol",
+    "facility": "Facility",
+    "udpNote": "UDP delivery cannot be confirmed: the app reports it as sent, never as delivered.",
+    "token": "Bearer token",
+    "webhookNote": "Honours HTTP_PROXY, and is the escape hatch for logic the rules cannot express.",
+    "host": "SMTP 服务器",
+    "port": "端口",
+    "encryption": "加密",
+    "authMethod": "认证方式",
+    "username": "用户名",
+    "password": "密码",
+    "to": "收件人",
+    "none": "无",
+    "redact": "Mask target addresses",
+    "redacted": "已脱敏",
+    "redactHint": "Anonymous Mode only masks the screen and does not persist, so outbound masking is set per destination.",
+    "matchCategories": "类别",
+    "emptyMeansAll": "Leave empty to match everything.",
+    "minSeverity": "最低严重级别",
+    "any": "全部",
+    "priority": "优先级",
+    "sources": "来源",
+    "sourcesHint": "CIDR (10.0.0.0/8) or glob (sw-*), separated by spaces.",
+    "oidPrefix": "OID prefix",
+    "quietHours": "静默时段",
+    "allCategories": "all categories",
+    "quietHoursHint": "Inside this window the rule does not deliver. May wrap past midnight.",
+    "deliverTo": "发送到",
+    "stopAfter": "Stop after this rule",
+    "stops": "停止",
+    "stopHint": "Stop evaluating further rules when this one matches.",
+    "secretOnFile": "已保存 — 留空则保持不变",
+    "secretSet": "已设置凭据",
+    "secretCleared": "凭据已删除。",
+    "clearSecret": "删除已保存的凭据",
+    "secretHint": "存储在数据库之外，保护方式：{backend}"
+  },
+  "tray": {
+    "show": "打开 SnmpLens",
+    "quit": "退出"
+  },
+  "service": {
+    "saved": "服务设置已保存。",
+    "backgroundTitle": "后台运行",
+    "backgroundHint": "窗口关闭后继续轮询、监听 Trap 并发送通知。这些设置在窗口存在之前就要读取，因此单独保存，不与常规偏好设置放在一起。",
+    "runInBackground": "关闭窗口后保留在系统托盘中运行",
+    "noTray": "此桌面环境（{platform}）未提供系统托盘，因此关闭窗口仍会退出 SnmpLens。重新启动应用会将正在运行的实例带到前台。",
+    "startHidden": "启动时最小化到托盘",
+    "startHiddenHint": "适用于开机自启：SnmpLens 无需打开窗口即可开始工作。",
+    "unattendedTitle": "无人值守启动",
+    "unattendedHint": "无人看管时，SnmpLens 启动后应自行完成的操作。",
+    "autoResume": "恢复退出时仍在运行的监控会话",
+    "autoStartTraps": "启动时开启 Trap 监听器",
+    "trapPort": "Trap 端口",
+    "trapPortHint": "低于 1024 的端口通常需要提升权限。",
+    "stateTitle": "当前状态",
+    "stateTray": "系统托盘：",
+    "stateTraps": "Trap 监听器：",
+    "active": "已启用",
+    "inactive": "未启用",
+    "restartNote": "最小化启动和 Trap 端口将在下次启动时生效。",
+    "auditTitle": "审计",
+    "auditHint": "SET 是唯一会更改设备的 SNMP 操作，因此被拒绝的 SET 值得留下记录。",
+    "auditFailedSets": "记录被拒绝的 SNMP SET 操作"
   }
 }

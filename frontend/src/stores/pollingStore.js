@@ -1,252 +1,215 @@
 import { writable, get } from 'svelte/store';
 import { _ } from 'svelte-i18n';
-import { SnmpGet, MonitorCreateSession, MonitorSaveDataPoints, MonitorLoadSessions, MonitorLoadSessionData, MonitorDeleteSession, MonitorUpdateSession } from '../../wailsjs/go/main/App';
+import {
+  MonitorCreateSession,
+  MonitorStart,
+  MonitorStop,
+  MonitorRunning,
+  MonitorSaveDataPoints,
+  MonitorLoadSessions,
+  MonitorLoadSessionData,
+  MonitorDeleteSession,
+} from '../../wailsjs/go/main/App';
+import { EventsOn } from '../../wailsjs/runtime/runtime';
 import { settingsStore } from './settingsStore';
 import { notificationStore } from './notifications';
-import { buildSnmpRequest } from '../utils/snmpParams';
-import { sendNativeNotification } from '../utils/nativeNotify';
+import { buildMonitorConnection } from '../utils/snmpParams';
 
-const MAX_DATA_POINTS = 500;
-const ALERT_COOLDOWN_MS = 30000;
+// In-memory scope buffer, per (target x OID) series. The chart draws a sliding
+// window over this buffer and lets you travel back through it, so it has to be
+// deep enough to browse — decimation keeps drawing cheap, and every point is
+// also persisted to SQLite for ranges older than the buffer.
+const MAX_DATA_POINTS = 5000;
 
+// One warning per (session, OID) that returns something ungraphable: repeating
+// it on every tick would bury the UI under identical toasts.
 const warnedNonNumeric = new Set();
 
-// Alert sound via Web Audio API
-function playAlertSound() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.value = 880;
-    osc.type = 'sine';
-    gain.gain.value = 0.3;
-    osc.start();
-    osc.stop(ctx.currentTime + 0.2);
-  } catch (e) { /* ignore */ }
-}
-
-// Send native OS notification for threshold alerts
-function sendDesktopNotification(title, body) {
-  const settings = get(settingsStore);
-  if (!settings.monitor?.systemNotifications) return;
-  sendNativeNotification(title, body);
-  if (settings.monitor?.alertSound) playAlertSound();
-}
-
+// The poll clock lives in Go.
+//
+// It used to be a setInterval here, which meant monitoring only ran while the
+// window was open: closing it silently stopped every session, and with them the
+// thresholds, the event journal and every notification route that depends on
+// them. This store is now a view onto a loop that runs whether or not anyone is
+// watching — it starts and stops sessions, and receives samples as they happen.
 function createPollingStore() {
   const { subscribe, update, set } = writable([]);
-  const lastAlertTime = {};
 
-  function createPollFn(id, oid, targets, intervalMs, snmpVersion) {
-    return async function poll() {
-      const settings = get(settingsStore);
-      try {
-        const bulkResults = await SnmpGet(buildSnmpRequest({...settings, snmpVersion}, targets, oid));
-        const timestamp = new Date().toISOString();
+  // Samples pushed by the Go scheduler. Arrive whenever a poll completes, at
+  // whatever cadence each session was configured with.
+  EventsOn('monitor:samples', (payload) => {
+    if (!payload || !payload.sessionId || !Array.isArray(payload.points)) return;
+    const { sessionId, points } = payload;
 
-        // Non-numeric SNMP types that should not be graphed
-        const nonNumericTypes = ['OctetString', 'ObjectIdentifier', 'IPAddress', 'Opaque', 'NsapAddress', 'BitString'];
-        // Error-like sentinel values returned by the backend for missing OIDs
-        const errorSentinels = ['noSuchObject', 'noSuchInstance', 'endOfMibView'];
+    update((sessions) => sessions.map((s) => {
+      if (s.id !== sessionId) return s;
 
-        // Build data points outside update() so we can persist them to SQLite
-        let newDataPoints = [];
-        const currentSessions = get({ subscribe });
-        const currentSession = currentSessions.find(s => s.id === id);
+      const incoming = points.map((p) => ({
+        target: p.target,
+        timestamp: p.timestamp,
+        value: p.value ?? null,
+        delta: p.delta ?? null,
+        rate: p.rate ?? null,
+        responseTimeMs: p.responseTimeMs || 0,
+        error: p.error || null,
+        snmpType: p.snmpType || '',
+        oid: p.oid || '',
+      }));
 
-        for (const res of bulkResults) {
-          const rawValue = res.error ? null : res.result?.value;
-          const snmpType = res.result?.type || '';
-          const isNonNumericType = nonNumericTypes.some(t => snmpType.toLowerCase().includes(t.toLowerCase()));
-          const isErrorSentinel = rawValue !== null && errorSentinels.includes(rawValue);
+      warnAboutUngraphableValues(sessionId, incoming);
 
-          let value = null;
-          if (rawValue !== null && !isNonNumericType && !isErrorSentinel) {
-            const numValue = Number(rawValue);
-            value = isNaN(numValue) ? null : numValue;
-          }
+      // The buffer is capped PER SERIES, not per session: with 8 curves a
+      // shared cap would leave each one only an eighth of the history.
+      const cap = MAX_DATA_POINTS * Math.max(1, s.targets.length) * Math.max(1, (s.oids || [s.oid]).length);
+      let results = [...s.results, ...incoming];
+      if (results.length > cap) results = results.slice(-cap);
+      return { ...s, results, running: true };
+    }));
+  });
 
-          if (rawValue !== null && (isNonNumericType || isErrorSentinel) && !warnedNonNumeric.has(id)) {
-            warnedNonNumeric.add(id);
-            const t = get(_);
-            notificationStore.add(
-              t('monitor.nonNumericWarning', { values: { oid, type: snmpType } }),
-              'warning'
-            );
-          }
-
-          const prevResults = currentSession ? currentSession.results : [];
-          const prevPoint = [...prevResults].reverse().find(
-            p => p.target === res.target && p.value !== null
-          );
-
-          const delta = prevPoint && value !== null ? value - prevPoint.value : null;
-          const rate = delta !== null && intervalMs > 0 ? delta / (intervalMs / 1000) : null;
-
-          newDataPoints.push({
-            target: res.target,
-            timestamp,
-            value,
-            delta,
-            rate,
-            responseTimeMs: res.responseTimeMs || 0,
-            error: isErrorSentinel ? String(rawValue) : (res.error || null),
-          });
-        }
-
-        update(sessions => sessions.map(s => {
-          if (s.id !== id || !s.running) return s;
-
-          // Threshold alert checks
-          if (s.thresholds && s.thresholds.alertEnabled) {
-            const now = Date.now();
-            const lastAlert = lastAlertTime[id] || 0;
-            if (now - lastAlert > ALERT_COOLDOWN_MS) {
-              for (const dp of newDataPoints) {
-                if (dp.value === null) continue;
-                const { min, max } = s.thresholds;
-                if (min !== null && min !== undefined && min !== '' && dp.value < Number(min)) {
-                  const t = get(_);
-                  const msg = t('monitor.thresholdBelow', { values: { target: dp.target, value: dp.value, min, oid } });
-                  notificationStore.add(msg, 'error');
-                  sendDesktopNotification(t('monitor.thresholdAlertTitle'), msg);
-                  lastAlertTime[id] = now;
-                  break;
-                }
-                if (max !== null && max !== undefined && max !== '' && dp.value > Number(max)) {
-                  const t = get(_);
-                  const msg = t('monitor.thresholdAbove', { values: { target: dp.target, value: dp.value, max, oid } });
-                  notificationStore.add(msg, 'error');
-                  sendDesktopNotification(t('monitor.thresholdAlertTitle'), msg);
-                  lastAlertTime[id] = now;
-                  break;
-                }
-              }
-            }
-          }
-
-          let updatedResults = [...s.results, ...newDataPoints];
-          if (updatedResults.length > MAX_DATA_POINTS * targets.length) {
-            updatedResults = updatedResults.slice(-MAX_DATA_POINTS * targets.length);
-          }
-
-          return { ...s, results: updatedResults };
-        }));
-
-        // Persist data points to SQLite (fire-and-forget)
-        MonitorSaveDataPoints(newDataPoints.map(dp => ({
-          sessionId: id,
-          target: dp.target,
-          timestamp: dp.timestamp,
-          value: dp.value,
-          delta: dp.delta,
-          rate: dp.rate,
-          responseTimeMs: dp.responseTimeMs,
-          error: dp.error || '',
-        }))).catch(e => console.warn('Failed to save data points:', e));
-
-      } catch (err) {
-        console.error('Polling error:', err);
-      }
-    };
+  // A point with neither a value nor an error came back as a type that cannot
+  // be plotted — a string, an OID, an address. Say so once, rather than drawing
+  // an empty chart and leaving the user to guess.
+  function warnAboutUngraphableValues(sessionId, points) {
+    for (const p of points) {
+      if (p.value !== null || p.error) continue;
+      const key = sessionId + '|' + p.oid;
+      if (warnedNonNumeric.has(key)) continue;
+      warnedNonNumeric.add(key);
+      notificationStore.add(
+        get(_)('monitor.nonNumericWarning', { values: { oid: p.oid, type: p.snmpType || '?' } }),
+        'warning',
+      );
+    }
   }
 
-  async function startPolling(oid, targets, intervalMs, thresholds = null, snmpVersion = '2c') {
-    // Create persistent session in backend
-    let persistentId;
+  // `oid` accepts a single OID or a list: a session can watch several at once,
+  // each rendered as its own small multiple (different OIDs have different
+  // scales, so they must never share one plot).
+  async function startPolling(oid, targets, intervalMs, thresholds = null, snmpVersion = 'v2c', name = '') {
+    // Deduplicate: the same OID twice would poll twice, draw two identical
+    // curves and collide as a key in the channel picker.
+    const oidList = [...new Set((Array.isArray(oid) ? oid : [oid]).map((o) => String(o).trim()).filter(Boolean))];
+    targets = [...new Set(targets)];
+    // Persisted joined so a reloaded session restores the whole list.
+    const oidKey = oidList.join(',');
+
+    // thresholds is keyed by OID. Normalise every band and drop the ones that
+    // set no bound at all.
+    const byOid = {};
+    for (const [tOid, t] of Object.entries(thresholds || {})) {
+      if (!t) continue;
+      const min = t.min !== null && t.min !== undefined && t.min !== '' ? Number(t.min) : null;
+      const max = t.max !== null && t.max !== undefined && t.max !== '' ? Number(t.max) : null;
+      if (min === null && max === null) continue;
+      byOid[tOid] = {
+        min,
+        max,
+        forSeconds: Number(t.forSeconds) || 0,
+        alertEnabled: t.alertEnabled !== false,
+      };
+    }
+    const thresholdsPayload = Object.keys(byOid).length ? byOid : null;
+
+    // The connection is persisted WITH the session: a background poll has no
+    // renderer to ask for it, and after a restart there is no renderer at all.
+    const settings = get(settingsStore);
+    const conn = buildMonitorConnection({ ...settings, snmpVersion });
+
+    let id;
     try {
-      const thresholdsPayload = thresholds ? {
-        min: thresholds.min !== null && thresholds.min !== '' ? Number(thresholds.min) : null,
-        max: thresholds.max !== null && thresholds.max !== '' ? Number(thresholds.max) : null,
-        alertEnabled: !!thresholds.alertEnabled,
-      } : null;
-      persistentId = await MonitorCreateSession(oid, targets, intervalMs, snmpVersion, thresholdsPayload);
+      id = await MonitorCreateSession(oidKey, targets, intervalMs, snmpVersion, thresholdsPayload, name, conn);
     } catch (e) {
-      console.warn('Failed to create persistent session:', e);
-      persistentId = 'local-' + Date.now();
+      notificationStore.add(String(e), 'error');
+      throw e;
     }
 
-    const session = {
-      id: persistentId,
-      oid,
+    update((sessions) => [...sessions, {
+      id,
+      name: (name || '').trim(),
+      oid: oidList[0],
+      oids: oidList,
       targets,
       interval: intervalMs,
       snmpVersion,
       results: [],
       running: true,
       startedAt: new Date().toISOString(),
-      timerId: null,
-      thresholds,
-    };
+      thresholds: thresholdsPayload || {},
+    }]);
 
-    const poll = createPollFn(session.id, oid, targets, intervalMs, snmpVersion);
-    poll();
-    session.timerId = setInterval(poll, intervalMs);
-
-    update(sessions => [...sessions, session]);
-    return session.id;
+    try {
+      await MonitorStart(id);
+    } catch (e) {
+      notificationStore.add(String(e), 'error');
+      markRunning(id, false);
+    }
+    return id;
   }
 
-  function resumeSession(sessionId) {
-    update(sessions => sessions.map(s => {
-      if (s.id !== sessionId || s.running) return s;
-      const poll = createPollFn(s.id, s.oid, s.targets, s.interval, s.snmpVersion);
-      poll();
-      MonitorUpdateSession(s.id, true, '').catch(() => {});
-      return { ...s, running: true, timerId: setInterval(poll, s.interval) };
-    }));
+  function markRunning(sessionId, running) {
+    update((sessions) => sessions.map((s) => (s.id === sessionId ? { ...s, running } : s)));
   }
 
-  function stopPolling(sessionId) {
-    update(sessions => sessions.map(s => {
-      if (s.id === sessionId && s.running) {
-        clearInterval(s.timerId);
-        MonitorUpdateSession(s.id, false, new Date().toISOString()).catch(() => {});
-        return { ...s, running: false, timerId: null };
+  async function resumeSession(sessionId) {
+    markRunning(sessionId, true);
+    try {
+      await MonitorStart(sessionId);
+    } catch (e) {
+      notificationStore.add(String(e), 'error');
+      markRunning(sessionId, false);
+    }
+  }
+
+  async function stopPolling(sessionId) {
+    markRunning(sessionId, false);
+    try {
+      await MonitorStop(sessionId);
+    } catch (e) {
+      console.warn('Failed to stop session:', e);
+    }
+  }
+
+  async function removeSession(sessionId) {
+    try {
+      await MonitorStop(sessionId);
+    } catch (e) {
+      console.warn('Failed to stop session before deleting it:', e);
+    }
+    update((sessions) => {
+      // Keys are `sessionId|oid`, so drop every key belonging to the session.
+      for (const key of [...warnedNonNumeric]) {
+        if (key.startsWith(sessionId + '|')) warnedNonNumeric.delete(key);
       }
-      return s;
-    }));
-  }
-
-  function removeSession(sessionId) {
-    update(sessions => {
-      const session = sessions.find(s => s.id === sessionId);
-      if (session && session.timerId) {
-        clearInterval(session.timerId);
-      }
-      warnedNonNumeric.delete(sessionId);
-      return sessions.filter(s => s.id !== sessionId);
+      return sessions.filter((s) => s.id !== sessionId);
     });
-    MonitorDeleteSession(sessionId).catch(e => console.warn('Failed to delete session:', e));
+    MonitorDeleteSession(sessionId).catch((e) => console.warn('Failed to delete session:', e));
   }
 
-  function stopAll() {
-    update(sessions => {
-      for (const s of sessions) {
-        if (s.timerId) clearInterval(s.timerId);
-        MonitorUpdateSession(s.id, false, new Date().toISOString()).catch(() => {});
-      }
-      return sessions.map(s => ({ ...s, running: false, timerId: null }));
-    });
+  async function stopAll() {
+    const ids = get({ subscribe }).filter((s) => s.running).map((s) => s.id);
+    update((sessions) => sessions.map((s) => ({ ...s, running: false })));
+    await Promise.allSettled(ids.map((id) => MonitorStop(id)));
   }
 
-  // Load persisted sessions from SQLite backend
+  // Load persisted sessions, then ask Go which ones are actually polling. That
+  // second question matters: with the window closed the scheduler kept running,
+  // so the database's `active` flag is a record of intent while MonitorRunning
+  // is the truth.
   async function initFromBackend() {
     try {
       const sessions = await MonitorLoadSessions();
       if (!sessions || sessions.length === 0) {
-        // Try localStorage migration
         await migrateLegacyData();
         return;
       }
       const loaded = [];
       for (const s of sessions) {
+        const oids = (s.oid || '').split(',').map((o) => o.trim()).filter(Boolean);
         let results = [];
         try {
           const points = await MonitorLoadSessionData(s.id, MAX_DATA_POINTS * (s.targets?.length || 1));
-          results = (points || []).map(p => ({
+          results = (points || []).map((p) => ({
             target: p.target,
             timestamp: p.timestamp,
             value: p.value,
@@ -254,41 +217,61 @@ function createPollingStore() {
             rate: p.rate,
             responseTimeMs: p.responseTimeMs,
             error: p.error || null,
+            snmpType: p.snmpType || '',
+            oid: p.oid || '',
           }));
         } catch (e) {
           console.warn('Failed to load session data:', e);
         }
         loaded.push({
           id: s.id,
-          oid: s.oid,
+          name: s.name || '',
+          oid: oids[0] || '',
+          oids,
           targets: s.targets || [],
           interval: s.intervalMs,
           snmpVersion: s.snmpVersion,
           results,
           running: false,
           startedAt: s.startedAt,
-          timerId: null,
-          thresholds: s.thresholds,
+          thresholds: s.thresholds || {},
+          // A session stored before the connection was persisted cannot be
+          // polled from Go; the UI offers to re-arm it with the current
+          // settings rather than failing silently.
+          needsConnection: !s.conn,
         });
       }
       set(loaded);
     } catch (e) {
       console.warn('Failed to load sessions from backend:', e);
+      return;
     }
 
-    // Auto-resume if enabled
+    await reconcileWithScheduler();
+  }
+
+  // Reflect what the Go scheduler is really doing, and resume anything the user
+  // asked to have resumed.
+  async function reconcileWithScheduler() {
+    let running = [];
+    try {
+      running = (await MonitorRunning()) || [];
+    } catch (e) {
+      console.warn('Failed to read the running sessions:', e);
+    }
+    const live = new Set(running);
+    update((sessions) => sessions.map((s) => ({ ...s, running: live.has(s.id) })));
+
     const settings = get(settingsStore);
-    if (settings.polling?.autoResume) {
-      const sessions = get(pollingStore);
-      for (const s of sessions) {
-        if (!s.running && s.results.length > 0) {
-          resumeSession(s.id);
-        }
+    if (!settings.polling?.autoResume) return;
+    for (const s of get({ subscribe })) {
+      if (!s.running && !s.needsConnection && s.results.length > 0) {
+        resumeSession(s.id);
       }
     }
   }
 
-  // One-time migration from localStorage
+  // One-time migration from localStorage.
   async function migrateLegacyData() {
     const stored = localStorage.getItem('pollingHistory');
     if (!stored) return;
@@ -298,14 +281,15 @@ function createPollingStore() {
         localStorage.removeItem('pollingHistory');
         return;
       }
-      // Re-create sessions in backend
+      const settings = get(settingsStore);
       for (const ls of legacySessions) {
         try {
           const id = await MonitorCreateSession(
-            ls.oid, ls.targets, ls.interval, ls.snmpVersion || 'v2c', ls.thresholds || null
+            ls.oid, ls.targets, ls.interval, ls.snmpVersion || 'v2c', ls.thresholds || null, ls.name || '',
+            buildMonitorConnection({ ...settings, snmpVersion: ls.snmpVersion || 'v2c' }),
           );
           if (ls.results && ls.results.length > 0) {
-            await MonitorSaveDataPoints(ls.results.map(r => ({
+            await MonitorSaveDataPoints(ls.results.map((r) => ({
               sessionId: id,
               target: r.target,
               timestamp: r.timestamp,
@@ -314,6 +298,8 @@ function createPollingStore() {
               rate: r.rate,
               responseTimeMs: r.responseTimeMs || 0,
               error: r.error || '',
+              snmpType: r.snmpType || '',
+              oid: r.oid || '',
             })));
           }
         } catch (e) {
@@ -321,7 +307,6 @@ function createPollingStore() {
         }
       }
       localStorage.removeItem('pollingHistory');
-      // Reload from backend
       await initFromBackend();
     } catch (e) {
       console.warn('Legacy migration failed:', e);
@@ -339,6 +324,7 @@ function createPollingStore() {
     stopPolling,
     removeSession,
     stopAll,
+    reconcileWithScheduler,
   };
 }
 

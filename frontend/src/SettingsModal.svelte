@@ -5,6 +5,8 @@
   import GeneralSettings from './settings/GeneralSettings.svelte';
   import MibSettings from './settings/MibSettings.svelte';
   import SnmpSettings from './settings/SnmpSettings.svelte';
+  import NotifySettings from './settings/NotifySettings.svelte';
+  import ServiceSettings from './settings/ServiceSettings.svelte';
   import Icon from './Icon.svelte';
 
   const dispatch = createEventDispatcher();
@@ -68,6 +70,20 @@
       >
         <Icon name="globe" size={15} /> {$_('settings.tabs.snmp')}
       </button>
+      <button
+        class="tab"
+        class:active={activeTab === 'notify'}
+        on:click={() => activeTab = 'notify'}
+      >
+        <Icon name="bell" size={15} /> {$_('settings.tabs.notify')}
+      </button>
+      <button
+        class="tab"
+        class:active={activeTab === 'service'}
+        on:click={() => activeTab = 'service'}
+      >
+        <Icon name="server-cog" size={15} /> {$_('settings.tabs.service')}
+      </button>
     </div>
 
     <div class="modal-content">
@@ -81,6 +97,14 @@
 
       {#if activeTab === 'snmp'}
         <SnmpSettings bind:settings />
+      {/if}
+
+      {#if activeTab === 'notify'}
+        <NotifySettings />
+      {/if}
+
+      {#if activeTab === 'service'}
+        <ServiceSettings />
       {/if}
     </div>
 

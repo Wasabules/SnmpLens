@@ -10,6 +10,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"SnmpLens/pkg/events"
+
 	"github.com/gosnmp/gosnmp"
 )
 
@@ -52,11 +54,24 @@ type Client struct {
 	debugEnabled bool
 	debugLog     []DebugEntry
 	debugMu      sync.Mutex
+	// recorder durably journals received traps. Defaults to events.Nop so a
+	// trap listener goroutine can always call it without a nil check.
+	recorder events.Recorder
 }
 
 // NewClient creates a new SNMP client.
 func NewClient(ctx context.Context) *Client {
-	return &Client{ctx: ctx}
+	return &Client{ctx: ctx, recorder: events.Nop{}}
+}
+
+// SetRecorder wires the event journal. Without it, received traps exist only as
+// a runtime event emitted at the webview: with no window listening they vanish
+// with no error at all.
+func (c *Client) SetRecorder(r events.Recorder) {
+	if r == nil {
+		r = events.Nop{}
+	}
+	c.recorder = r
 }
 
 // SetDebugMode enables or disables SNMP packet debug logging.

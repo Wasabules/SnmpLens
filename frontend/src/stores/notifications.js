@@ -1,10 +1,15 @@
 import { writable } from 'svelte/store';
 
+// Monotonic, collision-free. Date.now() gave two toasts raised in the same
+// synchronous tick the SAME id: they collided as {#each} keys, and removing
+// one dismissed both.
+let idSeq = 0;
+
 function createNotificationStore() {
   const { subscribe, update } = writable([]);
 
   function add(message, type = 'info', timeout = 5000) {
-    const id = Date.now();
+    const id = `${Date.now()}-${idSeq++}`;
     const notification = { id, message, type };
     
     update(notifications => [...notifications, notification]);
