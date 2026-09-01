@@ -974,6 +974,12 @@
     "draftRecovered": "Un travail non enregistré sur {name} a été récupéré d’une session précédente.",
     "find": "Rechercher…",
     "findNext": "Suivant",
-    "findPrev": "Précédent"
+    "findPrev": "Précédent",
+    "replace": "Remplacer par…",
+    "replaceOne": "Remplacer",
+    "replaceAll": "Tout",
+    "toggleReplace": "Afficher le remplacement",
+    "noMatch": "aucun",
+    "replacedAll": "{count} occurrence(s) remplacée(s)."
   }
 }

@@ -974,6 +974,12 @@
     "draftRecovered": "Unsaved work on {name} was recovered from a previous session.",
     "find": "Find…",
     "findNext": "Next",
-    "findPrev": "Previous"
+    "findPrev": "Previous",
+    "replace": "Replace with…",
+    "replaceOne": "Replace",
+    "replaceAll": "All",
+    "toggleReplace": "Show replace",
+    "noMatch": "no match",
+    "replacedAll": "{count} occurrence(s) replaced."
   }
 }

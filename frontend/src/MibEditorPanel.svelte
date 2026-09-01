@@ -6,6 +6,7 @@
   import { notificationStore } from './stores/notifications';
   import { highlight, SNIPPETS, stringStateAt } from './mibeditor/tokenize.js';
   import { charWidth, positionOf, lineColumnAt, wordAt, offsetAt } from './mibeditor/metrics.js';
+  import { findMatches, findAllMatches, applyReplaceAll, nextIndex } from './mibeditor/search.js';
   import { mibEditorStore } from './stores/mibEditorStore';
   import { mibPathsStore } from './stores/mibPathsStore';
   import { mibStore } from './stores/mibStore';
@@ -42,7 +43,10 @@
   let hover = null;        // { x, y, symbol }
   let completion = null;   // { x, y, items, index, range }
   let findOpen = false;
+  let showReplace = false;
   let findTerm = '';
+  let replaceTerm = '';
+  let findIndex = 0;
   let findCount = 0;
 
   $: lines = buffer.split('\n');
@@ -324,37 +328,95 @@
     mibEditorStore.setBuffer(textarea.value);
   }
 
-  // Find. Deliberately simple: highlight nothing, just move the caret to the
-  // next match and scroll it into view. A full find-and-replace over a file
-  // that other tools also edit is a different feature.
-  function findNext(backwards = false) {
-    if (!findTerm || !textarea) return;
-    const haystack = buffer.toLowerCase();
-    const needle = findTerm.toLowerCase();
-    findCount = needle ? haystack.split(needle).length - 1 : 0;
-    if (findCount === 0) return;
+  // Find and replace.
+  //
+  // Matches are drawn in an overlay rather than through the textarea's own
+  // selection, because showing a selection requires focusing the textarea —
+  // which is what used to throw you out of the search box on Enter. The
+  // overlay lets focus stay where you are typing, which is how every editor
+  // behaves and what makes Enter-to-cycle usable at all.
+  $: matches = findOpen ? findMatches(buffer, findTerm) : [];
+  $: findCount = matches.length;
+  $: if (findIndex >= matches.length) findIndex = matches.length ? matches.length - 1 : 0;
+  // Only the on-screen matches become boxes; a file can hold thousands.
+  $: matchBoxes = matches
+    .map((at, i) => ({ at, i }))
+    .filter(({ at }) => {
+      const line = lineColumnAt(buffer, at).line;
+      return line >= firstVisible && line <= lastVisible;
+    })
+    .map(({ at, i }) => {
+      const { line, column } = lineColumnAt(buffer, at);
+      const pos = positionOf(lines, line, column, cw, LINE_HEIGHT);
+      return { x: pos.x, y: pos.y, width: findTerm.length * cw, current: i === findIndex };
+    });
 
-    let at;
-    if (backwards) {
-      at = haystack.lastIndexOf(needle, Math.max(0, textarea.selectionStart - 1));
-      if (at < 0) at = haystack.lastIndexOf(needle);
-    } else {
-      at = haystack.indexOf(needle, textarea.selectionEnd);
-      if (at < 0) at = haystack.indexOf(needle);
+  // Move to a match WITHOUT focusing the textarea: scrolling works unfocused,
+  // and the highlight comes from the overlay.
+  function gotoMatch(index) {
+    if (!matches.length || !textarea) return;
+    findIndex = (index + matches.length) % matches.length;
+    const { line } = lineColumnAt(buffer, matches[findIndex]);
+    const top = (line - 1) * LINE_HEIGHT;
+    const view = textarea.clientHeight;
+    // Only scroll when the match is off screen, so cycling through matches on
+    // one screen does not make the view jump about.
+    if (top < textarea.scrollTop || top > textarea.scrollTop + view - LINE_HEIGHT * 2) {
+      textarea.scrollTop = Math.max(0, top - view / 3);
     }
-    if (at < 0) return;
-
-    const { line } = lineColumnAt(buffer, at);
-    textarea.focus();
-    textarea.setSelectionRange(at, at + findTerm.length);
-    textarea.scrollTop = Math.max(0, (line - 1) * LINE_HEIGHT - textarea.clientHeight / 3);
     syncScroll();
+  }
+
+  function findNext(backwards = false) {
+    if (!matches.length) return;
+    gotoMatch(nextIndex(findIndex, matches.length, backwards));
+  }
+
+  // Replacing needs the textarea focused — execCommand writes into the focused
+  // element — so focus is borrowed and given straight back, which keeps the
+  // edit on the native undo stack without moving the user out of the box.
+  function replaceRange(start, end, text) {
+    if (!textarea) return;
+    const active = document.activeElement;
+    textarea.focus();
+    textarea.setSelectionRange(start, end);
+    const done = document.execCommand && document.execCommand('insertText', false, text);
+    if (!done) {
+      mibEditorStore.setBuffer(buffer.slice(0, start) + text + buffer.slice(end));
+    } else {
+      mibEditorStore.setBuffer(textarea.value);
+    }
+    if (active && active !== textarea) tick().then(() => active.focus());
+  }
+
+  function replaceCurrent() {
+    if (!matches.length || !findTerm) return;
+    const at = matches[findIndex];
+    replaceRange(at, at + findTerm.length, replaceTerm);
+  }
+
+  // One edit, so one undo: replacing occurrence by occurrence would make
+  // Ctrl+Z walk back through a hundred steps.
+  //
+  // The match list used for HIGHLIGHTING is capped, so this recomputes without
+  // a cap. Replacing the first two thousand and reporting success would leave
+  // a file half-rewritten, which is worse than refusing.
+  function replaceAll() {
+    if (!findTerm) return;
+    const all = findAllMatches(buffer, findTerm);
+    if (!all.length) return;
+    replaceRange(0, buffer.length, applyReplaceAll(buffer, all, findTerm.length, replaceTerm));
+    findIndex = 0;
+    notificationStore.add(
+      get(_)('mibEditor.replacedAll', { values: { count: all.length } }), 'success');
   }
 
   function closeFind() {
     findOpen = false;
+    showReplace = false;
     findTerm = '';
-    findCount = 0;
+    replaceTerm = '';
+    findIndex = 0;
     textarea?.focus();
   }
 
@@ -608,22 +670,50 @@
            layers must use the same font metrics or they drift apart. -->
       {#if findOpen}
         <div class="findbar">
-          <Icon name="search" size={13} />
-          <input id="mib-find" type="search" bind:value={findTerm}
-            on:input={() => findNext()}
-            on:keydown={(e) => {
-              if (e.key === 'Enter') { e.preventDefault(); findNext(e.shiftKey); }
-              if (e.key === 'Escape') { e.preventDefault(); closeFind(); }
-            }}
-            placeholder={$_('mibEditor.find')} />
-          <span class="find-count">{findCount}</span>
-          <button class="btn-copy-small" on:click={() => findNext(true)} title={$_('mibEditor.findPrev')}>
-            <Icon name="chevron-up" size={13} />
+          <button class="btn-copy-small" on:click={() => (showReplace = !showReplace)}
+            title={$_('mibEditor.toggleReplace')}>
+            <Icon name={showReplace ? 'chevron-down' : 'chevron-right'} size={13} />
           </button>
-          <button class="btn-copy-small" on:click={() => findNext()} title={$_('mibEditor.findNext')}>
-            <Icon name="chevron-down" size={13} />
-          </button>
-          <button class="btn-copy-small" on:click={closeFind}><Icon name="circle-x" size={13} /></button>
+          <div class="find-fields">
+            <div class="find-row">
+              <Icon name="search" size={13} />
+              <input id="mib-find" type="search" bind:value={findTerm}
+                on:input={() => (findIndex = 0)}
+                on:keydown={(e) => {
+                  if (e.key === 'Enter') { e.preventDefault(); findNext(e.shiftKey); }
+                  else if (e.key === 'Escape') { e.preventDefault(); closeFind(); }
+                }}
+                placeholder={$_('mibEditor.find')} />
+              <span class="find-count">
+                {findCount ? `${findIndex + 1}/${findCount}` : $_('mibEditor.noMatch')}
+              </span>
+              <button class="btn-copy-small" on:click={() => findNext(true)} title={$_('mibEditor.findPrev')}>
+                <Icon name="chevron-up" size={13} />
+              </button>
+              <button class="btn-copy-small" on:click={() => findNext()} title={$_('mibEditor.findNext')}>
+                <Icon name="chevron-down" size={13} />
+              </button>
+              <button class="btn-copy-small" on:click={closeFind}><Icon name="circle-x" size={13} /></button>
+            </div>
+
+            {#if showReplace}
+              <div class="find-row">
+                <Icon name="pencil" size={13} />
+                <input type="text" bind:value={replaceTerm}
+                  on:keydown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); e.shiftKey ? replaceAll() : replaceCurrent(); }
+                    else if (e.key === 'Escape') { e.preventDefault(); closeFind(); }
+                  }}
+                  placeholder={$_('mibEditor.replace')} />
+                <button class="btn btn-small" on:click={replaceCurrent} disabled={!findCount}>
+                  {$_('mibEditor.replaceOne')}
+                </button>
+                <button class="btn btn-small" on:click={replaceAll} disabled={!findCount}>
+                  {$_('mibEditor.replaceAll')}
+                </button>
+              </div>
+            {/if}
+          </div>
         </div>
       {/if}
 
@@ -634,6 +724,15 @@
           <!-- Underlines sit between the mirror and the textarea, so they are
                visible through the transparent text layer without catching the
                pointer. -->
+          <!-- Search hits, drawn under the transparent text so focus can stay
+               in the search box. -->
+          <div class="marks" aria-hidden="true"
+            style="transform: translate({-scrollLeft}px, {-scrollTop}px)">
+            {#each matchBoxes as m, i (i)}
+              <span class="hit" class:current={m.current}
+                style="left: {m.x}px; top: {m.y}px; width: {m.width}px;"></span>
+            {/each}
+          </div>
           <div class="marks" aria-hidden="true"
             style="transform: translate({-scrollLeft}px, {-scrollTop}px)">
             {#each marks as m, i (i)}
@@ -1102,6 +1201,33 @@
     background-color: var(--bg-lighter-color);
     border: 1px solid var(--border-color);
     border-radius: 4px;
+  }
+
+  .find-fields {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .find-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .hit {
+    position: absolute;
+    height: 18px;
+    background-color: var(--warning-subtle);
+    border-radius: 2px;
+    box-sizing: border-box;
+  }
+
+  .hit.current {
+    background-color: var(--accent-subtle-strong);
+    outline: 1px solid var(--accent-color);
   }
 
   .findbar input {

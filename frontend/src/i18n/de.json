@@ -974,6 +974,12 @@
     "draftRecovered": "Ungespeicherte Arbeit an {name} wurde aus einer früheren Sitzung wiederhergestellt.",
     "find": "Suchen…",
     "findNext": "Weiter",
-    "findPrev": "Zurück"
+    "findPrev": "Zurück",
+    "replace": "Ersetzen durch…",
+    "replaceOne": "Ersetzen",
+    "replaceAll": "Alle",
+    "toggleReplace": "Ersetzen anzeigen",
+    "noMatch": "kein Treffer",
+    "replacedAll": "{count} Vorkommen ersetzt."
   }
 }

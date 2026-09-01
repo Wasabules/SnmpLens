@@ -974,6 +974,12 @@
     "draftRecovered": "Se recuperó trabajo sin guardar en {name} de una sesión anterior.",
     "find": "Buscar…",
     "findNext": "Siguiente",
-    "findPrev": "Anterior"
+    "findPrev": "Anterior",
+    "replace": "Reemplazar por…",
+    "replaceOne": "Reemplazar",
+    "replaceAll": "Todo",
+    "toggleReplace": "Mostrar reemplazo",
+    "noMatch": "sin coincidencias",
+    "replacedAll": "{count} aparición(es) reemplazada(s)."
   }
 }
