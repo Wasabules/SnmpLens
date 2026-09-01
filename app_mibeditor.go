@@ -154,6 +154,24 @@ func (a *App) MibEditorValidate(content string) []mib.Diagnostic {
 	return mib.Validate(content)
 }
 
+// MibEditorAnalyse runs every check in ONE call.
+//
+// One binding rather than three because each of them parses the file, and the
+// editor was calling them separately on every pause in typing — three parses of
+// a 185 KB MIB where one would do.
+func (a *App) MibEditorAnalyse(content string) mib.Analysis {
+	cat := mib.Symbols()
+	out := mib.Analysis{
+		Diagnostics: mib.Validate(content),
+		Missing:     mib.CheckImports(content, cat),
+	}
+	out.Diagnostics = append(out.Diagnostics, mib.Analyse(content, cat)...)
+	if out.Missing == nil {
+		out.Missing = []mib.MissingImport{}
+	}
+	return out
+}
+
 // MibEditorSave writes a MIB, backing up whatever was there first.
 //
 // force skips the "changed on disk since you opened it" check. Nothing here
@@ -243,13 +261,12 @@ func (a *App) MibEditorRestoreBundled(name string) (mib.Source, error) {
 	return a.MibEditorRead(name)
 }
 
-// MibEditorReload rebuilds the MIB tree from disk and reports what broke.
+// MibEditorReload rebuilds the tree from the files the user actually enabled.
+//
+// It used to fall back to "everything on disk" when handed an empty list, which
+// silently re-enabled every MIB somebody had deliberately switched off in
+// Settings. An empty list now means an empty list.
 func (a *App) MibEditorReload(enabledFiles []string) mib.Reloaded {
-	if len(enabledFiles) == 0 {
-		if names, err := mib.ListMibFiles(a.persistentMibDir); err == nil {
-			enabledFiles = names
-		}
-	}
 	result := a.mibService.Rebuild(enabledFiles)
 	if !result.Health.Ok {
 		a.recordSystemEvent(events.KindSystemMibLoadFailed, "major",

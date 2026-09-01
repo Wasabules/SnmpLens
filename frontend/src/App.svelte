@@ -28,6 +28,7 @@
   import { GetPersistentMibDirectory, ListMibFiles, ImportMibFiles, TraySetLabels } from '../wailsjs/go/main/App';
   import MibEditorPanel from './MibEditorPanel.svelte';
   import { mibEditorStore } from './stores/mibEditorStore';
+  import { tabRequest } from './stores/tabRequest';
   import { OnFileDrop, OnFileDropOff } from '../wailsjs/runtime/runtime';
 
   let activeTab = 'operations'; // 'operations', 'traps', or 'history'
@@ -230,6 +231,14 @@
   }
 
   // Initialize MIB paths store on startup
+  // Something elsewhere asked for a tab — the MIB settings' "open in editor"
+  // link, today.
+  $: if ($tabRequest) {
+    activeTab = $tabRequest;
+    showSettings = false;
+    tabRequest.set(null);
+  }
+
   onMount(async () => {
     // Load saved panel width
     loadPanelWidth();

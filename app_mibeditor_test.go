@@ -304,3 +304,33 @@ func TestDraftNamesAreContained(t *testing.T) {
 		}
 	}
 }
+
+// An empty enabled-list must mean empty, not "everything on disk". The old
+// fallback silently re-enabled every MIB the user had switched off.
+func TestReloadDoesNotReEnableEverything(t *testing.T) {
+	a, _ := newMibApp(t)
+	for _, name := range []string{"A-MIB", "B-MIB"} {
+		path, _ := a.resolveMibPath(name)
+		os.WriteFile(path, []byte(name+" DEFINITIONS ::= BEGIN\nEND\n"), 0o644)
+	}
+
+	res := a.MibEditorReload([]string{})
+	for _, d := range res.Diagnostics {
+		if d.FileName == "A-MIB" || d.FileName == "B-MIB" {
+			t.Errorf("a disabled MIB was loaded anyway: %s", d.FileName)
+		}
+	}
+}
+
+// One call, one parse: the editor used to make three separate bridge calls that
+// each re-parsed the file.
+func TestAnalyseReturnsEverythingInOneCall(t *testing.T) {
+	a, _ := newMibApp(t)
+	out := a.MibEditorAnalyse("BAD-MIB DEFINITIONS ::= BEGIN\nnot valid\nEND\n")
+	if len(out.Diagnostics) == 0 {
+		t.Error("no diagnostics")
+	}
+	if out.Missing == nil {
+		t.Error("Missing is nil; it crosses the bridge as null and every access has to guard")
+	}
+}

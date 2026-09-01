@@ -124,6 +124,20 @@ panels with `{#if activeTab === …}`, which destroys the component on every swi
 user's edits with it. The buffer is also mirrored to a draft file under `mib-drafts/` (a sibling of `mibs/`, for
 the same reason backups are) so it survives closing the window.
 
+`pkg/mib/analyse.go` is the semantic pass, and it exists because of a measurement: a MIB declaring
+`SYNTAX Integerr32` **and** assigning the same OID twice loads with `err=nil` and `IsLoaded=true`, then resolves
+both objects to a nil type and an **empty OID**, with nothing anywhere saying a word. gosmi looks the type up,
+gets nothing, breaks, and adds the object regardless. So `Analyse` checks what neither `parser.Parse` (syntax
+only) nor `LoadModule` (a boolean that is not even true) will: unknown types, duplicate OIDs, unresolved parents,
+missing modules in `FROM`, undefined `INDEX`, readable conceptual rows. The bar is zero errors on the 14 bundled
+MIBs, and that is a test.
+
+`frontend/src/mibeditor/metrics.js` turns a (line, column) into pixels, which is what makes squiggles, hover
+cards and caret-anchored completion possible **here and not in a plain textarea**: the mirror lays out identically
+to the text (unit-tested) and both are monospace with a fixed line height, so a position is arithmetic once the
+character width is measured once. Editing inserts through `execCommand('insertText')` — deprecated, but the only
+way to write into a textarea AS AN EDIT, which is what the native undo stack records.
+
 `CheckImports`/`FixImports` answer the question people actually have in front of a vendor MIB: which symbol is
 used without being imported, and which module it comes from. Only names the loaded tree knows are reported, which
 keeps false positives near zero, and the fix edits the IMPORTS clause as TEXT — a MIB carries comments and

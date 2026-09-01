@@ -1,0 +1,403 @@
+package mib
+
+import (
+	"fmt"
+	"sort"
+	"strings"
+
+	"github.com/sleepinggenius2/gosmi/parser"
+)
+
+// Semantic analysis of a MIB, which is the part nothing else does.
+//
+// Measured, not assumed: a MIB declaring SYNTAX Integerr32 and assigning the
+// same OID twice loads with err=nil and IsLoaded=true. Its objects then resolve
+// to a nil type and an EMPTY OID. gosmi looks the type up, gets nothing, breaks
+// out of the loop and adds the object anyway. So the user sees a MIB that
+// "loaded fine" and a browser that answers wrongly, and nothing anywhere says a
+// word.
+//
+// parser.Parse gives syntax. gosmi.LoadModule gives a boolean that is not even
+// true. This is the layer in between: everything that can be decided from the
+// AST plus the loaded tree, reported where it happened.
+
+// Additional diagnostic codes for the semantic pass.
+const (
+	CodeUnknownType    = "unknown-type"
+	CodeDuplicateOid   = "duplicate-oid"
+	CodeUnknownParent  = "unknown-parent"
+	CodeUnusedImport   = "unused-import"
+	CodeUnknownModule  = "unknown-module"
+	CodeNoDescription  = "no-description"
+	CodeIndexUndefined = "index-undefined"
+	CodeRowAccess      = "row-access"
+)
+
+// Analyse reports every semantic problem it can locate.
+//
+// cat is the loaded tree; when it is empty the checks that need it are skipped
+// rather than producing confident nonsense.
+func Analyse(content string, cat Catalogue) []Diagnostic {
+	module, err := parser.Parse(strings.NewReader(content))
+	if err != nil || module == nil {
+		// A file that does not parse has a syntax error already being shown.
+		// Guessing at its meaning would bury the thing that matters.
+		return []Diagnostic{}
+	}
+
+	a := &analysis{
+		module:  module,
+		cat:     cat,
+		known:   map[string]bool{},
+		types:   map[string]bool{},
+		imports: map[string]*importUse{},
+		byOid:     map[string][]*parser.Node{},
+		diags:     []Diagnostic{},
+		rawSource: content,
+	}
+	a.collect()
+	a.checkImportedModules()
+	a.checkSyntaxTypes()
+	a.checkOids()
+	a.checkTables()
+	a.checkDescriptions()
+	a.checkUnusedImports()
+
+	sort.Slice(a.diags, func(i, j int) bool {
+		if a.diags[i].Line != a.diags[j].Line {
+			return a.diags[i].Line < a.diags[j].Line
+		}
+		return a.diags[i].Column < a.diags[j].Column
+	})
+	return a.diags
+}
+
+type importUse struct {
+	module string
+	line   int
+	column int
+	used   bool
+}
+
+type analysis struct {
+	module  *parser.Module
+	cat     Catalogue
+	known   map[string]bool // every name defined or imported
+	types   map[string]bool // names usable as a SYNTAX type
+	imports map[string]*importUse
+	byOid   map[string][]*parser.Node
+	diags   []Diagnostic
+	// rawSource is kept because the AST does not retain the text, and the
+	// unused-import check has to look at what the file actually mentions.
+	rawSource string
+}
+
+func (a *analysis) add(pos lexerPos, severity, code, message, symbol string) {
+	a.diags = append(a.diags, Diagnostic{
+		Line: pos.Line, Column: pos.Column,
+		Severity: severity, Code: code, Message: message, Symbol: symbol,
+	})
+}
+
+// lexerPos is the shape every AST node carries.
+type lexerPos struct{ Line, Column int }
+
+func at(line, column int) lexerPos { return lexerPos{Line: line, Column: column} }
+
+func (a *analysis) collect() {
+	for _, imp := range a.module.Body.Imports {
+		mod := string(imp.Module)
+		for _, n := range imp.Names {
+			name := string(n)
+			a.known[name] = true
+			a.types[name] = true
+			a.imports[name] = &importUse{module: mod, line: imp.Pos.Line, column: imp.Pos.Column}
+		}
+	}
+	if a.module.Body.Identity != nil {
+		a.known[string(a.module.Body.Identity.Name)] = true
+	}
+	for i := range a.module.Body.Types {
+		name := string(a.module.Body.Types[i].Name)
+		a.known[name] = true
+		a.types[name] = true
+	}
+	for i := range a.module.Body.Nodes {
+		node := &a.module.Body.Nodes[i]
+		a.known[string(node.Name)] = true
+		// A SEQUENCE type shares the name of its row object, so a node name is
+		// also usable as a SYNTAX type.
+		a.types[string(node.Name)] = true
+		if key := oidKey(node.Oid); key != "" {
+			a.byOid[key] = append(a.byOid[key], node)
+		}
+	}
+	for i := range a.module.Body.Macros {
+		a.known[string(a.module.Body.Macros[i].Name)] = true
+	}
+}
+
+// oidKey renders an OID assignment as a comparable string.
+func oidKey(oid *parser.Oid) string {
+	if oid == nil || len(oid.SubIdentifiers) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(oid.SubIdentifiers))
+	for _, sub := range oid.SubIdentifiers {
+		switch {
+		case sub.Number != nil:
+			parts = append(parts, fmt.Sprint(*sub.Number))
+		case sub.Name != nil:
+			parts = append(parts, string(*sub.Name))
+		}
+	}
+	return strings.Join(parts, ".")
+}
+
+// checkImportedModules flags a FROM naming a module that is nowhere to be
+// found. This is the commonest reason a pasted vendor MIB never loads, and the
+// remedy is to fetch that module rather than to edit anything.
+func (a *analysis) checkImportedModules() {
+	if len(a.cat.Modules) == 0 {
+		return
+	}
+	loaded := map[string]bool{}
+	for _, m := range a.cat.Modules {
+		loaded[m] = true
+	}
+	for _, imp := range a.module.Body.Imports {
+		mod := string(imp.Module)
+		if loaded[mod] || mod == string(a.module.Name) {
+			continue
+		}
+		a.add(at(imp.Pos.Line, imp.Pos.Column), SevError, CodeUnknownModule,
+			fmt.Sprintf("module %q is not loaded; add its MIB file to SnmpLens or this module will never resolve", mod),
+			mod)
+	}
+}
+
+// checkSyntaxTypes is the one that matters most: gosmi accepts an unknown type
+// silently and produces an object with no type and no OID.
+func (a *analysis) checkSyntaxTypes() {
+	for i := range a.module.Body.Nodes {
+		node := &a.module.Body.Nodes[i]
+		if node.ObjectType == nil {
+			continue
+		}
+		syntax := node.ObjectType.Syntax
+
+		if syntax.Sequence != nil {
+			a.useType(string(*syntax.Sequence), syntax.Pos.Line, syntax.Pos.Column, node)
+			continue
+		}
+		if syntax.Type != nil {
+			a.useType(string(syntax.Type.Name), syntax.Type.Pos.Line, syntax.Type.Pos.Column, node)
+		}
+	}
+	// Textual conventions refer to types too: a TEXTUAL-CONVENTION with a
+	// mistyped SYNTAX is just as silently broken as an object with one.
+	for i := range a.module.Body.Types {
+		t := &a.module.Body.Types[i]
+		if t.Syntax != nil {
+			a.useType(string(t.Syntax.Name), t.Syntax.Pos.Line, t.Syntax.Pos.Column, nil)
+		}
+		if t.TextualConvention != nil {
+			st := t.TextualConvention.Syntax
+			a.useType(string(st.Name), st.Pos.Line, st.Pos.Column, nil)
+		}
+	}
+}
+
+func (a *analysis) useType(name string, line, column int, node *parser.Node) {
+	if name == "" {
+		return
+	}
+	if use, ok := a.imports[name]; ok {
+		use.used = true
+	}
+	if a.types[name] || baseTypes[name] || isBuiltinSyntax(name) {
+		return
+	}
+	// Known to the loaded tree but not imported: that is the IMPORTS check's
+	// job, and saying it twice in different words helps nobody.
+	if a.inCatalogue(name) {
+		return
+	}
+	symbol := name
+	msg := fmt.Sprintf("%q is not a known type; it is neither defined here, imported, nor a base type", name)
+	if node != nil {
+		msg = fmt.Sprintf("%q is not a known type, so %s will load with no type and no OID", name, node.Name)
+	}
+	a.add(at(line, column), SevError, CodeUnknownType, msg, symbol)
+}
+
+func (a *analysis) inCatalogue(name string) bool {
+	for _, s := range a.cat.Symbols {
+		if s.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// isBuiltinSyntax covers the spellings the grammar accepts directly.
+func isBuiltinSyntax(name string) bool {
+	switch name {
+	case "OCTET STRING", "OBJECT IDENTIFIER", "INTEGER", "BITS", "NULL":
+		return true
+	}
+	return false
+}
+
+// checkOids finds two objects claiming the same identifier, which gosmi accepts
+// and which makes one of them permanently unreachable.
+func (a *analysis) checkOids() {
+	keys := make([]string, 0, len(a.byOid))
+	for k := range a.byOid {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		nodes := a.byOid[key]
+		if len(nodes) < 2 {
+			continue
+		}
+		names := make([]string, 0, len(nodes))
+		for _, n := range nodes {
+			names = append(names, string(n.Name))
+		}
+		for _, n := range nodes[1:] {
+			a.add(at(n.Oid.Pos.Line, n.Oid.Pos.Column), SevError, CodeDuplicateOid,
+				fmt.Sprintf("OID { %s } is assigned to %s; only one of them will ever resolve",
+					strings.ReplaceAll(key, ".", " "), strings.Join(names, " and ")),
+				string(n.Name))
+		}
+	}
+
+	// A parent named but never defined anywhere.
+	for i := range a.module.Body.Nodes {
+		node := &a.module.Body.Nodes[i]
+		if node.Oid == nil || len(node.Oid.SubIdentifiers) == 0 {
+			continue
+		}
+		first := node.Oid.SubIdentifiers[0]
+		if first.Name == nil {
+			continue
+		}
+		parent := string(*first.Name)
+		if use, ok := a.imports[parent]; ok {
+			use.used = true
+		}
+		if a.known[parent] || a.inCatalogue(parent) {
+			continue
+		}
+		a.add(at(node.Oid.Pos.Line, node.Oid.Pos.Column), SevError, CodeUnknownParent,
+			fmt.Sprintf("%s is placed under %q, which is not defined here, imported, or in any loaded MIB",
+				node.Name, parent),
+			parent)
+	}
+}
+
+// checkTables applies the RFC2578 rules that are cheap to verify and painful to
+// debug: a conceptual row must not be readable, and its INDEX must name objects
+// that exist.
+func (a *analysis) checkTables() {
+	for i := range a.module.Body.Nodes {
+		node := &a.module.Body.Nodes[i]
+		ot := node.ObjectType
+		if ot == nil {
+			continue
+		}
+
+		isRow := len(ot.Index) > 0 || ot.Augments != nil
+		isTable := ot.Syntax.Sequence != nil
+
+		if (isRow || isTable) && ot.Access != parser.AccessNotAccessible {
+			what := "a conceptual row"
+			if isTable {
+				what = "a table"
+			}
+			a.add(at(ot.Pos.Line, ot.Pos.Column), SevWarning, CodeRowAccess,
+				fmt.Sprintf("%s is %s, so RFC2578 requires MAX-ACCESS not-accessible", node.Name, what),
+				string(node.Name))
+		}
+
+		for _, idx := range ot.Index {
+			name := string(idx.Name)
+			if use, ok := a.imports[name]; ok {
+				use.used = true
+			}
+			if a.known[name] || a.inCatalogue(name) {
+				continue
+			}
+			a.add(at(idx.Pos.Line, idx.Pos.Column), SevError, CodeIndexUndefined,
+				fmt.Sprintf("INDEX names %q, which is not defined anywhere", name), name)
+		}
+		if ot.Augments != nil {
+			name := string(*ot.Augments)
+			if use, ok := a.imports[name]; ok {
+				use.used = true
+			}
+			if !a.known[name] && !a.inCatalogue(name) {
+				a.add(at(ot.Pos.Line, ot.Pos.Column), SevError, CodeIndexUndefined,
+					fmt.Sprintf("AUGMENTS names %q, which is not defined anywhere", name), name)
+			}
+		}
+	}
+}
+
+// checkDescriptions: RFC2578 makes DESCRIPTION mandatory, and a MIB without one
+// is unusable to whoever inherits it.
+func (a *analysis) checkDescriptions() {
+	for i := range a.module.Body.Nodes {
+		node := &a.module.Body.Nodes[i]
+		if node.ObjectType == nil {
+			continue
+		}
+		if strings.TrimSpace(node.ObjectType.Description) == "" {
+			a.add(at(node.Pos.Line, node.Pos.Column), SevWarning, CodeNoDescription,
+				fmt.Sprintf("%s has no DESCRIPTION, which RFC2578 requires", node.Name),
+				string(node.Name))
+		}
+	}
+}
+
+// checkUnusedImports is advice: an import nobody uses is clutter that survives
+// every copy-paste.
+func (a *analysis) checkUnusedImports() {
+	// Anything mentioned anywhere in the text counts as used: macros and
+	// compliance statements reference names the AST does not expose.
+	mentioned := scanIdentifiers(a.rawSource)
+
+	names := make([]string, 0, len(a.imports))
+	for n := range a.imports {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		use := a.imports[name]
+		if use.used {
+			continue
+		}
+		if count, ok := mentioned[name]; ok && count[0] > 0 {
+			// Appears in the text somewhere other than its own IMPORTS line.
+			if count[0] != use.line {
+				continue
+			}
+		}
+		a.add(at(use.line, use.column), SevInfo, CodeUnusedImport,
+			fmt.Sprintf("%q is imported from %s but never used", name, use.module), name)
+	}
+}
+
+
+// Analysis is everything the editor needs from one parse.
+//
+// Grouped because each check parses the file, and running them as separate
+// bridge calls meant parsing a 185 KB MIB three times on every pause in typing.
+type Analysis struct {
+	Diagnostics []Diagnostic    `json:"diagnostics"`
+	Missing     []MissingImport `json:"missing"`
+}

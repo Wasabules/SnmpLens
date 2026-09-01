@@ -1,8 +1,7 @@
 import { writable, get } from 'svelte/store';
 import {
   MibEditorRead,
-  MibEditorValidate,
-  MibEditorCheckImports,
+  MibEditorAnalyse,
   MibEditorSaveDraft,
   MibEditorReadDraft,
   MibEditorDiscardDraft,
@@ -81,21 +80,21 @@ function createMibEditorStore() {
 
   // Validation and the import check both run in Go and touch nothing: no file,
   // no gosmi state. That is what makes them safe on every keystroke.
+  // ONE bridge call, one parse. This used to be two calls that each parsed the
+  // file, on every pause in typing, over a MIB that can be 185 KB.
   async function refresh() {
     const { buffer } = get({ subscribe });
-    let diagnostics = [];
-    let missingImports = [];
     try {
-      diagnostics = (await MibEditorValidate(buffer)) || [];
+      const out = (await MibEditorAnalyse(buffer)) || {};
+      update((s) => ({
+        ...s,
+        diagnostics: out.diagnostics || [],
+        missingImports: out.missing || [],
+        checking: false,
+      }));
     } catch (e) {
-      diagnostics = [];
+      update((s) => ({ ...s, checking: false }));
     }
-    try {
-      missingImports = (await MibEditorCheckImports(buffer)) || [];
-    } catch (e) {
-      missingImports = [];
-    }
-    update((s) => ({ ...s, diagnostics, missingImports, checking: false }));
   }
 
   function scheduleDraft() {

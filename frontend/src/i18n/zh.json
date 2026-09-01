@@ -624,7 +624,8 @@
       "diagnosticsTitle": "MIB 加载诊断",
       "loaded": "{count} 个已加载",
       "failed": "{count} 个失败",
-      "removeConfirm": "移除 MIB 路径：{path}？"
+      "removeConfirm": "移除 MIB 路径：{path}？",
+      "openInEditor": "在编辑器中打开"
     },
     "snmp": {
       "v1v2cTitle": "SNMP v1/v2c",
@@ -965,6 +966,9 @@
     "missingImports": "使用了但未导入：{symbols}（共 {count} 个）。",
     "fixImports": "添加到 IMPORTS",
     "importsFixed": "已将 {count} 个符号添加到 IMPORTS。",
-    "draftRecovered": "已从上一次会话恢复 {name} 的未保存内容。"
+    "draftRecovered": "已从上一次会话恢复 {name} 的未保存内容。",
+    "find": "查找…",
+    "findNext": "下一个",
+    "findPrev": "上一个"
   }
 }

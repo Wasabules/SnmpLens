@@ -624,7 +624,8 @@
       "diagnosticsTitle": "Diagnósticos de carga de MIB",
       "loaded": "{count} cargado(s)",
       "failed": "{count} fallido(s)",
-      "removeConfirm": "¿Eliminar la ruta de MIB: {path}?"
+      "removeConfirm": "¿Eliminar la ruta de MIB: {path}?",
+      "openInEditor": "Abrir en el editor"
     },
     "snmp": {
       "v1v2cTitle": "SNMP v1/v2c",
@@ -965,6 +966,9 @@
     "missingImports": "Usados sin importar: {symbols} ({count} en total).",
     "fixImports": "Añadir a IMPORTS",
     "importsFixed": "{count} símbolo(s) añadido(s) a IMPORTS.",
-    "draftRecovered": "Se recuperó trabajo sin guardar en {name} de una sesión anterior."
+    "draftRecovered": "Se recuperó trabajo sin guardar en {name} de una sesión anterior.",
+    "find": "Buscar…",
+    "findNext": "Siguiente",
+    "findPrev": "Anterior"
   }
 }

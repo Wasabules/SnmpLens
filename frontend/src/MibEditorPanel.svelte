@@ -5,7 +5,10 @@
   import Icon from './Icon.svelte';
   import { notificationStore } from './stores/notifications';
   import { highlight, SNIPPETS } from './mibeditor/tokenize.js';
+  import { charWidth, positionOf, lineColumnAt, wordAt, offsetAt } from './mibeditor/metrics.js';
   import { mibEditorStore } from './stores/mibEditorStore';
+  import { mibPathsStore } from './stores/mibPathsStore';
+  import { mibStore } from './stores/mibStore';
   import {
     MibEditorList,
     MibEditorOpenExternal,
@@ -26,6 +29,33 @@
   let textarea;
   let mirror;
   let gutter;
+  let surface;
+
+  // Overlay geometry. The mirror lays out identically to the text — that is
+  // unit-tested — and both are monospace with a fixed line height, so a
+  // position is arithmetic once the character width is measured.
+  const LINE_HEIGHT = 18;
+  let cw = 7.2;
+  let scrollTop = 0;
+  let scrollLeft = 0;
+
+  let hover = null;        // { x, y, symbol }
+  let completion = null;   // { x, y, items, index, range }
+  let findOpen = false;
+  let findTerm = '';
+  let findCount = 0;
+
+  $: lines = buffer.split('\n');
+  // Only errors and warnings get an underline; advice would be visual noise.
+  $: marks = diagnostics
+    .filter((d) => d.line > 0 && d.severity !== 'info')
+    .slice(0, 200)
+    .map((d) => {
+      const pos = positionOf(lines, d.line, d.column || 1, cw, LINE_HEIGHT);
+      const text = lines[d.line - 1] || '';
+      const width = Math.max(cw * 2, cw * Math.max(1, (d.symbol || '').length || wordAt(text, (d.column || 1) - 1).word.length || 6));
+      return { ...d, x: pos.x, y: pos.y, width };
+    });
 
   // The buffer lives in a store, not here: this component is destroyed on
   // every tab switch, and component state would take the user's edits with it.
@@ -41,12 +71,26 @@
         .filter((sy) => sy.name.toLowerCase().includes(symbolFilter.toLowerCase()))
         .slice(0, 60);
   $: lineCount = buffer.split('\n').length;
-  $: highlighted = highlight(buffer);
+  // Highlighting a 185 KB MIB takes ~45 ms. Doing it on every keystroke makes
+  // typing stutter on a big file, so the mirror lags the text by a frame or
+  // two — invisible while typing, and the caret is the textarea's own.
+  let highlighted = '';
+  let highlightTimer;
+  $: scheduleHighlight(buffer);
+  function scheduleHighlight(text) {
+    clearTimeout(highlightTimer);
+    if (text.length < 20000) {
+      highlighted = highlight(text);
+      return;
+    }
+    highlightTimer = setTimeout(() => (highlighted = highlight(text)), 90);
+  }
   $: shown = files.filter((f) => !filter || f.name.toLowerCase().includes(filter.toLowerCase()));
   $: errorCount = diagnostics.filter((d) => d.severity === 'error').length;
   $: warnCount = diagnostics.filter((d) => d.severity === 'warning').length;
 
   onMount(async () => {
+    if (mirror) cw = charWidth(mirror);
     await refreshList();
     try {
       catalogue = (await MibEditorSymbols()) || { modules: [], symbols: [] };
@@ -97,6 +141,7 @@
   // what makes it safe to run while someone types.
   function onInput(e) {
     mibEditorStore.setBuffer(e.target.value);
+    updateCompletion();
   }
 
   async function save(force = false) {
@@ -127,11 +172,25 @@
     }
   }
 
+  // The MIBs the user actually enabled. Passing an empty list used to make the
+  // backend fall back to "everything on disk", which silently switched back on
+  // every MIB somebody had deliberately turned off.
+  function enabledMibFiles() {
+    const state = get(mibPathsStore);
+    const out = [];
+    for (const perPath of Object.values(state.enabledMibs || {})) {
+      for (const [name, on] of Object.entries(perPath || {})) {
+        if (on) out.push(name);
+      }
+    }
+    return [...new Set(out)];
+  }
+
   // Rebuilding is the only way to see the effect of an edit: gosmi has no
   // unload, so without a full teardown the previously parsed module stays.
   async function reload() {
     try {
-      const res = await MibEditorReload([]);
+      const res = await MibEditorReload(enabledMibFiles());
       const failed = (res.diagnostics || []).filter((d) => !d.success);
       if (res.health && !res.health.ok) {
         notificationStore.add(
@@ -141,6 +200,15 @@
           get(_)('mibEditor.reloadedWithFailures', { values: { count: failed.length } }), 'warning');
       } else {
         notificationStore.add(get(_)('mibEditor.reloaded', { values: { count: res.health?.modules ?? 0 } }), 'success');
+      }
+      // The rebuilt tree was being thrown away, so the MIB browser kept showing
+      // the state from before the edit. mibStore owns that tree, so it is the
+      // one that has to be told.
+      mibStore.loadSilent();
+      try {
+        catalogue = (await MibEditorSymbols()) || catalogue;
+      } catch (e) {
+        /* keep the previous catalogue */
       }
     } catch (e) {
       notificationStore.add(String(e), 'error');
@@ -172,7 +240,8 @@
     try {
       const fix = await MibEditorFixImports(buffer);
       if (!fix.content) return;
-      mibEditorStore.setBuffer(fix.content);
+      // Replace the whole buffer as one edit so it stays undoable.
+      insertAtCaret(fix.content, [0, buffer.length]);
       notificationStore.add(
         get(_)('mibEditor.importsFixed', { values: { count: fix.missing.length } }), 'success');
     } catch (e) {
@@ -180,14 +249,63 @@
     }
   }
 
-  function insertAtCaret(text) {
-    const start = textarea?.selectionStart ?? buffer.length;
-    const end = textarea?.selectionEnd ?? buffer.length;
-    mibEditorStore.setBuffer(buffer.slice(0, start) + text + buffer.slice(end));
-    tick().then(() => {
-      textarea?.focus();
-      textarea?.setSelectionRange(start + text.length, start + text.length);
-    });
+  // Inserting by reassigning textarea.value wipes the browser's native undo
+  // stack, so Ctrl+Z stopped working the moment you used a snippet or the
+  // IMPORTS fix. execCommand('insertText') is deprecated but it is the only
+  // way to write into a textarea AS AN EDIT, which is what undo records.
+  function insertAtCaret(text, replaceRange) {
+    if (!textarea) {
+      mibEditorStore.setBuffer(buffer + text);
+      return;
+    }
+    textarea.focus();
+    if (replaceRange) {
+      textarea.setSelectionRange(replaceRange[0], replaceRange[1]);
+    }
+    const inserted = document.execCommand && document.execCommand('insertText', false, text);
+    if (!inserted) {
+      // Fallback for a webview that refuses it: correct, but undo is lost.
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      mibEditorStore.setBuffer(buffer.slice(0, start) + text + buffer.slice(end));
+      tick().then(() => textarea.setSelectionRange(start + text.length, start + text.length));
+      return;
+    }
+    mibEditorStore.setBuffer(textarea.value);
+  }
+
+  // Find. Deliberately simple: highlight nothing, just move the caret to the
+  // next match and scroll it into view. A full find-and-replace over a file
+  // that other tools also edit is a different feature.
+  function findNext(backwards = false) {
+    if (!findTerm || !textarea) return;
+    const haystack = buffer.toLowerCase();
+    const needle = findTerm.toLowerCase();
+    findCount = needle ? haystack.split(needle).length - 1 : 0;
+    if (findCount === 0) return;
+
+    let at;
+    if (backwards) {
+      at = haystack.lastIndexOf(needle, Math.max(0, textarea.selectionStart - 1));
+      if (at < 0) at = haystack.lastIndexOf(needle);
+    } else {
+      at = haystack.indexOf(needle, textarea.selectionEnd);
+      if (at < 0) at = haystack.indexOf(needle);
+    }
+    if (at < 0) return;
+
+    const { line } = lineColumnAt(buffer, at);
+    textarea.focus();
+    textarea.setSelectionRange(at, at + findTerm.length);
+    textarea.scrollTop = Math.max(0, (line - 1) * LINE_HEIGHT - textarea.clientHeight / 3);
+    syncScroll();
+  }
+
+  function closeFind() {
+    findOpen = false;
+    findTerm = '';
+    findCount = 0;
+    textarea?.focus();
   }
 
   // Clicking a problem puts the caret on it. Without this the line number is
@@ -208,6 +326,59 @@
     syncScroll();
   }
 
+  // Hover: the word under the pointer, looked up in the loaded tree.
+  let hoverTimer;
+  function onMouseMove(e) {
+    clearTimeout(hoverTimer);
+    const rect = textarea.getBoundingClientRect();
+    const px = e.clientX - rect.left + textarea.scrollLeft - 8;
+    const py = e.clientY - rect.top + textarea.scrollTop - 8;
+    hoverTimer = setTimeout(() => {
+      const offset = offsetAt(lines, buffer, px, py, cw, LINE_HEIGHT);
+      if (offset === null) { hover = null; return; }
+      const { word } = wordAt(buffer, offset);
+      if (word.length < 2) { hover = null; return; }
+      const symbol = catalogue.symbols.find((sy) => sy.name === word);
+      hover = symbol ? { x: e.clientX - rect.left, y: e.clientY - rect.top, symbol } : null;
+    }, 220);
+  }
+
+  function onMouseLeave() {
+    clearTimeout(hoverTimer);
+    hover = null;
+  }
+
+  // Completion, anchored at the caret. Possible here because the mirror
+  // guarantees identical layout; in a bare textarea the caret has no
+  // measurable position at all.
+  function updateCompletion() {
+    if (!textarea) return;
+    const offset = textarea.selectionStart;
+    const { word, start, end } = wordAt(buffer, offset);
+    if (word.length < 2 || offset !== end) { completion = null; return; }
+
+    const items = catalogue.symbols
+      .filter((sy) => sy.name.toLowerCase().startsWith(word.toLowerCase()) && sy.name !== word)
+      .slice(0, 12);
+    if (items.length === 0) { completion = null; return; }
+
+    const { line, column } = lineColumnAt(buffer, start);
+    const pos = positionOf(lines, line, column, cw, LINE_HEIGHT);
+    completion = {
+      x: pos.x - scrollLeft + 8,
+      y: pos.y - scrollTop + LINE_HEIGHT + 8,
+      items, index: 0, range: [start, end],
+    };
+  }
+
+  function acceptCompletion() {
+    if (!completion) return;
+    const chosen = completion.items[completion.index];
+    const range = completion.range;
+    completion = null;
+    insertAtCaret(chosen.name, range);
+  }
+
   function insertSnippet(snippet) {
     showSnippets = false;
     insertAtCaret(snippet.text.replace(/\$\{name\}/g, 'myObject'));
@@ -215,6 +386,10 @@
 
   // The mirror only stays under the text if it scrolls with it.
   function syncScroll() {
+    if (textarea) {
+      scrollTop = textarea.scrollTop;
+      scrollLeft = textarea.scrollLeft;
+    }
     if (mirror && textarea) {
       mirror.scrollTop = textarea.scrollTop;
       mirror.scrollLeft = textarea.scrollLeft;
@@ -223,6 +398,36 @@
   }
 
   function onKeydown(e) {
+    if (completion) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        completion.index = (completion.index + 1) % completion.items.length;
+        completion = completion;
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        completion.index = (completion.index - 1 + completion.items.length) % completion.items.length;
+        completion = completion;
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        acceptCompletion();
+        return;
+      }
+      if (e.key === 'Escape') {
+        completion = null;
+        return;
+      }
+    }
+    // A Wails webview has no Ctrl+F of its own, and IP-MIB is 4,993 lines.
+    if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+      e.preventDefault();
+      findOpen = true;
+      tick().then(() => document.getElementById('mib-find')?.focus());
+      return;
+    }
     if ((e.ctrlKey || e.metaKey) && e.key === 's') {
       e.preventDefault();
       save();
@@ -351,21 +556,81 @@
 
       <!-- The textarea is transparent and sits over the coloured mirror. Both
            layers must use the same font metrics or they drift apart. -->
-      <div class="surface">
+      {#if findOpen}
+        <div class="findbar">
+          <Icon name="search" size={13} />
+          <input id="mib-find" type="search" bind:value={findTerm}
+            on:input={() => findNext()}
+            on:keydown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); findNext(e.shiftKey); }
+              if (e.key === 'Escape') { e.preventDefault(); closeFind(); }
+            }}
+            placeholder={$_('mibEditor.find')} />
+          <span class="find-count">{findCount}</span>
+          <button class="btn-copy-small" on:click={() => findNext(true)} title={$_('mibEditor.findPrev')}>
+            <Icon name="chevron-up" size={13} />
+          </button>
+          <button class="btn-copy-small" on:click={() => findNext()} title={$_('mibEditor.findNext')}>
+            <Icon name="chevron-down" size={13} />
+          </button>
+          <button class="btn-copy-small" on:click={closeFind}><Icon name="circle-x" size={13} /></button>
+        </div>
+      {/if}
+
+      <div class="surface" bind:this={surface}>
         <pre class="gutter" bind:this={gutter} aria-hidden="true">{#each Array(lineCount) as _unused, i}{i + 1}
 {/each}</pre>
         <div class="code">
           <pre class="mirror" bind:this={mirror} aria-hidden="true">{@html highlighted}<br /></pre>
+          <!-- Underlines sit between the mirror and the textarea, so they are
+               visible through the transparent text layer without catching the
+               pointer. -->
+          <div class="marks" aria-hidden="true"
+            style="transform: translate({-scrollLeft}px, {-scrollTop}px)">
+            {#each marks as m, i (i)}
+              <span class="mark {m.severity}"
+                style="left: {m.x}px; top: {m.y}px; width: {m.width}px;"></span>
+            {/each}
+          </div>
           <textarea
             bind:this={textarea}
             value={buffer}
             on:input={onInput}
             on:scroll={syncScroll}
             on:keydown={onKeydown}
+            on:click={() => (completion = null)}
+            on:blur={() => (completion = null)}
+            on:mousemove={onMouseMove}
+            on:mouseleave={onMouseLeave}
             spellcheck="false"
             autocomplete="off"
             autocapitalize="off"
             wrap="off"></textarea>
+
+          {#if hover}
+            <div class="hovercard" style="left: {hover.x + 12}px; top: {hover.y + 18}px;">
+              <div class="hc-head">
+                <code>{hover.symbol.name}</code>
+                <span class="hc-mod">{hover.symbol.module}</span>
+              </div>
+              {#if hover.symbol.oid}<div class="hc-oid">{hover.symbol.oid}</div>{/if}
+              {#if hover.symbol.description}<p>{hover.symbol.description}</p>{/if}
+            </div>
+          {/if}
+
+          {#if completion}
+            <ul class="complete" style="left: {completion.x}px; top: {completion.y}px;">
+              {#each completion.items as item, i (item.module + '.' + item.name)}
+                <li>
+                  <button class:sel={i === completion.index}
+                    on:mousedown|preventDefault={() => { completion.index = i; acceptCompletion(); }}>
+                    <span class="sy-name">{item.name}</span>
+                    <span class="sy-mod">{item.module}</span>
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
         </div>
       </div>
 
@@ -778,6 +1043,134 @@
     border-radius: 4px;
     font-size: 0.76em;
     color: var(--text-color);
+  }
+
+  .findbar {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 6px;
+    background-color: var(--bg-lighter-color);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+  }
+
+  .findbar input {
+    flex: 1;
+    min-width: 0;
+    padding: 4px 6px;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    color: var(--text-color);
+    font-size: 0.8em;
+  }
+
+  .find-count {
+    font-size: 0.75em;
+    color: var(--text-muted);
+    min-width: 28px;
+    text-align: right;
+  }
+
+  /* Underlines live under the transparent textarea, so they never intercept
+     the pointer or the caret. */
+  .marks {
+    position: absolute;
+    inset: 0;
+    padding: 8px;
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  .mark {
+    position: absolute;
+    height: 18px;
+    border-bottom: 2px solid transparent;
+    box-sizing: border-box;
+  }
+
+  .mark.error {
+    border-bottom-color: var(--error-color);
+  }
+
+  .mark.warning {
+    border-bottom-color: var(--warning-color);
+  }
+
+  .hovercard {
+    position: absolute;
+    z-index: 30;
+    max-width: 320px;
+    padding: 7px 9px;
+    background-color: var(--bg-light-color);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    box-shadow: 0 6px 18px var(--shadow-color);
+    pointer-events: none;
+    font-size: 0.75em;
+  }
+
+  .hc-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 3px;
+  }
+
+  .hc-head code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: var(--accent-color);
+  }
+
+  .hc-mod {
+    color: var(--text-muted);
+  }
+
+  .hc-oid {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: var(--oid-color);
+    margin-bottom: 3px;
+  }
+
+  .hovercard p {
+    margin: 0;
+    color: var(--text-muted);
+  }
+
+  .complete {
+    position: absolute;
+    z-index: 30;
+    list-style: none;
+    margin: 0;
+    padding: 3px;
+    min-width: 220px;
+    max-height: 200px;
+    overflow-y: auto;
+    background-color: var(--bg-light-color);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    box-shadow: 0 6px 18px var(--shadow-color);
+  }
+
+  .complete button {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    width: 100%;
+    padding: 3px 6px;
+    background: none;
+    border: none;
+    border-radius: 3px;
+    color: var(--text-color);
+    font-size: 0.78em;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .complete button.sel,
+  .complete button:hover {
+    background-color: var(--accent-subtle);
   }
 
   .status {

@@ -624,7 +624,8 @@
       "diagnosticsTitle": "MIB Load Diagnostics",
       "loaded": "{count} loaded",
       "failed": "{count} failed",
-      "removeConfirm": "Remove MIB path: {path}?"
+      "removeConfirm": "Remove MIB path: {path}?",
+      "openInEditor": "Open in the editor"
     },
     "snmp": {
       "v1v2cTitle": "SNMP v1/v2c",
@@ -965,6 +966,9 @@
     "missingImports": "Used but never imported: {symbols} ({count} in total).",
     "fixImports": "Add to IMPORTS",
     "importsFixed": "{count} symbol(s) added to IMPORTS.",
-    "draftRecovered": "Unsaved work on {name} was recovered from a previous session."
+    "draftRecovered": "Unsaved work on {name} was recovered from a previous session.",
+    "find": "Find…",
+    "findNext": "Next",
+    "findPrev": "Previous"
   }
 }

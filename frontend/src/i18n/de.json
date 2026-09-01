@@ -624,7 +624,8 @@
       "diagnosticsTitle": "MIB-Ladediagnose",
       "loaded": "{count} geladen",
       "failed": "{count} fehlgeschlagen",
-      "removeConfirm": "MIB-Pfad entfernen: {path}?"
+      "removeConfirm": "MIB-Pfad entfernen: {path}?",
+      "openInEditor": "Im Editor öffnen"
     },
     "snmp": {
       "v1v2cTitle": "SNMP v1/v2c",
@@ -965,6 +966,9 @@
     "missingImports": "Verwendet, aber nie importiert: {symbols} ({count} insgesamt).",
     "fixImports": "Zu IMPORTS hinzufügen",
     "importsFixed": "{count} Symbol(e) zu IMPORTS hinzugefügt.",
-    "draftRecovered": "Ungespeicherte Arbeit an {name} wurde aus einer früheren Sitzung wiederhergestellt."
+    "draftRecovered": "Ungespeicherte Arbeit an {name} wurde aus einer früheren Sitzung wiederhergestellt.",
+    "find": "Suchen…",
+    "findNext": "Weiter",
+    "findPrev": "Zurück"
   }
 }

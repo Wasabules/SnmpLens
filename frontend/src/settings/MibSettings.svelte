@@ -1,5 +1,7 @@
 <script>
   import { onMount } from 'svelte';
+  import { mibEditorStore } from '../stores/mibEditorStore';
+  import { requestTab } from '../stores/tabRequest';
   import { _ } from 'svelte-i18n';
   import { get } from 'svelte/store';
   import { mibStore, mibDiagnostics } from '../stores/mibStore';
@@ -58,6 +60,17 @@
     if (confirm(t('settings.mibs.removeConfirm', { values: { path } }))) {
       mibPathsStore.removePath(path);
     }
+  }
+
+  // Jump straight from "this MIB failed to load" to the editor showing where.
+  async function openInEditor(fileName) {
+    try {
+      await mibEditorStore.open(fileName);
+    } catch (e) {
+      notificationStore.add(String(e), 'error');
+      return;
+    }
+    requestTab('mibeditor');
   }
 </script>
 
@@ -174,6 +187,11 @@
             <span class="diag-filename">{diag.fileName}</span>
             {#if diag.error}
               <span class="diag-error-msg" title={diag.error}>{diag.error}</span>
+              <!-- The failure list said what broke and gave no way to act on
+                   it. The editor is where the line number lives. -->
+              <button class="diag-open" on:click={() => openInEditor(diag.fileName)}>
+                {$_('settings.mibs.openInEditor')}
+              </button>
             {/if}
           </div>
         {/each}
@@ -183,6 +201,21 @@
 </fieldset>
 
 <style>
+  .diag-open {
+    background: none;
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    color: var(--accent-color);
+    font-size: 0.9em;
+    padding: 1px 6px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .diag-open:hover {
+    border-color: var(--accent-color);
+  }
+
   fieldset {
     border: 1px solid var(--border-color);
     border-radius: 6px;
