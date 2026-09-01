@@ -886,7 +886,14 @@
     "grpSmtp": "Servidor SMTP",
     "grpCredentials": "Credenciales",
     "grpEnvelope": "Sobre",
-    "grpTrust": "Cifrado y confianza"
+    "grpTrust": "Cifrado y confianza",
+    "grpPayload": "Carga útil",
+    "payloadMode": "Formato del cuerpo",
+    "payloadEnvelope": "Sobre estándar de SnmpLens",
+    "payloadTemplate": "Mi propio JSON (plantilla del mensaje)",
+    "payloadEnvelopeHint": "Un objeto JSON fijo con el evento, el asunto y el texto renderizado.",
+    "payloadTemplateHint": "La plantilla de abajo pasa a ser todo el cuerpo de la petición. Úsalo para Slack, Teams o Alertmanager, que quieren cada uno su propia forma.",
+    "tplJsonNote": "Este cuerpo ES la carga útil de la petición, así que debe ser JSON válido. Los valores que insertes se escapan por ti; las comillas y comas de alrededor son tuyas."
   },
   "tray": {
     "show": "Abrir SnmpLens",

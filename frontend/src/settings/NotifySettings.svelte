@@ -60,7 +60,7 @@
         caCert: '', serverName: '', insecureSkipVerify: false, clientCert: '',
       },
       webhook: {
-        url: '', method: 'POST', headers: {}, timeout: 10,
+        url: '', method: 'POST', headers: {}, timeout: 10, payloadMode: 'envelope',
         allowPlaintextHttp: false, caCert: '', serverName: '', insecureSkipVerify: false,
       },
       email: {
@@ -372,6 +372,19 @@
           </label>
         </div>
         <span class="sub">{$_('notify.secretHint', { values: { backend } })}</span>
+        <h4 class="grp-head">{$_('notify.grpPayload')}</h4>
+        <label class="fld"><span>{$_('notify.payloadMode')}</span>
+          <select bind:value={editingSink.webhook.payloadMode}>
+            <option value="envelope">{$_('notify.payloadEnvelope')}</option>
+            <option value="template">{$_('notify.payloadTemplate')}</option>
+          </select>
+          <span class="sub">
+            {editingSink.webhook.payloadMode === 'template'
+              ? $_('notify.payloadTemplateHint')
+              : $_('notify.payloadEnvelopeHint')}
+          </span>
+        </label>
+
         <h4 class="grp-head">{$_('notify.grpHeaders')}</h4>
         <label class="fld"><span>{$_('notify.headers')}</span>
           <textarea rows="3" value={headersToText(editingSink.webhook.headers)}

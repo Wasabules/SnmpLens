@@ -886,7 +886,14 @@
     "grpSmtp": "SMTP-Server",
     "grpCredentials": "Zugangsdaten",
     "grpEnvelope": "Umschlag",
-    "grpTrust": "Verschlüsselung und Vertrauen"
+    "grpTrust": "Verschlüsselung und Vertrauen",
+    "grpPayload": "Nutzlast",
+    "payloadMode": "Format des Rumpfs",
+    "payloadEnvelope": "Standard-SnmpLens-Umschlag",
+    "payloadTemplate": "Eigenes JSON (Nachrichtenvorlage)",
+    "payloadEnvelopeHint": "Ein festes JSON-Objekt mit dem Ereignis, dem Betreff und dem gerenderten Text.",
+    "payloadTemplateHint": "Die Vorlage unten wird zum gesamten Anfragerumpf. Für Slack, Teams oder Alertmanager, die jeweils ihre eigene Form erwarten.",
+    "tplJsonNote": "Dieser Rumpf IST die Nutzlast der Anfrage und muss daher gültiges JSON sein. Eingefügte Werte werden für Sie maskiert; die Anführungszeichen und Kommas drumherum sind Ihre."
   },
   "tray": {
     "show": "SnmpLens öffnen",

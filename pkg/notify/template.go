@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -357,8 +358,30 @@ func trimLeadingLine(s string) string {
 
 // --- rendering --------------------------------------------------------------
 
+// escapeFunc transforms a substituted VALUE before it joins the output. The
+// literal text of the template is never touched: the operator wrote that on
+// purpose, and escaping their punctuation would make a JSON template
+// impossible to write.
+type escapeFunc func(string) string
+
+// jsonEscape renders a value as it would appear inside a JSON string, without
+// the surrounding quotes.
+//
+// This is not decoration. A trap arrives from the network and its OID reaches
+// the rendered body; one double quote in it turns a hand-written JSON payload
+// into a parse error at the receiver, or worse, into a different document than
+// the operator wrote. Same class of problem as dot-stuffing an SMTP body.
+func jsonEscape(v string) string {
+	encoded, err := json.Marshal(v)
+	if err != nil {
+		return ""
+	}
+	// Marshal wraps the value in quotes; the template supplies its own.
+	return string(encoded[1 : len(encoded)-1])
+}
+
 // renderTemplateText walks the tokens once.
-func renderTemplateText(src string, lookup func(string) (string, bool)) string {
+func renderTemplateText(src string, lookup func(string) (string, bool), escape escapeFunc) string {
 	var b strings.Builder
 	toks := scan(src)
 
@@ -388,6 +411,9 @@ func renderTemplateText(src string, lookup func(string) (string, bool)) string {
 			if value == "" && t.hasFall {
 				b.WriteString(t.fallback)
 				continue
+			}
+			if escape != nil {
+				value = escape(value)
 			}
 			b.WriteString(value)
 
@@ -419,6 +445,16 @@ func renderTemplateText(src string, lookup func(string) (string, bool)) string {
 // name fields the built-in rendering never showed, so masking belongs upstream.
 // An empty field falls back to the built-in rendering, byte for byte.
 func RenderTemplate(e events.Event, sinkName string, tpl MessageTemplate) (subject, body string) {
+	return renderWith(e, sinkName, tpl, nil)
+}
+
+// RenderJSONTemplate is RenderTemplate with every substituted value escaped as
+// a JSON string fragment, for a webhook whose body the operator writes as JSON.
+func RenderJSONTemplate(e events.Event, sinkName string, tpl MessageTemplate) (subject, body string) {
+	return renderWith(e, sinkName, tpl, jsonEscape)
+}
+
+func renderWith(e events.Event, sinkName string, tpl MessageTemplate, escape escapeFunc) (subject, body string) {
 	lookup := func(name string) (string, bool) { return resolveVariable(e, sinkName, name) }
 
 	defSubject, defBody := renderDefault(e)
@@ -427,10 +463,10 @@ func RenderTemplate(e events.Event, sinkName string, tpl MessageTemplate) (subje
 	if tpl.Subject != "" {
 		// A subject is one line. Anything else is a mistake, and QEncoding
 		// would turn it into =0D=0A noise rather than a header break.
-		subject = collapseToOneLine(renderTemplateText(tpl.Subject, lookup))
+		subject = collapseToOneLine(renderTemplateText(tpl.Subject, lookup, nil))
 	}
 	if tpl.Body != "" {
-		body = truncateRunes(renderTemplateText(tpl.Body, lookup), MaxBodyLen)
+		body = truncateRunes(renderTemplateText(tpl.Body, lookup, escape), MaxBodyLen)
 	}
 	return subject, body
 }

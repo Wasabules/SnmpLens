@@ -886,7 +886,14 @@
     "grpSmtp": "SMTP 服务器",
     "grpCredentials": "凭据",
     "grpEnvelope": "信封",
-    "grpTrust": "加密与信任"
+    "grpTrust": "加密与信任",
+    "grpPayload": "负载",
+    "payloadMode": "正文格式",
+    "payloadEnvelope": "SnmpLens 标准信封",
+    "payloadTemplate": "自定义 JSON（消息模板）",
+    "payloadEnvelopeHint": "一个固定的 JSON 对象，包含事件、主题和渲染后的文本。",
+    "payloadTemplateHint": "下方的模板将成为整个请求正文。适用于 Slack、Teams 或 Alertmanager，它们各自需要自己的格式。",
+    "tplJsonNote": "此正文即请求负载，因此必须是有效的 JSON。您插入的值会自动转义；周围的引号和逗号由您负责。"
   },
   "tray": {
     "show": "打开 SnmpLens",

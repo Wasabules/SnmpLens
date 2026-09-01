@@ -182,6 +182,14 @@ answer. `pkg/notify` has an in-process SMTP server (`smtpserver_test.go`) so the
 conversation: implicit TLS, STARTTLS, AUTH PLAIN and LOGIN, certificate verification, and the refusal to send
 credentials before the connection is encrypted.
 
+A webhook sends either the fixed SnmpLens envelope or, with `PayloadMode: "template"`, whatever its message
+template renders — which is how you talk to Slack, Teams or Alertmanager. In that mode substituted values are
+escaped as JSON string fragments (`RenderJSONTemplate`) while the template's own punctuation is left alone: a trap
+arrives from the network, its OID reaches the body, and one quote would otherwise turn a hand-written payload into
+a different document. The rendered result is checked with `json.Valid` before it is posted, and at save time
+against a sample of each event kind — a template that looks like JSON with placeholders still in it can stop being
+JSON the moment one expands.
+
 The webhook sink **does not follow redirects**, on purpose. Go rewrites a redirected POST as a GET and drops the
 body, so a receiver behind a 302 answers 200 having been sent nothing — and the delivery would be recorded as
 successful. Errors returned by a receiver are scrubbed of the token before they reach `notify_outbox.last_error`,

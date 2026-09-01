@@ -886,7 +886,14 @@
     "grpSmtp": "SMTP server",
     "grpCredentials": "Credentials",
     "grpEnvelope": "Envelope",
-    "grpTrust": "Encryption and trust"
+    "grpTrust": "Encryption and trust",
+    "grpPayload": "Payload",
+    "payloadMode": "Body format",
+    "payloadEnvelope": "Standard SnmpLens envelope",
+    "payloadTemplate": "My own JSON (message template)",
+    "payloadEnvelopeHint": "A fixed JSON object carrying the event, the subject and the rendered text.",
+    "payloadTemplateHint": "The message template below becomes the whole request body. Use this for Slack, Teams or Alertmanager, which each want their own shape.",
+    "tplJsonNote": "This body IS the request payload, so it must be valid JSON. Values you insert are escaped for you; the quotes and commas around them are yours."
   },
   "tray": {
     "show": "Open SnmpLens",

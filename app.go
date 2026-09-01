@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"SnmpLens/pkg/events"
 	"SnmpLens/pkg/mib"
@@ -727,6 +728,13 @@ func (a *App) renderForSink(ev events.Event, cfg notify.SinkConfig) (subject, bo
 			subject, body = notify.Render(ev, false) // ev is already redacted
 		}
 	}()
+	// A webhook whose payload IS the template needs its values escaped as JSON,
+	// or one quote in a trap's OID turns a hand-written payload into a parse
+	// error at the receiver.
+	if cfg.Kind == notify.SinkWebhook &&
+		strings.EqualFold(strings.TrimSpace(cfg.Webhook.PayloadMode), notify.PayloadTemplate) {
+		return notify.RenderJSONTemplate(ev, cfg.Name, cfg.Template)
+	}
 	return notify.RenderTemplate(ev, cfg.Name, cfg.Template)
 }
 
@@ -937,6 +945,12 @@ func (a *App) NotifySaveSink(cfg notify.SinkConfig) (notify.SinkConfig, error) {
 	// instead of spoiling its formatting — so this is the only gate.
 	if errs := notify.ValidateTemplate(cfg.Template); len(errs) > 0 {
 		return notify.SinkConfig{}, fmt.Errorf("%s", errs[0].Error())
+	}
+	// A webhook that sends its template as the payload must produce JSON. Find
+	// out here rather than at 03:00, when the only symptom is a receiver
+	// rejecting a body nobody can see.
+	if err := notify.ValidatePayloadTemplate(cfg); err != nil {
+		return notify.SinkConfig{}, err
 	}
 	if a.storage == nil {
 		return cfg, fmt.Errorf("storage not initialized")

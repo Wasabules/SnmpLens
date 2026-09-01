@@ -13,6 +13,8 @@
   export let redact = false;
   /** The sink name, because {{sinkName}} is a variable. */
   export let sinkName = '';
+  /** The body IS the request payload, so it has to be valid JSON. */
+  export let jsonPayload = false;
 
   // The vocabulary comes from Go rather than being mirrored here: a hand-copied
   // list is a list that drifts, and the first symptom would be a variable the
@@ -150,6 +152,11 @@
   </div>
   </div>
 
+  {#if jsonPayload}
+    <p class="note warn">
+      <Icon name="triangle-alert" size={13} /> {$_('notify.tplJsonNote')}
+    </p>
+  {/if}
   <p class="note">{$_('notify.tplQueuedNote')}</p>
   <p class="note">{$_('notify.tplSharedNote')}</p>
 </div>

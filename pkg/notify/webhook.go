@@ -37,6 +37,16 @@ type WebhookConfig struct {
 	Token   string `json:"-"`       // sent as "Authorization: Bearer <token>"
 	Timeout int    `json:"timeout"` // seconds; 0 means 10
 
+	// PayloadMode chooses what is actually POSTed:
+	//
+	//   "envelope" (default) — the fixed JSON object below, with the rendered
+	//     text in its body field. Predictable, and what every existing sink
+	//     already receives.
+	//   "template" — the sink's message template IS the payload, sent as
+	//     written. This is how you talk to Slack, Teams or Alertmanager, which
+	//     all want their own shape rather than ours.
+	PayloadMode string `json:"payloadMode,omitempty"`
+
 	// AllowPlaintextHTTP permits sending the credential over http://.
 	// Without it, a sink with a credential refuses a plaintext URL: a bearer
 	// token on the wire in the clear is exactly what the rest of this package
@@ -174,7 +184,7 @@ func (w WebhookSink) Send(e events.Event, subject, body string) error {
 		return err
 	}
 
-	payload, err := json.Marshal(webhookBody{Event: e, Subject: subject, Body: body, Sender: "SnmpLens"})
+	payload, err := w.payload(e, subject, body)
 	if err != nil {
 		return err
 	}
@@ -252,7 +262,53 @@ func (w WebhookSink) scrub(err error) error {
 	return fmt.Errorf("%s", cleaned)
 }
 
+// PayloadTemplate is the mode where the template writes the whole body.
+const PayloadTemplate = "template"
+
+// payload builds the request body.
+func (w WebhookSink) payload(e events.Event, subject, body string) ([]byte, error) {
+	if strings.EqualFold(strings.TrimSpace(w.Config.PayloadMode), PayloadTemplate) {
+		trimmed := strings.TrimSpace(body)
+		if trimmed == "" {
+			return nil, fmt.Errorf("this webhook sends its message template as the payload, but the template rendered nothing")
+		}
+		// Refuse to post something that is not JSON rather than let the
+		// receiver reject it with a message nobody will see. The template was
+		// rendered with values escaped as JSON, so a failure here is the
+		// operator's punctuation rather than the event's content.
+		if !json.Valid([]byte(trimmed)) {
+			return nil, fmt.Errorf("the rendered payload is not valid JSON; check the quotes and commas in the message template")
+		}
+		return []byte(trimmed), nil
+	}
+	return json.Marshal(webhookBody{Event: e, Subject: subject, Body: body, Sender: "SnmpLens"})
+}
+
 // Describe names the destination for the delivery log.
 func (w WebhookSink) Describe() string {
 	return "webhook " + w.Config.URL
+}
+
+// ValidatePayloadTemplate checks a webhook whose template IS its payload.
+//
+// Rendered against a sample event, because the shape can only be wrong once
+// values are in it: a template that looks like JSON with the placeholders still
+// in place can stop being JSON the moment one of them expands.
+func ValidatePayloadTemplate(cfg SinkConfig) error {
+	if cfg.Kind != SinkWebhook {
+		return nil
+	}
+	if !strings.EqualFold(strings.TrimSpace(cfg.Webhook.PayloadMode), PayloadTemplate) {
+		return nil
+	}
+	if strings.TrimSpace(cfg.Template.Body) == "" {
+		return fmt.Errorf("this webhook sends its message template as the payload, so the template body cannot be empty")
+	}
+	for _, kind := range []string{events.CategoryThreshold, events.CategoryTrap, events.CategoryReachability} {
+		_, body := RenderJSONTemplate(SampleEvent(kind), cfg.Name, cfg.Template)
+		if !json.Valid([]byte(strings.TrimSpace(body))) {
+			return fmt.Errorf("the payload is not valid JSON once a %s event is rendered into it", kind)
+		}
+	}
+	return nil
 }
