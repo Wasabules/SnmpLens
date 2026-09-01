@@ -821,12 +821,13 @@
     "caCert": "CA certificate (PEM)",
     "caCertHint": "Leave empty to use the system trust store. Paste a certificate to trust an internal CA.",
     "serverName": "Expected certificate name",
-    "serverNameHint": "Only needed when the collector is reached by IP or through a load balancer.",
+    "serverNameHint": "Only needed when the destination is reached by IP or through a load balancer.",
     "insecureSkipVerify": "Do not verify the collector certificate",
     "insecureWarning": "The connection stays encrypted but nothing proves who is on the other end. Use this only against a lab collector.",
     "clientCert": "Client certificate (PEM)",
     "clientCertHint": "For mutual TLS, when the collector requires the sender to authenticate.",
-    "clientKey": "Client private key (PEM)"
+    "clientKey": "Client private key (PEM)",
+    "noEncryptionWarning": "Without encryption the message, and any password used to send it, cross the network in the clear."
   },
   "tray": {
     "show": "Open SnmpLens",

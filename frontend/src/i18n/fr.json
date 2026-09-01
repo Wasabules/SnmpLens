@@ -821,12 +821,13 @@
     "caCert": "Certificat de CA (PEM)",
     "caCertHint": "Laisser vide pour utiliser le magasin de confiance du système. Coller un certificat pour faire confiance à une CA interne.",
     "serverName": "Nom attendu dans le certificat",
-    "serverNameHint": "Nécessaire seulement si le collecteur est joint par IP ou via un répartiteur de charge.",
+    "serverNameHint": "Nécessaire seulement si la destination est jointe par IP ou via un répartiteur de charge.",
     "insecureSkipVerify": "Ne pas vérifier le certificat du collecteur",
     "insecureWarning": "La connexion reste chiffrée mais rien ne prouve qui se trouve en face. À réserver à un collecteur de laboratoire.",
     "clientCert": "Certificat client (PEM)",
     "clientCertHint": "Pour le TLS mutuel, quand le collecteur exige que l'émetteur s'authentifie.",
-    "clientKey": "Clé privée du client (PEM)"
+    "clientKey": "Clé privée du client (PEM)",
+    "noEncryptionWarning": "Sans chiffrement, le message et le mot de passe utilisé pour l'envoyer traversent le réseau en clair."
   },
   "tray": {
     "show": "Ouvrir SnmpLens",

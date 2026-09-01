@@ -821,12 +821,13 @@
     "caCert": "CA 证书（PEM）",
     "caCertHint": "留空则使用系统信任库。粘贴证书以信任内部 CA。",
     "serverName": "证书中应有的名称",
-    "serverNameHint": "仅在通过 IP 或负载均衡器访问收集器时需要。",
+    "serverNameHint": "仅在通过 IP 或负载均衡器访问目标时需要。",
     "insecureSkipVerify": "不验证收集器证书",
     "insecureWarning": "连接仍然加密，但无法证明对端是谁。仅可用于实验环境的收集器。",
     "clientCert": "客户端证书（PEM）",
     "clientCertHint": "用于双向 TLS，即收集器要求发送方进行身份验证时。",
-    "clientKey": "客户端私钥（PEM）"
+    "clientKey": "客户端私钥（PEM）",
+    "noEncryptionWarning": "不加密时，消息以及用于发送的密码都会以明文形式通过网络传输。"
   },
   "tray": {
     "show": "打开 SnmpLens",

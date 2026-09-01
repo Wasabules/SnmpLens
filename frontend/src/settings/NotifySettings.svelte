@@ -61,6 +61,7 @@
       email: {
         host: '', port: 587, username: '', from: '', to: [],
         encryption: 'starttls', authMethod: 'plain', insecureSkipVerify: false, timeout: 20,
+        caCert: '', serverName: '',
       },
     };
   }
@@ -367,6 +368,31 @@
         <p class="note">{$_('notify.secretHint', { values: { backend } })}</p>
         {#if editingSink.hasSecret}
           <button class="btn-mode" on:click={() => clearSecret(editingSink.id)}>{$_('notify.clearSecret')}</button>
+        {/if}
+
+        {#if editingSink.email.encryption !== 'none'}
+          <label class="fld"><span>{$_('notify.caCert')}</span>
+            <textarea rows="3" bind:value={editingSink.email.caCert}
+              placeholder={'-----BEGIN CERTIFICATE-----'}></textarea>
+            <span class="sub">{$_('notify.caCertHint')}</span>
+          </label>
+          <label class="fld"><span>{$_('notify.serverName')}</span>
+            <input type="text" bind:value={editingSink.email.serverName} placeholder="smtp.example.com" />
+            <span class="sub">{$_('notify.serverNameHint')}</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" bind:checked={editingSink.email.insecureSkipVerify} />
+            <span>{$_('notify.insecureSkipVerify')}</span>
+          </label>
+          {#if editingSink.email.insecureSkipVerify}
+            <p class="note warn">
+              <Icon name="triangle-alert" size={14} /> {$_('notify.insecureWarning')}
+            </p>
+          {/if}
+        {:else}
+          <p class="note warn">
+            <Icon name="triangle-alert" size={14} /> {$_('notify.noEncryptionWarning')}
+          </p>
         {/if}
       {/if}
 

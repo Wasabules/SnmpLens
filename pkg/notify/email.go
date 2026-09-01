@@ -2,6 +2,7 @@ package notify
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"mime"
@@ -28,9 +29,38 @@ type EmailConfig struct {
 	// Encryption: "starttls" (587, the usual), "tls" (465, implicit) or "none".
 	Encryption string `json:"encryption"`
 	// AuthMethod: "plain", "login" (on-prem Exchange) or "none".
-	AuthMethod         string `json:"authMethod"`
+	AuthMethod string `json:"authMethod"`
+	// CACert is a PEM bundle trusting a private CA, which is what an internal
+	// relay actually needs. Without it the only way to reach such a relay was
+	// to disable verification altogether — the insecure setting, for a
+	// situation that has a secure answer.
+	CACert string `json:"caCert,omitempty"`
+	// ServerName overrides the name checked against the certificate, for a
+	// relay reached by IP or through a load balancer.
+	ServerName         string `json:"serverName,omitempty"`
 	InsecureSkipVerify bool   `json:"insecureSkipVerify"`
 	Timeout            int    `json:"timeout"` // seconds; 0 means 20
+}
+
+// tlsConfig builds the client TLS settings for the relay.
+func (cfg EmailConfig) tlsConfig() (*tls.Config, error) {
+	serverName := strings.TrimSpace(cfg.ServerName)
+	if serverName == "" {
+		serverName = cfg.Host
+	}
+	out := &tls.Config{
+		ServerName:         serverName,
+		MinVersion:         tls.VersionTLS12,
+		InsecureSkipVerify: cfg.InsecureSkipVerify, // #nosec G402 -- opt-in and named for what it does
+	}
+	if ca := strings.TrimSpace(cfg.CACert); ca != "" {
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM([]byte(ca)) {
+			return nil, fmt.Errorf("the CA certificate is not valid PEM")
+		}
+		out.RootCAs = pool
+	}
+	return out, nil
 }
 
 // loginAuth implements the non-standard but widely required AUTH LOGIN, which
@@ -94,14 +124,12 @@ func (m EmailSink) Send(e events.Event, subject, body string) error {
 	addr := net.JoinHostPort(cfg.Host, fmt.Sprint(port))
 	encryption := strings.ToLower(strings.TrimSpace(cfg.Encryption))
 
-	tlsConfig := &tls.Config{
-		ServerName:         cfg.Host,
-		InsecureSkipVerify: cfg.InsecureSkipVerify, // #nosec G402 -- opt-in, for private CAs
-		MinVersion:         tls.VersionTLS12,
+	tlsConfig, err := cfg.tlsConfig()
+	if err != nil {
+		return err
 	}
 
 	var conn net.Conn
-	var err error
 	dialer := &net.Dialer{Timeout: timeout}
 	if encryption == "tls" {
 		conn, err = tls.DialWithDialer(dialer, "tcp", addr, tlsConfig)

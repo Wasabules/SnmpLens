@@ -821,12 +821,13 @@
     "caCert": "CA-Zertifikat (PEM)",
     "caCertHint": "Leer lassen, um den Systemzertifikatspeicher zu verwenden. Ein Zertifikat einfügen, um einer internen CA zu vertrauen.",
     "serverName": "Erwarteter Zertifikatsname",
-    "serverNameHint": "Nur nötig, wenn der Kollektor über eine IP oder einen Lastverteiler erreicht wird.",
+    "serverNameHint": "Nur nötig, wenn das Ziel über eine IP oder einen Lastverteiler erreicht wird.",
     "insecureSkipVerify": "Zertifikat des Kollektors nicht prüfen",
     "insecureWarning": "Die Verbindung bleibt verschlüsselt, aber nichts belegt, wer am anderen Ende ist. Nur für einen Testkollektor verwenden.",
     "clientCert": "Client-Zertifikat (PEM)",
     "clientCertHint": "Für gegenseitiges TLS, wenn der Kollektor eine Authentifizierung des Senders verlangt.",
-    "clientKey": "Privater Client-Schlüssel (PEM)"
+    "clientKey": "Privater Client-Schlüssel (PEM)",
+    "noEncryptionWarning": "Ohne Verschlüsselung gehen die Nachricht und das zum Senden verwendete Passwort im Klartext über das Netz."
   },
   "tray": {
     "show": "SnmpLens öffnen",
