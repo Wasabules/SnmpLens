@@ -70,7 +70,32 @@
     : catalogue.symbols
         .filter((sy) => sy.name.toLowerCase().includes(symbolFilter.toLowerCase()))
         .slice(0, 60);
-  $: lineCount = buffer.split('\n').length;
+  // Derived from `lines`, not a second split. Splitting a 185 KB buffer twice
+  // per keystroke allocated two 5,000-element arrays for one answer.
+  $: lineCount = lines.length;
+
+  // The gutter as ONE text node instead of 5,000 DOM nodes. An {#each} over
+  // the line count made Svelte create, diff and keep a node per line of
+  // IP-MIB — by far the most expensive thing on screen, and invisible in a
+  // profile of the analysis.
+  $: gutterText = buildGutter(lineCount);
+  let gutterCache = { n: 0, text: '' };
+  function buildGutter(n) {
+    if (n === gutterCache.n) return gutterCache.text;
+    let text;
+    // Typing adds a line at a time, so append rather than rebuild.
+    if (n > gutterCache.n && gutterCache.n > 0 && n - gutterCache.n < 32) {
+      const extra = [];
+      for (let i = gutterCache.n + 1; i <= n; i++) extra.push(i);
+      text = gutterCache.text + extra.join('\n') + '\n';
+    } else {
+      const parts = new Array(n);
+      for (let i = 0; i < n; i++) parts[i] = i + 1;
+      text = parts.join('\n') + '\n';
+    }
+    gutterCache = { n, text };
+    return text;
+  }
   // Highlighting a 185 KB MIB takes ~45 ms. Doing it on every keystroke makes
   // typing stutter on a big file, so the mirror lags the text by a frame or
   // two — invisible while typing, and the caret is the textarea's own.
@@ -312,7 +337,6 @@
   // just a number.
   async function jumpTo(d) {
     if (!textarea || !d.line) return;
-    const lines = buffer.split('\n');
     let offset = 0;
     for (let i = 0; i < Math.min(d.line - 1, lines.length); i++) offset += lines[i].length + 1;
     offset += Math.max(0, (d.column || 1) - 1);
@@ -578,8 +602,7 @@
       {/if}
 
       <div class="surface" bind:this={surface}>
-        <pre class="gutter" bind:this={gutter} aria-hidden="true">{#each Array(lineCount) as _unused, i}{i + 1}
-{/each}</pre>
+        <pre class="gutter" bind:this={gutter} aria-hidden="true">{gutterText}</pre>
         <div class="code">
           <pre class="mirror" bind:this={mirror} aria-hidden="true">{@html highlighted}<br /></pre>
           <!-- Underlines sit between the mirror and the textarea, so they are

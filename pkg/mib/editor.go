@@ -106,11 +106,18 @@ type SaveResult struct {
 // has no limit; this is advice, not a rule, hence a warning.
 const maxLineLength = 200
 
+// bomPrefix is the UTF-8 byte order mark.
+const bomPrefix = "\ufeff"
+
 // positionRe extracts "line:column:" from a participle lexer error, which
 // formats itself as "2:1: unexpected \"this\" (expected \"END\")".
 var positionRe = regexp.MustCompile(`^(\d+):(\d+):\s*(.*)$`)
 
 // moduleNameRe finds the module name in the DEFINITIONS line.
+// endRe finds the module terminator. Hoisted: it used to be compiled inside
+// structureDiagnostics, so every keystroke paid for building the automaton.
+var endRe = regexp.MustCompile(`(?m)^\s*END\s*$`)
+
 var moduleNameRe = regexp.MustCompile(`(?m)^\s*([A-Za-z][A-Za-z0-9-]*)\s+DEFINITIONS\b`)
 
 // Validate reports every problem it can find in MIB source text.
@@ -118,6 +125,22 @@ var moduleNameRe = regexp.MustCompile(`(?m)^\s*([A-Za-z][A-Za-z0-9-]*)\s+DEFINIT
 // It is pure: no file is read, no global state is touched, and gosmi's loaded
 // tree is untouched. That is what makes it safe to run while the user types.
 func Validate(content string) []Diagnostic {
+	module, err := parseOnce(content)
+	return validateParsed(content, module, err)
+}
+
+// parseOnce is the single parse the whole editor pipeline shares.
+//
+// It is by far the most expensive thing here: about 40 ms on a 185 KB MIB.
+// Running it once per check meant THREE parses on every pause in typing, which
+// is where the editor felt slow.
+func parseOnce(content string) (*parser.Module, error) {
+	return parser.Parse(strings.NewReader(strings.TrimPrefix(content, bomPrefix)))
+}
+
+// validateParsed produces the syntax, structure and style diagnostics from a
+// file that has already been parsed.
+func validateParsed(content string, _ *parser.Module, parseErr error) []Diagnostic {
 	diags := []Diagnostic{}
 
 	if strings.HasPrefix(content, "\ufeff") {
@@ -129,8 +152,8 @@ func Validate(content string) []Diagnostic {
 	}
 
 	// Syntax first: without a parse there is nothing else worth saying.
-	if _, err := parser.Parse(strings.NewReader(content)); err != nil {
-		diags = append(diags, syntaxDiagnostic(err))
+	if parseErr != nil {
+		diags = append(diags, syntaxDiagnostic(parseErr))
 	}
 
 	diags = append(diags, structureDiagnostics(content)...)
@@ -167,7 +190,7 @@ func structureDiagnostics(content string) []Diagnostic {
 
 	// A missing END is reported by the parser as "unexpected <EOF>", which
 	// points at the last line rather than at what is missing. Say it plainly.
-	if !regexp.MustCompile(`(?m)^\s*END\s*$`).MatchString(content) {
+	if !endRe.MatchString(content) {
 		diags = append(diags, Diagnostic{
 			Line: countLines(content), Column: 1, Severity: SevError, Code: CodeStructure,
 			Message: "the module is never closed with END",

@@ -128,6 +128,23 @@ type ImportFix struct {
 	Content string `json:"content,omitempty"`
 }
 
+// index maps each symbol name to the module that defines it. A name defined in
+// several modules resolves to the first alphabetically, which is stable rather
+// than arbitrary.
+//
+// Built once per analysis instead of scanned linearly per identifier: a few
+// thousand symbols against a few thousand identifiers is millions of string
+// comparisons for an answer a map gives in one.
+func (c Catalogue) index() map[string]string {
+	origin := make(map[string]string, len(c.Symbols))
+	for _, s := range c.Symbols {
+		if _, exists := origin[s.Name]; !exists {
+			origin[s.Name] = s.Module
+		}
+	}
+	return origin
+}
+
 // scanIdentifiers walks MIB source and returns every identifier used outside a
 // comment or a string, with the position of its first appearance.
 //
@@ -192,7 +209,14 @@ func isIdentPart(c byte) bool {
 // match a loaded symbol, and an unknown vendor name is not something we could
 // suggest an import for anyway.
 func CheckImports(content string, cat Catalogue) []MissingImport {
-	module, err := parser.Parse(strings.NewReader(content))
+	module, err := parseOnce(content)
+	return checkImportsParsed(content, module, err, cat.index())
+}
+
+// checkImportsParsed works from an already-parsed file and a pre-built name
+// index, so the pipeline pays for one parse and one index rather than three
+// parses and a linear scan per identifier.
+func checkImportsParsed(content string, module *parser.Module, err error, origin map[string]string) []MissingImport {
 	if err != nil || module == nil {
 		return nil // a file that does not parse has bigger problems
 	}
@@ -216,16 +240,6 @@ func CheckImports(content string, cat Catalogue) []MissingImport {
 	}
 	for _, m := range module.Body.Macros {
 		known[string(m.Name)] = true
-	}
-
-	// Where each catalogue symbol lives. A name defined in several modules
-	// resolves to the first alphabetically, which is stable rather than
-	// arbitrary.
-	origin := map[string]string{}
-	for _, s := range cat.Symbols {
-		if _, exists := origin[s.Name]; !exists {
-			origin[s.Name] = s.Module
-		}
 	}
 
 	selfName := string(module.Name)

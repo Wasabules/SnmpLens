@@ -154,22 +154,13 @@ func (a *App) MibEditorValidate(content string) []mib.Diagnostic {
 	return mib.Validate(content)
 }
 
-// MibEditorAnalyse runs every check in ONE call.
+// MibEditorAnalyse runs every check from one parse.
 //
-// One binding rather than three because each of them parses the file, and the
-// editor was calling them separately on every pause in typing — three parses of
-// a 185 KB MIB where one would do.
+// It used to call three functions that each parsed the file: 130 ms of work on
+// a 185 KB MIB for 45 ms of answers, on every pause in typing. The bridge call
+// was unified before the parse was, which is why the editor still felt slow.
 func (a *App) MibEditorAnalyse(content string) mib.Analysis {
-	cat := mib.Symbols()
-	out := mib.Analysis{
-		Diagnostics: mib.Validate(content),
-		Missing:     mib.CheckImports(content, cat),
-	}
-	out.Diagnostics = append(out.Diagnostics, mib.Analyse(content, cat)...)
-	if out.Missing == nil {
-		out.Missing = []mib.MissingImport{}
-	}
-	return out
+	return mib.AnalyseAll(content, mib.Symbols())
 }
 
 // MibEditorSave writes a MIB, backing up whatever was there first.

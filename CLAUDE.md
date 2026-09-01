@@ -142,6 +142,10 @@ only) nor `LoadModule` (a boolean that is not even true) will: unknown types, du
 missing modules in `FROM`, undefined `INDEX`, readable conceptual rows. The bar is zero errors on the 14 bundled
 MIBs, and that is a test.
 
+`AnalyseAll` is the entry point the bridge uses, and it exists for one reason: `parser.Parse` costs about 40 ms
+on a 185 KB MIB, and calling `Validate`, `CheckImports` and `Analyse` in turn parsed the file three times on every
+pause in typing. There are benchmarks in `bench_test.go`; run them before adding a check that parses.
+
 `frontend/src/mibeditor/metrics.js` turns a (line, column) into pixels, which is what makes squiggles, hover
 cards and caret-anchored completion possible **here and not in a plain textarea**: the mirror lays out identically
 to the text (unit-tested) and both are monospace with a fixed line height, so a position is arithmetic once the

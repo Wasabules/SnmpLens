@@ -38,7 +38,12 @@ const (
 // cat is the loaded tree; when it is empty the checks that need it are skipped
 // rather than producing confident nonsense.
 func Analyse(content string, cat Catalogue) []Diagnostic {
-	module, err := parser.Parse(strings.NewReader(content))
+	module, err := parseOnce(content)
+	return analyseParsed(content, module, err, cat)
+}
+
+// analyseParsed works from an already-parsed file.
+func analyseParsed(content string, module *parser.Module, err error, cat Catalogue) []Diagnostic {
 	if err != nil || module == nil {
 		// A file that does not parse has a syntax error already being shown.
 		// Guessing at its meaning would bury the thing that matters.
@@ -90,6 +95,8 @@ type analysis struct {
 	// rawSource is kept because the AST does not retain the text, and the
 	// unused-import check has to look at what the file actually mentions.
 	rawSource string
+	// catIndex is the catalogue by name, built lazily and once.
+	catIndex map[string]string
 }
 
 func (a *analysis) add(pos lexerPos, severity, code, message, symbol string) {
@@ -232,12 +239,11 @@ func (a *analysis) useType(name string, line, column int, node *parser.Node) {
 }
 
 func (a *analysis) inCatalogue(name string) bool {
-	for _, s := range a.cat.Symbols {
-		if s.Name == name {
-			return true
-		}
+	if a.catIndex == nil {
+		a.catIndex = a.cat.index()
 	}
-	return false
+	_, ok := a.catIndex[name]
+	return ok
 }
 
 // isBuiltinSyntax covers the spellings the grammar accepts directly.
@@ -400,4 +406,25 @@ func (a *analysis) checkUnusedImports() {
 type Analysis struct {
 	Diagnostics []Diagnostic    `json:"diagnostics"`
 	Missing     []MissingImport `json:"missing"`
+}
+
+// AnalyseAll runs every check from ONE parse.
+//
+// The editor called Validate, CheckImports and Analyse in turn, and each of
+// them parsed the file: three parses of a 185 KB MIB on every pause in typing,
+// about 130 ms of work for 45 ms of answers. This is the entry point the bridge
+// uses; the three functions above remain for callers that want one of them.
+func AnalyseAll(content string, cat Catalogue) Analysis {
+	module, err := parseOnce(content)
+	index := cat.index()
+
+	out := Analysis{
+		Diagnostics: validateParsed(content, module, err),
+		Missing:     checkImportsParsed(content, module, err, index),
+	}
+	out.Diagnostics = append(out.Diagnostics, analyseParsed(content, module, err, cat)...)
+	if out.Missing == nil {
+		out.Missing = []MissingImport{}
+	}
+	return out
 }
