@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -295,7 +296,7 @@ func TestNotifyPreviewTemplate(t *testing.T) {
 	p := a.NotifyPreviewTemplate(notify.MessageTemplate{
 		Subject: "[{{severityUpper}}] {{source}}",
 		Body:    "bound={{params.bound}} value={{value|n/a}}",
-	}, "threshold", false, "NOC mail")
+	}, "threshold", false, "NOC mail", false)
 
 	if len(p.Errors) != 0 {
 		t.Fatalf("a valid template previewed with errors: %+v", p.Errors)
@@ -307,13 +308,91 @@ func TestNotifyPreviewTemplate(t *testing.T) {
 		t.Errorf("the sample has no usable params: %q", p.Body)
 	}
 
-	masked := a.NotifyPreviewTemplate(notify.MessageTemplate{Body: "{{source}}"}, "threshold", true, "s")
+	masked := a.NotifyPreviewTemplate(notify.MessageTemplate{Body: "{{source}}"}, "threshold", true, "s", false)
 	if strings.Contains(masked.Body, "10.0.0.1") {
 		t.Errorf("the masked preview shows a real address: %q", masked.Body)
 	}
 
-	broken := a.NotifyPreviewTemplate(notify.MessageTemplate{Body: "{{#severity}}x"}, "threshold", false, "s")
+	broken := a.NotifyPreviewTemplate(notify.MessageTemplate{Body: "{{#severity}}x"}, "threshold", false, "s", false)
 	if len(broken.Errors) == 0 {
 		t.Error("an unclosed block previewed without an error")
+	}
+}
+
+// The preview must show what will actually be POSTed, because the plain and
+// JSON renderings differ exactly where the mistakes live: escaping.
+func TestPreviewShowsTheRealJSONPayload(t *testing.T) {
+	a := newTestApp(t)
+
+	p := a.NotifyPreviewTemplate(notify.MessageTemplate{
+		Body: `{"text":"{{summary}}","sev":"{{severity}}"}`,
+	}, "threshold", false, "NOC", true)
+
+	if !p.Json {
+		t.Error("the preview does not know it is a JSON payload")
+	}
+	if !p.JsonValid {
+		t.Errorf("a valid payload was reported invalid: %s / %s", p.JsonError, p.Body)
+	}
+	if p.Bytes != len(p.Body) {
+		t.Errorf("bytes = %d, body is %d", p.Bytes, len(p.Body))
+	}
+	var parsed map[string]string
+	if err := json.Unmarshal([]byte(p.Body), &parsed); err != nil {
+		t.Fatalf("the previewed body is not what it claims: %v", err)
+	}
+	if parsed["sev"] != "major" {
+		t.Errorf("values were not rendered: %+v", parsed)
+	}
+}
+
+// A broken payload must say so in the preview rather than at 03:00.
+func TestPreviewReportsInvalidJSON(t *testing.T) {
+	a := newTestApp(t)
+	p := a.NotifyPreviewTemplate(notify.MessageTemplate{Body: `{"unclosed": `}, "threshold", false, "s", true)
+	if p.JsonValid {
+		t.Fatal("invalid JSON previewed as valid")
+	}
+	if p.JsonError == "" {
+		t.Error("no reason given")
+	}
+}
+
+// The mode has to be stable: with nothing written yet it must still produce
+// JSON, not the plain-text default posted to an endpoint expecting an object.
+func TestEmptyTemplateInJSONModeStillProducesJSON(t *testing.T) {
+	a := newTestApp(t)
+	p := a.NotifyPreviewTemplate(notify.MessageTemplate{}, "threshold", false, "s", true)
+	if !p.JsonValid {
+		t.Fatalf("an empty template produced non-JSON: %s\n%s", p.JsonError, p.Body)
+	}
+	var parsed map[string]string
+	json.Unmarshal([]byte(p.Body), &parsed)
+	if parsed["summary"] == "" || parsed["severity"] == "" {
+		t.Errorf("the default payload is missing the basics: %+v", parsed)
+	}
+}
+
+// Hostile content from a trap must not be able to break the payload, and the
+// preview must show that it does not.
+func TestPreviewEscapesHostileContent(t *testing.T) {
+	a := newTestApp(t)
+	p := a.NotifyPreviewTemplate(notify.MessageTemplate{
+		Body: `{"oid":"{{oid}}"}`,
+	}, "trap", false, "s", true)
+	if !p.JsonValid {
+		t.Errorf("a trap sample broke the payload: %s", p.JsonError)
+	}
+}
+
+// Plain mode must be untouched by any of this.
+func TestPreviewPlainModeIsUnchanged(t *testing.T) {
+	a := newTestApp(t)
+	p := a.NotifyPreviewTemplate(notify.MessageTemplate{Body: "{{summary}}"}, "threshold", false, "s", false)
+	if p.Json || p.JsonValid || p.JsonError != "" {
+		t.Errorf("plain mode reported JSON state: %+v", p)
+	}
+	if strings.Contains(p.Body, `\"`) {
+		t.Errorf("plain mode was escaped: %q", p.Body)
 	}
 }

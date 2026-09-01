@@ -5,6 +5,7 @@
   import {
     NotifyTemplateVariables,
     NotifyPreviewTemplate,
+    NotifyDefaultJsonPayload,
   } from '../../wailsjs/go/main/App';
 
   /** The sink's template, bound two-way. */
@@ -46,7 +47,7 @@
       try {
         preview = await NotifyPreviewTemplate(
           { subject: template.subject || '', body: template.body || '' },
-          previewKind, redact, sinkName,
+          previewKind, redact, sinkName, jsonPayload,
         );
       } catch (e) {
         preview = null;
@@ -54,7 +55,7 @@
     }, 200);
   }
 
-  $: template, previewKind, redact, sinkName, refreshPreview();
+  $: template, previewKind, redact, sinkName, jsonPayload, refreshPreview();
 
   async function insert(name) {
     const token = '{{' + name + '}}';
@@ -75,6 +76,16 @@
     el.setSelectionRange(start + token.length, start + token.length);
   }
 
+  // Starting from something that already works beats starting from a blank
+  // field that will not save.
+  async function useDefaultPayload() {
+    try {
+      template.body = await NotifyDefaultJsonPayload();
+    } catch (e) {
+      /* leave the body alone */
+    }
+  }
+
   function errorsFor(field) {
     return (preview?.errors || []).filter((e) => e.field === field);
   }
@@ -83,6 +94,11 @@
 <div class="tpl">
   <div class="tpl-head">
     <h5>{$_('notify.templateTitle')}</h5>
+    {#if jsonPayload}
+      <button class="btn btn-small" on:click={useDefaultPayload}>
+        {$_('notify.useDefaultPayload')}
+      </button>
+    {/if}
     <button class="btn btn-small" on:click={() => (showVariables = !showVariables)}>
       <Icon name={showVariables ? 'chevron-up' : 'chevron-down'} size={13} />
       {$_('notify.insertVariable')}
@@ -136,7 +152,14 @@
 
   <div class="preview">
     <div class="preview-head">
-      <span>{$_('notify.templatePreview')}</span>
+      <span>{jsonPayload ? $_('notify.previewPayload') : $_('notify.templatePreview')}</span>
+      {#if jsonPayload && preview}
+        {#if preview.jsonValid}
+          <span class="pv-ok">{$_('notify.jsonValid', { values: { bytes: preview.bytes } })}</span>
+        {:else}
+          <span class="pv-bad" title={preview.jsonError}>{$_('notify.jsonInvalid')}</span>
+        {/if}
+      {/if}
       <select bind:value={previewKind}>
         <option value="threshold">{$_('events.category.threshold')}</option>
         <option value="trap">{$_('events.category.trap')}</option>
@@ -145,8 +168,13 @@
     </div>
     {#if preview}
       <div class="preview-body">
-        <div class="pv-subject">{preview.subject}</div>
-        <pre class="pv-text">{preview.body}</pre>
+        {#if !jsonPayload}
+          <div class="pv-subject">{preview.subject}</div>
+        {/if}
+        <pre class="pv-text" class:pv-json={jsonPayload}>{preview.body}</pre>
+        {#if jsonPayload && !preview.jsonValid && preview.jsonError}
+          <p class="pv-error">{preview.jsonError}</p>
+        {/if}
       </div>
     {/if}
   </div>
@@ -324,6 +352,25 @@
     color: var(--text-color);
     margin-bottom: 6px;
     word-break: break-word;
+  }
+
+  .pv-ok {
+    color: var(--success-color);
+  }
+
+  .pv-bad {
+    color: var(--error-color);
+  }
+
+  .pv-error {
+    margin: 4px 0 0;
+    font-size: 0.72em;
+    color: var(--error-color);
+    word-break: break-word;
+  }
+
+  .pv-json {
+    color: var(--text-color);
   }
 
   .pv-text {

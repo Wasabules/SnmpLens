@@ -893,7 +893,11 @@
     "payloadTemplate": "Eigenes JSON (Nachrichtenvorlage)",
     "payloadEnvelopeHint": "Ein festes JSON-Objekt mit dem Ereignis, dem Betreff und dem gerenderten Text.",
     "payloadTemplateHint": "Die Vorlage unten wird zum gesamten Anfragerumpf. Für Slack, Teams oder Alertmanager, die jeweils ihre eigene Form erwarten.",
-    "tplJsonNote": "Dieser Rumpf IST die Nutzlast der Anfrage und muss daher gültiges JSON sein. Eingefügte Werte werden für Sie maskiert; die Anführungszeichen und Kommas drumherum sind Ihre."
+    "tplJsonNote": "Dieser Rumpf IST die Nutzlast der Anfrage und muss daher gültiges JSON sein. Eingefügte Werte werden für Sie maskiert; die Anführungszeichen und Kommas drumherum sind Ihre.",
+    "previewPayload": "Vorschau der Nutzlast",
+    "jsonValid": "gültiges JSON · {bytes} Bytes",
+    "jsonInvalid": "kein gültiges JSON",
+    "useDefaultPayload": "Mit der Standardnutzlast beginnen"
   },
   "tray": {
     "show": "SnmpLens öffnen",

@@ -186,7 +186,13 @@ A webhook sends either the fixed SnmpLens envelope or, with `PayloadMode: "templ
 template renders — which is how you talk to Slack, Teams or Alertmanager. In that mode substituted values are
 escaped as JSON string fragments (`RenderJSONTemplate`) while the template's own punctuation is left alone: a trap
 arrives from the network, its OID reaches the body, and one quote would otherwise turn a hand-written payload into
-a different document. The rendered result is checked with `json.Valid` before it is posted, and at save time
+a different document. An empty template in that mode renders `DefaultJSONPayload` rather than the plain-text default, so the mode is
+valid before anyone writes anything — falling back to prose would post it to an endpoint expecting an object.
+Every field in that default is a string: a numeric one becomes `"value": ` and stops being JSON the first time an
+event arrives without a value. The preview renders through the same path the sink uses, so what is on screen is
+what will be POSTed, with its size and its parse result.
+
+The rendered result is checked with `json.Valid` before it is posted, and at save time
 against a sample of each event kind — a template that looks like JSON with placeholders still in it can stop being
 JSON the moment one expands.
 

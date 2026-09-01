@@ -893,7 +893,11 @@
     "payloadTemplate": "Mon propre JSON (gabarit du message)",
     "payloadEnvelopeHint": "Un objet JSON fixe portant l'événement, le sujet et le texte rendu.",
     "payloadTemplateHint": "Le gabarit ci-dessous devient le corps entier de la requête. À utiliser pour Slack, Teams ou Alertmanager, qui veulent chacun leur propre forme.",
-    "tplJsonNote": "Ce corps EST la charge utile de la requête : il doit donc être du JSON valide. Les valeurs que vous insérez sont échappées pour vous ; les guillemets et virgules autour sont les vôtres."
+    "tplJsonNote": "Ce corps EST la charge utile de la requête : il doit donc être du JSON valide. Les valeurs que vous insérez sont échappées pour vous ; les guillemets et virgules autour sont les vôtres.",
+    "previewPayload": "Aperçu de la charge utile",
+    "jsonValid": "JSON valide · {bytes} octets",
+    "jsonInvalid": "JSON invalide",
+    "useDefaultPayload": "Partir de la charge utile par défaut"
   },
   "tray": {
     "show": "Ouvrir SnmpLens",

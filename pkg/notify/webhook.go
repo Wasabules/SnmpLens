@@ -301,9 +301,8 @@ func ValidatePayloadTemplate(cfg SinkConfig) error {
 	if !strings.EqualFold(strings.TrimSpace(cfg.Webhook.PayloadMode), PayloadTemplate) {
 		return nil
 	}
-	if strings.TrimSpace(cfg.Template.Body) == "" {
-		return fmt.Errorf("this webhook sends its message template as the payload, so the template body cannot be empty")
-	}
+	// An empty template is fine here: RenderJSONTemplate falls back to
+	// DefaultJSONPayload, so the mode always produces valid JSON.
 	for _, kind := range []string{events.CategoryThreshold, events.CategoryTrap, events.CategoryReachability} {
 		_, body := RenderJSONTemplate(SampleEvent(kind), cfg.Name, cfg.Template)
 		if !json.Valid([]byte(strings.TrimSpace(body))) {

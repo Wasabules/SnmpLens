@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -1058,6 +1059,18 @@ type TemplatePreview struct {
 	Subject string                 `json:"subject"`
 	Body    string                 `json:"body"`
 	Errors  []notify.TemplateError `json:"errors"`
+	// Json is set when the sink posts its template as the payload. The editor
+	// shows what will actually be sent rather than a plain-text approximation
+	// of it, because the two differ exactly where mistakes live: escaping.
+	Json bool `json:"json"`
+	// JsonValid says whether the rendered body parses. Not "valid template" —
+	// a template can look like JSON with its placeholders still in place and
+	// stop being JSON the moment one of them expands.
+	JsonValid bool `json:"jsonValid"`
+	// JsonError is the parse failure, verbatim.
+	JsonError string `json:"jsonError,omitempty"`
+	// Bytes is the size of the request body as it will go on the wire.
+	Bytes int `json:"bytes"`
 }
 
 // NotifyPreviewTemplate renders a template against a canned event.
@@ -1066,15 +1079,27 @@ type TemplatePreview struct {
 // summary for an empty subject, so a template that renders to nothing looks
 // exactly like one that works. The sample carries real Params, which the test
 // notification does not, so {{params.*}} can actually be seen.
-func (a *App) NotifyPreviewTemplate(tpl notify.MessageTemplate, kind string, redact bool, sinkName string) TemplatePreview {
-	out := TemplatePreview{Errors: a.NotifyValidateTemplate(tpl)}
+func (a *App) NotifyPreviewTemplate(tpl notify.MessageTemplate, kind string, redact bool, sinkName string, jsonMode bool) TemplatePreview {
+	out := TemplatePreview{Errors: a.NotifyValidateTemplate(tpl), Json: jsonMode}
 
 	ev := notify.SampleEvent(kind)
 	if redact {
 		ev = notify.RedactEvent(ev)
 	}
-	subject, body := notify.RenderTemplate(ev, sinkName, tpl)
-	out.Subject, out.Body = subject, body
+
+	if jsonMode {
+		out.Subject, out.Body = notify.RenderJSONTemplate(ev, sinkName, tpl)
+		out.Bytes = len(out.Body)
+		if err := json.Unmarshal([]byte(strings.TrimSpace(out.Body)), new(any)); err != nil {
+			out.JsonError = err.Error()
+		} else {
+			out.JsonValid = true
+		}
+		return out
+	}
+
+	out.Subject, out.Body = notify.RenderTemplate(ev, sinkName, tpl)
+	out.Bytes = len(out.Body)
 	return out
 }
 
@@ -1123,4 +1148,13 @@ func (a *App) NotifyRetryDelivery(id int64) error {
 		a.dispatcher.Wake()
 	}
 	return nil
+}
+
+// NotifyDefaultJsonPayload is the starting point offered when a webhook is
+// switched to sending its template as the payload.
+//
+// Served from Go rather than duplicated in the editor so the default the user
+// starts from is the same one the sink falls back to.
+func (a *App) NotifyDefaultJsonPayload() string {
+	return notify.DefaultJSONPayload
 }

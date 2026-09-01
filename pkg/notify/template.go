@@ -448,9 +448,37 @@ func RenderTemplate(e events.Event, sinkName string, tpl MessageTemplate) (subje
 	return renderWith(e, sinkName, tpl, nil)
 }
 
+// DefaultJSONPayload is what a JSON webhook sends before anyone writes a
+// template, and the starting point offered when the mode is switched on.
+//
+// It exists because the mode has to be STABLE: falling back to the built-in
+// plain-text rendering would post prose to an endpoint expecting JSON, which
+// fails at the receiver with a message nobody sees. Every field is a string —
+// a numeric field would become `"value": ` and stop being JSON the moment an
+// event arrives without one.
+const DefaultJSONPayload = `{
+  "severity": "{{severity}}",
+  "category": "{{category}}",
+  "kind": "{{kind}}",
+  "source": "{{source}}",
+  "oid": "{{oid}}",
+  "value": "{{value}}",
+  "summary": "{{summary}}",
+  "time": "{{ts}}",
+  "eventId": "{{id}}",
+  "sender": "SnmpLens"
+}`
+
 // RenderJSONTemplate is RenderTemplate with every substituted value escaped as
 // a JSON string fragment, for a webhook whose body the operator writes as JSON.
+//
+// An empty template renders DefaultJSONPayload rather than the plain-text
+// default: in this mode the body is the request, so it has to be JSON whatever
+// the operator has or has not written.
 func RenderJSONTemplate(e events.Event, sinkName string, tpl MessageTemplate) (subject, body string) {
+	if strings.TrimSpace(tpl.Body) == "" {
+		tpl.Body = DefaultJSONPayload
+	}
 	return renderWith(e, sinkName, tpl, jsonEscape)
 }
 
