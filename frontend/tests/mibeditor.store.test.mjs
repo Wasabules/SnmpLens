@@ -13,14 +13,15 @@ import { pathToFileURL } from 'node:url';
 
 const calls = [];
 let pending = [];
+let drafts = {};
 
 globalThis.__stub = {
   MibEditorRead: async (name) => ({
     name, content: 'A DEFINITIONS ::= BEGIN\nEND\n', sha256: 'h', diagnostics: [],
   }),
-  MibEditorReadDraft: async () => '',
-  MibEditorSaveDraft: async () => {},
-  MibEditorDiscardDraft: async () => {},
+  MibEditorReadDraft: async (name) => drafts[name] || '',
+  MibEditorSaveDraft: async (name, content) => { drafts[name] = content; },
+  MibEditorDiscardDraft: async (name) => { delete drafts[name]; },
   // Each analysis parks itself; the test decides when and in what order each
   // one answers.
   MibEditorAnalyse: (content) => {
@@ -116,5 +117,38 @@ check('a current answer is applied',
   get(mibEditorStore).diagnostics.some((d) => d.message === 'current'));
 check('checking is cleared when the answer lands',
   get(mibEditorStore).checking === false);
+
+
+// --- drafts ---
+//
+// Abandoning changes has to reach the disk. It did not: saying yes to
+// "discard your changes?" left the draft in place, so reopening the file
+// recovered exactly the edits that had just been refused — and asked again.
+drafts = { 'B-MIB': 'work in progress' };
+await mibEditorStore.discardDraft('B-MIB');
+check('discarding removes the stored buffer', drafts['B-MIB'] === undefined);
+
+// Reverting is a decision, so the draft goes immediately rather than in a
+// second and a bit — long enough to leave the file and have it survive.
+drafts = {};
+await mibEditorStore.open('C-MIB');
+mibEditorStore.setBuffer('edited');
+await tick();
+drafts['C-MIB'] = 'edited';           // as the debounced writer would have
+mibEditorStore.revert();
+await tick();
+check('reverting removes the draft at once', drafts['C-MIB'] === undefined);
+check('reverting restores the saved content',
+  get(mibEditorStore).buffer === 'A DEFINITIONS ::= BEGIN\nEND\n');
+
+// A pending draft write belongs to the file it was scheduled for. Reading the
+// current file instead wrote one file's buffer under another file's name.
+drafts = {};
+await mibEditorStore.open('D-MIB');
+mibEditorStore.setBuffer('belongs to D');
+await mibEditorStore.open('E-MIB');    // switch before the debounce fires
+await new Promise((r) => setTimeout(r, 1400));
+check('a pending draft is not written under the newly opened file',
+  drafts['E-MIB'] === undefined, JSON.stringify(drafts));
 
 process.exit(failures ? 1 : 0);

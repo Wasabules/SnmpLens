@@ -43,6 +43,7 @@ function createMibEditorStore() {
   }
 
   async function open(name) {
+    clearTimeout(draftTimer); // whatever was pending belongs to the file being left
     const source = await MibEditorRead(name);
     // A draft for this file means a previous session left work behind.
     let draft = '';
@@ -116,22 +117,50 @@ function createMibEditorStore() {
     }
   }
 
+  // The draft is written for the file that was open when the timer was SET,
+  // not for whatever happens to be open when it fires. Reading the current
+  // state instead meant that switching files inside the delay wrote one file's
+  // buffer under another file's name.
   function scheduleDraft() {
     clearTimeout(draftTimer);
+    const s = get({ subscribe });
+    if (!s.source) return;
+    const name = s.source.name;
+
     draftTimer = setTimeout(async () => {
-      const s = get({ subscribe });
-      if (!s.source) return;
+      const now = get({ subscribe });
+      // Still the same file? If not, that file's draft was already settled
+      // when it was closed.
+      if (!now.source || now.source.name !== name) return;
       try {
-        if (isDirty(s)) {
-          await MibEditorSaveDraft(s.source.name, s.buffer);
+        if (isDirty(now)) {
+          await MibEditorSaveDraft(name, now.buffer);
         } else {
-          await MibEditorDiscardDraft(s.source.name);
+          await MibEditorDiscardDraft(name);
         }
       } catch (e) {
         // A draft is a safety net, not a feature; failing to write one must
         // never interrupt typing.
       }
     }, 1200);
+  }
+
+  /**
+   * Forget the stored buffer for a file.
+   *
+   * Abandoning changes has to reach the DISK, not just the screen. Without
+   * this, saying yes to "discard your changes?" left the draft in place, and
+   * reopening the file recovered the very edits that had just been thrown
+   * away — so the prompt came back, for changes the user had already refused.
+   */
+  async function discardDraft(name) {
+    clearTimeout(draftTimer);
+    if (!name) return;
+    try {
+      await MibEditorDiscardDraft(name);
+    } catch (e) {
+      /* nothing recoverable to do */
+    }
   }
 
   /** Called after a successful save: the file on disk is now the buffer. */
@@ -151,9 +180,12 @@ function createMibEditorStore() {
     }
   }
 
+  // Reverting is a decision, so the draft goes NOW rather than in a second and
+  // a bit — long enough to leave the file and have it survive.
   function revert() {
+    const name = get({ subscribe }).source?.name;
     update((s) => (s.source ? { ...s, buffer: s.source.content, diagnostics: s.source.diagnostics || [] } : s));
-    scheduleDraft();
+    discardDraft(name);
   }
 
   function close() {
@@ -162,7 +194,7 @@ function createMibEditorStore() {
     set({ ...EMPTY });
   }
 
-  return { subscribe, open, openSource, setBuffer, refresh, markSaved, revert, close, dirty };
+  return { subscribe, open, openSource, setBuffer, refresh, markSaved, revert, close, dirty, discardDraft };
 }
 
 export const mibEditorStore = createMibEditorStore();

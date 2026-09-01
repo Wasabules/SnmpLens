@@ -206,7 +206,11 @@
   // Losing an edit to a misclick is the one failure this editor must not have.
   async function confirmDiscard() {
     if (!dirty) return true;
-    return window.confirm(get(_)('mibEditor.discardConfirm'));
+    if (!window.confirm(get(_)('mibEditor.discardConfirm'))) return false;
+    // Throwing the changes away has to reach the draft on disk too, or
+    // reopening the file recovers exactly what was just refused.
+    await mibEditorStore.discardDraft(source?.name);
+    return true;
   }
 
   // Validation runs in Go and touches nothing: no file, no gosmi state. That is
