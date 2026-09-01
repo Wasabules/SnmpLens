@@ -119,6 +119,14 @@ because a debug endpoint that echoes request headers would otherwise write the c
 A custom header value may contain `{{secret}}` (`notify.SecretPlaceholder`) to draw on the stored credential:
 header values are persisted with the configuration, so a credential typed directly into one would not be.
 
+Event text is not all ours: a trap arrives from the network unauthenticated and its trap-OID value reaches the
+rendered body, so anything written into a protocol where a newline or a dot changes meaning is escaped —
+`dotStuff` (RFC5321 4.5.2, on CRLF-normalised lines), `headerValue` for the raw mail headers, and the RFC5424
+header sanitiser. The mail subject relies on `mime.QEncoding` encoding every byte below 0x20; that is standard
+library behaviour we depend on rather than implement, so `injection_test.go` pins it. Redaction is applied to the
+event when the delivery is QUEUED, not only to the rendered text, because the webhook embeds the whole event as
+JSON.
+
 A sink has exactly one secret slot (`SinkConfig.Secret`, write-only), and each kind decides what it holds: the
 SMTP password, the webhook bearer token, or the mutual-TLS **client private key** for syslog. The matching
 certificate is public and stays in the config.

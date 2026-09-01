@@ -68,6 +68,42 @@ func writeField(b *strings.Builder, label, value string) {
 // This is NOT Anonymous Mode: that is renderer-only display masking and is
 // deliberately non-persistent, so it cannot govern what a background dispatcher
 // puts on the wire. This is its explicit, per-sink counterpart.
+// RedactEvent returns a copy with the target address masked everywhere it
+// appears, for a sink whose Redact option is on.
+//
+// Rendering alone is not enough: the webhook sink embeds the whole event as
+// JSON, so masking only the subject and body would send the real address in
+// the structured payload of the very sink most likely to forward it onwards.
+// The redaction is applied when the delivery is QUEUED, so what is stored is
+// already what will be sent — a later change to the option cannot retroactively
+// unmask an alert that has already gone out, and a queued row never holds an
+// address the operator asked to hide.
+func RedactEvent(e events.Event) events.Event {
+	if e.Source == "" {
+		return e
+	}
+	masked := redactAddress(e.Source)
+
+	out := e
+	out.Source = masked
+	out.Summary = strings.ReplaceAll(e.Summary, e.Source, masked)
+	out.DedupKey = strings.ReplaceAll(e.DedupKey, e.Source, masked)
+
+	if len(e.Params) > 0 {
+		// Copy: the caller's map is shared with the journal entry, which must
+		// keep the real address.
+		params := make(map[string]any, len(e.Params))
+		for k, v := range e.Params {
+			if str, ok := v.(string); ok {
+				v = strings.ReplaceAll(str, e.Source, masked)
+			}
+			params[k] = v
+		}
+		out.Params = params
+	}
+	return out
+}
+
 func redactAddress(addr string) string {
 	if addr == "" {
 		return ""

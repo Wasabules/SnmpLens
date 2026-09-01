@@ -682,7 +682,11 @@ func (a *App) routeEvent(e events.Event) {
 		}
 	}
 	if len(redacted) > 0 {
-		if err := a.storage.EnqueueDeliveries(e, redacted, redactedSubject, redactedBody); err != nil {
+		// The event itself is masked too, not just the rendering: the webhook
+		// sink embeds the whole event as JSON, so a redacted subject with an
+		// unredacted payload would leak the address through the one sink most
+		// likely to forward it somewhere else.
+		if err := a.storage.EnqueueDeliveries(notify.RedactEvent(e), redacted, redactedSubject, redactedBody); err != nil {
 			log.Printf("notify: could not queue redacted deliveries: %v", err)
 		}
 	}
@@ -937,12 +941,22 @@ func (a *App) NotifyDeleteSink(id string) error {
 // NotifyTestSink sends a synthetic event so the operator can verify a
 // destination without waiting for a real incident.
 func (a *App) NotifyTestSink(cfg notify.SinkConfig) error {
-	sink, ok := notify.Build(cfg, cfg.Secret)
+	// Resolve the stored credential BEFORE building the sink: Build captures
+	// the secret by value, so fetching it afterwards left every test of an
+	// already-saved sink authenticating with nothing. The symptom was the
+	// confusing one — "Test fails but the alerts themselves arrive".
+	//
+	// Looking the credential up by sink id means a caller could name one sink
+	// and point the test at another destination. That is accepted: the caller
+	// is our own renderer, and anyone able to drive it already has the user's
+	// session and could simply read the sink list instead.
+	secret := cfg.Secret
+	if secret == "" {
+		secret = a.sinkSecret(cfg.ID)
+	}
+	sink, ok := notify.Build(cfg, secret)
 	if !ok {
 		return fmt.Errorf("unknown sink kind %q", cfg.Kind)
-	}
-	if cfg.Secret == "" {
-		cfg.Secret = a.sinkSecret(cfg.ID) // testing a saved sink must use its saved credential
 	}
 	sample := events.Event{
 		ID:       "test-" + generateEventCorrID(),

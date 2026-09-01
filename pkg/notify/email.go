@@ -215,8 +215,12 @@ func buildMessage(cfg EmailConfig, e events.Event, subject, body string) string 
 	}
 
 	var b strings.Builder
-	b.WriteString("From: " + cfg.From + "\r\n")
-	b.WriteString("To: " + strings.Join(cfg.To, ", ") + "\r\n")
+	b.WriteString("From: " + headerValue(cfg.From) + "\r\n")
+	b.WriteString("To: " + headerValue(strings.Join(cfg.To, ", ")) + "\r\n")
+	// QEncoding encodes every byte below 0x20, so a CR or LF in the subject
+	// becomes =0D=0A rather than starting a new header. That is what stops an
+	// event summary from injecting a Bcc, so it is pinned by a test: the
+	// safety of this line lives in the standard library, not here.
 	b.WriteString("Subject: " + mime.QEncoding.Encode("utf-8", subject) + "\r\n")
 	b.WriteString("Date: " + time.Now().Format(time.RFC1123Z) + "\r\n")
 	b.WriteString("MIME-Version: 1.0\r\n")
@@ -224,14 +228,49 @@ func buildMessage(cfg EmailConfig, e events.Event, subject, body string) string 
 	b.WriteString("Content-Transfer-Encoding: 8bit\r\n")
 	// A stable id so a mail client threads retries instead of showing copies.
 	if e.ID != "" {
-		b.WriteString("Message-ID: <" + e.ID + "@snmplens>\r\n")
-		b.WriteString("X-SnmpLens-Event-Id: " + e.ID + "\r\n")
+		b.WriteString("Message-ID: <" + headerValue(e.ID) + "@snmplens>\r\n")
+		b.WriteString("X-SnmpLens-Event-Id: " + headerValue(e.ID) + "\r\n")
 	}
 	b.WriteString("\r\n")
-	// Dot-stuffing: a line consisting of a single dot would end the DATA phase.
-	b.WriteString(strings.ReplaceAll(body, "\r\n.\r\n", "\r\n..\r\n"))
+	b.WriteString(dotStuff(body))
 	b.WriteString("\r\n")
 	return b.String()
+}
+
+// headerValue strips CR and LF from a header value.
+//
+// The subject goes through MIME encoding, which handles this, but these fields
+// do not: a sender address pasted with a stray newline would end the header and
+// let whatever followed be read as one of its own.
+func headerValue(s string) string {
+	return strings.NewReplacer("\r", " ", "\n", " ").Replace(s)
+}
+
+// dotStuff prepares the body for the DATA phase.
+//
+// Two things have to be right, and only one of them used to be. First the body
+// must use CRLF: Render emits bare LFs, so the previous rule — replacing the
+// exact sequence "\r\n.\r\n" — never matched anything it produced. Second,
+// RFC5321 section 4.5.2 requires an extra dot on EVERY line starting with one,
+// not only on a line that is nothing but a dot.
+//
+// This matters because event text is not all ours. A trap arrives from the
+// network unauthenticated, and its trap OID value reaches the rendered body; a
+// line beginning with a dot in it would end DATA early, truncating the alert
+// and handing the remainder to the relay as SMTP commands — through a
+// connection this application has already authenticated.
+func dotStuff(body string) string {
+	// Normalise to CRLF without doubling the ones already there.
+	body = strings.ReplaceAll(body, "\r\n", "\n")
+	body = strings.ReplaceAll(body, "\r", "\n")
+
+	lines := strings.Split(body, "\n")
+	for i, line := range lines {
+		if strings.HasPrefix(line, ".") {
+			lines[i] = "." + line
+		}
+	}
+	return strings.Join(lines, "\r\n")
 }
 
 // Describe names the destination for the delivery log.
