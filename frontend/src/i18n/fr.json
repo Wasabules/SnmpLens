@@ -854,6 +854,14 @@
     "restartNote": "Le démarrage réduit et le port des traps prennent effet au prochain lancement.",
     "auditTitle": "Audit",
     "auditHint": "Le SET est la seule opération SNMP qui modifie un équipement : un SET refusé mérite donc d'être conservé.",
-    "auditFailedSets": "Journaliser les opérations SNMP SET refusées"
+    "auditFailedSets": "Journaliser les opérations SNMP SET refusées",
+    "loginTitle": "Démarrage à l'ouverture de session",
+    "loginHint": "Le fonctionnement en arrière-plan n'a d'intérêt que si SnmpLens revient seul après un redémarrage. L'entrée créée est propre à votre compte : aucun droit administrateur n'est demandé.",
+    "startAtLogin": "Démarrer SnmpLens à l'ouverture de ma session",
+    "loginLocation": "Emplacement de l'entrée : {location}",
+    "loginWindowNote": "La fenêtre s'ouvrira à la connexion. Activez « Démarrer réduit dans la zone de notification » ci-dessus pour un démarrage silencieux.",
+    "loginUnsupported": "L'enregistrement au démarrage de session n'est pas implémenté sur cette plateforme.",
+    "loginRegistered": "SnmpLens démarrera désormais à l'ouverture de session.",
+    "loginRemoved": "SnmpLens ne démarrera plus à l'ouverture de session."
   }
 }

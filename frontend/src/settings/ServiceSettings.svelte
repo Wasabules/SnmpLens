@@ -4,12 +4,13 @@
   import { get } from 'svelte/store';
   import Icon from '../Icon.svelte';
   import { notificationStore } from '../stores/notifications';
-  import { ServiceGetStatus, ServiceSetConfig } from '../../wailsjs/go/main/App';
+  import { ServiceGetStatus, ServiceSetConfig, AutostartGet, AutostartSet } from '../../wailsjs/go/main/App';
 
   // These preferences do NOT live in the settings store: they are read by Go
   // before a window exists, so they have their own file. Keeping them in
   // localStorage would make them unreadable at the moment they are needed.
   let status = null;
+  let autostart = null;
   let saving = false;
 
   onMount(async () => {
@@ -18,7 +19,35 @@
     } catch (e) {
       notificationStore.add(String(e), 'error');
     }
+    await refreshAutostart();
   });
+
+  // Always ask the OS. The entry can be removed through Task Manager or System
+  // Settings without us being told, and a remembered "yes" would be a lie this
+  // screen keeps repeating.
+  async function refreshAutostart() {
+    try {
+      autostart = await AutostartGet();
+    } catch (e) {
+      autostart = null;
+    }
+  }
+
+  async function toggleAutostart(enabled) {
+    saving = true;
+    try {
+      autostart = await AutostartSet(enabled);
+      notificationStore.add(
+        get(_)(enabled ? 'service.loginRegistered' : 'service.loginRemoved'),
+        'success',
+      );
+    } catch (e) {
+      notificationStore.add(String(e), 'error');
+      await refreshAutostart();
+    } finally {
+      saving = false;
+    }
+  }
 
   async function apply(changes) {
     if (!status) return;
@@ -68,6 +97,30 @@
         <span>{$_('service.startHidden')}</span>
       </label>
       <p class="sub">{$_('service.startHiddenHint')}</p>
+    </section>
+
+    <section>
+      <h4>{$_('service.loginTitle')}</h4>
+      <p class="hint">{$_('service.loginHint')}</p>
+
+      {#if autostart && autostart.supported}
+        <label class="toggle">
+          <input type="checkbox" checked={autostart.enabled} disabled={saving}
+            on:change={(e) => toggleAutostart(e.currentTarget.checked)} />
+          <span>{$_('service.startAtLogin')}</span>
+        </label>
+        <p class="sub">{$_('service.loginLocation', { values: { location: autostart.location } })}</p>
+        {#if autostart.error}
+          <p class="note warn">
+            <Icon name="triangle-alert" size={14} /> {autostart.error}
+          </p>
+        {/if}
+        {#if autostart.enabled && !status.config.startHidden}
+          <p class="note">{$_('service.loginWindowNote')}</p>
+        {/if}
+      {:else}
+        <p class="note">{$_('service.loginUnsupported')}</p>
+      {/if}
     </section>
 
     <section>

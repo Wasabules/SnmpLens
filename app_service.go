@@ -4,6 +4,7 @@ import (
 	"log"
 	goruntime "runtime"
 
+	"SnmpLens/pkg/autostart"
 	"SnmpLens/pkg/events"
 	"SnmpLens/pkg/service"
 	"SnmpLens/pkg/snmp"
@@ -117,6 +118,21 @@ func (a *App) refreshTrayStatus() {
 func (a *App) TraySetLabels(show, quit string) {
 	a.tray.SetLabels(tray.Labels{Show: show, Quit: quit})
 	a.refreshTrayStatus()
+}
+
+// AutostartGet reports whether SnmpLens is registered to start at login.
+//
+// The answer comes from the operating system every time rather than from a
+// stored flag: the entry can be removed through Task Manager, System Settings
+// or by deleting a file, and a remembered "yes" would be a lie the settings
+// screen keeps telling.
+func (a *App) AutostartGet() autostart.Status {
+	return autostart.Get()
+}
+
+// AutostartSet registers or removes the login entry.
+func (a *App) AutostartSet(enabled bool) (autostart.Status, error) {
+	return autostart.Set(enabled)
 }
 
 // ServiceGetConfig returns the pre-GUI preferences.

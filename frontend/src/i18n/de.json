@@ -854,6 +854,14 @@
     "restartNote": "Minimierter Start und Trap-Port wirken erst beim nächsten Start.",
     "auditTitle": "Audit",
     "auditHint": "Ein SET ist die einzige SNMP-Operation, die ein Gerät verändert; ein abgelehntes SET ist deshalb festhaltenswert.",
-    "auditFailedSets": "Abgelehnte SNMP-SET-Operationen protokollieren"
+    "auditFailedSets": "Abgelehnte SNMP-SET-Operationen protokollieren",
+    "loginTitle": "Start bei der Anmeldung",
+    "loginHint": "Hintergrundbetrieb nützt nur, wenn SnmpLens nach einem Neustart von selbst zurückkehrt. Der Eintrag gilt nur für dieses Benutzerkonto und verlangt keine Administratorrechte.",
+    "startAtLogin": "SnmpLens bei meiner Anmeldung starten",
+    "loginLocation": "Ort des Eintrags: {location}",
+    "loginWindowNote": "Das Fenster öffnet sich bei der Anmeldung. Für einen stillen Start oben „Minimiert im Infobereich starten“ aktivieren.",
+    "loginUnsupported": "Ein Anmeldeeintrag ist auf dieser Plattform nicht implementiert.",
+    "loginRegistered": "SnmpLens startet nun bei der Anmeldung.",
+    "loginRemoved": "SnmpLens startet nicht mehr bei der Anmeldung."
   }
 }

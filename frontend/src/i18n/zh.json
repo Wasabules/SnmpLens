@@ -854,6 +854,14 @@
     "restartNote": "最小化启动和 Trap 端口将在下次启动时生效。",
     "auditTitle": "审计",
     "auditHint": "SET 是唯一会更改设备的 SNMP 操作，因此被拒绝的 SET 值得留下记录。",
-    "auditFailedSets": "记录被拒绝的 SNMP SET 操作"
+    "auditFailedSets": "记录被拒绝的 SNMP SET 操作",
+    "loginTitle": "登录时启动",
+    "loginHint": "只有当 SnmpLens 在重启后能自行恢复运行时，后台运行才有意义。此项创建的是当前用户的启动项，无需管理员权限。",
+    "startAtLogin": "登录时启动 SnmpLens",
+    "loginLocation": "启动项位置：{location}",
+    "loginWindowNote": "登录时将打开窗口。若需静默启动，请启用上方的「启动时最小化到托盘」。",
+    "loginUnsupported": "此平台尚未实现登录启动项。",
+    "loginRegistered": "SnmpLens 将在登录时启动。",
+    "loginRemoved": "SnmpLens 将不再在登录时启动。"
   }
 }

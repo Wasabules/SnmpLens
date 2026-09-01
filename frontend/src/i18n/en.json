@@ -854,6 +854,14 @@
     "restartNote": "Starting minimised and the trap port take effect at the next launch.",
     "auditTitle": "Audit",
     "auditHint": "A SET is the one SNMP operation that changes a device, so a refused one is worth keeping a record of.",
-    "auditFailedSets": "Journal refused SNMP SET operations"
+    "auditFailedSets": "Journal refused SNMP SET operations",
+    "loginTitle": "Start at login",
+    "loginHint": "Background operation is only useful if SnmpLens comes back by itself after a reboot. This registers a per-user entry, so it never asks for administrator rights.",
+    "startAtLogin": "Start SnmpLens when I log in",
+    "loginLocation": "Entry location: {location}",
+    "loginWindowNote": "The window will open at login. Enable \"Start minimised to the tray\" above for a silent start.",
+    "loginUnsupported": "Registering a login entry is not implemented on this platform.",
+    "loginRegistered": "SnmpLens will now start at login.",
+    "loginRemoved": "SnmpLens will no longer start at login."
   }
 }

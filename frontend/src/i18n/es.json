@@ -854,6 +854,14 @@
     "restartNote": "El inicio minimizado y el puerto de traps se aplican en el próximo arranque.",
     "auditTitle": "Auditoría",
     "auditHint": "El SET es la única operación SNMP que modifica un equipo, así que un SET rechazado merece quedar registrado.",
-    "auditFailedSets": "Registrar las operaciones SNMP SET rechazadas"
+    "auditFailedSets": "Registrar las operaciones SNMP SET rechazadas",
+    "loginTitle": "Inicio al iniciar sesión",
+    "loginHint": "El funcionamiento en segundo plano solo sirve si SnmpLens vuelve por sí solo tras un reinicio. La entrada es propia de tu cuenta, así que nunca pide permisos de administrador.",
+    "startAtLogin": "Iniciar SnmpLens al iniciar sesión",
+    "loginLocation": "Ubicación de la entrada: {location}",
+    "loginWindowNote": "La ventana se abrirá al iniciar sesión. Activa «Iniciar minimizado en la bandeja» arriba para un arranque silencioso.",
+    "loginUnsupported": "El registro al iniciar sesión no está implementado en esta plataforma.",
+    "loginRegistered": "SnmpLens se iniciará al iniciar sesión.",
+    "loginRemoved": "SnmpLens ya no se iniciará al iniciar sesión."
   }
 }
