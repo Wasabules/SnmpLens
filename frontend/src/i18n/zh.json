@@ -868,7 +868,18 @@
       "appVersion": "SnmpLens 版本",
       "sinkName": "此消息将发往的目标名称",
       "lb": "输出两个字面的左花括号"
-    }
+    },
+    "from": "发件人",
+    "grpConnection": "连接",
+    "grpServerTrust": "服务器信任",
+    "grpClientAuth": "客户端认证（mTLS）",
+    "grpEndpoint": "端点",
+    "grpHeaders": "请求头",
+    "grpTransport": "传输安全",
+    "grpSmtp": "SMTP 服务器",
+    "grpCredentials": "凭据",
+    "grpEnvelope": "信封",
+    "grpTrust": "加密与信任"
   },
   "tray": {
     "show": "打开 SnmpLens",

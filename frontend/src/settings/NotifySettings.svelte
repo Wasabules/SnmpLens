@@ -289,14 +289,20 @@
 <!-- ================= SINK EDITOR ================= -->
 {#if editingSink}
   <div class="editor-overlay" on:click={() => (editingSink = null)} on:keydown={(e) => e.key === 'Escape' && (editingSink = null)} role="button" tabindex="-1">
-    <div class="editor" on:click|stopPropagation on:keydown|stopPropagation role="dialog">
-      <h3>{$_('notify.sinkEditor', { values: { kind: editingSink.kind } })}</h3>
+    <div class="editor sink-editor" on:click|stopPropagation on:keydown|stopPropagation role="dialog">
+      <h3>
+        {$_('notify.sinkEditor', { values: { kind: editingSink.kind } })}
+        {#if editingSink.name}<span class="sink-name">— {editingSink.name}</span>{/if}
+      </h3>
 
+      <div class="editor-body">
+      <div class="pane pane-config">
       <label class="fld"><span>{$_('notify.name')}</span>
         <input type="text" bind:value={editingSink.name} placeholder="NOC syslog" />
       </label>
 
       {#if editingSink.kind === 'syslog'}
+        <h4 class="grp-head">{$_('notify.grpConnection')}</h4>
         <label class="fld"><span>{$_('notify.address')}</span>
           <input type="text" bind:value={editingSink.syslog.address} placeholder="10.0.0.50:514" />
         </label>
@@ -313,6 +319,7 @@
           </label>
         </div>
         {#if editingSink.syslog.protocol === 'tls'}
+          <h4 class="grp-head">{$_('notify.grpServerTrust')}</h4>
           <p class="note">{$_('notify.tlsNote')}</p>
           <label class="fld"><span>{$_('notify.caCert')}</span>
             <textarea rows="3" bind:value={editingSink.syslog.caCert}
@@ -332,6 +339,7 @@
               <Icon name="triangle-alert" size={14} /> {$_('notify.insecureWarning')}
             </p>
           {/if}
+          <h4 class="grp-head">{$_('notify.grpClientAuth')}</h4>
           <label class="fld"><span>{$_('notify.clientCert')}</span>
             <textarea rows="3" bind:value={editingSink.syslog.clientCert}
               placeholder={'-----BEGIN CERTIFICATE-----'}></textarea>
@@ -346,6 +354,7 @@
           <p class="note">{$_('notify.udpNote')}</p>
         {/if}
       {:else if editingSink.kind === 'webhook'}
+        <h4 class="grp-head">{$_('notify.grpEndpoint')}</h4>
         <label class="fld"><span>URL</span>
           <input type="text" bind:value={editingSink.webhook.url} placeholder="https://hooks.example.com/snmplens" />
         </label>
@@ -363,6 +372,7 @@
           </label>
         </div>
         <span class="sub">{$_('notify.secretHint', { values: { backend } })}</span>
+        <h4 class="grp-head">{$_('notify.grpHeaders')}</h4>
         <label class="fld"><span>{$_('notify.headers')}</span>
           <textarea rows="3" value={headersToText(editingSink.webhook.headers)}
             on:input={(e) => (editingSink.webhook.headers = textToHeaders(e.target.value))}
@@ -370,6 +380,7 @@
           <span class="sub">{$_('notify.headersHint', { values: { placeholder: SECRET_PLACEHOLDER } })}</span>
         </label>
         <p class="note">{$_('notify.webhookNote')}</p>
+        <h4 class="grp-head">{$_('notify.grpTransport')}</h4>
         {#if isPlaintextURL(editingSink.webhook.url)}
           <label class="toggle">
             <input type="checkbox" bind:checked={editingSink.webhook.allowPlaintextHttp} />
@@ -400,6 +411,7 @@
         {/if}
       {:else}
         <div class="fld-row">
+          <h4 class="grp-head">{$_('notify.grpSmtp')}</h4>
           <label class="fld"><span>{$_('notify.host')}</span>
             <input type="text" bind:value={editingSink.email.host} placeholder="smtp.example.com" />
           </label>
@@ -423,6 +435,7 @@
             </select>
           </label>
         </div>
+        <h4 class="grp-head">{$_('notify.grpCredentials')}</h4>
         <div class="fld-row">
           <label class="fld"><span>{$_('notify.username')}</span>
             <input type="text" bind:value={editingSink.email.username} />
@@ -432,6 +445,7 @@
               placeholder={editingSink.hasSecret ? $_('notify.secretOnFile') : ''} />
           </label>
         </div>
+        <h4 class="grp-head">{$_('notify.grpEnvelope')}</h4>
         <label class="fld"><span>{$_('notify.from')}</span>
           <input type="text" bind:value={editingSink.email.from} placeholder="snmplens@example.com" />
         </label>
@@ -444,6 +458,7 @@
           <button class="btn-mode" on:click={() => clearSecret(editingSink.id)}>{$_('notify.clearSecret')}</button>
         {/if}
 
+        <h4 class="grp-head">{$_('notify.grpTrust')}</h4>
         {#if editingSink.email.encryption !== 'none'}
           <label class="fld"><span>{$_('notify.caCert')}</span>
             <textarea rows="3" bind:value={editingSink.email.caCert}
@@ -470,17 +485,22 @@
         {/if}
       {/if}
 
-      <TemplateEditor bind:template={editingSink.template}
-        redact={editingSink.redact} sinkName={editingSink.name} />
+      </div>
 
-      <label class="toggle">
-        <input type="checkbox" bind:checked={editingSink.enabled} /> {$_('notify.enabled')}
-      </label>
-      <label class="toggle" title={$_('notify.redactHint')}>
-        <input type="checkbox" bind:checked={editingSink.redact} /> {$_('notify.redact')}
-      </label>
+      <div class="pane pane-template">
+        <TemplateEditor bind:template={editingSink.template}
+          redact={editingSink.redact} sinkName={editingSink.name} />
+      </div>
+      </div>
 
       <div class="editor-actions">
+        <label class="toggle">
+          <input type="checkbox" bind:checked={editingSink.enabled} /> {$_('notify.enabled')}
+        </label>
+        <label class="toggle" title={$_('notify.redactHint')}>
+          <input type="checkbox" bind:checked={editingSink.redact} /> {$_('notify.redact')}
+        </label>
+        <span class="sep"></span>
         <button class="btn tertiary" on:click={() => testSink(editingSink)} disabled={testing === 'new'}>
           <Icon name="zap" size={13} /> {$_('notify.test')}
         </button>
@@ -726,7 +746,7 @@
 
   /* PEM blocks are long, fixed-width and meant to be pasted, not typed. */
   .fld textarea {
-    font-family: var(--font-mono, ui-monospace, monospace);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 0.72em;
     resize: vertical;
     white-space: pre;
@@ -787,6 +807,168 @@
 
   .toggle input {
     width: auto;
+  }
+
+  /* ---------- sink editor: two panes instead of one long column ----------
+     .editor is shared with the ROUTE editor below, so every rule here is
+     scoped to .sink-editor. Widening .editor itself would have silently
+     restyled a dialog nobody asked about. */
+  .editor.sink-editor {
+    width: min(1200px, 94vw);
+    max-height: 88vh;
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .sink-editor > h3 {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: var(--space-md) var(--space-xl);
+    border-bottom: 1px solid var(--border-color);
+    min-width: 0;
+  }
+
+  .sink-editor > h3 .sink-name {
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+
+  /* The body scrolls; the dialog never does, so the title and the buttons
+     stay put however long the form gets. */
+  .sink-editor .editor-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .sink-editor .pane {
+    min-width: 0;
+    padding: var(--space-lg) var(--space-xl);
+  }
+
+  .sink-editor .pane-template {
+    border-top: 1px solid var(--border-color);
+  }
+
+  .sink-editor .grp-head {
+    margin: var(--space-lg) 0 var(--space-sm);
+    font-size: 0.72em;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .sink-editor .grp-head:first-child {
+    margin-top: 0;
+  }
+
+  /* A hint under one half of a row was pushing its partner's input upwards.
+     Scoped, because the route editor's rows are tuned for flex-end. */
+  .sink-editor .fld-row {
+    align-items: flex-start;
+  }
+
+  /* Two panes only when each still gets a full measure. A PEM line at the
+     textarea's size needs ~460px of content box; below that the split would
+     make the form narrower than the single column it replaced, which is the
+     opposite of the point. */
+  @media (min-width: 1200px) {
+    .sink-editor .editor-body {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      overflow: hidden;
+    }
+
+    .sink-editor .pane {
+      overflow-y: auto;
+      min-height: 0;
+    }
+
+    .sink-editor .pane-template {
+      border-top: none;
+      border-left: 1px solid var(--border-color);
+      background-color: var(--bg-color);
+      display: flex;
+      flex-direction: column;
+    }
+  }
+
+  /* The template editor's own split is driven from here, so the breakpoint
+     has one home rather than one per component. */
+  .sink-editor .pane-template :global(.tpl) {
+    padding-top: 0;
+    border-top: none;
+  }
+
+  /* One wide column: the preview fits beside the fields. */
+  @media (min-width: 980px) and (max-width: 1199px) {
+    .sink-editor .pane-template :global(.tpl-main) {
+      flex-direction: row;
+      align-items: stretch;
+      gap: var(--space-lg);
+    }
+
+    .sink-editor .pane-template :global(.tpl-fields) {
+      flex: 1.15 1 0;
+      min-width: 0;
+    }
+
+    .sink-editor .pane-template :global(.preview) {
+      flex: 0.85 1 0;
+      min-width: 0;
+    }
+  }
+
+  /* Two panes: the template pane is tall and narrow, so the preview sits
+     below the fields and takes whatever height is left. */
+  @media (min-width: 1200px) {
+    .sink-editor .pane-template :global(.tpl),
+    .sink-editor .pane-template :global(.tpl-main) {
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+
+    .sink-editor .pane-template :global(.preview) {
+      flex: 1 1 auto;
+      min-height: 160px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sink-editor .pane-template :global(.preview-body) {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+    }
+
+    .sink-editor .pane-template :global(.pv-text) {
+      max-height: none;
+    }
+  }
+
+  .sink-editor .editor-actions {
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    margin-top: 0;
+    padding: var(--space-sm) var(--space-xl);
+    border-top: 1px solid var(--border-color);
+    background-color: var(--bg-light-color);
+  }
+
+  .sink-editor .editor-actions .toggle {
+    margin-bottom: 0;
+  }
+
+  .sink-editor .editor-actions .sep {
+    width: 1px;
+    align-self: stretch;
+    margin: 0 var(--space-sm);
+    background-color: var(--border-color);
   }
 
   .editor-actions {

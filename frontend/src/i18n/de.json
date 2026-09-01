@@ -868,7 +868,18 @@
       "appVersion": "SnmpLens-Version",
       "sinkName": "Name des Ziels, an das diese Nachricht geht",
       "lb": "Schreibt zwei wörtliche geschweifte Klammern"
-    }
+    },
+    "from": "Absender",
+    "grpConnection": "Verbindung",
+    "grpServerTrust": "Serververtrauen",
+    "grpClientAuth": "Client-Authentifizierung (mTLS)",
+    "grpEndpoint": "Endpunkt",
+    "grpHeaders": "Kopfzeilen",
+    "grpTransport": "Transportsicherheit",
+    "grpSmtp": "SMTP-Server",
+    "grpCredentials": "Zugangsdaten",
+    "grpEnvelope": "Umschlag",
+    "grpTrust": "Verschlüsselung und Vertrauen"
   },
   "tray": {
     "show": "SnmpLens öffnen",

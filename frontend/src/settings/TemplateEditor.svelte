@@ -88,6 +88,8 @@
   </div>
   <p class="hint">{$_('notify.templateHint')}</p>
 
+  <div class="tpl-main">
+    <div class="tpl-fields">
   {#if showVariables}
     <div class="vars">
       {#each variables as v (v.name)}
@@ -128,6 +130,8 @@
     {/each}
   </label>
 
+    </div>
+
   <div class="preview">
     <div class="preview-head">
       <span>{$_('notify.templatePreview')}</span>
@@ -144,6 +148,7 @@
       </div>
     {/if}
   </div>
+  </div>
 
   <p class="note">{$_('notify.tplQueuedNote')}</p>
   <p class="note">{$_('notify.tplSharedNote')}</p>
@@ -156,6 +161,22 @@
     gap: 8px;
     padding-top: 8px;
     border-top: 1px solid var(--border-color);
+  }
+
+  /* One column by default. NotifySettings decides when this splits, so the
+     breakpoint has a single home rather than one per component. */
+  .tpl-main {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .tpl-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
   }
 
   .tpl-head {
@@ -175,7 +196,7 @@
   .note {
     margin: 0;
     font-size: 0.75em;
-    color: var(--text-muted-color);
+    color: var(--text-muted);
     display: flex;
     align-items: center;
     gap: 5px;
@@ -212,11 +233,11 @@
   }
 
   .var code {
-    font-family: var(--font-mono, ui-monospace, monospace);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
 
   .ex {
-    color: var(--text-muted-color);
+    color: var(--text-muted);
     max-width: 130px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -232,7 +253,7 @@
     flex-direction: column;
     gap: 3px;
     font-size: 0.8em;
-    color: var(--text-muted-color);
+    color: var(--text-muted);
   }
 
   .fld input,
@@ -243,7 +264,7 @@
     border: 1px solid var(--border-color);
     border-radius: 4px;
     color: var(--text-color);
-    font-family: var(--font-mono, ui-monospace, monospace);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 0.95em;
   }
 
@@ -274,7 +295,7 @@
     padding: 5px 8px;
     background-color: var(--bg-lighter-color);
     font-size: 0.75em;
-    color: var(--text-muted-color);
+    color: var(--text-muted);
   }
 
   .preview-head select {
@@ -300,12 +321,14 @@
 
   .pv-text {
     margin: 0;
-    font-family: var(--font-mono, ui-monospace, monospace);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 0.75em;
-    color: var(--text-muted-color);
+    color: var(--text-muted);
     white-space: pre-wrap;
     word-break: break-word;
     max-height: 190px;
     overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
   }
 </style>

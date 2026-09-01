@@ -868,7 +868,18 @@
       "appVersion": "SnmpLens version",
       "sinkName": "Name of the destination this message is going to",
       "lb": "Writes two literal opening braces"
-    }
+    },
+    "from": "Sender",
+    "grpConnection": "Connection",
+    "grpServerTrust": "Server trust",
+    "grpClientAuth": "Client authentication (mTLS)",
+    "grpEndpoint": "Endpoint",
+    "grpHeaders": "Headers",
+    "grpTransport": "Transport security",
+    "grpSmtp": "SMTP server",
+    "grpCredentials": "Credentials",
+    "grpEnvelope": "Envelope",
+    "grpTrust": "Encryption and trust"
   },
   "tray": {
     "show": "Open SnmpLens",

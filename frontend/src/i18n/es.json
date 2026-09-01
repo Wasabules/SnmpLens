@@ -868,7 +868,18 @@
       "appVersion": "Versión de SnmpLens",
       "sinkName": "Nombre del destino al que va este mensaje",
       "lb": "Escribe dos llaves de apertura literales"
-    }
+    },
+    "from": "Remitente",
+    "grpConnection": "Conexión",
+    "grpServerTrust": "Confianza del servidor",
+    "grpClientAuth": "Autenticación de cliente (mTLS)",
+    "grpEndpoint": "Endpoint",
+    "grpHeaders": "Cabeceras",
+    "grpTransport": "Seguridad del transporte",
+    "grpSmtp": "Servidor SMTP",
+    "grpCredentials": "Credenciales",
+    "grpEnvelope": "Sobre",
+    "grpTrust": "Cifrado y confianza"
   },
   "tray": {
     "show": "Abrir SnmpLens",

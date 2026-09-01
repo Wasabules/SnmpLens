@@ -193,7 +193,7 @@
   h4 {
     margin: 0;
     font-size: 0.9rem;
-    color: var(--text-primary);
+    color: var(--text-color);
   }
 
   .hint,
@@ -208,7 +208,7 @@
     align-items: center;
     gap: 0.5rem;
     font-size: 0.82rem;
-    color: var(--text-secondary);
+    color: var(--text-color);
     cursor: pointer;
   }
 
@@ -223,16 +223,16 @@
     flex-direction: column;
     gap: 0.25rem;
     font-size: 0.82rem;
-    color: var(--text-secondary);
+    color: var(--text-color);
     max-width: 220px;
   }
 
   .fld input {
     padding: 0.35rem 0.5rem;
-    background: var(--bg-input);
+    background: var(--bg-lighter-color);
     border: 1px solid var(--border-color);
     border-radius: 4px;
-    color: var(--text-primary);
+    color: var(--text-color);
     font-size: 0.82rem;
   }
 
@@ -257,7 +257,7 @@
     flex-direction: column;
     gap: 0.35rem;
     font-size: 0.8rem;
-    color: var(--text-secondary);
+    color: var(--text-color);
   }
 
   .state li {
