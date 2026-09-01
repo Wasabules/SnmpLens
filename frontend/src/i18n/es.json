@@ -957,6 +957,14 @@
       "table": "Tabla y fila",
       "imports": "Cláusula IMPORTS",
       "module": "Esqueleto de módulo vacío"
-    }
+    },
+    "symbols": "Símbolos",
+    "symbolSearch": "Buscar un símbolo…",
+    "symbolHint": "{count} símbolos en las MIB cargadas. Escribe al menos dos caracteres.",
+    "symbolNone": "Ningún símbolo coincide.",
+    "missingImports": "Usados sin importar: {symbols} ({count} en total).",
+    "fixImports": "Añadir a IMPORTS",
+    "importsFixed": "{count} símbolo(s) añadido(s) a IMPORTS.",
+    "draftRecovered": "Se recuperó trabajo sin guardar en {name} de una sesión anterior."
   }
 }

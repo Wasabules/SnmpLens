@@ -957,6 +957,14 @@
       "table": "表与行",
       "imports": "IMPORTS 子句",
       "module": "空模块骨架"
-    }
+    },
+    "symbols": "符号",
+    "symbolSearch": "搜索符号…",
+    "symbolHint": "已加载的 MIB 中有 {count} 个符号。请至少输入两个字符。",
+    "symbolNone": "没有匹配的符号。",
+    "missingImports": "使用了但未导入：{symbols}（共 {count} 个）。",
+    "fixImports": "添加到 IMPORTS",
+    "importsFixed": "已将 {count} 个符号添加到 IMPORTS。",
+    "draftRecovered": "已从上一次会话恢复 {name} 的未保存内容。"
   }
 }

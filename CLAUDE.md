@@ -119,6 +119,16 @@ Two rules that look like tidiness and are not: **backups go to a sibling `mib-ba
 load first as the same module and win; and **every path goes through `resolveMibPath`**, because these methods
 write and `monitoring.db`, `service.json` and the secret store all sit one directory above `mibs/`.
 
+The editor's buffer lives in `stores/mibEditorStore.js`, **not** in the panel component: the tab shell mounts
+panels with `{#if activeTab === …}`, which destroys the component on every switch, and component state took the
+user's edits with it. The buffer is also mirrored to a draft file under `mib-drafts/` (a sibling of `mibs/`, for
+the same reason backups are) so it survives closing the window.
+
+`CheckImports`/`FixImports` answer the question people actually have in front of a vendor MIB: which symbol is
+used without being imported, and which module it comes from. Only names the loaded tree knows are reported, which
+keeps false positives near zero, and the fix edits the IMPORTS clause as TEXT — a MIB carries comments and
+alignment no AST printer would preserve.
+
 `pkg/mib` now takes a package-level `RWMutex` around gosmi. Its state is global, Wails dispatches each bound
 method on its own goroutine, and the editor's reload tears the world down while the rest of the app resolves OIDs.
 

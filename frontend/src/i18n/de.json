@@ -957,6 +957,14 @@
       "table": "Tabelle und Zeile",
       "imports": "IMPORTS-Klausel",
       "module": "Leeres Modulgerüst"
-    }
+    },
+    "symbols": "Symbole",
+    "symbolSearch": "Symbol suchen…",
+    "symbolHint": "{count} Symbole in den geladenen MIBs. Mindestens zwei Zeichen eingeben.",
+    "symbolNone": "Kein passendes Symbol.",
+    "missingImports": "Verwendet, aber nie importiert: {symbols} ({count} insgesamt).",
+    "fixImports": "Zu IMPORTS hinzufügen",
+    "importsFixed": "{count} Symbol(e) zu IMPORTS hinzugefügt.",
+    "draftRecovered": "Ungespeicherte Arbeit an {name} wurde aus einer früheren Sitzung wiederhergestellt."
   }
 }

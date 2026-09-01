@@ -5,36 +5,55 @@
   import Icon from './Icon.svelte';
   import { notificationStore } from './stores/notifications';
   import { highlight, SNIPPETS } from './mibeditor/tokenize.js';
+  import { mibEditorStore } from './stores/mibEditorStore';
   import {
     MibEditorList,
-    MibEditorRead,
     MibEditorOpenExternal,
-    MibEditorValidate,
     MibEditorSave,
     MibEditorRestoreBundled,
     MibEditorReload,
+    MibEditorSymbols,
+    MibEditorFixImports,
   } from '../wailsjs/go/main/App';
 
   let files = [];
   let filter = '';
-  let source = null;      // the open file, as read
-  let buffer = '';        // what is in the textarea
-  let diagnostics = [];
-  let checking = false;
   let saving = false;
   let showSnippets = false;
+  let showSymbols = false;
+  let symbolFilter = '';
+  let catalogue = { modules: [], symbols: [] };
   let textarea;
   let mirror;
   let gutter;
 
+  // The buffer lives in a store, not here: this component is destroyed on
+  // every tab switch, and component state would take the user's edits with it.
+  $: source = $mibEditorStore.source;
+  $: buffer = $mibEditorStore.buffer;
+  $: diagnostics = $mibEditorStore.diagnostics;
+  $: missingImports = $mibEditorStore.missingImports;
+  $: checking = $mibEditorStore.checking;
   $: dirty = source !== null && buffer !== source.content;
+  $: matchingSymbols = symbolFilter.length < 2
+    ? []
+    : catalogue.symbols
+        .filter((sy) => sy.name.toLowerCase().includes(symbolFilter.toLowerCase()))
+        .slice(0, 60);
   $: lineCount = buffer.split('\n').length;
   $: highlighted = highlight(buffer);
   $: shown = files.filter((f) => !filter || f.name.toLowerCase().includes(filter.toLowerCase()));
   $: errorCount = diagnostics.filter((d) => d.severity === 'error').length;
   $: warnCount = diagnostics.filter((d) => d.severity === 'warning').length;
 
-  onMount(refreshList);
+  onMount(async () => {
+    await refreshList();
+    try {
+      catalogue = (await MibEditorSymbols()) || { modules: [], symbols: [] };
+    } catch (e) {
+      catalogue = { modules: [], symbols: [] };
+    }
+  });
 
   async function refreshList() {
     try {
@@ -47,9 +66,10 @@
   async function open(name) {
     if (!(await confirmDiscard())) return;
     try {
-      source = await MibEditorRead(name);
-      buffer = source.content;
-      diagnostics = source.diagnostics || [];
+      const { recovered } = await mibEditorStore.open(name);
+      if (recovered) {
+        notificationStore.add(get(_)('mibEditor.draftRecovered', { values: { name } }), 'warning');
+      }
     } catch (e) {
       notificationStore.add(String(e), 'error');
     }
@@ -60,9 +80,7 @@
     try {
       const s = await MibEditorOpenExternal();
       if (!s || !s.name) return; // cancelled
-      source = s;
-      buffer = s.content;
-      diagnostics = s.diagnostics || [];
+      mibEditorStore.openSource(s);
       notificationStore.add(get(_)('mibEditor.externalOpened', { values: { name: s.name } }), 'info');
     } catch (e) {
       notificationStore.add(String(e), 'error');
@@ -77,19 +95,8 @@
 
   // Validation runs in Go and touches nothing: no file, no gosmi state. That is
   // what makes it safe to run while someone types.
-  let checkTimer;
-  function scheduleCheck() {
-    clearTimeout(checkTimer);
-    checking = true;
-    checkTimer = setTimeout(async () => {
-      try {
-        diagnostics = (await MibEditorValidate(buffer)) || [];
-      } catch (e) {
-        diagnostics = [];
-      } finally {
-        checking = false;
-      }
-    }, 350);
+  function onInput(e) {
+    mibEditorStore.setBuffer(e.target.value);
   }
 
   async function save(force = false) {
@@ -107,8 +114,7 @@
         notificationStore.add(get(_)('mibEditor.saveFailed'), 'error');
         return;
       }
-      source = { ...source, content: buffer, sha256: res.sha256, external: false };
-      diagnostics = res.diagnostics || [];
+      await mibEditorStore.markSaved(res.sha256, res.diagnostics || []);
       notificationStore.add(
         get(_)(res.backupPath ? 'mibEditor.savedWithBackup' : 'mibEditor.saved',
           { values: { name: source.name } }), 'success');
@@ -145,9 +151,7 @@
     if (!source?.bundled) return;
     if (!window.confirm(get(_)('mibEditor.restoreConfirm', { values: { name: source.name } }))) return;
     try {
-      source = await MibEditorRestoreBundled(source.name);
-      buffer = source.content;
-      diagnostics = source.diagnostics || [];
+      mibEditorStore.openSource(await MibEditorRestoreBundled(source.name));
       await refreshList();
       await reload();
       notificationStore.add(get(_)('mibEditor.restored', { values: { name: source.name } }), 'success');
@@ -159,8 +163,31 @@
   function revert() {
     if (!source || !dirty) return;
     if (!window.confirm(get(_)('mibEditor.revertConfirm'))) return;
-    buffer = source.content;
-    diagnostics = source.diagnostics || [];
+    mibEditorStore.revert();
+  }
+
+  // The one place the editor goes from "here is the problem" to "here is the
+  // repair": the diagnostic knows the symbol, the catalogue knows its module.
+  async function fixImports() {
+    try {
+      const fix = await MibEditorFixImports(buffer);
+      if (!fix.content) return;
+      mibEditorStore.setBuffer(fix.content);
+      notificationStore.add(
+        get(_)('mibEditor.importsFixed', { values: { count: fix.missing.length } }), 'success');
+    } catch (e) {
+      notificationStore.add(String(e), 'error');
+    }
+  }
+
+  function insertAtCaret(text) {
+    const start = textarea?.selectionStart ?? buffer.length;
+    const end = textarea?.selectionEnd ?? buffer.length;
+    mibEditorStore.setBuffer(buffer.slice(0, start) + text + buffer.slice(end));
+    tick().then(() => {
+      textarea?.focus();
+      textarea?.setSelectionRange(start + text.length, start + text.length);
+    });
   }
 
   // Clicking a problem puts the caret on it. Without this the line number is
@@ -182,12 +209,8 @@
   }
 
   function insertSnippet(snippet) {
-    const text = snippet.text.replace(/\$\{name\}/g, 'myObject');
-    const start = textarea?.selectionStart ?? buffer.length;
-    const end = textarea?.selectionEnd ?? buffer.length;
-    buffer = buffer.slice(0, start) + text + buffer.slice(end);
     showSnippets = false;
-    scheduleCheck();
+    insertAtCaret(snippet.text.replace(/\$\{name\}/g, 'myObject'));
   }
 
   // The mirror only stays under the text if it scrolls with it.
@@ -208,11 +231,7 @@
     // A textarea would otherwise move focus out of the editor on Tab.
     if (e.key === 'Tab') {
       e.preventDefault();
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      buffer = buffer.slice(0, start) + '    ' + buffer.slice(end);
-      tick().then(() => textarea.setSelectionRange(start + 4, start + 4));
-      scheduleCheck();
+      insertAtCaret('    ');
     }
   }
 </script>
@@ -281,6 +300,34 @@
           {/if}
         </div>
 
+        <div class="snip">
+          <button class="btn btn-small" on:click={() => (showSymbols = !showSymbols)}>
+            <Icon name="book-marked" size={13} /> {$_('mibEditor.symbols')}
+          </button>
+          {#if showSymbols}
+            <div class="sym-menu">
+              <input type="search" bind:value={symbolFilter}
+                placeholder={$_('mibEditor.symbolSearch')} />
+              <ul>
+                {#each matchingSymbols as sy (sy.module + '.' + sy.name)}
+                  <li>
+                    <button on:click={() => { showSymbols = false; insertAtCaret(sy.name); }}
+                      title={sy.description}>
+                      <span class="sy-name">{sy.name}</span>
+                      <span class="sy-mod">{sy.module}</span>
+                    </button>
+                  </li>
+                {/each}
+                {#if symbolFilter.length < 2}
+                  <li class="sy-hint">{$_('mibEditor.symbolHint', { values: { count: catalogue.symbols.length } })}</li>
+                {:else if matchingSymbols.length === 0}
+                  <li class="sy-hint">{$_('mibEditor.symbolNone')}</li>
+                {/if}
+              </ul>
+            </div>
+          {/if}
+        </div>
+
         {#if source.bundled}
           <button class="btn btn-small" on:click={restoreBundled}>{$_('mibEditor.restore')}</button>
         {/if}
@@ -311,8 +358,8 @@
           <pre class="mirror" bind:this={mirror} aria-hidden="true">{@html highlighted}<br /></pre>
           <textarea
             bind:this={textarea}
-            bind:value={buffer}
-            on:input={scheduleCheck}
+            value={buffer}
+            on:input={onInput}
             on:scroll={syncScroll}
             on:keydown={onKeydown}
             spellcheck="false"
@@ -336,6 +383,16 @@
           <span class="pill ok">{$_('mibEditor.parses')}</span>
         {/if}
       </div>
+
+      {#if missingImports.length}
+        <div class="fixbar">
+          <Icon name="circle-alert" size={13} />
+          <span>{$_('mibEditor.missingImports', {
+            values: { count: missingImports.length, symbols: missingImports.slice(0, 4).map((m) => m.symbol).join(', ') } })}</span>
+          <span class="spacer"></span>
+          <button class="btn btn-small" on:click={fixImports}>{$_('mibEditor.fixImports')}</button>
+        </div>
+      {/if}
 
       {#if diagnostics.length}
         <ul class="problems">
@@ -639,6 +696,89 @@
   .mirror :global(.num) { color: var(--oid-color); }
   .mirror :global(.op)  { color: var(--favorites-color); }
   .mirror :global(.pun) { color: var(--text-muted); }
+
+  .sym-menu {
+    position: absolute;
+    right: 0;
+    top: 100%;
+    z-index: 20;
+    width: 300px;
+    margin-top: 4px;
+    padding: 6px;
+    background-color: var(--bg-light-color);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    box-shadow: 0 6px 18px var(--shadow-color);
+  }
+
+  .sym-menu input {
+    width: 100%;
+    padding: 5px 7px;
+    margin-bottom: 4px;
+    background-color: var(--bg-lighter-color);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-color);
+    font-size: 0.8em;
+  }
+
+  .sym-menu ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 260px;
+    overflow-y: auto;
+  }
+
+  .sym-menu li button {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    width: 100%;
+    padding: 3px 6px;
+    background: none;
+    border: none;
+    border-radius: 3px;
+    color: var(--text-color);
+    font-size: 0.78em;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .sym-menu li button:hover {
+    background-color: var(--hover-overlay);
+  }
+
+  .sy-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  .sy-mod {
+    color: var(--text-muted);
+    font-size: 0.9em;
+  }
+
+  .sy-hint {
+    padding: 6px;
+    font-size: 0.75em;
+    color: var(--text-muted);
+  }
+
+  .fixbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    background-color: var(--accent-subtle);
+    border-radius: 4px;
+    font-size: 0.76em;
+    color: var(--text-color);
+  }
 
   .status {
     display: flex;

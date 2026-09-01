@@ -257,3 +257,120 @@ func (a *App) MibEditorReload(enabledFiles []string) mib.Reloaded {
 	}
 	return result
 }
+
+// --- symbols and import assistance ---
+
+// MibEditorSymbols returns every name the loaded tree knows.
+func (a *App) MibEditorSymbols() mib.Catalogue {
+	return mib.Symbols()
+}
+
+// MibEditorCheckImports reports symbols the buffer uses but never imports.
+func (a *App) MibEditorCheckImports(content string) []mib.MissingImport {
+	missing := mib.CheckImports(content, mib.Symbols())
+	if missing == nil {
+		return []mib.MissingImport{}
+	}
+	return missing
+}
+
+// MibEditorFixImports returns the buffer with its IMPORTS clause repaired.
+func (a *App) MibEditorFixImports(content string) mib.ImportFix {
+	return mib.FixImports(content, mib.Symbols())
+}
+
+// --- drafts ---
+
+// mibDraftDirName is where unsaved buffers live, a sibling of the MIB folder
+// for the same reason backups are: anything inside mibs/ gets loaded as a MIB.
+const mibDraftDirName = "mib-drafts"
+
+// DraftInfo describes an unsaved buffer recovered from a previous session.
+type DraftInfo struct {
+	Name    string `json:"name"`
+	SavedAt string `json:"savedAt"`
+	Size    int64  `json:"size"`
+}
+
+func (a *App) draftPath(name string) (string, error) {
+	clean := filepath.Base(strings.TrimSpace(name))
+	if clean == "" || clean == "." {
+		return "", fmt.Errorf("invalid draft name %q", name)
+	}
+	dir := filepath.Join(filepath.Dir(a.persistentMibDir), mibDraftDirName)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, clean+".draft"), nil
+}
+
+// MibEditorSaveDraft keeps an unsaved buffer outside the MIB directory.
+//
+// It exists because the editor is one tab among seven: the buffer has to
+// survive switching away, closing the window and the machine going down, and
+// none of those are moments where the user chose to write a possibly broken
+// MIB into the folder the whole app loads from.
+func (a *App) MibEditorSaveDraft(name, content string) error {
+	path, err := a.draftPath(name)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(content), 0o644)
+}
+
+// MibEditorReadDraft returns a stored buffer, or empty if there is none.
+func (a *App) MibEditorReadDraft(name string) (string, error) {
+	path, err := a.draftPath(name)
+	if err != nil {
+		return "", err
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	return string(raw), nil
+}
+
+// MibEditorListDrafts reports what can be recovered.
+func (a *App) MibEditorListDrafts() ([]DraftInfo, error) {
+	dir := filepath.Join(filepath.Dir(a.persistentMibDir), mibDraftDirName)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []DraftInfo{}, nil
+		}
+		return []DraftInfo{}, err
+	}
+	out := []DraftInfo{}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".draft") {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		out = append(out, DraftInfo{
+			Name:    strings.TrimSuffix(e.Name(), ".draft"),
+			SavedAt: info.ModTime().UTC().Format(time.RFC3339),
+			Size:    info.Size(),
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].SavedAt > out[j].SavedAt })
+	return out, nil
+}
+
+// MibEditorDiscardDraft removes a stored buffer.
+func (a *App) MibEditorDiscardDraft(name string) error {
+	path, err := a.draftPath(name)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}

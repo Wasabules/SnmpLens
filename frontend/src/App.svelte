@@ -27,6 +27,7 @@
   import { eventCounts, eventsStore } from './stores/eventsStore';
   import { GetPersistentMibDirectory, ListMibFiles, ImportMibFiles, TraySetLabels } from '../wailsjs/go/main/App';
   import MibEditorPanel from './MibEditorPanel.svelte';
+  import { mibEditorStore } from './stores/mibEditorStore';
   import { OnFileDrop, OnFileDropOff } from '../wailsjs/runtime/runtime';
 
   let activeTab = 'operations'; // 'operations', 'traps', or 'history'
@@ -512,6 +513,9 @@
         </button>
         <button class="tab-btn" class:active={activeTab === 'mibeditor'} on:click={() => activeTab = 'mibeditor'} title="Ctrl+7">
           <Icon name="book-marked" size={15} /> {$_('app.tabs.mibEditor')}
+          {#if $mibEditorStore.source && $mibEditorStore.buffer !== $mibEditorStore.source.content}
+            <span class="unsaved-dot" title={$_('mibEditor.unsaved')}></span>
+          {/if}
         </button>
         {#if $settingsStore.anonymousMode}
           <span class="anon-badge" title={$_('settings.general.anonymousMode') + ' (Ctrl+Shift+A)'}>ANON</span>
@@ -765,6 +769,17 @@
 
   /* Every other panel just grows; the editor needs to own the height so its
      textarea can scroll instead of the page. */
+  /* Unsaved work must be visible from another tab, since the editor panel is
+     unmounted while you are not looking at it. */
+  .unsaved-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--accent-color);
+    display: inline-block;
+    margin-left: 2px;
+  }
+
   .main-content.editor-host {
     display: flex;
     flex-direction: column;

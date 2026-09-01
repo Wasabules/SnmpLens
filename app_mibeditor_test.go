@@ -236,3 +236,71 @@ func TestRestoreBundledRefusesAVendorMib(t *testing.T) {
 		t.Error("the file was emptied by a failed restore")
 	}
 }
+
+// A draft must survive leaving the tab, and must NOT be written into the MIB
+// directory: a half-finished MIB there would be loaded by the app.
+func TestDraftsLandOutsideTheMibDirectory(t *testing.T) {
+	a, mibDir := newMibApp(t)
+
+	if err := a.MibEditorSaveDraft("WIP-MIB", "WIP-MIB DEFINITIONS ::= BEGIN\n"); err != nil {
+		t.Fatalf("SaveDraft: %v", err)
+	}
+	entries, _ := os.ReadDir(mibDir)
+	if len(entries) != 0 {
+		names := []string{}
+		for _, e := range entries {
+			names = append(names, e.Name())
+		}
+		t.Errorf("the draft landed in the MIB directory: %v", names)
+	}
+
+	got, err := a.MibEditorReadDraft("WIP-MIB")
+	if err != nil {
+		t.Fatalf("ReadDraft: %v", err)
+	}
+	if got != "WIP-MIB DEFINITIONS ::= BEGIN\n" {
+		t.Errorf("draft = %q", got)
+	}
+
+	list, err := a.MibEditorListDrafts()
+	if err != nil || len(list) != 1 || list[0].Name != "WIP-MIB" {
+		t.Errorf("ListDrafts = %+v (%v)", list, err)
+	}
+
+	if err := a.MibEditorDiscardDraft("WIP-MIB"); err != nil {
+		t.Fatalf("DiscardDraft: %v", err)
+	}
+	if got, _ := a.MibEditorReadDraft("WIP-MIB"); got != "" {
+		t.Error("the draft survived being discarded")
+	}
+}
+
+// Reading a draft that was never written is a normal state, not an error:
+// every open would otherwise have to handle a failure that means "nothing to
+// recover".
+func TestReadingAMissingDraftIsNotAnError(t *testing.T) {
+	a, _ := newMibApp(t)
+	got, err := a.MibEditorReadDraft("NEVER-SAVED")
+	if err != nil {
+		t.Errorf("err = %v", err)
+	}
+	if got != "" {
+		t.Errorf("content = %q", got)
+	}
+}
+
+func TestDraftNamesAreContained(t *testing.T) {
+	a, _ := newMibApp(t)
+	for _, name := range []string{"../escape", "../../monitoring.db", "/etc/passwd"} {
+		path, err := a.draftPath(name)
+		if err != nil {
+			continue
+		}
+		if strings.Contains(filepath.ToSlash(path), "/mibs/") {
+			t.Errorf("%q resolved into the MIB directory: %s", name, path)
+		}
+		if !strings.Contains(filepath.ToSlash(path), mibDraftDirName) {
+			t.Errorf("%q escaped the draft directory: %s", name, path)
+		}
+	}
+}

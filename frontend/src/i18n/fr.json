@@ -957,6 +957,14 @@
       "table": "Table et ligne",
       "imports": "Clause IMPORTS",
       "module": "Squelette de module vide"
-    }
+    },
+    "symbols": "Symboles",
+    "symbolSearch": "Rechercher un symbole…",
+    "symbolHint": "{count} symboles dans les MIB chargées. Saisissez au moins deux caractères.",
+    "symbolNone": "Aucun symbole ne correspond.",
+    "missingImports": "Utilisés sans être importés : {symbols} ({count} au total).",
+    "fixImports": "Ajouter aux IMPORTS",
+    "importsFixed": "{count} symbole(s) ajouté(s) aux IMPORTS.",
+    "draftRecovered": "Un travail non enregistré sur {name} a été récupéré d’une session précédente."
   }
 }
