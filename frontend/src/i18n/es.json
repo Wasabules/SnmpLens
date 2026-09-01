@@ -9,7 +9,8 @@
       "history": "Historial",
       "monitor": "Monitor",
       "network": "Red",
-      "events": "Eventos"
+      "events": "Eventos",
+      "mibEditor": "Editor de MIB"
     },
     "status": {
       "targetsTitle": "Número de objetivos configurados",
@@ -916,5 +917,46 @@
     "loginUnsupported": "El registro al iniciar sesión no está implementado en esta plataforma.",
     "loginRegistered": "SnmpLens se iniciará al iniciar sesión.",
     "loginRemoved": "SnmpLens ya no se iniciará al iniciar sesión."
+  },
+  "mibEditor": {
+    "filter": "Filtrar…",
+    "refresh": "Actualizar la lista",
+    "openExternal": "Abrir un archivo…",
+    "noFiles": "Ninguna MIB coincide",
+    "placeholder": "Elige una MIB a la izquierda, o abre un archivo, para empezar.",
+    "external": "externa",
+    "bundled": "incluida",
+    "bundledModified": "incluida, modificada",
+    "unsaved": "sin guardar",
+    "insert": "Insertar",
+    "restore": "Restaurar la copia incluida",
+    "revert": "Descartar cambios",
+    "lines": "{count} líneas",
+    "checking": "Analizando…",
+    "parses": "Sintaxis correcta",
+    "errorCount": "{count} error(es)",
+    "warnCount": "{count} aviso(s)",
+    "saved": "{name} guardada.",
+    "savedWithBackup": "{name} guardada; se hizo copia de la versión anterior.",
+    "saveFailed": "No se pudo escribir el archivo.",
+    "restored": "{name} restaurada desde la copia que incluye SnmpLens.",
+    "restoreConfirm": "¿Reemplazar {name} por la copia que incluye SnmpLens? Se perderán tus cambios en este archivo.",
+    "revertConfirm": "¿Descartar tus cambios y volver al archivo guardado?",
+    "discardConfirm": "Tienes cambios sin guardar. ¿Descartarlos?",
+    "conflictConfirm": "Este archivo cambió en disco desde que lo abriste. ¿Sobrescribirlo con tu versión?",
+    "reloaded": "Árbol MIB recargado: {count} módulos.",
+    "reloadedWithFailures": "Árbol MIB recargado, pero {count} archivo(s) no se cargaron.",
+    "treeBroken": "El árbol MIB ya no se resuelve: {failures}. Restaura la copia incluida para recuperarlo.",
+    "externalOpened": "{name} abierta. Al guardar se escribirá en la carpeta MIB de SnmpLens.",
+    "externalWarning": "Este archivo se abrió desde fuera de SnmpLens. Al guardar se escribe en la carpeta MIB como «{name}», no se reescribe el original.",
+    "bundledWarning": "Esta MIB viene con SnmpLens y casi todas las demás importan de ella. Un error aquí rompe todo el árbol — la copia incluida se puede restaurar en cualquier momento.",
+    "snippet": {
+      "objectType": "Definición OBJECT-TYPE",
+      "moduleIdentity": "Cabecera MODULE-IDENTITY",
+      "textualConvention": "TEXTUAL-CONVENTION",
+      "table": "Tabla y fila",
+      "imports": "Cláusula IMPORTS",
+      "module": "Esqueleto de módulo vacío"
+    }
   }
 }

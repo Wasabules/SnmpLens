@@ -9,7 +9,8 @@
       "history": "Verlauf",
       "monitor": "Überwachung",
       "network": "Netzwerk",
-      "events": "Ereignisse"
+      "events": "Ereignisse",
+      "mibEditor": "MIB-Editor"
     },
     "status": {
       "targetsTitle": "Anzahl konfigurierter Ziele",
@@ -916,5 +917,46 @@
     "loginUnsupported": "Ein Anmeldeeintrag ist auf dieser Plattform nicht implementiert.",
     "loginRegistered": "SnmpLens startet nun bei der Anmeldung.",
     "loginRemoved": "SnmpLens startet nicht mehr bei der Anmeldung."
+  },
+  "mibEditor": {
+    "filter": "Filtern…",
+    "refresh": "Liste aktualisieren",
+    "openExternal": "Datei öffnen…",
+    "noFiles": "Keine passende MIB",
+    "placeholder": "Wählen Sie links eine MIB oder öffnen Sie eine Datei, um zu beginnen.",
+    "external": "extern",
+    "bundled": "mitgeliefert",
+    "bundledModified": "mitgeliefert, geändert",
+    "unsaved": "ungespeichert",
+    "insert": "Einfügen",
+    "restore": "Mitgelieferte Kopie wiederherstellen",
+    "revert": "Änderungen verwerfen",
+    "lines": "{count} Zeilen",
+    "checking": "Prüfung…",
+    "parses": "Syntax in Ordnung",
+    "errorCount": "{count} Fehler",
+    "warnCount": "{count} Warnung(en)",
+    "saved": "{name} gespeichert.",
+    "savedWithBackup": "{name} gespeichert; die vorherige Fassung wurde gesichert.",
+    "saveFailed": "Die Datei konnte nicht geschrieben werden.",
+    "restored": "{name} aus der mit SnmpLens gelieferten Kopie wiederhergestellt.",
+    "restoreConfirm": "{name} durch die mit SnmpLens gelieferte Kopie ersetzen? Ihre Änderungen an dieser Datei gehen verloren.",
+    "revertConfirm": "Änderungen verwerfen und zur gespeicherten Datei zurückkehren?",
+    "discardConfirm": "Es gibt ungespeicherte Änderungen. Verwerfen?",
+    "conflictConfirm": "Diese Datei wurde seit dem Öffnen auf der Festplatte geändert. Mit Ihrer Fassung überschreiben?",
+    "reloaded": "MIB-Baum neu geladen: {count} Module.",
+    "reloadedWithFailures": "MIB-Baum neu geladen, aber {count} Datei(en) ließen sich nicht laden.",
+    "treeBroken": "Der MIB-Baum lässt sich nicht mehr auflösen: {failures}. Stellen Sie die mitgelieferte Kopie wieder her.",
+    "externalOpened": "{name} geöffnet. Beim Speichern wird sie in den MIB-Ordner von SnmpLens geschrieben.",
+    "externalWarning": "Diese Datei stammt von außerhalb von SnmpLens. Beim Speichern wird sie als „{name}“ in den MIB-Ordner geschrieben, das Original bleibt unberührt.",
+    "bundledWarning": "Diese MIB wird mit SnmpLens geliefert und fast jede andere importiert aus ihr. Ein Fehler hier zerstört den gesamten Baum — die mitgelieferte Kopie kann jederzeit wiederhergestellt werden.",
+    "snippet": {
+      "objectType": "OBJECT-TYPE-Definition",
+      "moduleIdentity": "MODULE-IDENTITY-Kopf",
+      "textualConvention": "TEXTUAL-CONVENTION",
+      "table": "Tabelle und Zeile",
+      "imports": "IMPORTS-Klausel",
+      "module": "Leeres Modulgerüst"
+    }
   }
 }

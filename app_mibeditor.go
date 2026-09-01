@@ -1,0 +1,259 @@
+package main
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+
+	"SnmpLens/pkg/events"
+	"SnmpLens/pkg/mib"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
+)
+
+// The MIB editor.
+//
+// Every method that names a file goes through resolveMibPath. The existing
+// ListMibFiles takes a caller-supplied directory and hands it straight to
+// os.ReadDir, which is a precedent worth not following: monitoring.db,
+// service.json and the pkg/secrets store all live one directory above the MIB
+// folder, and these methods WRITE.
+
+// mibBackupDirName is a SIBLING of the MIB directory, never inside it.
+//
+// ListMibFiles filters only dotfiles, README and LICENSE, and the MIB path
+// store enables everything it finds. A backup left beside the original would
+// therefore be loaded as a second copy of the same module — and since
+// os.ReadDir is alphabetical, "IF-MIB.1234.bak" would load before "IF-MIB" and
+// its stale content would win, silently, with no error anywhere.
+const mibBackupDirName = "mib-backups"
+
+// resolveMibPath maps a file name to a path inside the MIB directory, and
+// refuses anything that would land outside it.
+func (a *App) resolveMibPath(name string) (string, error) {
+	clean := filepath.Base(strings.TrimSpace(name))
+	if clean == "" || clean == "." || clean == string(filepath.Separator) {
+		return "", fmt.Errorf("invalid MIB file name %q", name)
+	}
+	full := filepath.Join(a.persistentMibDir, clean)
+	// Belt and braces: Base should make this impossible, but the check is
+	// cheap and the consequence of being wrong is writing outside the folder.
+	if filepath.Dir(full) != filepath.Clean(a.persistentMibDir) {
+		return "", fmt.Errorf("refusing a MIB path outside the MIB directory: %q", name)
+	}
+	return full, nil
+}
+
+// bundledContent returns the embedded copy of a standard MIB, if there is one.
+func (a *App) bundledContent(name string) (string, bool) {
+	// embed.FS always uses forward slashes, even on Windows.
+	raw, err := a.mibs.ReadFile("mibs/" + filepath.Base(name))
+	if err != nil {
+		return "", false
+	}
+	content, _ := mib.NormaliseSource(raw)
+	return content, true
+}
+
+// MibEditorList returns the MIBs in the persistent directory.
+func (a *App) MibEditorList() ([]mib.FileInfo, error) {
+	names, err := mib.ListMibFiles(a.persistentMibDir)
+	if err != nil {
+		return []mib.FileInfo{}, err
+	}
+
+	out := make([]mib.FileInfo, 0, len(names))
+	for _, name := range names {
+		info := mib.FileInfo{Name: name}
+		if path, err := a.resolveMibPath(name); err == nil {
+			if st, err := os.Stat(path); err == nil {
+				info.Size = st.Size()
+			}
+			if embedded, ok := a.bundledContent(name); ok {
+				info.Bundled = true
+				if raw, err := os.ReadFile(path); err == nil {
+					onDisk, _ := mib.NormaliseSource(raw)
+					info.Modified = onDisk != embedded
+				}
+			}
+		}
+		out = append(out, info)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
+}
+
+// MibEditorRead opens a MIB from the persistent directory.
+func (a *App) MibEditorRead(name string) (mib.Source, error) {
+	path, err := a.resolveMibPath(name)
+	if err != nil {
+		return mib.Source{}, err
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return mib.Source{}, err
+	}
+	content, eol := mib.NormaliseSource(raw)
+	_, bundled := a.bundledContent(name)
+
+	return mib.Source{
+		Name: filepath.Base(name), Path: path, Content: content, Eol: eol,
+		Bundled: bundled, Sha256: mib.Checksum(content),
+		Diagnostics: mib.Validate(content),
+	}, nil
+}
+
+// MibEditorOpenExternal opens a MIB from anywhere on disk, read-only.
+//
+// External means external: the file is loaded into the editor but its path is
+// not kept, so a save has to choose a name inside the MIB directory. Writing
+// back to an arbitrary path is how an editor turns into a way to overwrite any
+// file the user can reach.
+func (a *App) MibEditorOpenExternal() (mib.Source, error) {
+	if a.ctx == nil {
+		return mib.Source{}, fmt.Errorf("no window")
+	}
+	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Open a MIB file",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "MIB files", Pattern: "*.mib;*.txt;*.my;*"},
+		},
+	})
+	if err != nil {
+		return mib.Source{}, err
+	}
+	if path == "" {
+		return mib.Source{}, nil // cancelled
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return mib.Source{}, err
+	}
+	content, eol := mib.NormaliseSource(raw)
+
+	// Offer the module's own name rather than the file name: gosmi resolves a
+	// module by name, so a file called "vendor.txt" holding ACME-MIB has to be
+	// saved as ACME-MIB to ever load.
+	suggested := mib.ModuleName(content)
+	if suggested == "" {
+		suggested = filepath.Base(path)
+	}
+
+	return mib.Source{
+		Name: suggested, Path: path, Content: content, Eol: eol,
+		External: true, Sha256: mib.Checksum(content),
+		Diagnostics: mib.Validate(content),
+	}, nil
+}
+
+// MibEditorValidate checks buffer text without touching disk or gosmi.
+func (a *App) MibEditorValidate(content string) []mib.Diagnostic {
+	return mib.Validate(content)
+}
+
+// MibEditorSave writes a MIB, backing up whatever was there first.
+//
+// force skips the "changed on disk since you opened it" check. Nothing here
+// refuses to save a MIB that fails validation: the file may be a work in
+// progress, and an editor that will not let you save is not an editor. The
+// consequences are made visible instead — the reload reports what broke, and
+// a bundled MIB can be restored.
+func (a *App) MibEditorSave(name, content, baseSha256 string, force bool) (mib.SaveResult, error) {
+	path, err := a.resolveMibPath(name)
+	if err != nil {
+		return mib.SaveResult{}, err
+	}
+
+	result := mib.SaveResult{Diagnostics: mib.Validate(content)}
+
+	existing, statErr := os.ReadFile(path)
+
+	// Refuse a save that would silently discard someone else's edit. The
+	// baseline is what the editor read; if disk no longer matches it, the file
+	// changed underneath — another instance, an import, a text editor.
+	if statErr == nil && !force && baseSha256 != "" {
+		onDisk, _ := mib.NormaliseSource(existing)
+		if mib.Checksum(onDisk) != baseSha256 {
+			result.Conflict = true
+			return result, nil
+		}
+	}
+
+	if statErr == nil {
+		backup, err := a.backupMib(name, existing)
+		if err != nil {
+			return result, fmt.Errorf("could not back up %s before saving: %w", name, err)
+		}
+		result.BackupPath = backup
+	}
+
+	eol := "lf"
+	if statErr == nil {
+		_, eol = mib.NormaliseSource(existing)
+	}
+	payload := []byte(mib.RestoreEol(content, eol))
+
+	// Write to a temporary file on the SAME volume, then rename: a crash
+	// halfway through must not leave a truncated MIB that breaks every module
+	// importing from it.
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, payload, 0o644); err != nil {
+		return result, err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		os.Remove(tmp)
+		return result, err
+	}
+
+	result.Saved = true
+	result.Sha256 = mib.Checksum(content)
+	return result, nil
+}
+
+// backupMib copies the previous content into a sibling directory.
+func (a *App) backupMib(name string, content []byte) (string, error) {
+	dir := filepath.Join(filepath.Dir(a.persistentMibDir), mibBackupDirName)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, fmt.Sprintf("%s.%d.bak", filepath.Base(name), time.Now().Unix()))
+	if err := os.WriteFile(path, content, 0o644); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+// MibEditorRestoreBundled puts back the copy that ships in the binary.
+//
+// This is the way out of having broken a standard MIB. Nearly every other MIB
+// IMPORTS from SNMPv2-SMI and SNMPv2-TC, so an editing mistake in one of those
+// takes the whole tree with it, and the file on disk is the only copy the app
+// reads at runtime.
+func (a *App) MibEditorRestoreBundled(name string) (mib.Source, error) {
+	embedded, ok := a.bundledContent(name)
+	if !ok {
+		return mib.Source{}, fmt.Errorf("%s does not ship with SnmpLens; there is nothing to restore", name)
+	}
+	if _, err := a.MibEditorSave(name, embedded, "", true); err != nil {
+		return mib.Source{}, err
+	}
+	return a.MibEditorRead(name)
+}
+
+// MibEditorReload rebuilds the MIB tree from disk and reports what broke.
+func (a *App) MibEditorReload(enabledFiles []string) mib.Reloaded {
+	if len(enabledFiles) == 0 {
+		if names, err := mib.ListMibFiles(a.persistentMibDir); err == nil {
+			enabledFiles = names
+		}
+	}
+	result := a.mibService.Rebuild(enabledFiles)
+	if !result.Health.Ok {
+		a.recordSystemEvent(events.KindSystemMibLoadFailed, "major",
+			"The MIB tree no longer resolves after a reload: "+strings.Join(result.Health.Failures, "; "))
+	}
+	return result
+}

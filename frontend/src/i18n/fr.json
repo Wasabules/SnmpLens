@@ -9,7 +9,8 @@
       "history": "Historique",
       "monitor": "Monitoring",
       "network": "Réseau",
-      "events": "Événements"
+      "events": "Événements",
+      "mibEditor": "Éditeur de MIB"
     },
     "status": {
       "targetsTitle": "Nombre de cibles configurées",
@@ -916,5 +917,46 @@
     "loginUnsupported": "L'enregistrement au démarrage de session n'est pas implémenté sur cette plateforme.",
     "loginRegistered": "SnmpLens démarrera désormais à l'ouverture de session.",
     "loginRemoved": "SnmpLens ne démarrera plus à l'ouverture de session."
+  },
+  "mibEditor": {
+    "filter": "Filtrer…",
+    "refresh": "Rafraîchir la liste",
+    "openExternal": "Ouvrir un fichier…",
+    "noFiles": "Aucune MIB ne correspond",
+    "placeholder": "Choisissez une MIB à gauche, ou ouvrez un fichier, pour commencer.",
+    "external": "externe",
+    "bundled": "intégrée",
+    "bundledModified": "intégrée, modifiée",
+    "unsaved": "non enregistré",
+    "insert": "Insérer",
+    "restore": "Restaurer la copie intégrée",
+    "revert": "Annuler les modifications",
+    "lines": "{count} lignes",
+    "checking": "Analyse…",
+    "parses": "Analyse correcte",
+    "errorCount": "{count} erreur(s)",
+    "warnCount": "{count} avertissement(s)",
+    "saved": "{name} enregistrée.",
+    "savedWithBackup": "{name} enregistrée ; la version précédente a été sauvegardée.",
+    "saveFailed": "Le fichier n'a pas pu être écrit.",
+    "restored": "{name} restaurée depuis la copie livrée avec SnmpLens.",
+    "restoreConfirm": "Remplacer {name} par la copie livrée avec SnmpLens ? Vos modifications de ce fichier seront perdues.",
+    "revertConfirm": "Abandonner vos modifications et revenir au fichier enregistré ?",
+    "discardConfirm": "Vous avez des modifications non enregistrées. Les abandonner ?",
+    "conflictConfirm": "Ce fichier a changé sur le disque depuis son ouverture. L'écraser avec votre version ?",
+    "reloaded": "Arbre MIB rechargé : {count} modules.",
+    "reloadedWithFailures": "Arbre MIB rechargé, mais {count} fichier(s) ne se chargent pas.",
+    "treeBroken": "L'arbre MIB ne se résout plus : {failures}. Restaurez la copie intégrée pour revenir en arrière.",
+    "externalOpened": "{name} ouverte. L'enregistrement l'écrira dans le dossier MIB de SnmpLens.",
+    "externalWarning": "Ce fichier a été ouvert hors de SnmpLens. L'enregistrement l'écrit dans le dossier MIB sous le nom « {name} », il ne réécrit pas l'original.",
+    "bundledWarning": "Cette MIB est livrée avec SnmpLens et presque toutes les autres en dépendent. Une erreur ici casse tout l'arbre — la copie intégrée reste restaurable à tout moment.",
+    "snippet": {
+      "objectType": "Définition OBJECT-TYPE",
+      "moduleIdentity": "En-tête MODULE-IDENTITY",
+      "textualConvention": "TEXTUAL-CONVENTION",
+      "table": "Table et ligne",
+      "imports": "Clause IMPORTS",
+      "module": "Squelette de module vide"
+    }
   }
 }

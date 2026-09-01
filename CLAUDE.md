@@ -101,6 +101,27 @@ Contains `mibs/` (extracted + user MIBs) and `monitoring.db`.
 - **Credentials are encrypted at rest.** `settingsStore` stores plaintext in memory but encrypts sensitive fields (`community`, v3 passphrases, per-target overrides) via `crypto.js` before writing to localStorage. When adding a new sensitive field, extend `SENSITIVE_PATHS` (and the per-target override handling) in `crypto.js`, or it will be persisted in clear.
 - **Anonymous Mode** is purely frontend masking and is intentionally **non-persistent** (always off on restart) — see `settingsStore.js` forcing `anonymousMode = false` on load. Don't make it persist.
 
+## MIB editor
+
+The MIB editor tab (`MibEditorPanel.svelte`, `pkg/mib/editor.go`, `app_mibeditor.go`) edits the MIBs in the
+persistent directory, or opens one from anywhere and saves it in. Validation is two-tier because the two tiers
+see different things: `parser.Parse` (gosmi's own sub-package) gives **line:column** syntax errors and is pure, so
+it runs while you type; `gosmi.LoadModule` sees semantic errors but reports them as `Could not load module at X`
+with no position at all — it discards the parser's positioned error with a `fmt.Println` in `smi/module.go`.
+
+Editing is safe to attempt: a failed load leaves the previously loaded tree untouched (`IsLoaded` stays false),
+verified rather than assumed. What is NOT safe is succeeding at saving a broken standard MIB, since nearly every
+other MIB imports from `SNMPv2-SMI`/`SNMPv2-TC` — hence the bundled marker, the automatic backup, `MibEditorRestoreBundled`,
+and the post-reload health probe.
+
+Two rules that look like tidiness and are not: **backups go to a sibling `mib-backups/` directory**, because
+`ListMibFiles` filters only dotfiles and `os.ReadDir` is alphabetical, so `IF-MIB.123.bak` beside `IF-MIB` would
+load first as the same module and win; and **every path goes through `resolveMibPath`**, because these methods
+write and `monitoring.db`, `service.json` and the secret store all sit one directory above `mibs/`.
+
+`pkg/mib` now takes a package-level `RWMutex` around gosmi. Its state is global, Wails dispatches each bound
+method on its own goroutine, and the editor's reload tears the world down while the rest of the app resolves OIDs.
+
 ## Background mode
 
 Three preferences are read by `main()` **before** `wails.Run`, so they cannot live in localStorage: they sit in `service.json` next to `monitoring.db` (`pkg/service`). `HideWindowOnClose` is deliberately NOT used — it is fixed before we know whether a tray icon actually appeared, and an app that refuses to close with no tray to quit from is unusable. `OnBeforeClose` makes the same decision later, once `tray.Start` has answered. Everything about `pkg/tray` is fail-soft for that reason, including a readiness timeout: a desktop with no StatusNotifierItem host never calls back rather than returning an error.

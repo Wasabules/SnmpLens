@@ -26,6 +26,7 @@
   import { historyStore } from './stores/historyStore';
   import { eventCounts, eventsStore } from './stores/eventsStore';
   import { GetPersistentMibDirectory, ListMibFiles, ImportMibFiles, TraySetLabels } from '../wailsjs/go/main/App';
+  import MibEditorPanel from './MibEditorPanel.svelte';
   import { OnFileDrop, OnFileDropOff } from '../wailsjs/runtime/runtime';
 
   let activeTab = 'operations'; // 'operations', 'traps', or 'history'
@@ -312,6 +313,9 @@
       } else if (event.key === '6') {
         event.preventDefault();
         activeTab = 'events';
+      } else if (event.key === '7') {
+        event.preventDefault();
+        activeTab = 'mibeditor';
       } else if (event.key === ',') {
         // Ctrl+, to open settings (like VS Code)
         event.preventDefault();
@@ -466,7 +470,7 @@
       </div>
     </div>
 
-    <div class="main-content">
+    <div class="main-content" class:editor-host={activeTab === 'mibeditor'}>
       <div class="tabs">
         <button class="tab-btn" class:active={activeTab === 'operations'} on:click={() => activeTab = 'operations'} title="Ctrl+1">
           {$_('app.tabs.operations')}
@@ -506,10 +510,17 @@
           {/if}
           <span class="shortcut-hint">6</span>
         </button>
+        <button class="tab-btn" class:active={activeTab === 'mibeditor'} on:click={() => activeTab = 'mibeditor'} title="Ctrl+7">
+          <Icon name="book-marked" size={15} /> {$_('app.tabs.mibEditor')}
+        </button>
         {#if $settingsStore.anonymousMode}
           <span class="anon-badge" title={$_('settings.general.anonymousMode') + ' (Ctrl+Shift+A)'}>ANON</span>
         {/if}
       </div>
+
+      {#if activeTab === 'mibeditor'}
+        <MibEditorPanel />
+      {/if}
 
       {#if activeTab === 'operations'}
         <OperationsPanel
@@ -750,6 +761,15 @@
     background-color: var(--accent-hover-color);
     opacity: 1;
     height: 100px;
+  }
+
+  /* Every other panel just grows; the editor needs to own the height so its
+     textarea can scroll instead of the page. */
+  .main-content.editor-host {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
   }
 
   .main-content {

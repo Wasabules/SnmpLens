@@ -9,7 +9,8 @@
       "history": "History",
       "monitor": "Monitor",
       "network": "Network",
-      "events": "Events"
+      "events": "Events",
+      "mibEditor": "MIB editor"
     },
     "status": {
       "targetsTitle": "Number of configured targets",
@@ -916,5 +917,46 @@
     "loginUnsupported": "Registering a login entry is not implemented on this platform.",
     "loginRegistered": "SnmpLens will now start at login.",
     "loginRemoved": "SnmpLens will no longer start at login."
+  },
+  "mibEditor": {
+    "filter": "Filter…",
+    "refresh": "Refresh the list",
+    "openExternal": "Open a file…",
+    "noFiles": "No MIB matches",
+    "placeholder": "Pick a MIB on the left, or open a file, to start editing.",
+    "external": "external",
+    "bundled": "bundled",
+    "bundledModified": "bundled, modified",
+    "unsaved": "unsaved",
+    "insert": "Insert",
+    "restore": "Restore the bundled copy",
+    "revert": "Revert",
+    "lines": "{count} lines",
+    "checking": "Checking…",
+    "parses": "Parses",
+    "errorCount": "{count} error(s)",
+    "warnCount": "{count} warning(s)",
+    "saved": "{name} saved.",
+    "savedWithBackup": "{name} saved; the previous version was backed up.",
+    "saveFailed": "The file could not be written.",
+    "restored": "{name} restored from the copy that ships with SnmpLens.",
+    "restoreConfirm": "Replace {name} with the copy that ships with SnmpLens? Your changes to this file will be lost.",
+    "revertConfirm": "Discard your changes and go back to the saved file?",
+    "discardConfirm": "You have unsaved changes. Discard them?",
+    "conflictConfirm": "This file changed on disk since you opened it. Overwrite it with your version?",
+    "reloaded": "MIB tree reloaded: {count} modules.",
+    "reloadedWithFailures": "MIB tree reloaded, but {count} file(s) failed to load.",
+    "treeBroken": "The MIB tree no longer resolves: {failures}. Restore the bundled copy to recover.",
+    "externalOpened": "{name} opened. Saving will write it into the SnmpLens MIB folder.",
+    "externalWarning": "This file was opened from outside SnmpLens. Saving writes it into the MIB folder as \"{name}\", it does not write back to the original.",
+    "bundledWarning": "This MIB ships with SnmpLens and almost every other MIB imports from it. A mistake here breaks the whole tree — the bundled copy can be restored at any time.",
+    "snippet": {
+      "objectType": "OBJECT-TYPE definition",
+      "moduleIdentity": "MODULE-IDENTITY header",
+      "textualConvention": "TEXTUAL-CONVENTION",
+      "table": "Table and row",
+      "imports": "IMPORTS clause",
+      "module": "Empty module skeleton"
+    }
   }
 }

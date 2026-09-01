@@ -36,6 +36,9 @@ func NewService(mibPath string) *Service {
 
 // LoadAll loads all MIBs from the service's path and returns the full tree.
 func (s *Service) LoadAll() ([]*Node, error) {
+	gosmiMu.Lock()
+	defer gosmiMu.Unlock()
+
 	log.Println("Loading all MIBs from:", s.path)
 
 	files, err := os.ReadDir(s.path)
@@ -66,6 +69,9 @@ func (s *Service) LoadAll() ([]*Node, error) {
 
 // LoadSpecific loads only the specified MIB files from the service's path.
 func (s *Service) LoadSpecific(fileNames []string) ([]*Node, error) {
+	gosmiMu.Lock()
+	defer gosmiMu.Unlock()
+
 	log.Printf("Loading %d specific MIBs from: %s", len(fileNames), s.path)
 
 	if len(fileNames) == 0 {
@@ -180,6 +186,9 @@ type MibLoadResponse struct {
 
 // LoadWithDiagnostics loads MIBs and returns both the tree and per-file diagnostics.
 func (s *Service) LoadWithDiagnostics(fileNames []string) MibLoadResponse {
+	gosmiMu.Lock()
+	defer gosmiMu.Unlock()
+
 	log.Printf("Loading %d MIBs with diagnostics from: %s", len(fileNames), s.path)
 
 	var diagnostics []MibLoadResult
@@ -244,6 +253,9 @@ type OidInfo struct {
 
 // GetOidDetails takes a raw OID string and returns its translated details if found.
 func (s *Service) Translate(oid string) OidDetails {
+	gosmiMu.RLock()
+	defer gosmiMu.RUnlock()
+
 	smiOid, err := types.OidFromString(oid)
 	if err != nil {
 		return OidDetails{Name: oid, Description: "Invalid OID format"}
@@ -258,6 +270,9 @@ func (s *Service) Translate(oid string) OidDetails {
 
 // ResolveOid returns detailed MIB info for a single OID, including enum values.
 func (s *Service) ResolveOid(oid string) OidInfo {
+	gosmiMu.RLock()
+	defer gosmiMu.RUnlock()
+
 	smiOid, err := types.OidFromString(oid)
 	if err != nil {
 		return OidInfo{Name: oid}
@@ -281,6 +296,9 @@ func (s *Service) ResolveOid(oid string) OidInfo {
 
 // ResolveOids returns detailed MIB info for a batch of OIDs.
 func (s *Service) ResolveOids(oids []string) map[string]OidInfo {
+	gosmiMu.RLock()
+	defer gosmiMu.RUnlock()
+
 	result := make(map[string]OidInfo, len(oids))
 	for _, oid := range oids {
 		result[oid] = s.ResolveOid(oid)

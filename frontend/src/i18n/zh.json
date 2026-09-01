@@ -9,7 +9,8 @@
       "history": "历史记录",
       "monitor": "监控",
       "network": "网络",
-      "events": "事件"
+      "events": "事件",
+      "mibEditor": "MIB 编辑器"
     },
     "status": {
       "targetsTitle": "已配置的目标数量",
@@ -916,5 +917,46 @@
     "loginUnsupported": "此平台尚未实现登录启动项。",
     "loginRegistered": "SnmpLens 将在登录时启动。",
     "loginRemoved": "SnmpLens 将不再在登录时启动。"
+  },
+  "mibEditor": {
+    "filter": "筛选…",
+    "refresh": "刷新列表",
+    "openExternal": "打开文件…",
+    "noFiles": "没有匹配的 MIB",
+    "placeholder": "在左侧选择一个 MIB，或打开一个文件，即可开始编辑。",
+    "external": "外部",
+    "bundled": "内置",
+    "bundledModified": "内置，已修改",
+    "unsaved": "未保存",
+    "insert": "插入",
+    "restore": "恢复内置副本",
+    "revert": "撤销更改",
+    "lines": "{count} 行",
+    "checking": "检查中…",
+    "parses": "语法正确",
+    "errorCount": "{count} 个错误",
+    "warnCount": "{count} 个警告",
+    "saved": "{name} 已保存。",
+    "savedWithBackup": "{name} 已保存；先前版本已备份。",
+    "saveFailed": "无法写入文件。",
+    "restored": "{name} 已从 SnmpLens 内置副本恢复。",
+    "restoreConfirm": "要用 SnmpLens 内置副本替换 {name} 吗？您对此文件的修改将丢失。",
+    "revertConfirm": "放弃您的修改并回到已保存的文件？",
+    "discardConfirm": "存在未保存的修改。要放弃吗？",
+    "conflictConfirm": "自打开以来此文件在磁盘上已被更改。要用您的版本覆盖吗？",
+    "reloaded": "MIB 树已重新加载：{count} 个模块。",
+    "reloadedWithFailures": "MIB 树已重新加载，但有 {count} 个文件加载失败。",
+    "treeBroken": "MIB 树已无法解析：{failures}。请恢复内置副本以还原。",
+    "externalOpened": "{name} 已打开。保存时会写入 SnmpLens 的 MIB 目录。",
+    "externalWarning": "此文件来自 SnmpLens 之外。保存会以「{name}」写入 MIB 目录，不会回写原文件。",
+    "bundledWarning": "此 MIB 随 SnmpLens 一起提供，几乎所有其他 MIB 都从中导入。此处出错会破坏整棵树 — 内置副本随时可以恢复。",
+    "snippet": {
+      "objectType": "OBJECT-TYPE 定义",
+      "moduleIdentity": "MODULE-IDENTITY 头部",
+      "textualConvention": "TEXTUAL-CONVENTION",
+      "table": "表与行",
+      "imports": "IMPORTS 子句",
+      "module": "空模块骨架"
+    }
   }
 }
