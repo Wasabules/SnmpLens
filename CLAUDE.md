@@ -32,9 +32,11 @@ Go unit tests live beside the code they cover (`go test ./...`, run in CI). They
 the logic that is subtle and easy to break silently — storage pragmas/migrations, aggregation, threshold
 semantics, the poll clock, counter-wrap maths — not coverage for its own sake.
 
-The frontend has one test, `cd frontend && npm test`: it runs the real `pollingStore` against a stubbed Wails
-bridge under node. It exists because a `ReferenceError` on that path once disabled all monitoring silently — the
-outer `try/catch` swallowed it — and neither the Vite build nor `go vet` can see that class of bug.
+The frontend tests are `cd frontend && npm test`. The first runs the real `pollingStore` against a stubbed Wails
+bridge under node — it exists because a `ReferenceError` on that path once disabled all monitoring silently (the
+outer `try/catch` swallowed it) and neither the Vite build nor `go vet` can see that class of bug. The second
+checks that the five locale files carry the same keys and the same placeholders; svelte-i18n falls back silently,
+so a locale can drift for months and only be noticed by whoever reads that language.
 
 Two tests in `pkg/monitor` talk to a real agent and skip unless you point them at one:
 
@@ -67,7 +69,7 @@ The frontend calls Go through auto-generated bindings in `frontend/wailsjs/`, wh
 - `pkg/mib/service.go` — MIB loading/parsing and tree construction via **gosmi**. `LoadAll`/`LoadSpecific`/`LoadWithDiagnostics` (the diagnostics variant returns per-file load errors for the drag-&-drop import UI). Also OID translation/resolution (`Translate`, `ResolveOid(s)`).
 - `pkg/snmp/` — SNMP over **gosnmp**: `client.go` (connection config, v3 security-protocol mapping, concurrent fan-out via `concurrentExecute`, debug ring-buffer logger), `operations.go` (GET/SET/GETNEXT/GETBULK/WALK), `trap.go` (listener + sender), `discovery.go` (CIDR scan), `params.go` (bridge request structs).
 - `pkg/monitor/` — the poll clock and the alerting engine. `scheduler.go` owns one goroutine per monitoring session (this is what makes background mode real — the clock used to be a `setInterval` in the renderer, so closing the window silently stopped every session and every alert with it); `breach.go` turns samples into threshold/reachability episodes; `counters.go` corrects counter wraps and derives rates from the time that actually elapsed.
-- `pkg/events/`, `pkg/notify/`, `pkg/secrets/`, `pkg/service/`, `pkg/tray/` — the event journal vocabulary, notification routing (syslog/webhook/email with a durable outbox), OS-protected credential storage, the pre-GUI preference file, and the fail-soft system-tray icon.
+- `pkg/events/`, `pkg/notify/`, `pkg/secrets/`, `pkg/service/`, `pkg/tray/`, `pkg/autostart/` — the event journal vocabulary, notification routing (syslog over UDP/TCP/**TLS per RFC5425**, webhook, email, with a durable outbox), OS-protected credential storage, the pre-GUI preference file, the fail-soft system-tray icon, and the per-user login entry (HKCU Run key / LaunchAgent / XDG autostart — never machine-wide, so it never needs elevation).
 - `pkg/network/tools.go` — pure-Go ping & traceroute (**pro-bing**); no elevated privileges required.
 - `pkg/storage/storage.go` — SQLite (**modernc.org/sqlite**, WAL mode) for monitoring history. Data points are **batch-buffered**: `QueueDataPoints` appends to an in-memory batch flushed by a ticker goroutine, not written per-call. Sessions keyed by generated UUID.
 
@@ -102,6 +104,10 @@ Contains `mibs/` (extracted + user MIBs) and `monitoring.db`.
 ## Background mode
 
 Three preferences are read by `main()` **before** `wails.Run`, so they cannot live in localStorage: they sit in `service.json` next to `monitoring.db` (`pkg/service`). `HideWindowOnClose` is deliberately NOT used — it is fixed before we know whether a tray icon actually appeared, and an app that refuses to close with no tray to quit from is unusable. `OnBeforeClose` makes the same decision later, once `tray.Start` has answered. Everything about `pkg/tray` is fail-soft for that reason, including a readiness timeout: a desktop with no StatusNotifierItem host never calls back rather than returning an error.
+
+A sink has exactly one secret slot (`SinkConfig.Secret`, write-only), and each kind decides what it holds: the
+SMTP password, the webhook bearer token, or the mutual-TLS **client private key** for syslog. The matching
+certificate is public and stays in the config.
 
 Session credentials follow the same rule as sink credentials: `storage.SessionConn` holds only what is safe to read in a copied `monitoring.db`, and the community and v3 passphrases go to `pkg/secrets` under `SessionRef(id)`.
 
