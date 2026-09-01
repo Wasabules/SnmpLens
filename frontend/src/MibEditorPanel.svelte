@@ -7,6 +7,7 @@
   import { highlight, SNIPPETS, stringStateAt } from './mibeditor/tokenize.js';
   import { charWidth, positionOf, lineColumnAt, wordAt, offsetAt } from './mibeditor/metrics.js';
   import { findMatches, findAllMatches, applyReplaceAll, nextIndex } from './mibeditor/search.js';
+  import { createHistory } from './mibeditor/history.js';
   import { mibEditorStore } from './stores/mibEditorStore';
   import { mibPathsStore } from './stores/mibPathsStore';
   import { mibStore } from './stores/mibStore';
@@ -23,6 +24,7 @@
   let files = [];
   let filter = '';
   let saving = false;
+  let atomicEdit = false;
   let showSnippets = false;
   let showSymbols = false;
   let symbolFilter = '';
@@ -48,8 +50,24 @@
   const UNDO_KEYS = isMac ? '⌘Z' : 'Ctrl+Z';
   const REDO_KEYS = isMac ? '⇧⌘Z' : 'Ctrl+Y';
 
+  // Our own history, because the browser's steps back one character at a time
+  // and loses the caret. Ctrl+Z is intercepted below so there is exactly one.
+  let hist = createHistory('');
+  let prevText = '';
+  let prevSel = { start: 0, end: 0 };
   let canUndo = false;
   let canRedo = false;
+
+  function syncHistoryFlags() {
+    canUndo = hist.canUndo;
+    canRedo = hist.canRedo;
+  }
+
+  function selectionNow() {
+    return textarea
+      ? { start: textarea.selectionStart, end: textarea.selectionEnd }
+      : { start: 0, end: 0 };
+  }
   let findOpen = false;
   let showReplace = false;
   let findTerm = '';
@@ -181,8 +199,7 @@
     if (!(await confirmDiscard())) return;
     try {
       const { recovered } = await mibEditorStore.open(name);
-      canUndo = false;
-      canRedo = false;
+      resetHistory();
       if (recovered) {
         notificationStore.add(get(_)('mibEditor.draftRecovered', { values: { name } }), 'warning');
       }
@@ -191,12 +208,20 @@
     }
   }
 
+  function resetHistory() {
+    prevText = get(mibEditorStore).buffer;
+    prevSel = { start: 0, end: 0 };
+    hist = createHistory(prevText);
+    syncHistoryFlags();
+  }
+
   async function openExternal() {
     if (!(await confirmDiscard())) return;
     try {
       const s = await MibEditorOpenExternal();
       if (!s || !s.name) return; // cancelled
       mibEditorStore.openSource(s);
+      resetHistory();
       notificationStore.add(get(_)('mibEditor.externalOpened', { values: { name: s.name } }), 'info');
     } catch (e) {
       notificationStore.add(String(e), 'error');
@@ -216,44 +241,48 @@
   // Validation runs in Go and touches nothing: no file, no gosmi state. That is
   // what makes it safe to run while someone types.
   function onInput(e) {
-    mibEditorStore.setBuffer(e.target.value);
+    const after = e.target.value;
+    // atomicEdit marks the deliberate ones — a snippet, replace-all, the
+    // IMPORTS fix — so they never merge into a run of typing.
+    hist.record(prevText, after, prevSel, selectionNow(), atomicEdit);
+    atomicEdit = false;
+    prevText = after;
+    prevSel = selectionNow();
+    syncHistoryFlags();
+
+    mibEditorStore.setBuffer(after);
     updateCompletion();
-    // A fresh edit reopens both directions: the browser's stack has something
-    // to undo, and whatever had been undone is now unreachable anyway.
-    canUndo = true;
-    canRedo = true;
   }
 
-  // Undo and redo drive the BROWSER's stack, the same one Ctrl+Z uses. Keeping
-  // our own would mean two stacks that disagree — the button walking back
-  // through one history while the shortcut walks another — which is worse than
-  // having no button.
-  //
-  // Whether a direction is still available cannot be asked reliably
-  // (queryCommandEnabled is deprecated and answers about whatever has focus),
-  // so it is DERIVED: run the command, and if the text did not change, that
-  // direction is exhausted. Wrong at worst for one click, never persistently.
-  function history(command) {
-    if (!textarea) return;
-    const before = textarea.value;
-    const active = document.activeElement;
-    textarea.focus();
-    try {
-      document.execCommand(command);
-    } catch (e) {
-      return;
-    }
-    const changed = textarea.value !== before;
-    if (changed) {
-      mibEditorStore.setBuffer(textarea.value);
-      // Undoing makes a redo available, and vice versa.
-      if (command === 'undo') canRedo = true;
-      else canUndo = true;
-    }
-    if (command === 'undo') canUndo = changed;
-    else canRedo = changed;
+  // The selection BEFORE the edit is what undo has to restore, and it is gone
+  // by the time input fires.
+  function onBeforeInput() {
+    prevSel = selectionNow();
+  }
 
-    if (active && active !== textarea) tick().then(() => active.focus());
+  // Undo and redo drive OUR stack, and the keyboard is intercepted so the
+  // browser's is never consulted. Two histories that disagree — the button
+  // walking back through one while Ctrl+Z walks another — would be worse than
+  // a coarse one.
+  function applyHistory(step) {
+    if (!step || !textarea) return;
+    const active = document.activeElement;
+    textarea.value = step.text;
+    textarea.setSelectionRange(step.selection.start, step.selection.end);
+    prevText = step.text;
+    prevSel = step.selection;
+    mibEditorStore.setBuffer(step.text);
+    syncHistoryFlags();
+    syncScroll();
+    if (active === textarea) textarea.focus();
+  }
+
+  function undoEdit() {
+    applyHistory(hist.undo(prevText));
+  }
+
+  function redoEdit() {
+    applyHistory(hist.redo(prevText));
   }
 
   async function save(force = false) {
@@ -366,6 +395,7 @@
   // IMPORTS fix. execCommand('insertText') is deprecated but it is the only
   // way to write into a textarea AS AN EDIT, which is what undo records.
   function insertAtCaret(text, replaceRange) {
+    atomicEdit = true;
     if (!textarea) {
       mibEditorStore.setBuffer(buffer + text);
       return;
@@ -435,6 +465,7 @@
   // edit on the native undo stack without moving the user out of the box.
   function replaceRange(start, end, text) {
     if (!textarea) return;
+    atomicEdit = true;
     const active = document.activeElement;
     textarea.focus();
     textarea.setSelectionRange(start, end);
@@ -590,6 +621,17 @@
         completion = null;
         return;
       }
+    }
+    // Intercepted so the browser's stack is never used: ours is the only one.
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+      e.preventDefault();
+      if (e.shiftKey) redoEdit(); else undoEdit();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
+      e.preventDefault();
+      redoEdit();
+      return;
     }
     // A Wails webview has no Ctrl+F of its own, and IP-MIB is 4,993 lines.
     if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
@@ -813,6 +855,7 @@
             bind:this={textarea}
             value={buffer}
             on:input={onInput}
+            on:beforeinput={onBeforeInput}
             on:scroll={syncScroll}
             on:keydown={onKeydown}
             on:click={() => (completion = null)}
