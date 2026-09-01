@@ -3,6 +3,7 @@ module SnmpLens
 go 1.25.0
 
 require (
+	fyne.io/systray v1.12.2
 	github.com/gosnmp/gosnmp v1.43.2
 	github.com/minio/selfupdate v0.6.0
 	github.com/prometheus-community/pro-bing v0.8.0
