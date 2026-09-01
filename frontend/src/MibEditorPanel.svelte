@@ -145,14 +145,22 @@
   $: errorCount = diagnostics.filter((d) => d.severity === 'error').length;
   $: warnCount = diagnostics.filter((d) => d.severity === 'warning').length;
 
+  // The visible window depends on how much is on screen, so it is re-read on
+  // resize.
+  function measureViewport() {
+    if (textarea) viewportHeight = textarea.clientHeight || viewportHeight;
+  }
+
+  // onDestroy has to be registered while the component is initialising — the
+  // component body, not inside onMount. Called from there it throws, which
+  // meant the listener was never removed; the panel is unmounted on every tab
+  // switch, so they accumulated on window one per visit.
+  onDestroy(() => window.removeEventListener('resize', measureViewport));
+
   onMount(async () => {
     if (mirror) cw = charWidth(mirror);
-    // The window depends on how much is on screen; read it once mounted and
-    // again whenever the pane is resized.
-    const measure = () => { if (textarea) viewportHeight = textarea.clientHeight || viewportHeight; };
-    measure();
-    window.addEventListener('resize', measure);
-    onDestroy(() => window.removeEventListener('resize', measure));
+    measureViewport();
+    window.addEventListener('resize', measureViewport);
     await refreshList();
     try {
       catalogue = (await MibEditorSymbols()) || { modules: [], symbols: [] };
