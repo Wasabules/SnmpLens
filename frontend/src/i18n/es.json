@@ -827,7 +827,12 @@
     "clientCert": "Certificado de cliente (PEM)",
     "clientCertHint": "Para TLS mutuo, cuando el colector exige que el emisor se autentique.",
     "clientKey": "Clave privada del cliente (PEM)",
-    "noEncryptionWarning": "Sin cifrado, el mensaje y la contraseña usada para enviarlo viajan por la red en claro."
+    "noEncryptionWarning": "Sin cifrado, el mensaje y la contraseña usada para enviarlo viajan por la red en claro.",
+    "method": "Método",
+    "headers": "Cabeceras personalizadas",
+    "headersHint": "Una por línea, como Nombre: valor. Escribe {placeholder} como valor para usar la credencial guardada en lugar de teclearla aquí — los valores de cabecera se guardan con la configuración, la credencial no.",
+    "allowPlaintextHttp": "Enviar la credencial por http sin cifrar de todos modos",
+    "plaintextHttpWarning": "Esta URL no está cifrada. Todo lo que se envíe a ella, incluido el token, viaja por la red en claro."
   },
   "tray": {
     "show": "Abrir SnmpLens",

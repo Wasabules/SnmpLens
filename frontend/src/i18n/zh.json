@@ -827,7 +827,12 @@
     "clientCert": "客户端证书（PEM）",
     "clientCertHint": "用于双向 TLS，即收集器要求发送方进行身份验证时。",
     "clientKey": "客户端私钥（PEM）",
-    "noEncryptionWarning": "不加密时，消息以及用于发送的密码都会以明文形式通过网络传输。"
+    "noEncryptionWarning": "不加密时，消息以及用于发送的密码都会以明文形式通过网络传输。",
+    "method": "方法",
+    "headers": "自定义请求头",
+    "headersHint": "每行一个，格式为 名称: 值。将值写为 {placeholder} 即可使用已保存的凭据，而无需在此输入 — 请求头的值会随配置一起保存，凭据不会。",
+    "allowPlaintextHttp": "仍以明文 http 发送凭据",
+    "plaintextHttpWarning": "此 URL 未加密。发送到该地址的所有内容（包括令牌）都会以明文通过网络传输。"
   },
   "tray": {
     "show": "打开 SnmpLens",

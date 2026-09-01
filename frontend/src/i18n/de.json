@@ -827,7 +827,12 @@
     "clientCert": "Client-Zertifikat (PEM)",
     "clientCertHint": "Für gegenseitiges TLS, wenn der Kollektor eine Authentifizierung des Senders verlangt.",
     "clientKey": "Privater Client-Schlüssel (PEM)",
-    "noEncryptionWarning": "Ohne Verschlüsselung gehen die Nachricht und das zum Senden verwendete Passwort im Klartext über das Netz."
+    "noEncryptionWarning": "Ohne Verschlüsselung gehen die Nachricht und das zum Senden verwendete Passwort im Klartext über das Netz.",
+    "method": "Methode",
+    "headers": "Eigene Kopfzeilen",
+    "headersHint": "Eine pro Zeile, als Name: Wert. Schreiben Sie {placeholder} als Wert, um die gespeicherten Zugangsdaten zu verwenden, statt sie hier einzutippen — Kopfzeilenwerte werden mit der Konfiguration gespeichert, die Zugangsdaten nicht.",
+    "allowPlaintextHttp": "Zugangsdaten trotzdem über unverschlüsseltes http senden",
+    "plaintextHttpWarning": "Diese URL ist nicht verschlüsselt. Alles, was dorthin geht, einschließlich des Tokens, läuft im Klartext über das Netz."
   },
   "tray": {
     "show": "SnmpLens öffnen",

@@ -827,7 +827,12 @@
     "clientCert": "Certificat client (PEM)",
     "clientCertHint": "Pour le TLS mutuel, quand le collecteur exige que l'émetteur s'authentifie.",
     "clientKey": "Clé privée du client (PEM)",
-    "noEncryptionWarning": "Sans chiffrement, le message et le mot de passe utilisé pour l'envoyer traversent le réseau en clair."
+    "noEncryptionWarning": "Sans chiffrement, le message et le mot de passe utilisé pour l'envoyer traversent le réseau en clair.",
+    "method": "Méthode",
+    "headers": "En-têtes personnalisés",
+    "headersHint": "Un par ligne, sous la forme Nom : valeur. Écrivez {placeholder} comme valeur pour utiliser l'identifiant enregistré au lieu de le saisir ici — les valeurs d'en-tête sont sauvegardées avec la configuration, pas l'identifiant.",
+    "allowPlaintextHttp": "Envoyer quand même l'identifiant en http non chiffré",
+    "plaintextHttpWarning": "Cette URL n'est pas chiffrée. Tout ce qui y est envoyé, jeton compris, traverse le réseau en clair."
   },
   "tray": {
     "show": "Ouvrir SnmpLens",

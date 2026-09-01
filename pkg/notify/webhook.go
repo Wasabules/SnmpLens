@@ -2,15 +2,30 @@ package notify
 
 import (
 	"bytes"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
 	"SnmpLens/pkg/events"
 )
+
+// SecretPlaceholder can be used in a custom header value to inject the sink's
+// stored credential.
+//
+// Custom headers are stored with the configuration, in the clear, because they
+// are ordinarily routing metadata rather than secrets. A receiver that
+// authenticates with something other than a bearer token — X-API-Key is the
+// common one — would otherwise force the operator to type a credential into a
+// field that gets written to monitoring.db. Writing {{secret}} there keeps it
+// in pkg/secrets with everything else.
+const SecretPlaceholder = "{{secret}}"
 
 // WebhookConfig describes an HTTP destination.
 type WebhookConfig struct {
@@ -21,14 +36,29 @@ type WebhookConfig struct {
 	// pkg/secrets, never persisted alongside the sink configuration.
 	Token   string `json:"-"`       // sent as "Authorization: Bearer <token>"
 	Timeout int    `json:"timeout"` // seconds; 0 means 10
+
+	// AllowPlaintextHTTP permits sending the credential over http://.
+	// Without it, a sink with a credential refuses a plaintext URL: a bearer
+	// token on the wire in the clear is exactly what the rest of this package
+	// goes to some length to avoid. Loopback is always allowed.
+	AllowPlaintextHTTP bool `json:"allowPlaintextHttp,omitempty"`
+
+	// --- TLS, matching the syslog and email sinks ---
+
+	// CACert is a PEM bundle trusting a private CA, for an internal receiver.
+	CACert string `json:"caCert,omitempty"`
+	// ServerName overrides the name checked against the certificate.
+	ServerName string `json:"serverName,omitempty"`
+	// InsecureSkipVerify disables certificate verification entirely.
+	InsecureSkipVerify bool `json:"insecureSkipVerify,omitempty"`
 }
 
 // WebhookSink posts the event as JSON.
 //
 // This is also the escape hatch for logic the fixed-field rules cannot express:
 // route broadly to a webhook and decide on your own side. It uses the default
-// transport, so it honours HTTP_PROXY/HTTPS_PROXY — which makes it the sink
-// most likely to work at all inside a locked-down corporate network.
+// proxy configuration, so it honours HTTP_PROXY/HTTPS_PROXY — which makes it
+// the sink most likely to work at all inside a locked-down corporate network.
 type WebhookSink struct {
 	Config WebhookConfig
 }
@@ -40,10 +70,108 @@ type webhookBody struct {
 	Sender  string       `json:"sender"`
 }
 
+// isLoopback reports whether the URL points at this machine, where a plaintext
+// credential never leaves the host.
+func isLoopback(host string) bool {
+	h := host
+	if parsed, _, err := net.SplitHostPort(host); err == nil {
+		h = parsed
+	}
+	if strings.EqualFold(h, "localhost") {
+		return true
+	}
+	if ip := net.ParseIP(h); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
+}
+
+// validate checks the destination before anything is sent.
+func (w WebhookSink) validate() (*url.URL, error) {
+	raw := strings.TrimSpace(w.Config.URL)
+	if raw == "" {
+		return nil, fmt.Errorf("webhook URL is empty")
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return nil, fmt.Errorf("webhook URL is not valid: %w", err)
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "http", "https":
+	default:
+		return nil, fmt.Errorf("webhook URL must be http or https, got %q", u.Scheme)
+	}
+	if u.Host == "" {
+		return nil, fmt.Errorf("webhook URL has no host")
+	}
+
+	if strings.EqualFold(u.Scheme, "http") && w.carriesCredential() &&
+		!w.Config.AllowPlaintextHTTP && !isLoopback(u.Host) {
+		return nil, fmt.Errorf(
+			"refusing to send the webhook credential over plaintext http to %s; use https, or enable the plaintext option explicitly", u.Host)
+	}
+	return u, nil
+}
+
+// carriesCredential reports whether this request would carry a secret.
+func (w WebhookSink) carriesCredential() bool {
+	if w.Config.Token != "" {
+		return true
+	}
+	for _, v := range w.Config.Headers {
+		if strings.Contains(v, SecretPlaceholder) {
+			return true
+		}
+	}
+	return false
+}
+
+// tlsConfig builds the transport security settings.
+func (w WebhookSink) tlsConfig() (*tls.Config, error) {
+	out := &tls.Config{
+		MinVersion:         tls.VersionTLS12,
+		ServerName:         strings.TrimSpace(w.Config.ServerName),
+		InsecureSkipVerify: w.Config.InsecureSkipVerify, // #nosec G402 -- opt-in and named for what it does
+	}
+	if ca := strings.TrimSpace(w.Config.CACert); ca != "" {
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM([]byte(ca)) {
+			return nil, fmt.Errorf("the CA certificate is not valid PEM")
+		}
+		out.RootCAs = pool
+	}
+	return out, nil
+}
+
+// client builds the HTTP client.
+//
+// Redirects are deliberately NOT followed. Go rewrites a redirected POST as a
+// GET and drops the body, so a receiver behind a 302 would answer 200 having
+// received nothing at all — and this sink would report the alert as delivered.
+// Silent loss is the worst outcome an alerting path can have, so a redirect is
+// surfaced as an error instead. It also stops custom auth headers from being
+// forwarded to whatever host the redirect names.
+func (w WebhookSink) client(timeout time.Duration) (*http.Client, error) {
+	tlsCfg, err := w.tlsConfig()
+	if err != nil {
+		return nil, err
+	}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = tlsCfg
+
+	return &http.Client{
+		Timeout:   timeout,
+		Transport: transport,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}, nil
+}
+
 // Send posts one event.
 func (w WebhookSink) Send(e events.Event, subject, body string) error {
-	if strings.TrimSpace(w.Config.URL) == "" {
-		return fmt.Errorf("webhook URL is empty")
+	if _, err := w.validate(); err != nil {
+		return err
 	}
 
 	payload, err := json.Marshal(webhookBody{Event: e, Subject: subject, Body: body, Sender: "SnmpLens"})
@@ -61,7 +189,7 @@ func (w WebhookSink) Send(e events.Event, subject, body string) error {
 		timeout = 10 * time.Second
 	}
 
-	req, err := http.NewRequest(method, w.Config.URL, bytes.NewReader(payload))
+	req, err := http.NewRequest(method, strings.TrimSpace(w.Config.URL), bytes.NewReader(payload))
 	if err != nil {
 		return err
 	}
@@ -71,26 +199,57 @@ func (w WebhookSink) Send(e events.Event, subject, body string) error {
 	// at-least-once, never exactly-once.
 	req.Header.Set("X-SnmpLens-Event-Id", e.ID)
 	for k, v := range w.Config.Headers {
-		req.Header.Set(k, v)
+		req.Header.Set(k, strings.ReplaceAll(v, SecretPlaceholder, w.Config.Token))
 	}
 	if w.Config.Token != "" {
 		req.Header.Set("Authorization", "Bearer "+w.Config.Token)
 	}
 
-	client := &http.Client{Timeout: timeout}
-	resp, err := client.Do(req)
+	client, err := w.client(timeout)
 	if err != nil {
 		return err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return w.scrub(err)
 	}
 	defer resp.Body.Close()
 	// Drain a little of the body so the connection can be reused, and so the
 	// error message says something useful.
 	snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 
+	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+		return fmt.Errorf(
+			"webhook returned a redirect (%s) to %q; redirects are not followed because they would drop the request body — point the sink at the final URL",
+			resp.Status, resp.Header.Get("Location"))
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("webhook returned %s: %s", resp.Status, strings.TrimSpace(string(snippet)))
+		return w.scrub(fmt.Errorf("webhook returned %s: %s", resp.Status, strings.TrimSpace(string(snippet))))
 	}
 	return nil
+}
+
+// scrub removes the sink's credential from an error before it is returned.
+//
+// The error is stored in notify_outbox.last_error and surfaced in the event
+// journal, so it outlives the request. A receiver that echoes the request
+// headers back in its error body — debug endpoints routinely do — would
+// otherwise write the bearer token into monitoring.db in the clear, undoing
+// the point of keeping it in pkg/secrets at all.
+func (w WebhookSink) scrub(err error) error {
+	if err == nil {
+		return nil
+	}
+	secret := w.Config.Token
+	if secret == "" {
+		return err
+	}
+	msg := err.Error()
+	cleaned := strings.ReplaceAll(msg, secret, "[redacted]")
+	if cleaned == msg {
+		return err
+	}
+	return fmt.Errorf("%s", cleaned)
 }
 
 // Describe names the destination for the delivery log.

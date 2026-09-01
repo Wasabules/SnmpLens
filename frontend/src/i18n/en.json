@@ -827,7 +827,12 @@
     "clientCert": "Client certificate (PEM)",
     "clientCertHint": "For mutual TLS, when the collector requires the sender to authenticate.",
     "clientKey": "Client private key (PEM)",
-    "noEncryptionWarning": "Without encryption the message, and any password used to send it, cross the network in the clear."
+    "noEncryptionWarning": "Without encryption the message, and any password used to send it, cross the network in the clear.",
+    "method": "Method",
+    "headers": "Custom headers",
+    "headersHint": "One per line, as Name: value. Write {placeholder} as a value to use the stored credential instead of typing it here — header values are saved with the configuration, the credential is not.",
+    "allowPlaintextHttp": "Send the credential over plaintext http anyway",
+    "plaintextHttpWarning": "This URL is not encrypted. Anything sent to it, including the token, crosses the network in the clear."
   },
   "tray": {
     "show": "Open SnmpLens",

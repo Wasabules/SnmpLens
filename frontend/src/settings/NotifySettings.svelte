@@ -57,7 +57,10 @@
         address: '', protocol: 'udp', facility: 16, hostname: '', appName: 'SnmpLens', timeout: 5,
         caCert: '', serverName: '', insecureSkipVerify: false, clientCert: '',
       },
-      webhook: { url: '', method: 'POST', headers: {}, token: '', timeout: 10 },
+      webhook: {
+        url: '', method: 'POST', headers: {}, timeout: 10,
+        allowPlaintextHttp: false, caCert: '', serverName: '', insecureSkipVerify: false,
+      },
       email: {
         host: '', port: 587, username: '', from: '', to: [],
         encryption: 'starttls', authMethod: 'plain', insecureSkipVerify: false, timeout: 20,
@@ -159,6 +162,32 @@
     } catch (e) {
       notificationStore.add(String(e), 'error');
     }
+  }
+
+  // Must match notify.SecretPlaceholder in Go: a header value containing it
+  // draws on the stored credential instead of the value being written to the
+  // database with the rest of the configuration.
+  const SECRET_PLACEHOLDER = '{{secret}}';
+
+  // Headers are edited as "Name: value" lines, which is how anyone who has
+  // configured a webhook elsewhere expects to type them.
+  function headersToText(headers) {
+    return Object.entries(headers || {}).map(([k, v]) => `${k}: ${v}`).join('\n');
+  }
+
+  function textToHeaders(text) {
+    const out = {};
+    for (const line of String(text || '').split('\n')) {
+      const i = line.indexOf(':');
+      if (i <= 0) continue;
+      const name = line.slice(0, i).trim();
+      if (name) out[name] = line.slice(i + 1).trim();
+    }
+    return out;
+  }
+
+  function isPlaintextURL(url) {
+    return /^http:\/\//i.test(String(url || '').trim());
   }
 
   function toggleIn(list, value) {
@@ -318,12 +347,55 @@
         <label class="fld"><span>URL</span>
           <input type="text" bind:value={editingSink.webhook.url} placeholder="https://hooks.example.com/snmplens" />
         </label>
-        <label class="fld"><span>{$_('notify.token')}</span>
-          <input type="password" bind:value={editingSink.secret}
-            placeholder={editingSink.hasSecret ? $_('notify.secretOnFile') : ''} />
-          <span class="sub">{$_('notify.secretHint', { values: { backend } })}</span>
+        <div class="fld-row">
+          <label class="fld"><span>{$_('notify.method')}</span>
+            <select bind:value={editingSink.webhook.method}>
+              <option value="POST">POST</option>
+              <option value="PUT">PUT</option>
+              <option value="PATCH">PATCH</option>
+            </select>
+          </label>
+          <label class="fld"><span>{$_('notify.token')}</span>
+            <input type="password" bind:value={editingSink.secret}
+              placeholder={editingSink.hasSecret ? $_('notify.secretOnFile') : ''} />
+          </label>
+        </div>
+        <span class="sub">{$_('notify.secretHint', { values: { backend } })}</span>
+        <label class="fld"><span>{$_('notify.headers')}</span>
+          <textarea rows="3" value={headersToText(editingSink.webhook.headers)}
+            on:input={(e) => (editingSink.webhook.headers = textToHeaders(e.target.value))}
+            placeholder={'X-Api-Key: ' + SECRET_PLACEHOLDER}></textarea>
+          <span class="sub">{$_('notify.headersHint', { values: { placeholder: SECRET_PLACEHOLDER } })}</span>
         </label>
         <p class="note">{$_('notify.webhookNote')}</p>
+        {#if isPlaintextURL(editingSink.webhook.url)}
+          <label class="toggle">
+            <input type="checkbox" bind:checked={editingSink.webhook.allowPlaintextHttp} />
+            <span>{$_('notify.allowPlaintextHttp')}</span>
+          </label>
+          <p class="note warn">
+            <Icon name="triangle-alert" size={14} /> {$_('notify.plaintextHttpWarning')}
+          </p>
+        {:else}
+          <label class="fld"><span>{$_('notify.caCert')}</span>
+            <textarea rows="3" bind:value={editingSink.webhook.caCert}
+              placeholder={'-----BEGIN CERTIFICATE-----'}></textarea>
+            <span class="sub">{$_('notify.caCertHint')}</span>
+          </label>
+          <label class="fld"><span>{$_('notify.serverName')}</span>
+            <input type="text" bind:value={editingSink.webhook.serverName} placeholder="hooks.example.com" />
+            <span class="sub">{$_('notify.serverNameHint')}</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" bind:checked={editingSink.webhook.insecureSkipVerify} />
+            <span>{$_('notify.insecureSkipVerify')}</span>
+          </label>
+          {#if editingSink.webhook.insecureSkipVerify}
+            <p class="note warn">
+              <Icon name="triangle-alert" size={14} /> {$_('notify.insecureWarning')}
+            </p>
+          {/if}
+        {/if}
       {:else}
         <div class="fld-row">
           <label class="fld"><span>{$_('notify.host')}</span>

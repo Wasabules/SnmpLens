@@ -105,12 +105,19 @@ Contains `mibs/` (extracted + user MIBs) and `monitoring.db`.
 
 Three preferences are read by `main()` **before** `wails.Run`, so they cannot live in localStorage: they sit in `service.json` next to `monitoring.db` (`pkg/service`). `HideWindowOnClose` is deliberately NOT used — it is fixed before we know whether a tray icon actually appeared, and an app that refuses to close with no tray to quit from is unusable. `OnBeforeClose` makes the same decision later, once `tray.Start` has answered. Everything about `pkg/tray` is fail-soft for that reason, including a readiness timeout: a desktop with no StatusNotifierItem host never calls back rather than returning an error.
 
-Both TLS-capable sinks (syslog `tls`, and email over `starttls`/`tls`) accept a **CA certificate in PEM** so an
+All three sinks accept a **CA certificate in PEM** so an
 internal collector or relay can be trusted without turning verification off — the email sink previously had only
 `InsecureSkipVerify`, which pushed people to the insecure setting for the exact situation that has a secure
 answer. `pkg/notify` has an in-process SMTP server (`smtpserver_test.go`) so the mail path is tested as a real
 conversation: implicit TLS, STARTTLS, AUTH PLAIN and LOGIN, certificate verification, and the refusal to send
 credentials before the connection is encrypted.
+
+The webhook sink **does not follow redirects**, on purpose. Go rewrites a redirected POST as a GET and drops the
+body, so a receiver behind a 302 answers 200 having been sent nothing — and the delivery would be recorded as
+successful. Errors returned by a receiver are scrubbed of the token before they reach `notify_outbox.last_error`,
+because a debug endpoint that echoes request headers would otherwise write the credential into `monitoring.db`.
+A custom header value may contain `{{secret}}` (`notify.SecretPlaceholder`) to draw on the stored credential:
+header values are persisted with the configuration, so a credential typed directly into one would not be.
 
 A sink has exactly one secret slot (`SinkConfig.Secret`, write-only), and each kind decides what it holds: the
 SMTP password, the webhook bearer token, or the mutual-TLS **client private key** for syslog. The matching
