@@ -33,6 +33,11 @@ type SinkConfig struct {
 	Syslog  SyslogConfig  `json:"syslog,omitzero"`
 	Webhook WebhookConfig `json:"webhook,omitzero"`
 	Email   EmailConfig   `json:"email,omitzero"`
+	// Template customises the subject and body. It lives on SinkConfig rather
+	// than on EmailConfig because the rendered body is also the syslog MSG and
+	// the webhook's body field: one concept, one slot.
+	Template MessageTemplate `json:"template,omitzero"`
+
 	// Redact masks target addresses in outbound messages. Anonymous Mode is
 	// renderer-only display masking and deliberately non-persistent, so it
 	// cannot govern what a background dispatcher sends: this is its explicit,

@@ -3,6 +3,7 @@
   import { _ } from 'svelte-i18n';
   import { get } from 'svelte/store';
   import Icon from '../Icon.svelte';
+  import TemplateEditor from './TemplateEditor.svelte';
   import { notificationStore } from '../stores/notifications';
   import {
     NotifyListSinks,
@@ -53,6 +54,7 @@
       redact: false,
       secret: '',
       hasSecret: false,
+      template: { subject: '', body: '' },
       syslog: {
         address: '', protocol: 'udp', facility: 16, hostname: '', appName: 'SnmpLens', timeout: 5,
         caCert: '', serverName: '', insecureSkipVerify: false, clientCert: '',
@@ -234,7 +236,7 @@
             <button class="btn-copy-small" on:click={() => testSink(s)} title={$_('notify.test')} disabled={testing === s.id}>
               <Icon name={testing === s.id ? 'loader-circle' : 'zap'} size={13} class={testing === s.id ? 'icon-spin' : ''} />
             </button>
-            <button class="btn-copy-small" on:click={() => (editingSink = { ...s })} title={$_('common.edit')}>
+            <button class="btn-copy-small" on:click={() => (editingSink = { ...s, template: { ...(s.template || { subject: '', body: '' }) } })} title={$_('common.edit')}>
               <Icon name="pencil" size={13} />
             </button>
             <button class="btn-copy-small" on:click={() => removeSink(s.id)} title={$_('common.delete')}>
@@ -467,6 +469,9 @@
           </p>
         {/if}
       {/if}
+
+      <TemplateEditor bind:template={editingSink.template}
+        redact={editingSink.redact} sinkName={editingSink.name} />
 
       <label class="toggle">
         <input type="checkbox" bind:checked={editingSink.enabled} /> {$_('notify.enabled')}

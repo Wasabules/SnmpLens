@@ -119,6 +119,14 @@ because a debug endpoint that echoes request headers would otherwise write the c
 A custom header value may contain `{{secret}}` (`notify.SecretPlaceholder`) to draw on the stored credential:
 header values are persisted with the configuration, so a credential typed directly into one would not be.
 
+Sinks may carry a **message template** (`pkg/notify/template.go`): `{{variable}}`, `{{variable|default}}` and
+`{{#variable}}…{{/variable}}`, over a frozen vocabulary that `TemplateVariables()` also serves to the settings UI
+so the two cannot drift. Deliberately NOT `text/template` — a fixed vocabulary can be listed, validated at save,
+and cannot reach a field nobody chose to expose. Two rules carry the safety: substituted text is **never
+re-scanned** (a trap OID reading `{{secret}}` comes out as those characters), and `RedactEvent` runs **before**
+templating, because a template can name fields the built-in rendering never showed. An empty template falls back
+to `renderDefault`, byte for byte.
+
 Event text is not all ours: a trap arrives from the network unauthenticated and its trap-OID value reaches the
 rendered body, so anything written into a protocol where a newline or a dot changes meaning is escaped —
 `dotStuff` (RFC5321 4.5.2, on CRLF-normalised lines), `headerValue` for the raw mail headers, and the RFC5424

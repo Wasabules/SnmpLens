@@ -221,7 +221,7 @@ func buildMessage(cfg EmailConfig, e events.Event, subject, body string) string 
 	// becomes =0D=0A rather than starting a new header. That is what stops an
 	// event summary from injecting a Bcc, so it is pinned by a test: the
 	// safety of this line lives in the standard library, not here.
-	b.WriteString("Subject: " + mime.QEncoding.Encode("utf-8", subject) + "\r\n")
+	b.WriteString("Subject: " + capEncodedSubject(subject) + "\r\n")
 	b.WriteString("Date: " + time.Now().Format(time.RFC1123Z) + "\r\n")
 	b.WriteString("MIME-Version: 1.0\r\n")
 	b.WriteString("Content-Type: text/plain; charset=utf-8\r\n")
@@ -235,6 +235,38 @@ func buildMessage(cfg EmailConfig, e events.Event, subject, body string) string 
 	b.WriteString(dotStuff(body))
 	b.WriteString("\r\n")
 	return b.String()
+}
+
+// maxSubjectOctets leaves headroom under the RFC5322 998-octet line limit,
+// after "Subject: " and the trailing CRLF.
+const maxSubjectOctets = 900
+
+// capEncodedSubject MIME-encodes the subject and keeps it to one legal line.
+//
+// The cap is measured on the ENCODED form because that is what goes on the
+// wire, and the two lengths are not proportional: Q-encoding expands non-ASCII
+// text by up to three times. It matters too that Go joins its encoded-words
+// with a plain space and never a CRLF, so an over-long subject becomes one very
+// long line rather than a folded one, and nothing downstream would bring it
+// back under the limit.
+func capEncodedSubject(subject string) string {
+	encoded := mime.QEncoding.Encode("utf-8", subject)
+	if len(encoded) <= maxSubjectOctets {
+		return encoded
+	}
+	runes := []rune(subject)
+	for len(runes) > 0 && len(encoded) > maxSubjectOctets {
+		drop := 1
+		if over := len(encoded) - maxSubjectOctets; over > 64 {
+			drop = over / 4 // converge fast, then settle a rune at a time
+		}
+		if drop > len(runes) {
+			drop = len(runes)
+		}
+		runes = runes[:len(runes)-drop]
+		encoded = mime.QEncoding.Encode("utf-8", string(runes)+"…")
+	}
+	return encoded
 }
 
 // headerValue strips CR and LF from a header value.

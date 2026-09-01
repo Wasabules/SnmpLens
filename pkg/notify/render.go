@@ -18,16 +18,24 @@ import (
 // whoever is on call — often not the person who set the language — and the
 // stored catalogue is in the frontend, unreachable from a background
 // dispatcher.
+// Render produces the built-in subject and body.
+//
+// Kept as a wrapper so existing callers are unchanged. Note that it redacts by
+// applying RedactEvent and then rendering, rather than masking inside the
+// rendering: those were two code paths that happened to agree, and templates
+// can reach fields only the second one covered.
 func Render(e events.Event, redact bool) (subject, body string) {
-	source := e.Source
 	if redact {
-		source = redactAddress(source)
+		e = RedactEvent(e)
 	}
+	return renderDefault(e)
+}
 
+// renderDefault is the built-in rendering, used when a sink has no template.
+// It takes an event that is already redacted if it needed to be.
+func renderDefault(e events.Event) (subject, body string) {
+	source := e.Source
 	summary := e.Summary
-	if redact && e.Source != "" {
-		summary = strings.ReplaceAll(summary, e.Source, source)
-	}
 
 	subject = fmt.Sprintf("[SnmpLens][%s] %s", strings.ToUpper(e.Severity), summary)
 

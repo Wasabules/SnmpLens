@@ -4,8 +4,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"SnmpLens/pkg/events"
 	"SnmpLens/pkg/notify"
 	"SnmpLens/pkg/secrets"
 	"SnmpLens/pkg/storage"
@@ -180,5 +182,138 @@ func TestNotifySaveSinkKeepsTheCredentialOnEdit(t *testing.T) {
 	}
 	if got := a.sinkSecret(saved.ID); got != "STORED-TOKEN" {
 		t.Errorf("the credential was lost on edit: %q", got)
+	}
+}
+
+// routeEvent renders per sink and groups identical results. Getting the group
+// key wrong is not a performance bug: it would deliver a plain rendering to a
+// sink whose whole purpose is to mask addresses.
+func TestRouteEventKeepsRedactedAndTemplatedRenderingsApart(t *testing.T) {
+	a := newTestApp(t)
+
+	mk := func(name string, redact bool, tpl notify.MessageTemplate) string {
+		s, err := a.NotifySaveSink(notify.SinkConfig{
+			Name: name, Kind: notify.SinkWebhook, Enabled: true, Redact: redact,
+			Webhook:  notify.WebhookConfig{URL: "https://hooks.example.com/" + name},
+			Template: tpl,
+		})
+		if err != nil {
+			t.Fatalf("save %s: %v", name, err)
+		}
+		return s.ID
+	}
+
+	plainDefault := mk("plain", false, notify.MessageTemplate{})
+	maskedDefault := mk("masked", true, notify.MessageTemplate{})
+	plainCustom := mk("custom", false, notify.MessageTemplate{Subject: "S {{source}}", Body: "B {{source}}"})
+	maskedCustom := mk("maskedCustom", true, notify.MessageTemplate{Subject: "S {{source}}", Body: "B {{source}}"})
+
+	// One route per sink, matching everything.
+	for _, id := range []string{plainDefault, maskedDefault, plainCustom, maskedCustom} {
+		if _, err := a.NotifySaveRoute(notify.Route{
+			Name: "all-" + id, Enabled: true, SinkIDs: []string{id},
+		}); err != nil {
+			t.Fatalf("save route: %v", err)
+		}
+	}
+
+	saved, err := a.storage.InsertEvent(events.Event{
+		Category: events.CategoryThreshold, Kind: events.KindThresholdOpened,
+		Severity: "major", Source: "10.0.0.1",
+		TitleKey: "events.kind." + events.KindThresholdOpened,
+		Summary:  "ifInOctets above 900 on 10.0.0.1",
+		DedupKey: "threshold|s1|10.0.0.1|1.3.6",
+	}, "")
+	if err != nil {
+		t.Fatalf("InsertEvent: %v", err)
+	}
+	a.routeEvent(saved)
+
+	deliveries, err := a.storage.ListDeliveries("pending", 50)
+	if err != nil {
+		t.Fatalf("ListDeliveries: %v", err)
+	}
+	if len(deliveries) != 4 {
+		t.Fatalf("got %d deliveries, want one per sink", len(deliveries))
+	}
+
+	bySink := map[string]storage.Delivery{}
+	for _, d := range deliveries {
+		bySink[d.SinkID] = d
+	}
+
+	// The two masking sinks must carry nothing real, in the rendering OR in
+	// the event snapshot the webhook will serialise.
+	for _, id := range []string{maskedDefault, maskedCustom} {
+		d := bySink[id]
+		for _, field := range []string{d.Subject, d.Body, d.Event.Source, d.Event.Summary, d.Event.DedupKey} {
+			if strings.Contains(field, "10.0.0.1") {
+				t.Errorf("sink %s masks, but %q went to the queue", id, field)
+			}
+		}
+	}
+	// ...and the two plain sinks must still carry the real one.
+	for _, id := range []string{plainDefault, plainCustom} {
+		if !strings.Contains(bySink[id].Body, "10.0.0.1") {
+			t.Errorf("sink %s does not mask, but its body lost the address: %q", id, bySink[id].Body)
+		}
+	}
+	// The custom templates must actually have been applied.
+	if bySink[plainCustom].Subject != "S 10.0.0.1" {
+		t.Errorf("the custom subject was not used: %q", bySink[plainCustom].Subject)
+	}
+	if bySink[maskedCustom].Subject != "S 10.x.x.1" {
+		t.Errorf("the masked custom subject is wrong: %q", bySink[maskedCustom].Subject)
+	}
+	// And the default sinks must still get the built-in rendering.
+	if !strings.HasPrefix(bySink[plainDefault].Subject, "[SnmpLens]") {
+		t.Errorf("the default rendering changed: %q", bySink[plainDefault].Subject)
+	}
+}
+
+// A template that cannot be saved cannot be routed with.
+func TestNotifySaveSinkRefusesABrokenTemplate(t *testing.T) {
+	a := newTestApp(t)
+	_, err := a.NotifySaveSink(notify.SinkConfig{
+		Name: "NOC", Kind: notify.SinkWebhook,
+		Webhook:  notify.WebhookConfig{URL: "https://hooks.example.com/x"},
+		Template: notify.MessageTemplate{Body: "{{nope}}"},
+	})
+	if err == nil {
+		t.Fatal("a template naming an unknown variable was saved")
+	}
+	if !strings.Contains(err.Error(), "unknown variable") {
+		t.Errorf("the error should name the problem: %v", err)
+	}
+}
+
+// The preview is what tells an operator their template works before an
+// incident does. It must render against an event with real params.
+func TestNotifyPreviewTemplate(t *testing.T) {
+	a := newTestApp(t)
+
+	p := a.NotifyPreviewTemplate(notify.MessageTemplate{
+		Subject: "[{{severityUpper}}] {{source}}",
+		Body:    "bound={{params.bound}} value={{value|n/a}}",
+	}, "threshold", false, "NOC mail")
+
+	if len(p.Errors) != 0 {
+		t.Fatalf("a valid template previewed with errors: %+v", p.Errors)
+	}
+	if !strings.HasPrefix(p.Subject, "[MAJOR]") {
+		t.Errorf("subject = %q", p.Subject)
+	}
+	if !strings.Contains(p.Body, "bound=900") {
+		t.Errorf("the sample has no usable params: %q", p.Body)
+	}
+
+	masked := a.NotifyPreviewTemplate(notify.MessageTemplate{Body: "{{source}}"}, "threshold", true, "s")
+	if strings.Contains(masked.Body, "10.0.0.1") {
+		t.Errorf("the masked preview shows a real address: %q", masked.Body)
+	}
+
+	broken := a.NotifyPreviewTemplate(notify.MessageTemplate{Body: "{{#severity}}x"}, "threshold", false, "s")
+	if len(broken.Errors) == 0 {
+		t.Error("an unclosed block previewed without an error")
 	}
 }

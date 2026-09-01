@@ -120,6 +120,10 @@ func (a *App) startup(ctx context.Context) {
 		}
 	}
 
+	// The template vocabulary exposes the version; pkg/notify keeps it in a
+	// package var rather than importing pkg/updater for one string.
+	notify.AppVersion = a.GetAppVersion()
+
 	// 5. The poll clock. It lives in Go so that monitoring, thresholds and the
 	// notification routes keep working with the window closed — which is the
 	// entire point of background mode.
@@ -659,41 +663,71 @@ func (a *App) routeEvent(e events.Event) {
 	if err != nil {
 		return
 	}
-	redactBySink := map[string]bool{}
+	configBySink := map[string]notify.SinkConfig{}
 	for _, s := range sinks {
-		redactBySink[s.ID] = s.Redact
+		configBySink[s.ID] = s
 	}
 
-	plainSubject, plainBody := notify.Render(e, false)
-	redactedSubject, redactedBody := notify.Render(e, true)
+	// Render once per sink, then group the identical results. Sinks usually
+	// share a rendering, and each group is one transaction on the synchronous
+	// insert path; grouping by the OUTPUT rather than by a guessed key means a
+	// new template variable can never silently merge two sinks that should
+	// have differed.
+	type group struct {
+		event   events.Event
+		subject string
+		body    string
+		sinkIDs []string
+	}
+	groups := map[string]*group{}
 
-	var plain, redacted []string
 	for _, id := range sinkIDs {
-		if redactBySink[id] {
-			redacted = append(redacted, id)
-		} else {
-			plain = append(plain, id)
+		cfg := configBySink[id]
+
+		// Masking happens BEFORE templating, always. A template can name
+		// fields the built-in rendering never showed — dedupKey, params — so
+		// masking inside the renderer would leave exactly those uncovered.
+		ev := e
+		if cfg.Redact {
+			ev = notify.RedactEvent(e)
 		}
+		subject, body := a.renderForSink(ev, cfg)
+
+		key := fmt.Sprintf("%t|%q|%q", cfg.Redact, subject, body)
+		g, ok := groups[key]
+		if !ok {
+			g = &group{event: ev, subject: subject, body: body}
+			groups[key] = g
+		}
+		g.sinkIDs = append(g.sinkIDs, id)
 	}
 
-	if len(plain) > 0 {
-		if err := a.storage.EnqueueDeliveries(e, plain, plainSubject, plainBody); err != nil {
+	for _, g := range groups {
+		if err := a.storage.EnqueueDeliveries(g.event, g.sinkIDs, g.subject, g.body); err != nil {
 			log.Printf("notify: could not queue deliveries: %v", err)
-		}
-	}
-	if len(redacted) > 0 {
-		// The event itself is masked too, not just the rendering: the webhook
-		// sink embeds the whole event as JSON, so a redacted subject with an
-		// unredacted payload would leak the address through the one sink most
-		// likely to forward it somewhere else.
-		if err := a.storage.EnqueueDeliveries(notify.RedactEvent(e), redacted, redactedSubject, redactedBody); err != nil {
-			log.Printf("notify: could not queue redacted deliveries: %v", err)
 		}
 	}
 
 	if a.dispatcher != nil {
 		a.dispatcher.Wake()
 	}
+}
+
+// renderForSink applies the sink's template, falling back to the built-in
+// rendering if anything goes wrong.
+//
+// The recover is not decoration. This runs on the trap-listener and the
+// monitor-scheduler goroutines; a panic in a formatting routine would take
+// down the background monitoring that pkg/monitor exists to keep alive. A bug
+// here must cost formatting, never the alert.
+func (a *App) renderForSink(ev events.Event, cfg notify.SinkConfig) (subject, body string) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("notify: template for sink %q panicked, using the default rendering: %v", cfg.Name, r)
+			subject, body = notify.Render(ev, false) // ev is already redacted
+		}
+	}()
+	return notify.RenderTemplate(ev, cfg.Name, cfg.Template)
 }
 
 // EventsQuery returns one page of the journal, newest first.
@@ -898,6 +932,12 @@ func (a *App) NotifyListSinks() ([]notify.SinkConfig, error) {
 // write-only transport, and the config that reaches the database must never
 // carry it.
 func (a *App) NotifySaveSink(cfg notify.SinkConfig) (notify.SinkConfig, error) {
+	// Refuse a broken template here rather than at 03:00. Rendering itself
+	// cannot fail — it runs at enqueue, where an error would lose the alert
+	// instead of spoiling its formatting — so this is the only gate.
+	if errs := notify.ValidateTemplate(cfg.Template); len(errs) > 0 {
+		return notify.SinkConfig{}, fmt.Errorf("%s", errs[0].Error())
+	}
 	if a.storage == nil {
 		return cfg, fmt.Errorf("storage not initialized")
 	}
@@ -969,8 +1009,59 @@ func (a *App) NotifyTestSink(cfg notify.SinkConfig) error {
 		TitleKey: "events.kind." + events.KindSystemListenerStarted,
 		Summary:  "SnmpLens test notification",
 	}
-	subject, body := notify.Render(sample, cfg.Redact)
-	return sink.Send(sample, subject, body)
+	// Render through the SAME path as a real delivery, with the template as it
+	// stands in the form. Otherwise the one button an operator presses to check
+	// a template is the one path that never exercises it.
+	ev := sample
+	if cfg.Redact {
+		ev = notify.RedactEvent(sample)
+	}
+	subject, body := a.renderForSink(ev, cfg)
+	return sink.Send(ev, subject, body)
+}
+
+// NotifyTemplateVariables returns the template vocabulary for the editor.
+//
+// Generated from Go rather than mirrored in JavaScript: a hand-copied list is
+// a list that drifts, and the first symptom would be a variable the UI offers
+// and the renderer does not know.
+func (a *App) NotifyTemplateVariables() []notify.VariableDoc {
+	return notify.TemplateVariables()
+}
+
+// NotifyValidateTemplate reports every problem with a template at once, so the
+// editor can mark them all rather than one per save attempt.
+func (a *App) NotifyValidateTemplate(tpl notify.MessageTemplate) []notify.TemplateError {
+	errs := notify.ValidateTemplate(tpl)
+	if errs == nil {
+		return []notify.TemplateError{}
+	}
+	return errs
+}
+
+// TemplatePreview is what the editor shows while a template is being written.
+type TemplatePreview struct {
+	Subject string                 `json:"subject"`
+	Body    string                 `json:"body"`
+	Errors  []notify.TemplateError `json:"errors"`
+}
+
+// NotifyPreviewTemplate renders a template against a canned event.
+//
+// A preview is not a nicety here: buildMessage silently substitutes the event
+// summary for an empty subject, so a template that renders to nothing looks
+// exactly like one that works. The sample carries real Params, which the test
+// notification does not, so {{params.*}} can actually be seen.
+func (a *App) NotifyPreviewTemplate(tpl notify.MessageTemplate, kind string, redact bool, sinkName string) TemplatePreview {
+	out := TemplatePreview{Errors: a.NotifyValidateTemplate(tpl)}
+
+	ev := notify.SampleEvent(kind)
+	if redact {
+		ev = notify.RedactEvent(ev)
+	}
+	subject, body := notify.RenderTemplate(ev, sinkName, tpl)
+	out.Subject, out.Body = subject, body
+	return out
 }
 
 // NotifyListRoutes returns the routing rules.
