@@ -8,7 +8,7 @@ require (
 	fyne.io/systray v1.12.2
 	github.com/gosnmp/gosnmp v1.43.2
 	github.com/minio/selfupdate v0.6.0
-	github.com/prometheus-community/pro-bing v0.8.0
+	github.com/prometheus-community/pro-bing v0.9.1
 	github.com/sleepinggenius2/gosmi v0.4.4
 	github.com/wailsapp/wails/v2 v2.15.0
 	golang.org/x/mod v0.40.0
