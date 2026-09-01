@@ -980,6 +980,8 @@
     "replaceAll": "全部",
     "toggleReplace": "显示替换",
     "noMatch": "无匹配",
-    "replacedAll": "已替换 {count} 处。"
+    "replacedAll": "已替换 {count} 处。",
+    "undo": "撤销",
+    "redo": "重做"
   }
 }

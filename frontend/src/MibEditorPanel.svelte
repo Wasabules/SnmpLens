@@ -42,6 +42,14 @@
 
   let hover = null;        // { x, y, symbol }
   let completion = null;   // { x, y, items, index, range }
+  // The app ships on macOS too, where redo is Cmd+Shift+Z rather than Ctrl+Y.
+  // A tooltip naming the wrong key teaches the wrong thing.
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
+  const UNDO_KEYS = isMac ? '⌘Z' : 'Ctrl+Z';
+  const REDO_KEYS = isMac ? '⇧⌘Z' : 'Ctrl+Y';
+
+  let canUndo = false;
+  let canRedo = false;
   let findOpen = false;
   let showReplace = false;
   let findTerm = '';
@@ -165,6 +173,8 @@
     if (!(await confirmDiscard())) return;
     try {
       const { recovered } = await mibEditorStore.open(name);
+      canUndo = false;
+      canRedo = false;
       if (recovered) {
         notificationStore.add(get(_)('mibEditor.draftRecovered', { values: { name } }), 'warning');
       }
@@ -196,6 +206,42 @@
   function onInput(e) {
     mibEditorStore.setBuffer(e.target.value);
     updateCompletion();
+    // A fresh edit reopens both directions: the browser's stack has something
+    // to undo, and whatever had been undone is now unreachable anyway.
+    canUndo = true;
+    canRedo = true;
+  }
+
+  // Undo and redo drive the BROWSER's stack, the same one Ctrl+Z uses. Keeping
+  // our own would mean two stacks that disagree — the button walking back
+  // through one history while the shortcut walks another — which is worse than
+  // having no button.
+  //
+  // Whether a direction is still available cannot be asked reliably
+  // (queryCommandEnabled is deprecated and answers about whatever has focus),
+  // so it is DERIVED: run the command, and if the text did not change, that
+  // direction is exhausted. Wrong at worst for one click, never persistently.
+  function history(command) {
+    if (!textarea) return;
+    const before = textarea.value;
+    const active = document.activeElement;
+    textarea.focus();
+    try {
+      document.execCommand(command);
+    } catch (e) {
+      return;
+    }
+    const changed = textarea.value !== before;
+    if (changed) {
+      mibEditorStore.setBuffer(textarea.value);
+      // Undoing makes a redo available, and vice versa.
+      if (command === 'undo') canRedo = true;
+      else canUndo = true;
+    }
+    if (command === 'undo') canUndo = changed;
+    else canRedo = changed;
+
+    if (active && active !== textarea) tick().then(() => active.focus());
   }
 
   async function save(force = false) {
@@ -604,6 +650,17 @@
         </span>
         <span class="spacer"></span>
 
+        <div class="history">
+          <button class="btn-copy-small" on:click={() => history('undo')} disabled={!canUndo}
+            title="{$_('mibEditor.undo')} ({UNDO_KEYS})" aria-label={$_('mibEditor.undo')}>
+            <Icon name="undo-2" size={14} />
+          </button>
+          <button class="btn-copy-small" on:click={() => history('redo')} disabled={!canRedo}
+            title="{$_('mibEditor.redo')} ({REDO_KEYS})" aria-label={$_('mibEditor.redo')}>
+            <Icon name="redo-2" size={14} />
+          </button>
+        </div>
+
         <div class="snip">
           <button class="btn btn-small" on:click={() => (showSnippets = !showSnippets)}>
             <Icon name="file-plus" size={13} /> {$_('mibEditor.insert')}
@@ -976,6 +1033,19 @@
 
   .spacer {
     flex: 1;
+  }
+
+  .history {
+    display: flex;
+    gap: 2px;
+    padding-right: 6px;
+    margin-right: 2px;
+    border-right: 1px solid var(--border-color);
+  }
+
+  .history button:disabled {
+    opacity: 0.35;
+    cursor: default;
   }
 
   .snip {

@@ -980,6 +980,8 @@
     "replaceAll": "Tout",
     "toggleReplace": "Afficher le remplacement",
     "noMatch": "aucun",
-    "replacedAll": "{count} occurrence(s) remplacée(s)."
+    "replacedAll": "{count} occurrence(s) remplacée(s).",
+    "undo": "Annuler",
+    "redo": "Rétablir"
   }
 }

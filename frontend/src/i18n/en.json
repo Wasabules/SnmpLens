@@ -980,6 +980,8 @@
     "replaceAll": "All",
     "toggleReplace": "Show replace",
     "noMatch": "no match",
-    "replacedAll": "{count} occurrence(s) replaced."
+    "replacedAll": "{count} occurrence(s) replaced.",
+    "undo": "Undo",
+    "redo": "Redo"
   }
 }

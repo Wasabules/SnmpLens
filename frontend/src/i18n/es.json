@@ -980,6 +980,8 @@
     "replaceAll": "Todo",
     "toggleReplace": "Mostrar reemplazo",
     "noMatch": "sin coincidencias",
-    "replacedAll": "{count} aparición(es) reemplazada(s)."
+    "replacedAll": "{count} aparición(es) reemplazada(s).",
+    "undo": "Deshacer",
+    "redo": "Rehacer"
   }
 }
