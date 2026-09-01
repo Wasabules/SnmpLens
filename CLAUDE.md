@@ -18,6 +18,16 @@ wails build -platform darwin/universal
 
 Frontend-only scripts (run from `frontend/`): `npm run dev`, `npm run build`. You normally don't invoke these directly — `wails dev`/`wails build` drive them via `wails.json`.
 
+The Go toolchain is pinned by the `toolchain` directive in `go.mod`, and every workflow reads it with
+`go-version-file` rather than naming a version — one source of truth. It matters: Go supports only the two most
+recent majors, so a project sitting on an older one stops receiving security fixes without anything failing.
+
+Security workflows: `codeql.yml` (SAST for Go and the frontend, weekly as well as per-push, because a query added
+after a commit lands would otherwise never see it), `dependency-review` on pull requests (govulncheck reports on
+what is already merged; this blocks it before), `govulncheck`, and `npm audit --audit-level=high` — which used to
+end in `|| true` and therefore never failed. Actions are pinned by commit SHA, with Dependabot configured for
+gomod, npm and github-actions, because pinning without something to move the pins just freezes them.
+
 CI verification gate (`.github/workflows/ci.yml`, all run from repo root):
 
 ```bash

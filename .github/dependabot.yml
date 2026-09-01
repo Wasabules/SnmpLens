@@ -1,0 +1,31 @@
+version: 2
+
+# Dependabot is what makes SHA-pinned actions maintainable. Pinning without it
+# means the pins rot: an action stays frozen at whatever commit was current the
+# day someone wrote it, security fixes included.
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # golang.org/x/* move together and are almost always safe; one PR rather
+      # than five keeps the noise down without hiding anything.
+      golang-x:
+        patterns:
+          - golang.org/x/*
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  # The workflows pin actions by commit SHA, so this is the only thing that
+  # ever moves them.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

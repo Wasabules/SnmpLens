@@ -15,6 +15,21 @@ import (
 	"github.com/gosnmp/gosnmp"
 )
 
+// DefaultPort is the SNMP agent port used when none is given.
+const DefaultPort = 161
+
+// normalisePort clamps a port into the range a uint16 can hold.
+//
+// gosnmp takes a uint16, and Go truncates silently on conversion: a port of
+// 70000 becomes 4464 and the request goes somewhere nobody asked for. The
+// value arrives from the renderer, so it is not this package's to trust.
+func normalisePort(port int, fallback uint16) uint16 {
+	if port <= 0 || port > 65535 {
+		return fallback
+	}
+	return uint16(port)
+}
+
 // V3Params holds all security parameters for an SNMPv3 connection.
 type V3Params struct {
 	User        string `json:"User"`
@@ -122,7 +137,7 @@ func concurrentExecute(targets []string, fn func(target string) *BulkResult) []*
 func (c *Client) newGoSNMP(target, community, version string, port, timeoutSec, retries int, v3 V3Params) (*gosnmp.GoSNMP, error) {
 	g := &gosnmp.GoSNMP{
 		Target:    target,
-		Port:      uint16(port),
+		Port:      normalisePort(port, DefaultPort),
 		Community: community,
 		Timeout:   time.Duration(timeoutSec) * time.Second,
 		Retries:   retries,

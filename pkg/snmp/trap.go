@@ -24,13 +24,16 @@ type TrapVariable struct {
 }
 
 // StartTrapListener starts listening for SNMP traps, configured with v3 parameters.
+// DefaultTrapPort is the IANA port for SNMP traps.
+const DefaultTrapPort = 162
+
 func (c *Client) StartTrapListener(port int, v3 V3Params) error {
 	if c.trapListener != nil {
 		return fmt.Errorf("trap listener is already running")
 	}
 
 	params := &gosnmp.GoSNMP{
-		Port:    uint16(port),
+		Port:    normalisePort(port, DefaultTrapPort),
 		Version: gosnmp.Version3,
 	}
 
@@ -190,7 +193,7 @@ func (c *Client) recordTrap(source, ts, pduType string, packet *gosnmp.SnmpPacke
 func (c *Client) SendTrap(target string, port int, community, version, trapOid string, variables []TrapVariable) error {
 	g := &gosnmp.GoSNMP{
 		Target:    target,
-		Port:      uint16(port),
+		Port:      normalisePort(port, DefaultTrapPort),
 		Community: community,
 		Timeout:   5 * time.Second,
 	}
