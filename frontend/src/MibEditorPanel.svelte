@@ -1,10 +1,10 @@
 <script>
-  import { onMount, tick } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import { _ } from 'svelte-i18n';
   import { get } from 'svelte/store';
   import Icon from './Icon.svelte';
   import { notificationStore } from './stores/notifications';
-  import { highlight, SNIPPETS } from './mibeditor/tokenize.js';
+  import { highlight, SNIPPETS, stringStateAt } from './mibeditor/tokenize.js';
   import { charWidth, positionOf, lineColumnAt, wordAt, offsetAt } from './mibeditor/metrics.js';
   import { mibEditorStore } from './stores/mibEditorStore';
   import { mibPathsStore } from './stores/mibPathsStore';
@@ -96,26 +96,51 @@
     gutterCache = { n, text };
     return text;
   }
-  // Highlighting a 185 KB MIB takes ~45 ms. Doing it on every keystroke makes
-  // typing stutter on a big file, so the mirror lags the text by a frame or
-  // two — invisible while typing, and the caret is the textarea's own.
-  let highlighted = '';
-  let highlightTimer;
-  $: scheduleHighlight(buffer);
-  function scheduleHighlight(text) {
-    clearTimeout(highlightTimer);
-    if (text.length < 20000) {
-      highlighted = highlight(text);
-      return;
-    }
-    highlightTimer = setTimeout(() => (highlighted = highlight(text)), 90);
+  // Only the visible lines are coloured.
+  //
+  // Tokenising the whole buffer cost about 45 ms on a 185 KB MIB, on every
+  // pause in typing, to produce markup for four thousand lines nobody was
+  // looking at. A real IDE does not do that either: it colours the viewport
+  // and parses incrementally. We cannot parse incrementally — participle
+  // offers no way in — but the viewport half is free.
+  //
+  // Highlighting carries `inString` across lines, so starting mid-file needs
+  // the state at that point. stringStateAt answers it by scanning without
+  // producing anything: 4 ms where tokenising is 29.
+  const VIEW_MARGIN = 40; // lines rendered beyond the viewport, so small scrolls do not re-render
+  let viewportHeight = 600;
+
+  $: firstVisible = Math.max(0, Math.floor(scrollTop / LINE_HEIGHT) - VIEW_MARGIN);
+  $: lastVisible = Math.min(
+    lineCount,
+    Math.ceil((scrollTop + viewportHeight) / LINE_HEIGHT) + VIEW_MARGIN,
+  );
+  $: highlighted = renderWindow(buffer, lines, firstVisible, lastVisible);
+
+  function renderWindow(text, allLines, first, last) {
+    if (!text) return '';
+    let offset = 0;
+    for (let i = 0; i < first; i++) offset += allLines[i].length + 1;
+    const windowText = allLines.slice(first, last).join('\n');
+    // Blank lines stand in for what is not rendered, so the mirror keeps the
+    // same height as the textarea and scroll sync still works.
+    return '\n'.repeat(first)
+      + highlight(windowText, stringStateAt(text, offset))
+      + '\n'.repeat(Math.max(0, allLines.length - last));
   }
+
   $: shown = files.filter((f) => !filter || f.name.toLowerCase().includes(filter.toLowerCase()));
   $: errorCount = diagnostics.filter((d) => d.severity === 'error').length;
   $: warnCount = diagnostics.filter((d) => d.severity === 'warning').length;
 
   onMount(async () => {
     if (mirror) cw = charWidth(mirror);
+    // The window depends on how much is on screen; read it once mounted and
+    // again whenever the pane is resized.
+    const measure = () => { if (textarea) viewportHeight = textarea.clientHeight || viewportHeight; };
+    measure();
+    window.addEventListener('resize', measure);
+    onDestroy(() => window.removeEventListener('resize', measure));
     await refreshList();
     try {
       catalogue = (await MibEditorSymbols()) || { modules: [], symbols: [] };
@@ -419,6 +444,7 @@
       mirror.scrollLeft = textarea.scrollLeft;
     }
     if (gutter && textarea) gutter.scrollTop = textarea.scrollTop;
+    if (textarea) viewportHeight = textarea.clientHeight || viewportHeight;
   }
 
   function onKeydown(e) {

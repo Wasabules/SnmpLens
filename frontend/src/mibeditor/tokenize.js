@@ -71,6 +71,54 @@ function classifyWord(word) {
 }
 
 /**
+ * Whether position `index` sits inside a quoted string.
+ *
+ * This is what lets the editor colour only the visible window. Highlighting
+ * carries `inString` across lines — a DESCRIPTION spans many — so starting
+ * mid-file needs to know the state at that point, and getting it wrong repaints
+ * half the file as a string. Scanning for it costs a fraction of tokenising,
+ * because it produces nothing: no markup, no escaping, no allocation per token.
+ *
+ * @param {string} text
+ * @param {number} index character offset
+ * @returns {boolean}
+ */
+export function stringStateAt(text, index) {
+  const upto = Math.max(0, Math.min(index, text.length));
+  let inString = false;
+  let i = 0;
+
+  while (i < upto) {
+    const ch = text[i];
+    if (inString) {
+      if (ch === '"') inString = false;
+      i++;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      i++;
+      continue;
+    }
+    // A comment runs to the next `--` or to end of line, and a quote inside it
+    // opens nothing.
+    if (ch === '-' && text[i + 1] === '-') {
+      let j = i + 2;
+      while (j < text.length && text[j] !== '\n') {
+        if (text[j] === '-' && text[j + 1] === '-') { j += 2; break; }
+        j++;
+      }
+      i = j;
+      continue;
+    }
+    // A string never spans a blank line boundary in practice, but the
+    // tokeniser resets nothing at newlines, so neither does this.
+    i++;
+  }
+  return inString;
+}
+
+/**
  * Turn MIB source into highlighted HTML, one line at a time.
  *
  * Comments and strings are handled by scanning rather than by regex over the
@@ -81,9 +129,9 @@ function classifyWord(word) {
  * @param {string} text
  * @returns {string} HTML whose text content is character-identical to `text`
  */
-export function highlight(text) {
+export function highlight(text, startInString = false) {
   let out = '';
-  let inString = false;
+  let inString = startInString;
 
   const lines = String(text ?? '').split('\n');
 

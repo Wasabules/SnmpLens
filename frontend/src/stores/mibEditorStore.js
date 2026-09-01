@@ -82,18 +82,37 @@ function createMibEditorStore() {
   // no gosmi state. That is what makes them safe on every keystroke.
   // ONE bridge call, one parse. This used to be two calls that each parsed the
   // file, on every pause in typing, over a MIB that can be 185 KB.
+  // Analyses can overlap — the user keeps typing while one runs — and nothing
+  // makes them answer in the order they were asked. An answer is applied only
+  // if the text it describes is still the text on screen: diagnostics carry
+  // line numbers, and showing the ones computed two keystrokes ago points at
+  // lines that have since moved, which is worse than showing none.
+  //
+  // The buffer itself is the identity rather than a sequence number, because
+  // that is the actual predicate: valid iff the file has not changed since.
+  let inFlight = 0;
+
   async function refresh() {
-    const { buffer } = get({ subscribe });
+    const asked = get({ subscribe }).buffer;
+    inFlight++;
     try {
-      const out = (await MibEditorAnalyse(buffer)) || {};
-      update((s) => ({
-        ...s,
-        diagnostics: out.diagnostics || [],
-        missingImports: out.missing || [],
-        checking: false,
-      }));
+      const out = (await MibEditorAnalyse(asked)) || {};
+      update((s) => {
+        if (s.buffer !== asked) return s; // superseded; leave what is shown
+        return {
+          ...s,
+          diagnostics: out.diagnostics || [],
+          missingImports: out.missing || [],
+        };
+      });
     } catch (e) {
-      update((s) => ({ ...s, checking: false }));
+      // Nothing usable came back; the previous diagnostics are still the best
+      // description of the file we have.
+    } finally {
+      inFlight--;
+      // Only stop saying "checking" when nothing is still running, or a
+      // discarded answer would clear the indicator while work continues.
+      if (inFlight === 0) update((s) => ({ ...s, checking: false }));
     }
   }
 

@@ -146,6 +146,17 @@ MIBs, and that is a test.
 on a 185 KB MIB, and calling `Validate`, `CheckImports` and `Analyse` in turn parsed the file three times on every
 pause in typing. There are benchmarks in `bench_test.go`; run them before adding a check that parses.
 
+The editor colours only the visible window, the way an IDE does. It cannot parse incrementally — participle
+offers no way in — but the viewport half is free. `highlight` takes an initial `inString`, because the state
+carries across lines and a window opening inside a multi-line DESCRIPTION would otherwise paint the rest of the
+file as a string; `stringStateAt` answers that by scanning without producing anything (4 ms where tokenising is
+29). Unrendered lines are stood in for by blank lines, so the mirror keeps the textarea's height and scroll sync
+still works — the tokenise test checks the line count is preserved exactly.
+
+An analysis result is applied only if the buffer it describes is still the buffer on screen. Analyses overlap
+while the user types, nothing orders their answers, and diagnostics carry line numbers: showing the ones computed
+two keystrokes ago points at lines that have moved.
+
 `frontend/src/mibeditor/metrics.js` turns a (line, column) into pixels, which is what makes squiggles, hover
 cards and caret-anchored completion possible **here and not in a plain textarea**: the mirror lays out identically
 to the text (unit-tested) and both are monospace with a fixed line height, so a position is arithmetic once the

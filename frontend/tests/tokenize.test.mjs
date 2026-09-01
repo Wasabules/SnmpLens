@@ -5,7 +5,7 @@
 // same characters as the text — one added space, one collapsed run, one lost
 // newline, and every line below it drifts. That is invisible in a screenshot of
 // line 1 and maddening on line 400, so it is checked here rather than by eye.
-import { highlight, SNIPPETS } from '../src/mibeditor/tokenize.js';
+import { highlight, SNIPPETS, stringStateAt } from '../src/mibeditor/tokenize.js';
 
 let failures = 0;
 const check = (name, ok, extra = '') => {
@@ -107,5 +107,59 @@ check('every snippet has a key and body',
   SNIPPETS.length > 0 && SNIPPETS.every((s) => s.key && s.text));
 check('snippets carry a name placeholder',
   SNIPPETS.filter((s) => s.text.includes('${name}')).length >= 4);
+
+// --- windowed highlighting ---
+//
+// The editor colours only the visible lines, so it starts tokenising mid-file.
+// Highlighting carries `inString` across lines, so a window opening inside a
+// multi-line DESCRIPTION must be told — otherwise half the file paints as a
+// string, which is the exact failure that made per-line caching a bad idea.
+
+const doc = `A-MIB DEFINITIONS ::= BEGIN
+x OBJECT-TYPE
+    DESCRIPTION
+        "line one
+         line two mentions OBJECT-TYPE and SYNTAX
+         line three"
+    ::= { 1 }
+-- a comment with a " quote in it
+y OBJECT-TYPE
+    SYNTAX Counter32
+END
+`;
+
+const docLines = doc.split('\n');
+let ok = true;
+for (let first = 0; first < docLines.length; first++) {
+  const start = docLines.slice(0, first).reduce((n, l) => n + l.length + 1, 0);
+  const windowText = docLines.slice(first).join('\n');
+  const windowed = highlight(windowText, stringStateAt(doc, start));
+  const wholeFile = highlight(doc);
+  // The tail of the full-file rendering must equal the windowed rendering.
+  if (!wholeFile.endsWith(windowed)) {
+    ok = false;
+    console.log(`      window from line ${first + 1} differs`);
+  }
+}
+check('a window matches the full-file rendering at every start line', ok);
+
+check('a quote inside a comment does not open a string',
+  stringStateAt(doc, doc.indexOf('y OBJECT-TYPE')) === false);
+check('inside a DESCRIPTION reports true',
+  stringStateAt(doc, doc.indexOf('line two')) === true);
+check('after the closing quote reports false',
+  stringStateAt(doc, doc.indexOf('::= { 1 }')) === false);
+
+// Cost: the state scan must be far cheaper than tokenising, or the windowing
+// saves nothing.
+const bigDoc = SAMPLES['a whole module'].repeat(600);
+let t = process.hrtime.bigint();
+stringStateAt(bigDoc, bigDoc.length);
+const scanMs = Number(process.hrtime.bigint() - t) / 1e6;
+t = process.hrtime.bigint();
+highlight(bigDoc);
+const fullMs = Number(process.hrtime.bigint() - t) / 1e6;
+check('the state scan is much cheaper than tokenising', scanMs < fullMs / 3,
+  `scan ${scanMs.toFixed(1)} ms vs full ${fullMs.toFixed(1)} ms`);
 
 process.exit(failures ? 1 : 0);
