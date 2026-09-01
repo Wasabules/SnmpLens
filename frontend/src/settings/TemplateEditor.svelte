@@ -8,14 +8,17 @@
     NotifyDefaultJsonPayload,
   } from '../../wailsjs/go/main/App';
 
-  /** The sink's template, bound two-way. */
-  export let template;
-  /** Whether the sink masks addresses, so the preview shows what it will send. */
-  export let redact = false;
-  /** The sink name, because {{sinkName}} is a variable. */
-  export let sinkName = '';
+  /**
+   * The sink being edited, bound two-way.
+   *
+   * The whole sink rather than the template alone: the preview has to know the
+   * kind and the payload mode to show what will actually be sent, and passing
+   * those as separate props is how they came to disagree with each other.
+   */
+  export let sink;
+
   /** The body IS the request payload, so it has to be valid JSON. */
-  export let jsonPayload = false;
+  $: jsonPayload = sink.kind === 'webhook' && sink.webhook?.payloadMode === 'template';
 
   // The vocabulary comes from Go rather than being mirrored here: a hand-copied
   // list is a list that drifts, and the first symptom would be a variable the
@@ -45,31 +48,36 @@
     clearTimeout(previewTimer);
     previewTimer = setTimeout(async () => {
       try {
-        preview = await NotifyPreviewTemplate(
-          { subject: template.subject || '', body: template.body || '' },
-          previewKind, redact, sinkName, jsonPayload,
-        );
+        preview = await NotifyPreviewTemplate(sink, previewKind);
       } catch (e) {
         preview = null;
       }
     }, 200);
   }
 
-  $: template, previewKind, redact, sinkName, jsonPayload, refreshPreview();
+  // `sink` is watched whole: the preview depends on the template, the kind, the
+  // payload mode and the redaction flag, and naming them one by one is how one
+  // of them gets forgotten.
+  $: sink, previewKind, refreshPreview();
+
+  // Whether the preview is showing a request body rather than a message. Read
+  // from the answer, not guessed alongside it — a webhook posts an object in
+  // both modes, so this is true wider than `jsonPayload` is.
+  $: asPayload = !!preview?.json;
 
   async function insert(name) {
     const token = '{{' + name + '}}';
     const el = lastFocused === 'subject' ? subjectEl : bodyEl;
     const field = lastFocused === 'subject' ? 'subject' : 'body';
-    const current = template[field] || '';
+    const current = sink.template[field] || '';
 
     if (!el) {
-      template[field] = current + token;
+      sink.template[field] = current + token;
       return;
     }
     const start = el.selectionStart ?? current.length;
     const end = el.selectionEnd ?? current.length;
-    template[field] = current.slice(0, start) + token + current.slice(end);
+    sink.template[field] = current.slice(0, start) + token + current.slice(end);
 
     await tick();
     el.focus();
@@ -80,7 +88,7 @@
   // field that will not save.
   async function useDefaultPayload() {
     try {
-      template.body = await NotifyDefaultJsonPayload();
+      sink.template.body = await NotifyDefaultJsonPayload();
     } catch (e) {
       /* leave the body alone */
     }
@@ -130,7 +138,7 @@
 
   <label class="fld">
     <span>{$_('notify.templateSubject')}</span>
-    <input type="text" bind:this={subjectEl} bind:value={template.subject}
+    <input type="text" bind:this={subjectEl} bind:value={sink.template.subject}
       on:focus={() => (lastFocused = 'subject')}
       placeholder={$_('notify.templateDefault')} />
     {#each errorsFor('subject') as err}
@@ -140,7 +148,7 @@
 
   <label class="fld">
     <span>{$_('notify.templateBody')}</span>
-    <textarea rows="7" bind:this={bodyEl} bind:value={template.body}
+    <textarea rows="7" bind:this={bodyEl} bind:value={sink.template.body}
       on:focus={() => (lastFocused = 'body')}
       placeholder={$_('notify.templateDefault')}></textarea>
     {#each errorsFor('body') as err}
@@ -152,8 +160,8 @@
 
   <div class="preview">
     <div class="preview-head">
-      <span>{jsonPayload ? $_('notify.previewPayload') : $_('notify.templatePreview')}</span>
-      {#if jsonPayload && preview}
+      <span>{asPayload ? $_('notify.previewPayload') : $_('notify.templatePreview')}</span>
+      {#if asPayload && preview}
         {#if preview.jsonValid}
           <span class="pv-ok">{$_('notify.jsonValid', { values: { bytes: preview.bytes } })}</span>
         {:else}
@@ -168,11 +176,11 @@
     </div>
     {#if preview}
       <div class="preview-body">
-        {#if !jsonPayload}
+        {#if !asPayload}
           <div class="pv-subject">{preview.subject}</div>
         {/if}
-        <pre class="pv-text" class:pv-json={jsonPayload}>{preview.body}</pre>
-        {#if jsonPayload && !preview.jsonValid && preview.jsonError}
+        <pre class="pv-text" class:pv-json={asPayload}>{preview.body}</pre>
+        {#if asPayload && !preview.jsonValid && preview.jsonError}
           <p class="pv-error">{preview.jsonError}</p>
         {/if}
       </div>

@@ -293,10 +293,13 @@ func TestNotifySaveSinkRefusesABrokenTemplate(t *testing.T) {
 func TestNotifyPreviewTemplate(t *testing.T) {
 	a := newTestApp(t)
 
-	p := a.NotifyPreviewTemplate(notify.MessageTemplate{
-		Subject: "[{{severityUpper}}] {{source}}",
-		Body:    "bound={{params.bound}} value={{value|n/a}}",
-	}, "threshold", false, "NOC mail", false)
+	p := a.NotifyPreviewTemplate(notify.SinkConfig{
+		Kind: notify.SinkEmail, Name: "NOC mail",
+		Template: notify.MessageTemplate{
+			Subject: "[{{severityUpper}}] {{source}}",
+			Body:    "bound={{params.bound}} value={{value|n/a}}",
+		},
+	}, "threshold")
 
 	if len(p.Errors) != 0 {
 		t.Fatalf("a valid template previewed with errors: %+v", p.Errors)
@@ -308,12 +311,18 @@ func TestNotifyPreviewTemplate(t *testing.T) {
 		t.Errorf("the sample has no usable params: %q", p.Body)
 	}
 
-	masked := a.NotifyPreviewTemplate(notify.MessageTemplate{Body: "{{source}}"}, "threshold", true, "s", false)
+	masked := a.NotifyPreviewTemplate(notify.SinkConfig{
+		Kind: notify.SinkEmail, Name: "s", Redact: true,
+		Template: notify.MessageTemplate{Body: "{{source}}"},
+	}, "threshold")
 	if strings.Contains(masked.Body, "10.0.0.1") {
 		t.Errorf("the masked preview shows a real address: %q", masked.Body)
 	}
 
-	broken := a.NotifyPreviewTemplate(notify.MessageTemplate{Body: "{{#severity}}x"}, "threshold", false, "s", false)
+	broken := a.NotifyPreviewTemplate(notify.SinkConfig{
+		Kind: notify.SinkEmail, Name: "s",
+		Template: notify.MessageTemplate{Body: "{{#severity}}x"},
+	}, "threshold")
 	if len(broken.Errors) == 0 {
 		t.Error("an unclosed block previewed without an error")
 	}
@@ -324,9 +333,7 @@ func TestNotifyPreviewTemplate(t *testing.T) {
 func TestPreviewShowsTheRealJSONPayload(t *testing.T) {
 	a := newTestApp(t)
 
-	p := a.NotifyPreviewTemplate(notify.MessageTemplate{
-		Body: `{"text":"{{summary}}","sev":"{{severity}}"}`,
-	}, "threshold", false, "NOC", true)
+	p := a.NotifyPreviewTemplate(jsonSink(`{"text":"{{summary}}","sev":"{{severity}}"}`), "threshold")
 
 	if !p.Json {
 		t.Error("the preview does not know it is a JSON payload")
@@ -349,7 +356,7 @@ func TestPreviewShowsTheRealJSONPayload(t *testing.T) {
 // A broken payload must say so in the preview rather than at 03:00.
 func TestPreviewReportsInvalidJSON(t *testing.T) {
 	a := newTestApp(t)
-	p := a.NotifyPreviewTemplate(notify.MessageTemplate{Body: `{"unclosed": `}, "threshold", false, "s", true)
+	p := a.NotifyPreviewTemplate(jsonSink(`{"unclosed": `), "threshold")
 	if p.JsonValid {
 		t.Fatal("invalid JSON previewed as valid")
 	}
@@ -362,7 +369,7 @@ func TestPreviewReportsInvalidJSON(t *testing.T) {
 // JSON, not the plain-text default posted to an endpoint expecting an object.
 func TestEmptyTemplateInJSONModeStillProducesJSON(t *testing.T) {
 	a := newTestApp(t)
-	p := a.NotifyPreviewTemplate(notify.MessageTemplate{}, "threshold", false, "s", true)
+	p := a.NotifyPreviewTemplate(jsonSink(""), "threshold")
 	if !p.JsonValid {
 		t.Fatalf("an empty template produced non-JSON: %s\n%s", p.JsonError, p.Body)
 	}
@@ -377,9 +384,7 @@ func TestEmptyTemplateInJSONModeStillProducesJSON(t *testing.T) {
 // preview must show that it does not.
 func TestPreviewEscapesHostileContent(t *testing.T) {
 	a := newTestApp(t)
-	p := a.NotifyPreviewTemplate(notify.MessageTemplate{
-		Body: `{"oid":"{{oid}}"}`,
-	}, "trap", false, "s", true)
+	p := a.NotifyPreviewTemplate(jsonSink(`{"oid":"{{oid}}"}`), "trap")
 	if !p.JsonValid {
 		t.Errorf("a trap sample broke the payload: %s", p.JsonError)
 	}
@@ -388,11 +393,60 @@ func TestPreviewEscapesHostileContent(t *testing.T) {
 // Plain mode must be untouched by any of this.
 func TestPreviewPlainModeIsUnchanged(t *testing.T) {
 	a := newTestApp(t)
-	p := a.NotifyPreviewTemplate(notify.MessageTemplate{Body: "{{summary}}"}, "threshold", false, "s", false)
+	p := a.NotifyPreviewTemplate(notify.SinkConfig{
+		Kind: notify.SinkEmail, Name: "s",
+		Template: notify.MessageTemplate{Body: "{{summary}}"},
+	}, "threshold")
 	if p.Json || p.JsonValid || p.JsonError != "" {
 		t.Errorf("plain mode reported JSON state: %+v", p)
 	}
 	if strings.Contains(p.Body, `\"`) {
 		t.Errorf("plain mode was escaped: %q", p.Body)
+	}
+}
+
+// jsonSink is a webhook that posts its template as the payload.
+func jsonSink(body string) notify.SinkConfig {
+	return notify.SinkConfig{
+		Kind: notify.SinkWebhook, Name: "NOC",
+		Webhook:  notify.WebhookConfig{URL: "https://hooks.example.com/x", PayloadMode: notify.PayloadTemplate},
+		Template: notify.MessageTemplate{Body: body},
+	}
+}
+
+// In envelope mode the preview must show the OBJECT the receiver gets, not the
+// text inside one of its fields: the shape is what is being configured.
+func TestPreviewShowsTheEnvelopeForAWebhook(t *testing.T) {
+	a := newTestApp(t)
+	p := a.NotifyPreviewTemplate(notify.SinkConfig{
+		Kind: notify.SinkWebhook, Name: "NOC",
+		Webhook:  notify.WebhookConfig{URL: "https://hooks.example.com/x"},
+		Template: notify.MessageTemplate{Body: "just some text"},
+	}, "threshold")
+
+	if !p.Json || !p.JsonValid {
+		t.Fatalf("the envelope preview is not reported as JSON: %+v", p)
+	}
+	var env map[string]any
+	if err := json.Unmarshal([]byte(p.Body), &env); err != nil {
+		t.Fatalf("the preview is not the envelope: %v\n%s", err, p.Body)
+	}
+	if env["sender"] != "SnmpLens" {
+		t.Errorf("envelope = %v", env)
+	}
+	if env["body"] != "just some text" {
+		t.Errorf("the rendered text is not inside the envelope: %v", env["body"])
+	}
+}
+
+// An email preview stays plain text: there is no envelope to show.
+func TestPreviewStaysPlainForEmail(t *testing.T) {
+	a := newTestApp(t)
+	p := a.NotifyPreviewTemplate(notify.SinkConfig{
+		Kind: notify.SinkEmail, Name: "s",
+		Template: notify.MessageTemplate{Body: "{{summary}}"},
+	}, "threshold")
+	if p.Json {
+		t.Errorf("an email preview claimed to be JSON: %+v", p)
 	}
 }

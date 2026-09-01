@@ -289,6 +289,16 @@ func (w WebhookSink) Describe() string {
 	return "webhook " + w.Config.URL
 }
 
+// PreviewPayload returns the exact bytes a webhook would POST.
+//
+// Exported so the settings editor can show what will be sent rather than an
+// approximation of it. In envelope mode that is the fixed object with the
+// rendered text inside — showing only the text would hide the shape the
+// receiver actually gets, which is the thing being configured.
+func PreviewPayload(cfg WebhookConfig, e events.Event, subject, body string) ([]byte, error) {
+	return WebhookSink{Config: cfg}.payload(e, subject, body)
+}
+
 // ValidatePayloadTemplate checks a webhook whose template IS its payload.
 //
 // Rendered against a sample event, because the shape can only be wrong once

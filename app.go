@@ -1079,26 +1079,43 @@ type TemplatePreview struct {
 // summary for an empty subject, so a template that renders to nothing looks
 // exactly like one that works. The sample carries real Params, which the test
 // notification does not, so {{params.*}} can actually be seen.
-func (a *App) NotifyPreviewTemplate(tpl notify.MessageTemplate, kind string, redact bool, sinkName string, jsonMode bool) TemplatePreview {
-	out := TemplatePreview{Errors: a.NotifyValidateTemplate(tpl), Json: jsonMode}
+func (a *App) NotifyPreviewTemplate(cfg notify.SinkConfig, kind string) TemplatePreview {
+	out := TemplatePreview{Errors: a.NotifyValidateTemplate(cfg.Template)}
 
 	ev := notify.SampleEvent(kind)
-	if redact {
+	if cfg.Redact {
 		ev = notify.RedactEvent(ev)
 	}
 
+	jsonMode := cfg.Kind == notify.SinkWebhook &&
+		strings.EqualFold(strings.TrimSpace(cfg.Webhook.PayloadMode), notify.PayloadTemplate)
+
 	if jsonMode {
-		out.Subject, out.Body = notify.RenderJSONTemplate(ev, sinkName, tpl)
-		out.Bytes = len(out.Body)
-		if err := json.Unmarshal([]byte(strings.TrimSpace(out.Body)), new(any)); err != nil {
+		out.Subject, out.Body = notify.RenderJSONTemplate(ev, cfg.Name, cfg.Template)
+	} else {
+		out.Subject, out.Body = notify.RenderTemplate(ev, cfg.Name, cfg.Template)
+	}
+
+	// For a webhook, show the REQUEST, not the text inside it. In envelope
+	// mode the rendered text is only one field of the object the receiver
+	// gets, and the shape is exactly what is being configured.
+	if cfg.Kind == notify.SinkWebhook {
+		out.Json = true
+		payload, err := notify.PreviewPayload(cfg.Webhook, ev, out.Subject, out.Body)
+		if err != nil {
 			out.JsonError = err.Error()
-		} else {
-			out.JsonValid = true
+			out.Bytes = len(out.Body)
+			return out
+		}
+		out.Body = string(payload)
+		out.Bytes = len(payload)
+		out.JsonValid = json.Valid(payload)
+		if !out.JsonValid {
+			out.JsonError = "the rendered payload is not valid JSON"
 		}
 		return out
 	}
 
-	out.Subject, out.Body = notify.RenderTemplate(ev, sinkName, tpl)
 	out.Bytes = len(out.Body)
 	return out
 }

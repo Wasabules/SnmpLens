@@ -501,8 +501,7 @@
       </div>
 
       <div class="pane pane-template">
-        <TemplateEditor bind:template={editingSink.template}
-          redact={editingSink.redact} sinkName={editingSink.name} />
+        <TemplateEditor bind:sink={editingSink} />
       </div>
       </div>
 
