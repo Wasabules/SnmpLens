@@ -34,6 +34,11 @@
       "parseError": "MIB 文件解析失败",
       "skipped": "{count} 个已存在（已跳过）",
       "allSkipped": "所有 {count} 个文件已存在 — 无需导入"
+    },
+    "panel": {
+      "resize": "调整 MIB 面板大小",
+      "hide": "隐藏 MIB 树",
+      "show": "显示 MIB 树"
     }
   },
   "common": {

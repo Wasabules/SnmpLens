@@ -34,6 +34,11 @@
       "parseError": "Échec du parsing du fichier MIB",
       "skipped": "{count} déjà présent(s) (ignoré(s))",
       "allSkipped": "Les {count} fichier(s) sont déjà présents — rien à importer"
+    },
+    "panel": {
+      "resize": "Redimensionner le panneau MIB",
+      "hide": "Masquer l'arbre MIB",
+      "show": "Afficher l'arbre MIB"
     }
   },
   "common": {

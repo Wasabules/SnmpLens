@@ -34,6 +34,11 @@
       "parseError": "MIB-Datei konnte nicht geparst werden",
       "skipped": "{count} bereits vorhanden (übersprungen)",
       "allSkipped": "Alle {count} Datei(en) bereits vorhanden — nichts zu importieren"
+    },
+    "panel": {
+      "resize": "MIB-Bereich anpassen",
+      "hide": "MIB-Baum ausblenden",
+      "show": "MIB-Baum einblenden"
     }
   },
   "common": {

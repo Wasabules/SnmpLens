@@ -34,6 +34,11 @@
       "parseError": "Error al analizar el archivo MIB",
       "skipped": "{count} ya presente(s) (omitido(s))",
       "allSkipped": "Los {count} archivo(s) ya están presentes — nada que importar"
+    },
+    "panel": {
+      "resize": "Redimensionar el panel MIB",
+      "hide": "Ocultar el árbol MIB",
+      "show": "Mostrar el árbol MIB"
     }
   },
   "common": {

@@ -55,6 +55,12 @@
   
   // Resizable panel
   let mibPanelWidth = 350; // Default width in pixels
+  // Collapsed, the tree gives its width back to whatever tab is open. Worth
+  // having on every tab, but the editor is where it earns its keep.
+  let mibPanelCollapsed = false;
+  // Width of the rail left behind when collapsed: enough for the arrow to stay
+  // fully visible and clickable, since it is the only way back.
+  const COLLAPSED_RAIL = 12;
   let isResizing = false;
   let startX = 0;
   let startWidth = 0;
@@ -66,6 +72,7 @@
       if (saved) {
         mibPanelWidth = parseInt(saved, 10);
       }
+      mibPanelCollapsed = localStorage.getItem('snmplens_panel_collapsed') === '1';
     } catch (e) {
       console.error('Failed to load panel width:', e);
     }
@@ -75,12 +82,14 @@
   function savePanelWidth() {
     try {
       localStorage.setItem('snmplens_panel_width', mibPanelWidth.toString());
+      localStorage.setItem('snmplens_panel_collapsed', mibPanelCollapsed ? '1' : '0');
     } catch (e) {
       console.error('Failed to save panel width:', e);
     }
   }
 
   function startResize(event) {
+    if (mibPanelCollapsed) return; // nothing to resize; the arrow still works
     isResizing = true;
     startX = event.clientX;
     startWidth = mibPanelWidth;
@@ -96,6 +105,11 @@
     
     // Constrain width between 250px and 800px
     mibPanelWidth = Math.max(250, Math.min(800, newWidth));
+  }
+
+  function toggleMibPanel() {
+    mibPanelCollapsed = !mibPanelCollapsed;
+    savePanelWidth();
   }
 
   function stopResize() {
@@ -326,6 +340,10 @@
       } else if (event.key === '7') {
         event.preventDefault();
         activeTab = 'mibeditor';
+      } else if (event.key === 'b') {
+        // The conventional shortcut for a sidebar, and it was free.
+        event.preventDefault();
+        toggleMibPanel();
       } else if (event.key === ',') {
         // Ctrl+, to open settings (like VS Code)
         event.preventDefault();
@@ -464,19 +482,35 @@
   </div>
 
   <div class="container">
-    <div class="mib-panel-container" style="width: {mibPanelWidth}px;">
-      <MibPanel 
-        on:select={(e) => selectedNode = e.detail.node}
-        on:snmpAction={handleSnmpAction}
-      />
+    <div class="mib-panel-container" class:collapsed={mibPanelCollapsed}
+      style="width: {mibPanelCollapsed ? COLLAPSED_RAIL : mibPanelWidth}px;">
+      <!-- Hidden rather than unmounted: the tree keeps its scroll position and
+           its expanded nodes, so collapsing and reopening returns you to where
+           you were instead of to the top. -->
+      <div class="mib-panel-inner" class:hidden={mibPanelCollapsed}>
+        <MibPanel 
+          on:select={(e) => selectedNode = e.detail.node}
+          on:snmpAction={handleSnmpAction}
+        />
+      </div>
       <div 
         class="resize-handle" 
+        class:disabled={mibPanelCollapsed}
         on:mousedown={startResize}
         role="separator"
         aria-orientation="vertical"
-        aria-label="Resize sidebar"
+        aria-label={$_('app.panel.resize')}
       >
         <div class="resize-handle-inner"></div>
+        <button
+          class="panel-toggle"
+          on:mousedown|stopPropagation
+          on:click|stopPropagation={toggleMibPanel}
+          aria-expanded={!mibPanelCollapsed}
+          title="{mibPanelCollapsed ? $_('app.panel.show') : $_('app.panel.hide')} (Ctrl+B)"
+        >
+          <Icon name={mibPanelCollapsed ? 'chevron-right' : 'chevron-left'} size={13} />
+        </button>
       </div>
     </div>
 
@@ -740,6 +774,61 @@
     height: 100%;
     min-width: 250px;
     max-width: 800px;
+  }
+
+  /* The min-width has to go, or collapsing would stop at 250px. */
+  .mib-panel-container.collapsed {
+    min-width: 0;
+  }
+
+  .mib-panel-inner {
+    display: flex;
+    min-width: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .mib-panel-inner.hidden {
+    display: none;
+  }
+
+  .resize-handle.disabled {
+    cursor: default;
+  }
+
+  /* The arrow sits on the divider, vertically centred: the same place the eye
+     already goes to drag it. When collapsed it is the only way back, so it
+     stays fully on-screen rather than half under the edge. */
+  .panel-toggle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 18px;
+    height: 44px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bg-light-color);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+    z-index: 11;
+  }
+
+  .panel-toggle:hover,
+  .panel-toggle:focus-visible {
+    opacity: 1;
+    color: var(--accent-color);
+    border-color: var(--accent-color);
+  }
+
+  .collapsed .panel-toggle {
+    opacity: 1;
   }
 
   /* Resize handle */

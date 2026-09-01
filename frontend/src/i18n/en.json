@@ -34,6 +34,11 @@
       "parseError": "Failed to parse MIB file",
       "skipped": "{count} already present (skipped)",
       "allSkipped": "All {count} file(s) already present — nothing to import"
+    },
+    "panel": {
+      "resize": "Resize the MIB panel",
+      "hide": "Hide the MIB tree",
+      "show": "Show the MIB tree"
     }
   },
   "common": {
