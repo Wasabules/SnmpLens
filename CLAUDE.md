@@ -22,12 +22,29 @@ CI verification gate (`.github/workflows/ci.yml`, all run from repo root):
 
 ```bash
 go vet -tags webkit2_41 ./...
+go test -tags webkit2_41 ./...
 staticcheck ./...                 # go install honnef.co/go/tools/cmd/staticcheck@latest
 go mod tidy && git diff --exit-code go.mod go.sum   # go.mod must stay tidy
 govulncheck ./...
 ```
 
-**There are no Go or JS unit tests.** Correctness is verified by the build + `go vet` + `staticcheck` passing, and by manual testing against the bundled Python SNMP simulator:
+Go unit tests live beside the code they cover (`go test ./...`, run in CI). They are deliberately few and target
+the logic that is subtle and easy to break silently — storage pragmas/migrations, aggregation, threshold
+semantics, the poll clock, counter-wrap maths — not coverage for its own sake.
+
+The frontend has one test, `cd frontend && npm test`: it runs the real `pollingStore` against a stubbed Wails
+bridge under node. It exists because a `ReferenceError` on that path once disabled all monitoring silently — the
+outer `try/catch` swallowed it — and neither the Vite build nor `go vet` can see that class of bug.
+
+Two tests in `pkg/monitor` talk to a real agent and skip unless you point them at one:
+
+```bash
+python tools/snmp_test_agent.py --port 11611 --no-traps
+SNMPLENS_TEST_AGENT=127.0.0.1:11611 go test ./pkg/monitor/ -run Integration -v
+```
+
+Beyond that, correctness is verified by the build + `go vet` + `staticcheck` passing, and by manual testing
+against the bundled Python SNMP simulator:
 
 ```bash
 pip install pycryptodome
@@ -49,6 +66,8 @@ The frontend calls Go through auto-generated bindings in `frontend/wailsjs/`, wh
 
 - `pkg/mib/service.go` — MIB loading/parsing and tree construction via **gosmi**. `LoadAll`/`LoadSpecific`/`LoadWithDiagnostics` (the diagnostics variant returns per-file load errors for the drag-&-drop import UI). Also OID translation/resolution (`Translate`, `ResolveOid(s)`).
 - `pkg/snmp/` — SNMP over **gosnmp**: `client.go` (connection config, v3 security-protocol mapping, concurrent fan-out via `concurrentExecute`, debug ring-buffer logger), `operations.go` (GET/SET/GETNEXT/GETBULK/WALK), `trap.go` (listener + sender), `discovery.go` (CIDR scan), `params.go` (bridge request structs).
+- `pkg/monitor/` — the poll clock and the alerting engine. `scheduler.go` owns one goroutine per monitoring session (this is what makes background mode real — the clock used to be a `setInterval` in the renderer, so closing the window silently stopped every session and every alert with it); `breach.go` turns samples into threshold/reachability episodes; `counters.go` corrects counter wraps and derives rates from the time that actually elapsed.
+- `pkg/events/`, `pkg/notify/`, `pkg/secrets/`, `pkg/service/`, `pkg/tray/` — the event journal vocabulary, notification routing (syslog/webhook/email with a durable outbox), OS-protected credential storage, the pre-GUI preference file, and the fail-soft system-tray icon.
 - `pkg/network/tools.go` — pure-Go ping & traceroute (**pro-bing**); no elevated privileges required.
 - `pkg/storage/storage.go` — SQLite (**modernc.org/sqlite**, WAL mode) for monitoring history. Data points are **batch-buffered**: `QueueDataPoints` appends to an in-memory batch flushed by a ticker goroutine, not written per-call. Sessions keyed by generated UUID.
 
@@ -79,6 +98,12 @@ Contains `mibs/` (extracted + user MIBs) and `monitoring.db`.
 
 - **Credentials are encrypted at rest.** `settingsStore` stores plaintext in memory but encrypts sensitive fields (`community`, v3 passphrases, per-target overrides) via `crypto.js` before writing to localStorage. When adding a new sensitive field, extend `SENSITIVE_PATHS` (and the per-target override handling) in `crypto.js`, or it will be persisted in clear.
 - **Anonymous Mode** is purely frontend masking and is intentionally **non-persistent** (always off on restart) — see `settingsStore.js` forcing `anonymousMode = false` on load. Don't make it persist.
+
+## Background mode
+
+Three preferences are read by `main()` **before** `wails.Run`, so they cannot live in localStorage: they sit in `service.json` next to `monitoring.db` (`pkg/service`). `HideWindowOnClose` is deliberately NOT used — it is fixed before we know whether a tray icon actually appeared, and an app that refuses to close with no tray to quit from is unusable. `OnBeforeClose` makes the same decision later, once `tray.Start` has answered. Everything about `pkg/tray` is fail-soft for that reason, including a readiness timeout: a desktop with no StatusNotifierItem host never calls back rather than returning an error.
+
+Session credentials follow the same rule as sink credentials: `storage.SessionConn` holds only what is safe to read in a copied `monitoring.db`, and the community and v3 passphrases go to `pkg/secrets` under `SessionRef(id)`.
 
 ## Releases
 

@@ -60,6 +60,16 @@ jobs:
         if: runner.os == 'Linux'
         run: go vet -tags webkit2_41 ./...
 
+      - name: Go tests
+        if: runner.os == 'Linux'
+        run: go test -tags webkit2_41 ./...
+
+      # Runs the polling store against a stubbed Wails bridge. node_modules is
+      # already present: wails build installed it.
+      - name: Frontend tests
+        if: runner.os == 'Linux'
+        run: cd frontend && npm test
+
       - name: Install staticcheck
         if: runner.os == 'Linux'
         run: go install honnef.co/go/tools/cmd/staticcheck@latest
