@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -68,7 +67,17 @@ func (c *Client) StartTrapListener(port int, v3 V3Params) error {
 	c.trapListener = gosnmp.NewTrapListener()
 	c.trapListener.OnNewTrap = c.handleTrap
 	c.trapListener.Params = params
-	c.trapListener.Params.Logger = gosnmp.NewLogger(log.New(os.Stdout, "", 0))
+	// Through the scrubbed ring buffer, and only when debug is on.
+	//
+	// This used to be log.New(os.Stdout, ...) unconditionally: not the ring
+	// writer, so scrubSecrets never saw it, and not gated on debug, so every
+	// arriving trap printed "Parsed community <whatever the sender used>" to
+	// stdout whether or not anyone had asked for a debug log. A trap sender's
+	// community is not ours to disclose, and stdout in a packaged app goes
+	// somewhere nobody chose.
+	if c.debugEnabled {
+		c.trapListener.Params.Logger = gosnmp.NewLogger(log.New(&ringLogWriter{client: c}, "", 0))
+	}
 
 	go func() {
 		defer func() {

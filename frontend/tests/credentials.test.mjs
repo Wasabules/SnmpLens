@@ -351,7 +351,10 @@ for (const scenario of [
 // treated as success: GCM authenticates, so a failed open means a wrong key.
 {
   const legacy = JSON.stringify({ kty: 'oct', k: 'AAAA' });
-  const store = makeStorage({ _snmplens_ek: legacy });
+  // With a stored blob, which is the only case where the verification has
+  // anything to verify against — and the only case where getting it wrong
+  // costs anything.
+  const store = makeStorage({ _snmplens_ek: legacy, settings: JSON.stringify(settings()) });
   const m = await load({
     ...working,
     SettingsOpen: async () => { throw new Error('cannot be decrypted with the stored key'); },
@@ -360,6 +363,19 @@ for (const scenario of [
   await m.decryptSettings(settings());
   check('a key that does not open the blob is not trusted',
     store.getItem('_snmplens_ek') === legacy);
+}
+
+// And with no blob at all the key protects nothing, so taking custody and
+// dropping the extractable copy is right — that copy used to sit in
+// localStorage indefinitely because the migration only ran when a blob
+// existed.
+{
+  const store = makeStorage({ _snmplens_ek: JSON.stringify({ kty: 'oct', k: 'AAAA' }) });
+  const m = await load(working, store);
+  await waitFor(() => store.getItem('_snmplens_ek') === null, 'the stranded key to go');
+  check('a stranded legacy key is not left in localStorage',
+    store.getItem('_snmplens_ek') === null);
+  void m;
 }
 
 // --- reset ---

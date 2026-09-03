@@ -249,3 +249,122 @@ func TestTheKeyLivesInTheSecretStore(t *testing.T) {
 		t.Errorf("the stored key is not 32 raw bytes: %d, %v", len(key), err)
 	}
 }
+
+// A Store whose failures we choose.
+type stubStore struct {
+	values  map[string]string
+	getErr  error
+	setErr  error
+	backend string
+	sets    int
+}
+
+func (s *stubStore) Get(ref string) (string, error) {
+	if s.getErr != nil {
+		return "", s.getErr
+	}
+	v, ok := s.values[ref]
+	if !ok {
+		return "", secrets.ErrNotFound
+	}
+	return v, nil
+}
+
+func (s *stubStore) Set(ref, secret string) error {
+	s.sets++
+	if s.setErr != nil {
+		return s.setErr
+	}
+	if s.values == nil {
+		s.values = map[string]string{}
+	}
+	s.values[ref] = secret
+	return nil
+}
+
+func (s *stubStore) Delete(ref string) error { delete(s.values, ref); return nil }
+func (s *stubStore) Backend() string {
+	if s.backend == "" {
+		return "stub"
+	}
+	return s.backend
+}
+
+// The branch settingsKey's own doc comment is about: a key that cannot be READ
+// must not be answered with a new one.
+//
+// Doing so re-seals the user's credentials under a fresh key while the real
+// one sits unreadable, which loses the old ones for good. Mutating the
+// ErrNotFound case to `default:` restores exactly that behaviour, and nothing
+// in the suite noticed — secrets.Store is an interface, so this is the only
+// place it can be pinned.
+func TestSettingsKeyRefusesToMintOverAnUnreadableKey(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{
+		{"locked keychain", errors.New("keychain lookup: exit status 51")},
+		{"dpapi refused", errors.New("unprotect: access denied")},
+		{"permission denied", errors.New("read sinks.secrets: permission denied")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &stubStore{getErr: tc.err}
+			a := &App{secrets: store}
+
+			if _, err := a.SettingsSeal([]string{"public"}); err == nil {
+				t.Error("sealing proceeded with an unreadable key")
+			}
+			if store.sets != 0 {
+				t.Errorf("a replacement key was written %d time(s)", store.sets)
+			}
+			if _, err := a.SettingsOpen([]string{webcryptoCommunity}); err == nil {
+				t.Error("opening proceeded with an unreadable key")
+			}
+			if st := a.SettingsKeyStatus(); st.HasKey || st.Error == "" {
+				t.Errorf("status hides the failure: %+v", st)
+			}
+		})
+	}
+}
+
+// And the case that MAY mint: genuinely absent.
+func TestSettingsKeyMintsWhenGenuinelyAbsent(t *testing.T) {
+	store := &stubStore{}
+	a := &App{secrets: store}
+
+	sealed, err := a.SettingsSeal([]string{"public"})
+	if err != nil {
+		t.Fatalf("first use failed: %v", err)
+	}
+	if store.sets != 1 {
+		t.Errorf("wrote the key %d times", store.sets)
+	}
+	opened, err := a.SettingsOpen(sealed)
+	if err != nil || opened[0] != "public" {
+		t.Errorf("round trip: %q %v", opened, err)
+	}
+}
+
+// A value that merely LOOKS sealed must not be passed through as plaintext.
+func TestSealDoesNotMistakeAValueForCiphertext(t *testing.T) {
+	a := settingsApp(t)
+
+	// A community someone actually chose, that happens to start with the
+	// prefix. It used to be written to localStorage verbatim, in the clear,
+	// and then failed the entire batch on the next open.
+	const tricky = "enc:my-community"
+	sealed, err := a.SettingsSeal([]string{tricky})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sealed[0] == tricky {
+		t.Fatal("the value was passed through unsealed")
+	}
+	opened, err := a.SettingsOpen(sealed)
+	if err != nil {
+		t.Fatalf("it no longer opens: %v", err)
+	}
+	if opened[0] != tricky {
+		t.Errorf("round-tripped to %q", opened[0])
+	}
+}

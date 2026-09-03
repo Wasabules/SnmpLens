@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -92,6 +93,15 @@ type fileStore struct {
 func Open(dir string) (Store, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("secrets: create %s: %w", dir, err)
+	}
+	// MkdirAll never TIGHTENS a directory that already exists, and this one
+	// usually does: app.startup creates <config>/SnmpLens/mibs at 0755 first,
+	// which creates the parent at 0755. So the 0700 above was decorative, and
+	// the protection the file backend documents — and the settings banner
+	// implies — was not in place on Linux. Chmod is a no-op on Windows, where
+	// ACLs govern instead.
+	if err := os.Chmod(dir, 0o700); err != nil {
+		log.Printf("secrets: could not tighten %s to 0700: %v", dir, err)
 	}
 	s := &fileStore{
 		path:      filepath.Join(dir, "sinks.secrets"),

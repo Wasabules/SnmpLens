@@ -283,7 +283,12 @@
               <span class="stat-value">{pingResult.maxMs} ms</span>
             </div>
           </div>
-          <pre class="raw-output">{pingResult.output}</pre>
+          <!-- The per-probe round trips, which pro-bing collects and nothing showed.
+             `pingResult.output` was a field the Go PingResult never had, so this
+             box rendered permanently empty under every ping. -->
+        {#if pingResult.replies?.length}
+          <pre class="raw-output">{pingResult.replies.map((ms, i) => `reply ${i + 1}: ${ms.toFixed(2)} ms`).join('\n')}</pre>
+        {/if}
         </div>
       {/if}
     </div>

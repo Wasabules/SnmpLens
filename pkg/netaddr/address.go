@@ -133,6 +133,12 @@ func isHostname(s string) bool {
 			c := label[i]
 			switch {
 			case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '-':
+			// Underscore, which RFC 1123 forbids and the world uses anyway:
+			// Microsoft DNS allows it by default, AD-integrated zones are full
+			// of it, and /etc/hosts has no syntax rules at all. Refusing it
+			// broke targets that worked, to guard against nothing — an
+			// underscore is not an option character to any traceroute.
+			case c == '_':
 			default:
 				return false
 			}

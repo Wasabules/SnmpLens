@@ -76,12 +76,26 @@ function fields(settings) {
   }
   for (const addr of Object.keys(settings.targetOverrides || {})) {
     const ov = settings.targetOverrides[addr];
+    // Only fields the override actually HAS.
+    //
+    // A slot was pushed for every override whether or not it defined a
+    // community, and writing the answer back unconditionally turned
+    // `{ port: 1161 }` into `{ port: 1161, community: '' }`.
+    // getEffectiveSettings tests `!== undefined`, so that empty string then
+    // overrode the global community and the target authenticated with nothing.
+    //
     // A key, not a position: restoring the previous blob has to survive a
     // target being added or removed while the store was locked.
-    out.push({ key: `o:${addr}.community`, get: () => ov.community, set: (v) => { ov.community = v; } });
+    if ('community' in ov) {
+      out.push({ key: `o:${addr}.community`, get: () => ov.community, set: (v) => { ov.community = v; } });
+    }
     if (ov.v3) {
-      out.push({ key: `o:${addr}.v3.authPass`, get: () => ov.v3.authPass, set: (v) => { ov.v3.authPass = v; } });
-      out.push({ key: `o:${addr}.v3.privPass`, get: () => ov.v3.privPass, set: (v) => { ov.v3.privPass = v; } });
+      if ('authPass' in ov.v3) {
+        out.push({ key: `o:${addr}.v3.authPass`, get: () => ov.v3.authPass, set: (v) => { ov.v3.authPass = v; } });
+      }
+      if ('privPass' in ov.v3) {
+        out.push({ key: `o:${addr}.v3.privPass`, get: () => ov.v3.privPass, set: (v) => { ov.v3.privPass = v; } });
+      }
     }
   }
   return out;
@@ -255,6 +269,11 @@ async function migrateLegacyKey(settings) {
  */
 export async function initCredentialState() {
   await refreshStatus();
+  // The legacy key too. migrateLegacyKey only ran from decryptSettings, which
+  // only runs when a settings blob exists — so a profile whose blob had been
+  // reset kept the old extractable JWK in localStorage indefinitely, next to
+  // nothing it could open but still there to be read.
+  await migrateLegacyKey({});
 }
 
 /** Forget the key, for "reset settings". */

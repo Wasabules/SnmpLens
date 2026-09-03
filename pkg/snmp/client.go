@@ -370,6 +370,14 @@ const redacted = "[redacted]"
 var (
 	communityField  = regexp.MustCompile(`Community:[^,]*`)
 	parsedCommunity = regexp.MustCompile(`Parsed community \S*`)
+	// A raw packet, rendered by fmt as decimal bytes. gosnmp prints whole
+	// datagrams this way — "GET RESPONSE OK: %+v" on a []byte (marshal.go:313),
+	// and the same shape at "Last 4 Bytes" and "Enterprise" — and in SNMPv1 and
+	// v2c the community IS in those bytes, by protocol design. There is no
+	// scrubbing a packet dump: the credential is the payload.
+	//
+	// Four numbers minimum, so an ordinary "[1 2]" in a message is left alone.
+	byteDump = regexp.MustCompile(`\[\d{1,3}( \d{1,3}){3,}\]`)
 )
 
 // scrubSecrets removes credential values from one debug line.
@@ -388,6 +396,7 @@ var (
 func scrubSecrets(msg string, secrets []string) string {
 	msg = communityField.ReplaceAllString(msg, "Community:"+redacted)
 	msg = parsedCommunity.ReplaceAllString(msg, "Parsed community "+redacted)
+	msg = byteDump.ReplaceAllStringFunc(msg, redactBytes)
 
 	for _, secret := range secrets {
 		// Below three characters a value is as likely to be ordinary text as a
@@ -399,4 +408,16 @@ func scrubSecrets(msg string, secrets []string) string {
 		msg = strings.ReplaceAll(msg, secret, redacted)
 	}
 	return msg
+}
+
+// redactBytes replaces a decimal packet dump with its length.
+//
+// The length is the part worth keeping: "did the response arrive, and how big
+// was it" is what the dump is read for, while the bytes themselves carry the
+// community verbatim on every v1 and v2c exchange. Redacting only the
+// credential inside would need to know it, and the listener does not know a
+// trap sender's.
+func redactBytes(match string) string {
+	n := strings.Count(match, " ") + 1
+	return fmt.Sprintf("[%d bytes %s]", n, redacted)
 }

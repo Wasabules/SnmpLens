@@ -107,6 +107,9 @@ func TestValidTargetAcceptsRealHosts(t *testing.T) {
 		"192.168.1.1", "8.8.8.8", "::1", "2001:db8::1", "[2001:db8::1]",
 		"fe80::1%eth0", "switch-01", "switch-01.example.com", "a.b.c.d.e",
 		"example.com.", "XN--BCHER-KVA.example", "0", "host-with-many-hyphens-1",
+		// Not RFC 1123, and used everywhere: Microsoft DNS permits it, and
+		// /etc/hosts has no syntax rules at all.
+		"my_switch.corp.local", "core_sw_01", "_underscore-start",
 	} {
 		if err := ValidTarget(in); err != nil {
 			t.Errorf("ValidTarget(%q) = %v, want nil", in, err)

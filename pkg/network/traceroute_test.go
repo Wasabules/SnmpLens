@@ -130,3 +130,37 @@ func TestPingAndTracerouteRefuseAnOptionAsATarget(t *testing.T) {
 		}
 	}
 }
+
+// A traceroute that starts and fails must say so.
+//
+// cmd.Wait's error was dropped and stderr was never captured, so an unknown
+// name returned an empty hop list and a nil error — the panel showed an empty
+// table with nothing to explain it. Measured on this machine: tracert writes
+// "cannot resolve the target system name" and exits non-zero.
+func TestTracerouteReportsAFailureInsteadOfNoHops(t *testing.T) {
+	hops, err := Traceroute(context.Background(), "nonexistent-xyz-host.invalid")
+	if err == nil {
+		t.Errorf("a failed traceroute returned %d hops and no error", len(hops))
+	}
+	if len(hops) != 0 {
+		t.Errorf("hops = %+v", hops)
+	}
+	if err != nil && !strings.Contains(err.Error(), "traceroute failed") {
+		t.Logf("error text: %v", err)
+	}
+}
+
+// The message stays one line: these tools print a paragraph.
+func TestFirstLine(t *testing.T) {
+	cases := map[string]string{
+		"one line":             "one line",
+		"first\r\nsecond":      "first",
+		"first\nsecond\nthird": "first",
+		"":                     "",
+	}
+	for in, want := range cases {
+		if got := firstLine(in); got != want {
+			t.Errorf("firstLine(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

@@ -2,6 +2,7 @@ package network
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"net"
@@ -114,6 +115,11 @@ func Traceroute(ctx context.Context, target string) ([]TracerouteHop, error) {
 	if err != nil {
 		return nil, fmt.Errorf("traceroute pipe: %w", err)
 	}
+	// Captured so a failure can say why. Windows tracert writes its
+	// "cannot resolve" message to stdout, so the hop-count check below covers
+	// that case too.
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("traceroute start: %w", err)
@@ -133,8 +139,29 @@ func Traceroute(ctx context.Context, target string) ([]TracerouteHop, error) {
 		hops = parseUnixTraceroute(scanner, emit)
 	}
 
-	cmd.Wait()
+	// The error, not just the hops. cmd.Wait's result was dropped and stderr
+	// was never wired, so a traceroute that started and failed — an unknown
+	// name, no permission, no such binary — returned an empty list and a nil
+	// error, and the panel showed nothing at all with nothing to explain it.
+	waitErr := cmd.Wait()
+	if len(hops) == 0 {
+		detail := strings.TrimSpace(stderr.String())
+		switch {
+		case detail != "":
+			return nil, fmt.Errorf("traceroute failed: %s", firstLine(detail))
+		case waitErr != nil:
+			return nil, fmt.Errorf("traceroute failed: %w", waitErr)
+		}
+	}
 	return hops, nil
+}
+
+// firstLine keeps an error to one line: these tools print a paragraph.
+func firstLine(s string) string {
+	if i := strings.IndexAny(s, "\r\n"); i >= 0 {
+		return s[:i]
+	}
+	return s
 }
 
 // parseWindowsTraceroute parses Windows tracert output.

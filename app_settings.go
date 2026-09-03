@@ -70,6 +70,9 @@ func (a *App) settingsKey() ([]byte, error) {
 	if a.secrets == nil {
 		return nil, errNoSecretStore
 	}
+	a.settingsKeyMu.Lock()
+	defer a.settingsKeyMu.Unlock()
+
 	if len(a.settingsKeyCache) == 32 {
 		return a.settingsKeyCache, nil
 	}
@@ -135,9 +138,19 @@ func (a *App) SettingsSeal(values []string) ([]string, error) {
 
 	out := make([]string, len(values))
 	for i, value := range values {
-		if value == "" || strings.HasPrefix(value, settingsPrefix) {
-			// Already sealed, or nothing to seal. Re-sealing an already sealed
-			// value would double-encrypt it and lose the plaintext.
+		if value == "" {
+			out[i] = value
+			continue
+		}
+		if strings.HasPrefix(value, settingsPrefix) && looksSealed(value) {
+			// Already sealed. Re-sealing would double-encrypt it and lose the
+			// plaintext on the way back.
+			//
+			// looksSealed, not the prefix alone: a community string that
+			// happens to start with "enc:" was passed through as PLAINTEXT and
+			// written to localStorage in the clear, and then failed the whole
+			// batch on the next open. Rare, and the consequence is the one
+			// thing this file exists to prevent.
 			out[i] = value
 			continue
 		}
@@ -219,7 +232,9 @@ func (a *App) SettingsAdoptKey(jwkK string) error {
 		// Idempotent when it is the same key: a migration interrupted after
 		// Set but before the browser removed its copy must be able to finish.
 		if existing == base64.StdEncoding.EncodeToString(key) {
+			a.settingsKeyMu.Lock()
 			a.settingsKeyCache = key
+			a.settingsKeyMu.Unlock()
 			return nil
 		}
 		return errors.New("a settings key is already stored; refusing to replace it")
@@ -243,18 +258,29 @@ func (a *App) SettingsAdoptKey(jwkK string) error {
 		return errors.New("the key read back does not match the one stored")
 	}
 
+	a.settingsKeyMu.Lock()
 	a.settingsKeyCache = key
+	a.settingsKeyMu.Unlock()
 	return nil
 }
 
 // SettingsForgetKey deletes the key, which makes every sealed value
 // unreadable. Used by "reset settings", which also clears the values.
 func (a *App) SettingsForgetKey() error {
+	a.settingsKeyMu.Lock()
 	a.settingsKeyCache = nil
+	a.settingsKeyMu.Unlock()
 	if a.secrets == nil {
 		return nil
 	}
 	return a.secrets.Delete(secrets.SettingsKeyRef())
+}
+
+// looksSealed reports whether a value is one of ours: the prefix, followed by
+// base64 that is at least a nonce and a tag.
+func looksSealed(value string) bool {
+	raw, err := base64.StdEncoding.DecodeString(value[len(settingsPrefix):])
+	return err == nil && len(raw) >= 12+16
 }
 
 func newGCM(key []byte) (cipher.AEAD, error) {

@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"SnmpLens/pkg/events"
 	"SnmpLens/pkg/mib"
@@ -45,7 +46,11 @@ type App struct {
 	// a whole-file read and decrypt, and a settings save seals one value per
 	// sensitive field plus three per target override.
 	settingsKeyCache []byte
-	updater          *updater.Service
+	// Guards settingsKeyCache. Wails dispatches every bound method on its own
+	// goroutine, and a settings load issues KeyStatus, AdoptKey and Open while
+	// a save issues Seal — concurrently, on the same field.
+	settingsKeyMu sync.Mutex
+	updater       *updater.Service
 
 	// Background-mode state. configDir is the SnmpLens directory, kept here
 	// because several subsystems need it after startup.
