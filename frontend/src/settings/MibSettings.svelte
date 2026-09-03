@@ -8,6 +8,8 @@
   import { mibPathsStore } from '../stores/mibPathsStore';
   import { notificationStore } from '../stores/notifications';
   import Icon from '../Icon.svelte';
+  import MibDiagnosis from '../mib/MibDiagnosis.svelte';
+  import { MibDiagnose } from '../../wailsjs/go/main/App';
 
   export let defaultMibPath;
 
@@ -72,6 +74,26 @@
     }
     requestTab('mibeditor');
   }
+  // A diagnosis on demand. Not run for every file on every load: it re-reads
+  // and re-parses, and a directory of two hundred vendor MIBs would pay that
+  // cost for the one someone is actually looking at.
+  let diagnosis = null;
+  let diagnosisFor = '';
+  let diagnosing = '';
+
+  async function runDiagnosis(fileName) {
+    diagnosing = fileName;
+    try {
+      diagnosis = await MibDiagnose(fileName);
+      diagnosisFor = fileName;
+    } catch (e) {
+      diagnosis = { stage: '', summary: String(e?.message || e), fileName };
+      diagnosisFor = fileName;
+    } finally {
+      diagnosing = '';
+    }
+  }
+
 </script>
 
 <fieldset>
@@ -193,7 +215,16 @@
                 {$_('settings.mibs.openInEditor')}
               </button>
             {/if}
+            <!-- Offered on SUCCESSES too: a MIB whose IMPORTS cannot be
+                 satisfied loads with no error at all and resolves to nothing,
+                 so "it loaded" is exactly when this is worth asking. -->
+            <button class="diag-open" on:click={() => runDiagnosis(diag.fileName)} disabled={diagnosing === diag.fileName}>
+              {diagnosing === diag.fileName ? $_('settings.mibs.diagnosing') : $_('settings.mibs.diagnose')}
+            </button>
           </div>
+          {#if diagnosisFor === diag.fileName && diagnosis}
+            <MibDiagnosis {diagnosis} fileName={diag.fileName} />
+          {/if}
         {/each}
       </div>
     </div>

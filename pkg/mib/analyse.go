@@ -51,11 +51,11 @@ func analyseParsed(content string, module *parser.Module, err error, cat Catalog
 	}
 
 	a := &analysis{
-		module:  module,
-		cat:     cat,
-		known:   map[string]bool{},
-		types:   map[string]bool{},
-		imports: map[string]*importUse{},
+		module:    module,
+		cat:       cat,
+		known:     map[string]bool{},
+		types:     map[string]bool{},
+		imports:   map[string]*importUse{},
 		byOid:     map[string][]*parser.Node{},
 		diags:     []Diagnostic{},
 		rawSource: content,
@@ -397,7 +397,6 @@ func (a *analysis) checkUnusedImports() {
 			fmt.Sprintf("%q is imported from %s but never used", name, use.module), name)
 	}
 }
-
 
 // Analysis is everything the editor needs from one parse.
 //

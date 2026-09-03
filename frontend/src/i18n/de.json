@@ -33,7 +33,25 @@
       "colError": "Fehler",
       "parseError": "MIB-Datei konnte nicht geparst werden",
       "skipped": "{count} bereits vorhanden (übersprungen)",
-      "allSkipped": "Alle {count} Datei(en) bereits vorhanden — nichts zu importieren"
+      "allSkipped": "Alle {count} Datei(en) bereits vorhanden — nichts zu importieren",
+      "stageHint": "Wie weit die Datei kam, bevor sie stehen blieb",
+      "stage": {
+        "read": "nicht gelesen",
+        "content": "keine MIB",
+        "parse": "Syntax",
+        "imports": "Importe",
+        "build": "abgelehnt",
+        "semantic": "ungelöst",
+        "loaded": "geladen"
+      },
+      "at": "Zeile {line}, Sp. {column}",
+      "missingImports": "Nicht erfüllbare Importe",
+      "reason": {
+        "absent": "(nicht im MIB-Verzeichnis)",
+        "failed": "(vorhanden, lädt aber ebenfalls nicht)"
+      },
+      "usedFor": "verwendet für: {symbols}",
+      "rawDetail": "Meldung des Laders"
     },
     "panel": {
       "resize": "MIB-Bereich anpassen",
@@ -649,7 +667,9 @@
       "loaded": "{count} geladen",
       "failed": "{count} fehlgeschlagen",
       "removeConfirm": "MIB-Pfad entfernen: {path}?",
-      "openInEditor": "Im Editor öffnen"
+      "openInEditor": "Im Editor öffnen",
+      "diagnose": "Diagnose",
+      "diagnosing": "Prüfung…"
     },
     "snmp": {
       "v1v2cTitle": "SNMP v1/v2c",

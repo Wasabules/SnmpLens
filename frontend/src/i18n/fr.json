@@ -33,7 +33,25 @@
       "colError": "Erreur",
       "parseError": "Échec du parsing du fichier MIB",
       "skipped": "{count} déjà présent(s) (ignoré(s))",
-      "allSkipped": "Les {count} fichier(s) sont déjà présents — rien à importer"
+      "allSkipped": "Les {count} fichier(s) sont déjà présents — rien à importer",
+      "stageHint": "Jusqu'où le fichier est allé avant de s'arrêter",
+      "stage": {
+        "read": "non lu",
+        "content": "pas une MIB",
+        "parse": "syntaxe",
+        "imports": "imports",
+        "build": "refusé",
+        "semantic": "non résolu",
+        "loaded": "chargé"
+      },
+      "at": "ligne {line}, col. {column}",
+      "missingImports": "Imports impossibles à satisfaire",
+      "reason": {
+        "absent": "(absent du répertoire des MIBs)",
+        "failed": "(présent, mais ne charge pas non plus)"
+      },
+      "usedFor": "utilisé pour : {symbols}",
+      "rawDetail": "Message du chargeur"
     },
     "panel": {
       "resize": "Redimensionner le panneau MIB",
@@ -649,7 +667,9 @@
       "loaded": "{count} chargé(s)",
       "failed": "{count} échoué(s)",
       "removeConfirm": "Supprimer le chemin MIB : {path} ?",
-      "openInEditor": "Ouvrir dans l'éditeur"
+      "openInEditor": "Ouvrir dans l'éditeur",
+      "diagnose": "Diagnostiquer",
+      "diagnosing": "Analyse…"
     },
     "snmp": {
       "v1v2cTitle": "SNMP v1/v2c",

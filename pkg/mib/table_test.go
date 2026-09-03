@@ -18,8 +18,13 @@ func loadedService(t *testing.T) *Service {
 	// gosmi is global and needs its search path set before a module resolves;
 	// app.startup does this at runtime, so a test that skips it loads nothing
 	// and every assertion below turns into "not in any loaded MIB".
+	// Exit before Init, the same sequence Rebuild uses: gosmi has no unload,
+	// and Init on its own finds the existing handle and returns with every
+	// previously loaded module still in it. Without this, a stub SNMPv2-SMI
+	// from one test is what the next test's IF-MIB gets built against.
+	gosmi.Exit()
 	gosmi.Init()
-	gosmi.AppendPath("../../mibs")
+	gosmi.SetPath("../../mibs")
 
 	s := NewService("../../mibs")
 	if _, err := s.LoadAll(); err != nil {

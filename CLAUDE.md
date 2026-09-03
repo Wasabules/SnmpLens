@@ -121,6 +121,38 @@ Contains `mibs/` (extracted + user MIBs) and `monitoring.db`.
 - **Credentials are encrypted at rest.** `settingsStore` stores plaintext in memory but encrypts sensitive fields (`community`, v3 passphrases, per-target overrides) via `crypto.js` before writing to localStorage. When adding a new sensitive field, extend `SENSITIVE_PATHS` (and the per-target override handling) in `crypto.js`, or it will be persisted in clear.
 - **Anonymous Mode** is purely frontend masking and is intentionally **non-persistent** (always off on restart) — see `settingsStore.js` forcing `anonymousMode = false` on load. Don't make it persist.
 
+## Why a MIB did not load
+
+`gosmi.LoadModule` returns `Could not load module at X` for a missing file, a PDF, a syntax error on line 412 and
+an unsatisfiable IMPORTS clause alike — and it throws away the one thing that would tell them apart:
+`smi.LoadModule` receives `internal.GetModule`'s real error (`Parse module: …X-MIB:2:1: unexpected "("`), prints
+it with `fmt.Println`, and returns an empty string. `pkg/mib/diagnose.go` captures stdout to recover it
+(`captureStdout`, reader on its own goroutine because a pipe holds ~64 KB and the output matters most when there
+is a lot of it), and `shortenPaths` drops the directory so the position survives.
+
+`Diagnose` reports a STAGE — read / content / parse / imports / build / semantic / loaded — plus located
+diagnostics, an excerpt with a caret, the imported modules that cannot be satisfied and the symbols each was
+needed for, and a chain followed to its root when a dependency fails too. It recognises the files people actually
+download by mistake (HTML page, PDF, zip, UTF-16) because all four reach gosmi as the same sentence, and it warns
+when a file's name does not match its module, which loads fine and is invisible until something imports it.
+
+A module can load AND be broken: gosmi resolves imports lazily and returns nil rather than failing, so a MIB
+importing a module you do not have reports success and resolves to nothing. That is why `Diagnose` is offered on
+successes too, and why the missing import stays the headline rather than the unresolved references it causes.
+
+`LoadWithDiagnostics` runs it automatically on failures only — it re-reads and re-parses, which is worth doing
+once something is wrong and not for two hundred working vendor MIBs.
+
+**An empty file list means empty**, in the service. It used to mean "everything in the directory", which
+re-enabled every MIB the user had switched off; the policy lives in `App.LoadMibsWithDiagnostics`, which
+enumerates explicitly. This only surfaced when the `.mib`/`.txt` filter was removed — the bundled MIBs are
+extension-less, so the fallback quietly loaded nothing.
+
+In tests, reset gosmi with `Exit()` **then** `Init()` and use `SetPath` rather than `AppendPath`: `Init` alone
+finds the existing handle and returns with every previously loaded module still in it, and `AppendPath`
+accumulates directories — a deleted one then aborts every lookup, because `GetModuleFile` returns the ReadDir
+error instead of trying the next path.
+
 ## Conceptual tables
 
 A walk is a flat list; a table is that list pivoted by column and split by INDEX. The pivot is

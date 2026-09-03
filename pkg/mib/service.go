@@ -178,6 +178,11 @@ type MibLoadResult struct {
 	FileName string `json:"fileName"`
 	Success  bool   `json:"success"`
 	Error    string `json:"error,omitempty"`
+	// Diagnosis explains a failure: the stage it stopped at, the located
+	// problems, the imports it could not satisfy. Present only for failures —
+	// it re-reads and re-parses the file, which is worth doing once something
+	// is already wrong and not on every file of a working directory.
+	Diagnosis *LoadDiagnosis `json:"diagnosis,omitempty"`
 }
 
 // MibLoadResponse wraps the tree and diagnostics for a load operation.
@@ -196,29 +201,29 @@ func (s *Service) LoadWithDiagnostics(fileNames []string) MibLoadResponse {
 	var diagnostics []MibLoadResult
 	var loadedModuleNames []string
 
-	if len(fileNames) == 0 {
-		// Load all MIBs from directory
-		files, err := os.ReadDir(s.path)
-		if err != nil {
-			log.Printf("Could not read MIB directory: %v", err)
-			return MibLoadResponse{Tree: []*Node{}, Diagnostics: diagnostics}
-		}
-		for _, file := range files {
-			fileName := file.Name()
-			if !file.IsDir() && (strings.HasSuffix(strings.ToLower(fileName), ".mib") || strings.HasSuffix(strings.ToLower(fileName), ".txt")) {
-				fileNames = append(fileNames, fileName)
-			}
-		}
-	}
+	// An empty list means empty. It used to mean "everything in the
+	// directory", which is the opposite of what the editor reload needs: it
+	// passes the ENABLED MIBs, and re-enabling every file the user switched
+	// off is not a fallback, it is a bug. The tab that does want all of them
+	// asks for all of them by name — see App.LoadMibsWithDiagnostics.
+	//
+	// This only surfaced when the filter here was fixed: it required a .mib
+	// or .txt suffix, and the bundled MIBs are extension-less, so the
+	// fallback quietly loaded nothing and looked correct.
 
 	for _, fileName := range fileNames {
 		moduleName, err := gosmi.LoadModule(fileName)
 		if err != nil {
-			log.Printf("Diagnostic: failed to load '%s': %v", fileName, err)
+			// gosmi says "Could not load module at X" for a missing file, a
+			// PDF, a syntax error on line 412 and an unsatisfiable IMPORTS
+			// clause alike. Work out which, while we still hold the lock.
+			diag := s.diagnose(fileName, map[string]bool{})
+			log.Printf("Diagnostic: failed to load '%s' at stage %s: %s", fileName, diag.Stage, diag.Summary)
 			diagnostics = append(diagnostics, MibLoadResult{
-				FileName: fileName,
-				Success:  false,
-				Error:    err.Error(),
+				FileName:  fileName,
+				Success:   false,
+				Error:     diag.Summary,
+				Diagnosis: &diag,
 			})
 		} else {
 			log.Printf("Diagnostic: loaded '%s' as module '%s'", fileName, moduleName)

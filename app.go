@@ -201,8 +201,18 @@ func (a *App) LoadEnabledMibs(enabledFiles []string) ([]*mib.Node, error) {
 
 // LoadMibsWithDiagnostics loads MIBs and returns both tree and per-file load diagnostics.
 func (a *App) LoadMibsWithDiagnostics(enabledFiles []string) mib.MibLoadResponse {
+	// "Nothing selected" means "everything" HERE and nowhere deeper: the
+	// editor's reload calls the service directly with the enabled list, and an
+	// empty list there must stay empty or every MIB the user switched off
+	// comes back on.
 	if len(enabledFiles) == 0 {
 		log.Println("No enabled MIBs specified, loading all MIBs with diagnostics")
+		found, err := mib.ListMibFiles(a.persistentMibDir)
+		if err != nil {
+			log.Printf("Could not list MIB files: %v", err)
+			return mib.MibLoadResponse{Tree: []*mib.Node{}, Diagnostics: []mib.MibLoadResult{}}
+		}
+		enabledFiles = found
 	}
 	return a.mibService.LoadWithDiagnostics(enabledFiles)
 }
@@ -315,6 +325,15 @@ func (a *App) SnmpSetMultiple(req snmp.SetMultiRequest) []*snmp.BulkResult {
 		a.auditFailedSets(audit, results)
 	}
 	return results
+}
+
+// MibDiagnose explains why a MIB file does or does not load.
+//
+// Separate from loading because it costs a re-read and a re-parse: it is what
+// you ask for when something is wrong, and what the import dialog asks for on
+// your behalf when a file has already failed.
+func (a *App) MibDiagnose(fileName string) mib.LoadDiagnosis {
+	return a.mibService.Diagnose(fileName)
 }
 
 // MibTable returns the conceptual table containing oid — the table itself, its

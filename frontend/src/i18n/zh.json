@@ -33,7 +33,25 @@
       "colError": "错误",
       "parseError": "MIB 文件解析失败",
       "skipped": "{count} 个已存在（已跳过）",
-      "allSkipped": "所有 {count} 个文件已存在 — 无需导入"
+      "allSkipped": "所有 {count} 个文件已存在 — 无需导入",
+      "stageHint": "文件在停止前进行到哪一步",
+      "stage": {
+        "read": "未读取",
+        "content": "不是 MIB",
+        "parse": "语法",
+        "imports": "导入",
+        "build": "被拒绝",
+        "semantic": "未解析",
+        "loaded": "已加载"
+      },
+      "at": "第 {line} 行，第 {column} 列",
+      "missingImports": "无法满足的导入",
+      "reason": {
+        "absent": "（不在 MIB 目录中）",
+        "failed": "（存在，但同样无法加载）"
+      },
+      "usedFor": "用于：{symbols}",
+      "rawDetail": "加载器消息"
     },
     "panel": {
       "resize": "调整 MIB 面板大小",
@@ -649,7 +667,9 @@
       "loaded": "{count} 个已加载",
       "failed": "{count} 个失败",
       "removeConfirm": "移除 MIB 路径：{path}？",
-      "openInEditor": "在编辑器中打开"
+      "openInEditor": "在编辑器中打开",
+      "diagnose": "诊断",
+      "diagnosing": "检查中…"
     },
     "snmp": {
       "v1v2cTitle": "SNMP v1/v2c",

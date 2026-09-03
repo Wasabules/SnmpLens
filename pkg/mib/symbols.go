@@ -38,6 +38,13 @@ type Catalogue struct {
 func Symbols() Catalogue {
 	gosmiMu.RLock()
 	defer gosmiMu.RUnlock()
+	return symbolsLocked()
+}
+
+// symbolsLocked is Symbols for callers that already hold gosmiMu. Separate
+// because the mutex is not reentrant: taking a read lock while holding the
+// write lock deadlocks the whole application, silently.
+func symbolsLocked() Catalogue {
 
 	cat := Catalogue{Modules: []string{}, Symbols: []Symbol{}}
 	seen := map[string]bool{}

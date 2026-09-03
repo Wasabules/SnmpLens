@@ -1,0 +1,581 @@
+package mib
+
+import (
+	"bytes"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"unicode/utf8"
+
+	"github.com/sleepinggenius2/gosmi"
+	"github.com/sleepinggenius2/gosmi/parser"
+)
+
+// Why a MIB did not load.
+//
+// gosmi says "Could not load module at X" and nothing else. That single string
+// covers a file that is not there, a file that is a PDF, a syntax error on line
+// 412, and an IMPORTS clause naming a module nobody has — four problems with
+// four different answers, and the message distinguishes none of them.
+//
+// It also throws away the one thing that would: smi.LoadModule receives
+// internal.GetModule's real error — "Parse module: 12:5: unexpected token" —
+// prints it with fmt.Println, and returns an empty string. So the position
+// exists, is computed, and is discarded one frame below the API.
+//
+// This file recovers it, and adds what gosmi never had: which imported module
+// is missing and which symbols came from it, whether a file even is a MIB,
+// whether its module name matches its file name, and the semantic problems
+// that pass the loader silently.
+
+// Load stages, in the order a file goes through them.
+const (
+	StageRead     = "read"     // the bytes could not be obtained
+	StageContent  = "content"  // the bytes are not a MIB
+	StageParse    = "parse"    // the grammar rejected it
+	StageImports  = "imports"  // it needs a module that is not here
+	StageBuild    = "build"    // gosmi refused it for another reason
+	StageSemantic = "semantic" // it loaded, but resolves to nonsense
+	StageLoaded   = "loaded"   // it is in the tree
+)
+
+// LoadDiagnosis explains how far one file got and what stopped it.
+type LoadDiagnosis struct {
+	FileName string `json:"fileName"`
+	// ModuleName is what the file DECLARES, which is what every IMPORTS clause
+	// elsewhere will look for — not necessarily what the file is called.
+	ModuleName string `json:"moduleName,omitempty"`
+	Loaded     bool   `json:"loaded"`
+	Stage      string `json:"stage"`
+	// Summary is one line saying what stopped it, in a person's words.
+	Summary string `json:"summary"`
+	// Detail is the underlying message, including the one gosmi discards.
+	Detail string `json:"detail,omitempty"`
+	// Diagnostics are located problems: syntax, unknown types, duplicate OIDs.
+	Diagnostics []Diagnostic `json:"diagnostics,omitempty"`
+	// Missing lists the imported modules that are not available.
+	Missing []MissingModule `json:"missing,omitempty"`
+	// Hints are what to do about it.
+	Hints []string `json:"hints,omitempty"`
+	Bytes int      `json:"bytes"`
+}
+
+// Reasons an imported module is unavailable.
+const (
+	ImportAbsent = "absent" // no file for it anywhere in the MIB directory
+	ImportFailed = "failed" // the file is there and does not load either
+)
+
+// MissingModule is one entry of an IMPORTS clause that cannot be satisfied.
+type MissingModule struct {
+	Module  string   `json:"module"`
+	Symbols []string `json:"symbols,omitempty"`
+	Reason  string   `json:"reason"`
+	// Cause is the missing module's own failure, when it has one. This is how
+	// a chain gets reported at its root rather than at its symptom.
+	Cause string `json:"cause,omitempty"`
+}
+
+// Diagnose explains one file, whether or not it loads.
+//
+// It is deliberately willing to do work the fast path does not: this runs when
+// something has already gone wrong, or when someone asks, and an answer that
+// takes 40 ms and names the line beats one that is instant and says nothing.
+func (s *Service) Diagnose(fileName string) LoadDiagnosis {
+	gosmiMu.Lock()
+	defer gosmiMu.Unlock()
+	return s.diagnose(fileName, map[string]bool{})
+}
+
+// diagnose does the work. `visiting` breaks import cycles, which exist in real
+// vendor MIB sets and would otherwise recurse until the stack ends.
+func (s *Service) diagnose(fileName string, visiting map[string]bool) LoadDiagnosis {
+	d := LoadDiagnosis{FileName: fileName, Stage: StageRead}
+
+	path, err := s.resolve(fileName)
+	if err != nil {
+		d.Summary = err.Error()
+		return d
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		d.Summary = readFailureSummary(path, err)
+		d.Detail = err.Error()
+		return d
+	}
+	d.Bytes = len(raw)
+
+	// --- is this a MIB at all? ---
+	d.Stage = StageContent
+	if summary, hint, bad := describeNonMib(raw); bad {
+		d.Summary = summary
+		if hint != "" {
+			d.Hints = append(d.Hints, hint)
+		}
+		return d
+	}
+
+	content, _ := NormaliseSource(raw)
+	d.ModuleName = moduleNameOf(content)
+	if d.ModuleName != "" {
+		if base := moduleBase(fileName); base != "" && !strings.EqualFold(base, d.ModuleName) {
+			// gosmi resolves an IMPORTS clause by looking for a FILE named
+			// after the module. A mismatch loads fine on its own and is
+			// invisible until something imports it and cannot find it.
+			d.Hints = append(d.Hints, fmt.Sprintf(
+				"the file is named %q but declares module %q; anything importing %s will not find it unless the file is renamed",
+				fileName, d.ModuleName, d.ModuleName))
+		}
+	}
+
+	// --- syntax ---
+	d.Stage = StageParse
+	module, parseErr := parseOnce(content)
+	if parseErr != nil {
+		diag := syntaxDiagnostic(parseErr)
+		d.Diagnostics = append(d.Diagnostics, diag)
+		if diag.Line > 0 {
+			d.Summary = fmt.Sprintf("syntax error at line %d, column %d: %s", diag.Line, diag.Column, diag.Message)
+			d.Hints = append(d.Hints, excerpt(content, diag.Line, diag.Column))
+		} else {
+			d.Summary = "the file does not parse: " + diag.Message
+		}
+		d.Detail = parseErr.Error()
+		return d
+	}
+
+	// --- imports ---
+	d.Stage = StageImports
+	d.Missing = s.missingImports(module, visiting)
+	if len(d.Missing) > 0 {
+		d.Summary = summariseMissing(d.Missing)
+		d.Hints = append(d.Hints, "put the missing module in the MIB directory, named after the module itself")
+		// Not a return: a module can be missing AND the file have other
+		// problems, and listing only the first wastes the round trip.
+	}
+
+	// --- the load itself, with gosmi's own message recovered ---
+	d.Stage = StageBuild
+	printed := captureStdout(func() {
+		name, err := gosmi.LoadModule(fileName)
+		d.Loaded = err == nil && name != ""
+		if d.Loaded {
+			d.ModuleName = name
+		}
+	})
+	printed = shortenPaths(strings.TrimSpace(printed), s.path)
+
+	if !d.Loaded {
+		if printed != "" {
+			d.Detail = printed
+			if d.Summary == "" {
+				d.Summary = humaniseGosmi(printed)
+			}
+		}
+		if d.Summary == "" {
+			d.Summary = "gosmi refused the module without saying why"
+		}
+		return d
+	}
+
+	// --- loaded, which is not the same as correct ---
+	cat := symbolsLocked()
+	for _, diag := range Analyse(content, cat) {
+		if diag.Severity == SevError {
+			d.Diagnostics = append(d.Diagnostics, diag)
+		}
+	}
+
+	// A module loads even when its IMPORTS cannot be satisfied: gosmi resolves
+	// them lazily and returns nil rather than failing. The unresolved
+	// references that follow are the SYMPTOM, so the missing module stays the
+	// headline — replacing it with "3 unresolved references" would report the
+	// consequence and hide the one thing worth acting on.
+	if len(d.Missing) > 0 {
+		d.Stage = StageImports
+		if len(d.Diagnostics) > 0 {
+			d.Summary += fmt.Sprintf("; %s could not be resolved as a result",
+				plural(len(d.Diagnostics), "reference", "references"))
+		}
+		return d
+	}
+
+	if len(d.Diagnostics) > 0 {
+		d.Stage = StageSemantic
+		d.Summary = fmt.Sprintf(
+			"the module loaded but has %s; objects that use them resolve to nothing",
+			plural(len(d.Diagnostics), "unresolved reference", "unresolved references"))
+		return d
+	}
+
+	d.Stage = StageLoaded
+	if d.Summary == "" {
+		d.Summary = "loaded"
+	}
+	return d
+}
+
+// resolve locates a file inside the MIB directory.
+//
+// Through resolveMibPath like every other method here: monitoring.db,
+// service.json and the secret store all sit one directory above mibs/.
+func (s *Service) resolve(fileName string) (string, error) {
+	path, err := SafeMibPath(s.path, fileName)
+	if err != nil {
+		return "", fmt.Errorf("%s: %v", fileName, err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("%s is not in the MIB directory", fileName)
+		}
+		return "", fmt.Errorf("%s cannot be opened: %v", fileName, err)
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("%s is a directory, not a MIB file", fileName)
+	}
+	return path, nil
+}
+
+func readFailureSummary(path string, err error) string {
+	switch {
+	case os.IsPermission(err):
+		return fmt.Sprintf("%s cannot be read: permission denied", filepath.Base(path))
+	case os.IsNotExist(err):
+		return fmt.Sprintf("%s is not in the MIB directory", filepath.Base(path))
+	}
+	return fmt.Sprintf("%s cannot be read: %v", filepath.Base(path), err)
+}
+
+// describeNonMib recognises the files people actually drop in by mistake.
+//
+// A downloaded MIB is very often the HTML page around it, a PDF of the
+// specification, or a zip nobody extracted. All three reach gosmi as "could
+// not load module", which sends people looking for a syntax error in a file
+// that is not text.
+func describeNonMib(raw []byte) (summary, hint string, bad bool) {
+	if len(raw) == 0 {
+		return "the file is empty", "", true
+	}
+	switch {
+	case bytes.HasPrefix(raw, []byte("%PDF-")):
+		return "this is a PDF, not a MIB", "MIBs are plain text; extract the module from the document, or download the .mib file", true
+	case bytes.HasPrefix(raw, []byte("PK\x03\x04")):
+		return "this is a zip archive, not a MIB", "extract it and import the MIB files inside", true
+	case bytes.HasPrefix(raw, []byte{0x1f, 0x8b}):
+		return "this is a gzip archive, not a MIB", "extract it and import the MIB files inside", true
+	}
+
+	head := raw
+	if len(head) > 4096 {
+		head = head[:4096]
+	}
+	lower := strings.ToLower(string(head))
+	if strings.Contains(lower, "<!doctype html") || strings.Contains(lower, "<html") {
+		return "this is an HTML page, not a MIB",
+			"the download returned the web page around the file; use the raw or download link", true
+	}
+	if bytes.IndexByte(head, 0) >= 0 {
+		// UTF-16 is the one binary-looking encoding a MIB is plausibly in.
+		if bytes.HasPrefix(raw, []byte{0xff, 0xfe}) || bytes.HasPrefix(raw, []byte{0xfe, 0xff}) {
+			return "the file is UTF-16 encoded", "save it as UTF-8 or ASCII; MIB parsers do not accept UTF-16", true
+		}
+		return "the file is binary, not text", "", true
+	}
+	if !utf8.Valid(head) {
+		return "the file is not valid UTF-8", "save it as UTF-8; a stray byte in a DESCRIPTION is enough to stop the parser", true
+	}
+	if !strings.Contains(strings.ToUpper(string(head)), "DEFINITIONS") {
+		return "no DEFINITIONS clause was found near the start of the file",
+			"a MIB begins with `MODULE-NAME DEFINITIONS ::= BEGIN`; this file may be a fragment or a different format", true
+	}
+	return "", "", false
+}
+
+// missingImports reports the modules an IMPORTS clause names that are not
+// available, with the symbols taken from each.
+//
+// The symbols matter: "CISCO-SMI is missing" is a fact, and "CISCO-SMI is
+// missing, which is where ciscoMgmt comes from" is the same fact with the
+// reason this file needs it.
+func (s *Service) missingImports(module *parser.Module, visiting map[string]bool) []MissingModule {
+	if module == nil || module.Body.Imports == nil {
+		return nil
+	}
+
+	available := s.availableModules()
+	var out []MissingModule
+
+	for _, imp := range module.Body.Imports {
+		name := strings.TrimSpace(imp.Module.String())
+		if name == "" || gosmi.IsLoaded(name) {
+			continue
+		}
+
+		symbols := make([]string, 0, len(imp.Names))
+		for _, n := range imp.Names {
+			symbols = append(symbols, n.String())
+		}
+		sort.Strings(symbols)
+
+		file, present := available[strings.ToUpper(name)]
+		if !present {
+			out = append(out, MissingModule{
+				Module: name, Symbols: symbols, Reason: ImportAbsent,
+			})
+			continue
+		}
+
+		// The file is here and the module is not loaded, so it failed too.
+		// Follow it once, so the chain is reported at its root.
+		entry := MissingModule{Module: name, Symbols: symbols, Reason: ImportFailed}
+		if !visiting[strings.ToUpper(name)] {
+			visiting[strings.ToUpper(name)] = true
+			sub := s.diagnose(file, visiting)
+			if !sub.Loaded {
+				entry.Cause = sub.Summary
+			} else {
+				// It loads on its own; the earlier failure was ordering or a
+				// cycle, and saying "failed" would be wrong.
+				continue
+			}
+		}
+		out = append(out, entry)
+	}
+	return out
+}
+
+// availableModules maps an upper-cased module name to the file that holds it.
+//
+// By CONTENT, not by file name: a vendor ships FOO.my declaring FOO-MIB, and a
+// name-only check would report FOO-MIB as absent while it sits right there.
+func (s *Service) availableModules() map[string]string {
+	out := map[string]string{}
+	files, err := ListMibFiles(s.path)
+	if err != nil {
+		return out
+	}
+	for _, f := range files {
+		// The file name is the cheap answer and usually the right one.
+		if base := moduleBase(f); base != "" {
+			if _, seen := out[strings.ToUpper(base)]; !seen {
+				out[strings.ToUpper(base)] = f
+			}
+		}
+		path, err := SafeMibPath(s.path, f)
+		if err != nil {
+			continue
+		}
+		name := declaredModuleName(path)
+		if name == "" {
+			continue
+		}
+		if _, seen := out[strings.ToUpper(name)]; !seen {
+			out[strings.ToUpper(name)] = f
+		}
+	}
+	return out
+}
+
+// declaredModuleName reads only the head of a file: the module name is on the
+// first non-comment line, and reading 185 KB of every MIB to find it would
+// turn a diagnosis into a directory scan.
+func declaredModuleName(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	head := make([]byte, 8192)
+	n, _ := io.ReadFull(f, head)
+	if n <= 0 {
+		return ""
+	}
+	content, _ := NormaliseSource(head[:n])
+	return moduleNameOf(content)
+}
+
+// moduleNameOf finds the module name without a full parse.
+func moduleNameOf(content string) string {
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(stripComment(line))
+		if line == "" {
+			continue
+		}
+		upper := strings.ToUpper(line)
+		i := strings.Index(upper, "DEFINITIONS")
+		if i <= 0 {
+			continue
+		}
+		name := strings.TrimSpace(line[:i])
+		if fields := strings.Fields(name); len(fields) == 1 {
+			return fields[0]
+		}
+		return ""
+	}
+	return ""
+}
+
+func stripComment(line string) string {
+	if i := strings.Index(line, "--"); i >= 0 {
+		return line[:i]
+	}
+	return line
+}
+
+// moduleBase is the file name without its extension, which is the name gosmi
+// searches by.
+func moduleBase(fileName string) string {
+	base := filepath.Base(fileName)
+	if i := strings.Index(base, "."); i > 0 {
+		return base[:i]
+	}
+	return base
+}
+
+func summariseMissing(missing []MissingModule) string {
+	names := make([]string, 0, len(missing))
+	for _, m := range missing {
+		names = append(names, m.Module)
+	}
+	if len(missing) == 1 {
+		m := missing[0]
+		if m.Reason == ImportAbsent {
+			return fmt.Sprintf("it imports %s, which is not in the MIB directory", m.Module)
+		}
+		return fmt.Sprintf("it imports %s, which is present but does not load either", m.Module)
+	}
+	return fmt.Sprintf("it imports %d modules that are unavailable: %s",
+		len(missing), strings.Join(names, ", "))
+}
+
+// humaniseGosmi turns the message gosmi prints into one worth showing.
+func humaniseGosmi(printed string) string {
+	switch {
+	case strings.Contains(printed, "Parse module:"):
+		return "the grammar rejected the file: " + after(printed, "Parse module:")
+	case strings.Contains(printed, "Get module file"):
+		return "the file could not be opened by the MIB loader: " + after(printed, "Get module file")
+	case strings.Contains(printed, "Build module:"):
+		return "the module parsed but could not be built: " + after(printed, "Build module:")
+	}
+	return printed
+}
+
+func after(s, marker string) string {
+	i := strings.Index(s, marker)
+	if i < 0 {
+		return s
+	}
+	return strings.TrimSpace(s[i+len(marker):])
+}
+
+// excerpt shows the offending line with a caret under the column, which is the
+// difference between "line 412" and seeing what is wrong on line 412.
+func excerpt(content string, line, column int) string {
+	lines := strings.Split(content, "\n")
+	if line < 1 || line > len(lines) {
+		return ""
+	}
+	text := strings.ReplaceAll(lines[line-1], "\t", " ")
+	if len(text) > 160 {
+		text = text[:160] + "…"
+	}
+	if column < 1 || column > len(text)+1 {
+		return text
+	}
+	return text + "\n" + strings.Repeat(" ", column-1) + "^"
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return fmt.Sprintf("%d %s", n, one)
+	}
+	return fmt.Sprintf("%d %s", n, many)
+}
+
+// captureStdout runs fn with os.Stdout redirected, and returns what was written.
+//
+// The only way to recover the real load error: smi.LoadModule receives it,
+// fmt.Println's it, and returns an empty string. Everything else in this app
+// logs through the log package, which writes to stderr, so what lands here is
+// gosmi's — and callers hold gosmiMu, so two of these cannot overlap.
+//
+// The reader runs on its own goroutine because a pipe holds about 64 KB and a
+// module with many errors can print more than that; reading after fn returns
+// would deadlock at exactly the point where the output matters most.
+func captureStdout(fn func()) string {
+	r, w, err := os.Pipe()
+	if err != nil {
+		fn()
+		return ""
+	}
+
+	saved := os.Stdout
+	os.Stdout = w
+
+	done := make(chan string, 1)
+	go func() {
+		var buf bytes.Buffer
+		_, _ = io.Copy(&buf, r)
+		done <- buf.String()
+	}()
+
+	func() {
+		// fn is third-party code; a panic must still restore stdout, or every
+		// later print in the process disappears into a pipe nobody reads.
+		defer func() {
+			os.Stdout = saved
+			_ = w.Close()
+		}()
+		fn()
+	}()
+
+	out := <-done
+	_ = r.Close()
+	return out
+}
+
+// SafeMibPath maps a file name to a path inside dir, refusing anything that
+// would land outside it.
+//
+// One implementation, shared with the editor's bridge methods: these read and
+// write, and monitoring.db, service.json and the secret store all sit one
+// directory above mibs/. Two copies of a containment check are two chances to
+// fix only one of them.
+func SafeMibPath(dir, name string) (string, error) {
+	clean := filepath.Base(strings.TrimSpace(name))
+	if clean == "" || clean == "." || clean == string(filepath.Separator) {
+		return "", fmt.Errorf("invalid MIB file name %q", name)
+	}
+	full := filepath.Join(dir, clean)
+	// Belt and braces: Base should make this impossible, but the check is
+	// cheap and the consequence of being wrong is writing outside the folder.
+	if filepath.Dir(full) != filepath.Clean(dir) {
+		return "", fmt.Errorf("refusing a MIB path outside the MIB directory: %q", name)
+	}
+	return full, nil
+}
+
+// shortenPaths replaces the absolute path gosmi prints with the file name.
+//
+// Its message embeds the full path of the file it was reading — a temp
+// directory, or the user's config folder — which buries the "12:5" that is the
+// only part anyone needs. Removing the directory keeps the position and the
+// file name, and drops eighty characters of noise before it.
+func shortenPaths(msg, dir string) string {
+	if dir == "" || msg == "" {
+		return msg
+	}
+	for _, form := range []string{
+		filepath.Clean(dir) + string(filepath.Separator),
+		filepath.ToSlash(filepath.Clean(dir)) + "/",
+	} {
+		msg = strings.ReplaceAll(msg, form, "")
+	}
+	return msg
+}

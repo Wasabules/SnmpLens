@@ -34,17 +34,7 @@ const mibBackupDirName = "mib-backups"
 // resolveMibPath maps a file name to a path inside the MIB directory, and
 // refuses anything that would land outside it.
 func (a *App) resolveMibPath(name string) (string, error) {
-	clean := filepath.Base(strings.TrimSpace(name))
-	if clean == "" || clean == "." || clean == string(filepath.Separator) {
-		return "", fmt.Errorf("invalid MIB file name %q", name)
-	}
-	full := filepath.Join(a.persistentMibDir, clean)
-	// Belt and braces: Base should make this impossible, but the check is
-	// cheap and the consequence of being wrong is writing outside the folder.
-	if filepath.Dir(full) != filepath.Clean(a.persistentMibDir) {
-		return "", fmt.Errorf("refusing a MIB path outside the MIB directory: %q", name)
-	}
-	return full, nil
+	return mib.SafeMibPath(a.persistentMibDir, name)
 }
 
 // bundledContent returns the embedded copy of a standard MIB, if there is one.

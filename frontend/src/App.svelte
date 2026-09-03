@@ -17,6 +17,7 @@
   import DebugPanel from './DebugPanel.svelte';
   import Icon from './Icon.svelte';
   import UpdateBanner from './UpdateBanner.svelte';
+  import MibDiagnosis from './mib/MibDiagnosis.svelte';
   import { trapStore } from './stores/trapStore';
   import { updateStore } from './stores/updateStore';
   import { mibPathsStore } from './stores/mibPathsStore';
@@ -211,7 +212,11 @@
       const diag = get(mibDiagnostics);
       const loadFailed = diag
         .filter(d => !d.success && copiedNames.includes(d.fileName))
-        .map(d => ({ fileName: d.fileName, error: d.error || t('app.mibDrop.parseError') }));
+        .map(d => ({
+          fileName: d.fileName,
+          error: d.error || t('app.mibDrop.parseError'),
+          diagnosis: d.diagnosis || null,
+        }));
 
       // 4. Combine copy failures + load/parse failures
       const allErrors = [...copyFailed, ...loadFailed];
@@ -407,22 +412,12 @@
         </div>
         <div class="import-error-body">
           <p class="import-error-desc">{$_('app.mibDrop.errorDesc')}</p>
-          <table class="import-error-table">
-            <thead>
-              <tr>
-                <th>{$_('app.mibDrop.colFile')}</th>
-                <th>{$_('app.mibDrop.colError')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each importErrors as err}
-                <tr>
-                  <td class="mono">{err.fileName}</td>
-                  <td class="error-cell">{err.error}</td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
+          {#each importErrors as err}
+            <MibDiagnosis
+              diagnosis={err.diagnosis || { stage: "", summary: err.error }}
+              fileName={err.fileName}
+              summary={err.error} />
+          {/each}
         </div>
       </div>
     </div>
