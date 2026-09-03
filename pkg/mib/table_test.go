@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/sleepinggenius2/gosmi"
+	"github.com/sleepinggenius2/gosmi/parser"
+	"github.com/sleepinggenius2/gosmi/types"
 )
 
 // Against the real bundled MIBs, because the whole point of decoding an index
@@ -320,5 +322,49 @@ func TestEncodeIndexRefusesBadInput(t *testing.T) {
 		if got, err := s.EncodeIndex("1.3.6.1.2.1.6.13", values); err == nil {
 			t.Errorf("%v was encoded as %q", values, got)
 		}
+	}
+}
+
+// isWritable has no case for read-create, and must not need one.
+//
+// gosmi folds read-create into ReadWrite while parsing, and types.Access has
+// no ReadCreate member — so a test for one by name could never match. That is
+// upstream behaviour this package depends on rather than implements, so it is
+// pinned here: if a future gosmi stops folding, a creatable table would
+// silently show every column as read-only and offer no editing at all.
+func TestGosmiFoldsReadCreateIntoReadWrite(t *testing.T) {
+	if got := parser.AccessReadCreate.ToSmi(); got != types.AccessReadWrite {
+		t.Fatalf("read-create maps to %v, want %v — isWritable now needs a case for it",
+			got, types.AccessReadWrite)
+	}
+	if !isWritable(parser.AccessReadCreate.ToSmi()) {
+		t.Error("a read-create column is not reported as writable")
+	}
+	for _, a := range []types.Access{
+		types.AccessReadOnly, types.AccessNotAccessible,
+		types.AccessNotify, types.AccessUnknown,
+	} {
+		if isWritable(a) {
+			t.Errorf("%v was reported as writable", a)
+		}
+	}
+}
+
+// A table whose columns are read-create must come back editable, end to end.
+func TestReadCreateTableIsReportedWritable(t *testing.T) {
+	s := loadedService(t)
+	// ipNetToMediaTable's columns are read-create in IP-MIB.
+	info, err := s.Table("1.3.6.1.2.1.4.22")
+	if err != nil {
+		t.Skipf("ipNetToMediaTable not in the corpus: %v", err)
+	}
+	var writable int
+	for _, c := range info.Columns {
+		if c.Writable {
+			writable++
+		}
+	}
+	if writable == 0 {
+		t.Errorf("no column of %s reported as writable: %+v", info.Name, info.Columns)
 	}
 }

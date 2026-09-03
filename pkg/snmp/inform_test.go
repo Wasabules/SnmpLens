@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -189,6 +190,36 @@ func TestInformCarriesItsVarbinds(t *testing.T) {
 		}
 		if !found {
 			t.Errorf("%s did not arrive; got %v", want, names)
+		}
+	}
+}
+
+// The two refusals must agree with each other.
+//
+// The v1 guard used to advise "use v2c or v3", and sendNotification then
+// rejects v3 with "supports v1 and v2c only" — a caller who followed the first
+// error landed on a contradicting second one. Any version the sender refuses
+// must not be named as a way forward.
+func TestRefusalsDoNotContradictEachOther(t *testing.T) {
+	c := NewClient(context.Background())
+
+	advice := c.SendInform("127.0.0.1", 162, "public", "v1", "1.3.6.1.6.3.1.1.5.3", nil).Error
+	if advice == "" {
+		t.Fatal("v1 was accepted")
+	}
+
+	// Whole tokens, not substrings: "v2c" contains "v2", and a naive
+	// Contains check flags the correct message.
+	offered := regexp.MustCompile(`\bv[0-9]+[a-z]*`).FindAllString(advice, -1)
+	if len(offered) == 0 {
+		t.Fatalf("the v1 error names no alternative at all: %q", advice)
+	}
+
+	for _, version := range offered {
+		res := c.SendInform("127.0.0.1", 162, "public", version, "1.3.6.1.6.3.1.1.5.3", nil)
+		if strings.Contains(res.Error, "supports") || strings.Contains(res.Error, "no INFORM") {
+			t.Errorf("the v1 error offers %q, which the sender then refuses with %q",
+				version, res.Error)
 		}
 	}
 }

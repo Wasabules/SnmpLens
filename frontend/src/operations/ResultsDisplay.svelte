@@ -391,6 +391,21 @@
     newRow = null;
   }
 
+  // Escape closes the open row modal.
+  //
+  // On the window, not on the backdrop: a keydown starts at whatever has focus
+  // — an input inside the modal, normally — and reaching the backdrop depends
+  // on nothing in between stopping it. The inner div stops CLICKS on purpose,
+  // and stopping keys along with them is what made Escape do nothing at all.
+  function closeOnEscape(e) {
+    if (e.key !== 'Escape') return;
+    if (destroyRow) {
+      destroyRow = null;
+    } else if (newRow) {
+      newRow = null;
+    }
+  }
+
   function confirmDestroy() {
     if (!destroyRow || !tableInfo?.rowStatusOid) return;
     dispatch('tableRowWrite', {
@@ -475,8 +490,15 @@
     try {
       info = await MibTable(oid);
     } catch (e) {
-      tableInfo = null;
-      decodedIndexes = [];
+      // Guarded like the success path below. A stale call that rejects after a
+      // fresher one has already published its result would otherwise wipe it,
+      // and since indexesFor still holds the newer token the reactive
+      // statement early-returns forever after: the table falls back to raw
+      // instances and stays there until you switch tables and come back.
+      if (indexesFor === token) {
+        tableInfo = null;
+        decodedIndexes = [];
+      }
       return;
     }
     if (indexesFor !== token) return;
@@ -529,6 +551,8 @@
   }
 </script>
 
+<svelte:window on:keydown={closeOnEscape} />
+
 {#if bulkResults.length > 0}
   <div class="results-container">
     {#if cellMenu.visible}
@@ -542,8 +566,8 @@
     {/if}
 
     {#if newRow && tableInfo}
-      <div class="modal-backdrop" on:click={() => (newRow = null)} on:keydown={(e) => e.key === 'Escape' && (newRow = null)} role="presentation">
-        <div class="row-modal" on:click|stopPropagation on:keydown|stopPropagation role="presentation">
+      <div class="modal-backdrop" on:click={() => (newRow = null)} role="presentation">
+        <div class="row-modal" on:click|stopPropagation role="presentation">
           <h4>{$_('results.newRowIn', { values: { table: tableInfo.name } })}</h4>
 
           <p class="hint">{$_('results.newRowIndexHint')}</p>
@@ -596,8 +620,8 @@
     {/if}
 
     {#if destroyRow && tableInfo}
-      <div class="modal-backdrop" on:click={() => (destroyRow = null)} on:keydown={(e) => e.key === 'Escape' && (destroyRow = null)} role="presentation">
-        <div class="row-modal" on:click|stopPropagation on:keydown|stopPropagation role="presentation">
+      <div class="modal-backdrop" on:click={() => (destroyRow = null)} role="presentation">
+        <div class="row-modal" on:click|stopPropagation role="presentation">
           <h4>{$_('results.deleteRow')}</h4>
           <p>{$_('results.deleteRowConfirm', { values: { table: tableInfo.name, index: destroyRow.index } })}</p>
           <p class="hint">{$_('results.deleteRowHint')}</p>

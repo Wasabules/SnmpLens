@@ -40,6 +40,12 @@
   }
 </script>
 
+<!-- Escape closes it, like every other dialog in the app. On the window
+     because a keydown starts at whatever has focus — a field deep inside the
+     settings — and reaching the backdrop would depend on nothing in between
+     stopping it first. -->
+<svelte:window on:keydown={(e) => e.key === 'Escape' && handleCancel()} />
+
 <div class="modal-backdrop" on:mousedown={handleCancel}>
   <div class="modal" on:mousedown|stopPropagation>
     <div class="modal-header">

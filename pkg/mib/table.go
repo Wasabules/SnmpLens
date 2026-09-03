@@ -363,15 +363,16 @@ func parseSubIDs(raw string) ([]uint32, error) {
 	return out, nil
 }
 
-// isWritable reports whether a column can be written, read-create included —
-// read-create is the access a creatable row's columns carry, so excluding it
-// would make every creatable table look read-only.
+// isWritable reports whether a column can be written.
+//
+// read-create needs no case of its own: gosmi folds it into ReadWrite while
+// parsing (parser.Access.ToSmi maps AccessReadWrite and AccessReadCreate to
+// the same value), and types.Access has no ReadCreate member at all. An
+// earlier version of this function tested for one by name, which could never
+// match — TestGosmiFoldsReadCreateIntoReadWrite pins the behaviour we rely on
+// instead.
 func isWritable(a types.Access) bool {
-	switch a {
-	case types.AccessReadWrite, types.AccessReadOnly:
-		return a == types.AccessReadWrite
-	}
-	return strings.EqualFold(a.String(), "ReadCreate")
+	return a == types.AccessReadWrite
 }
 
 func lookupNode(oid string) (gosmi.SmiNode, error) {

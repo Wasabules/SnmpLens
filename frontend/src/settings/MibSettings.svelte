@@ -80,17 +80,25 @@
   let diagnosis = null;
   let diagnosisFor = '';
   let diagnosing = '';
+  // Which request the state on screen belongs to. Only one file's Diagnose
+  // button is disabled at a time, so two can overlap — and without this the
+  // slower one lands last and replaces the answer the user asked for second.
+  let diagnosisToken = 0;
 
   async function runDiagnosis(fileName) {
+    const token = ++diagnosisToken;
     diagnosing = fileName;
     try {
-      diagnosis = await MibDiagnose(fileName);
+      const result = await MibDiagnose(fileName);
+      if (token !== diagnosisToken) return;
+      diagnosis = result;
       diagnosisFor = fileName;
     } catch (e) {
+      if (token !== diagnosisToken) return;
       diagnosis = { stage: '', summary: String(e?.message || e), fileName };
       diagnosisFor = fileName;
     } finally {
-      diagnosing = '';
+      if (token === diagnosisToken) diagnosing = '';
     }
   }
 

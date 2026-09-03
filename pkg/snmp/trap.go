@@ -212,10 +212,15 @@ func (c *Client) SendTrap(target string, port int, community, version, trapOid s
 // v1 is refused rather than silently downgraded to a trap: RFC 1157 has no
 // InformRequest PDU at all, so there is nothing to send, and a caller who
 // asked for a confirmed notification must not be told one was delivered.
+//
+// The error names v2c and nothing else. It used to offer v3 as well, which
+// sendNotification then rejects with "supports v1 and v2c only" — sending a
+// caller who followed the advice straight into a contradicting error. The
+// sender has never carried V3Params; when it does, this message can grow.
 func (c *Client) SendInform(target string, port int, community, version, trapOid string, variables []TrapVariable) InformResult {
 	start := time.Now()
 	if version == "v1" {
-		return InformResult{Error: "SNMPv1 has no INFORM: use v2c or v3, or send a trap"}
+		return InformResult{Error: "SNMPv1 has no INFORM: use v2c, or send a trap"}
 	}
 	acked, err := c.sendNotification(target, port, community, version, trapOid, variables, true)
 	res := InformResult{Acknowledged: acked, ResponseTimeMs: time.Since(start).Milliseconds()}
