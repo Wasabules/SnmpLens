@@ -209,6 +209,15 @@
   }
 </script>
 
+<!-- Escape on the window, not on the overlay: a keydown starts at whatever
+     has focus — a field inside the dialog — and the box below stops clicks,
+     which used to stop keys with them. The overlay handler never ran. -->
+<svelte:window on:keydown={(e) => {
+  if (e.key !== 'Escape') return;
+    if (editingSink) { editingSink = null; return; }
+    if (editingRoute) editingRoute = null;
+}} />
+
 <div class="notify-settings">
   <!-- ================= SINKS ================= -->
   <section>
@@ -288,8 +297,8 @@
 
 <!-- ================= SINK EDITOR ================= -->
 {#if editingSink}
-  <div class="editor-overlay" on:click={() => (editingSink = null)} on:keydown={(e) => e.key === 'Escape' && (editingSink = null)} role="button" tabindex="-1">
-    <div class="editor sink-editor" on:click|stopPropagation on:keydown|stopPropagation role="dialog">
+  <div class="editor-overlay" on:click={() => (editingSink = null)} role="button" tabindex="-1">
+    <div class="editor sink-editor" on:click|stopPropagation role="dialog">
       <h3>
         {$_('notify.sinkEditor', { values: { kind: editingSink.kind } })}
         {#if editingSink.name}<span class="sink-name">— {editingSink.name}</span>{/if}
@@ -526,8 +535,8 @@
 
 <!-- ================= ROUTE EDITOR ================= -->
 {#if editingRoute}
-  <div class="editor-overlay" on:click={() => (editingRoute = null)} on:keydown={(e) => e.key === 'Escape' && (editingRoute = null)} role="button" tabindex="-1">
-    <div class="editor" on:click|stopPropagation on:keydown|stopPropagation role="dialog">
+  <div class="editor-overlay" on:click={() => (editingRoute = null)} role="button" tabindex="-1">
+    <div class="editor" on:click|stopPropagation role="dialog">
       <h3>{$_('notify.routeEditor')}</h3>
 
       <label class="fld"><span>{$_('notify.name')}</span>

@@ -100,6 +100,10 @@
   }
 </script>
 
+<!-- On the window: the overlay closes on mousedown, and a keydown never
+     reaches it from a focused control inside the dialog. -->
+<svelte:window on:keydown={(e) => e.key === 'Escape' && dispatch('close')} />
+
 <div class="modal-overlay" on:mousedown={() => dispatch('close')}>
   <div class="modal" on:mousedown|stopPropagation>
     <div class="modal-header">

@@ -110,6 +110,16 @@
   }
 </script>
 
+<!-- Escape on the window, not on the overlay: a keydown starts at whatever
+     has focus — a field inside the dialog — and the box below stops clicks,
+     which used to stop keys with them. The overlay handler never ran. -->
+<svelte:window on:keydown={(e) => {
+  if (e.key !== 'Escape') return;
+    // This panel stays mounted while its tab is open, so guard on the dialog
+    // actually being up rather than assigning on every Escape.
+    if (openPayload) openPayload = null;
+}} />
+
 <div class="panel">
   <div class="header">
     <h3>
@@ -216,8 +226,8 @@
 </div>
 
 {#if openPayload}
-  <div class="modal-overlay" on:click={() => (openPayload = null)} on:keydown={(e) => e.key === 'Escape' && (openPayload = null)} role="button" tabindex="-1">
-    <div class="modal" on:click|stopPropagation on:keydown|stopPropagation role="dialog">
+  <div class="modal-overlay" on:click={() => (openPayload = null)} role="button" tabindex="-1">
+    <div class="modal" on:click|stopPropagation role="dialog">
       <h3>{$_('events.payloadTitle')}</h3>
       <textarea readonly>{openPayload.body}</textarea>
       <div class="modal-actions">

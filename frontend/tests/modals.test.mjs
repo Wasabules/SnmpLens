@@ -24,6 +24,27 @@ function svelteFiles(dir) {
   return out;
 }
 
+/** Whether the file has a <svelte:window> carrying an on:keydown handler. */
+function hasWindowKeydown(source) {
+  let i = source.indexOf('<svelte:window');
+  while (i >= 0) {
+    // Scan to the tag's own '>', ignoring the ones inside {...} attribute
+    // expressions — an arrow function is full of them.
+    let j = i;
+    let depth = 0;
+    while (j < source.length) {
+      const c = source[j];
+      if (c === '{') depth++;
+      else if (c === '}') depth--;
+      else if (c === '>' && depth === 0) break;
+      j++;
+    }
+    if (/on:keydown/.test(source.slice(i, j))) return true;
+    i = source.indexOf('<svelte:window', j);
+  }
+  return false;
+}
+
 let failures = 0;
 const check = (name, ok, extra = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${extra ? ' — ' + extra : ''}`);
@@ -36,30 +57,32 @@ check('there are components to check', files.length > 0, `${files.length} files`
 const swallowers = [];
 const unclosable = [];
 
+// Any of the names this codebase gives a full-screen dialog wrapper.
+const OVERLAY = /class="(modal-backdrop|modal-overlay|editor-overlay)"/;
+
 for (const file of files) {
   const source = readFileSync(file, 'utf8');
   const name = basename(file);
 
-  // Only inside a modal. Stopping keydown is perfectly correct on a menu or a
-  // field that handles its own keys — the bug is stopping it BELOW something
-  // that still needs to see Escape.
-  if (!/class="modal-backdrop"/.test(source)) continue;
+  const stopsKeys = /on:keydown\|stopPropagation/.test(source);
+  const windowEscape = hasWindowKeydown(source);
+  // An Escape handler written as an attribute on an element, which therefore
+  // depends on the event reaching that element.
+  const bubblingEscape = /on:keydown=\{[^}]*Escape/.test(source);
 
-  const windowEscape = /svelte:window[^>]*on:keydown/.test(source);
-  const anyEscape = windowEscape || /key\s*===\s*['"]Escape['"]/.test(source);
+  // The defect: something below stops the key an Escape handler is waiting
+  // for. Detected by SHAPE, not by class name — the first version of this
+  // test gated on `modal-backdrop` and so skipped every component that had
+  // the bug, five of them, and passed.
+  if (stopsKeys && bubblingEscape && !windowEscape) swallowers.push(name);
 
-  if (!anyEscape) unclosable.push(name);
-
-  // A window-level handler is out of reach of stopPropagation, so the two are
-  // only in conflict when Escape is expected to bubble.
-  if (!windowEscape && /on:keydown\|stopPropagation/.test(source)) {
-    swallowers.push(name);
-  }
+  // A dialog with no keyboard way out traps anyone not using a mouse.
+  if (OVERLAY.test(source) && !windowEscape && !bubblingEscape) unclosable.push(name);
 }
 
-check('no modal stops the keydown its own Escape handler needs',
+check('no dialog stops the keydown its own Escape handler waits for',
   swallowers.length === 0, swallowers.join(', '));
-check('every modal can be closed with Escape', unclosable.length === 0,
+check('every dialog can be closed with Escape', unclosable.length === 0,
   unclosable.join(', '));
 
 // Prove the detector works, or a passing run means nothing.
@@ -69,7 +92,22 @@ check('the detector accepts stopping clicks only',
   !/on:keydown\|stopPropagation/.test('<div on:click|stopPropagation>'));
 check('the detector accepts a window-level Escape',
   /svelte:window[^>]*on:keydown/.test('<svelte:window on:keydown={closeOnEscape} />'));
-check('the detector ignores a component that is not a modal',
-  !/class="modal-backdrop"/.test('<div class="menu" on:keydown|stopPropagation>'));
+// The shape that was shipped broken five times over.
+const brokenShape = `
+  <div class="modal-overlay" on:keydown={(e) => e.key === 'Escape' && close()}>
+    <div class="modal" on:click|stopPropagation on:keydown|stopPropagation></div>
+  </div>`;
+check('the detector rejects a bubbling Escape with a key-stopping child',
+  /on:keydown\|stopPropagation/.test(brokenShape) &&
+  /on:keydown=\{[^}]*Escape/.test(brokenShape) &&
+  !hasWindowKeydown(brokenShape));
+
+// Stopping keys is fine when Escape is handled where propagation cannot
+// reach it, which is what ContextMenu does.
+const okShape = `
+  <svelte:window on:keydown={handleKeydown} />
+  <div class="context-menu" on:click|stopPropagation on:keydown|stopPropagation></div>`;
+check('the detector accepts stopping keys under a window-level Escape',
+  hasWindowKeydown(okShape));
 
 process.exit(failures ? 1 : 0);

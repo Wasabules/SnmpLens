@@ -11,14 +11,21 @@
   const close = () => dispatch('close');
 </script>
 
+<!-- Escape on the window, not on the overlay: a keydown starts at whatever
+     has focus — a field inside the dialog — and the box below stops clicks,
+     which used to stop keys with them. The overlay handler never ran. -->
+<svelte:window on:keydown={(e) => {
+  if (e.key !== 'Escape') return;
+    close();
+}} />
+
 <div
   class="modal-overlay"
   on:click={close}
-  on:keydown={(e) => e.key === 'Escape' && close()}
   role="button"
   tabindex="-1"
 >
-  <div class="modal" on:click|stopPropagation on:keydown|stopPropagation role="dialog">
+  <div class="modal" on:click|stopPropagation role="dialog">
     <h3>{$_('history.exportTitle')}</h3>
     <div class="export-options">
       <div class="export-opt-group">

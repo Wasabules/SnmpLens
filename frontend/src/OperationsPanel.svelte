@@ -4,7 +4,7 @@
   import { notificationStore } from './stores/notifications';
   import { settingsStore } from './stores/settingsStore';
   import { historyStore } from './stores/historyStore';
-  import { getTargetsAsArray, groupTargetsByConfig } from './utils/targets';
+  import { getTargetsAsArray, groupTargetsByConfig, getEffectiveSettings } from './utils/targets';
   import { isNodeWritable } from './utils/mibTree';
   import { mibStore } from './stores/mibStore';
   import ResultsDisplay from './operations/ResultsDisplay.svelte';
@@ -371,13 +371,25 @@
   // The walk is re-run afterwards because a created row is invisible until it
   // is read back, and "did it work" is the only question that matters here.
   async function handleTableRowWrite(e) {
-    const { vars, label, kind } = e.detail;
+    const { vars, label, kind, target } = e.detail;
     const t = get(_);
     if (!vars?.length) return;
 
+    // ONE device: the one whose table the row was clicked in.
+    //
+    // Not executeGrouped. A conceptual row belongs to the agent that holds it,
+    // and index 3 of ipNetToMediaTable on another switch is a different ARP
+    // entry — writing destroy(6) to every configured target would remove rows
+    // on devices nobody looked at, and report success for all of them.
+    if (!target) {
+      notificationStore.add(t('operations.enterTarget'), 'error');
+      return;
+    }
+
     isLoading = true;
     try {
-      const results = await executeGrouped('', SnmpSetMultiple, buildSetMultiRequest, vars);
+      const effective = getEffectiveSettings($settingsStore, target);
+      const results = await SnmpSetMultiple(buildSetMultiRequest(effective, [target], '', vars));
       const failed = results.filter(r => r?.error);
       if (failed.length) {
         notificationStore.add(

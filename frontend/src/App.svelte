@@ -362,15 +362,17 @@
       settingsStore.save({ ...$settingsStore, anonymousMode: !$settingsStore.anonymousMode });
     }
 
-    // Escape to close settings modal
-    if (event.key === 'Escape' && showSettings) {
-      showSettings = false;
-    }
-
-    // F5 to reload MIBs (only when not in an input)
-    if (event.key === 'F5' && !isInput) {
-      event.preventDefault();
-      mibStore.load();
+    // Escape closes whichever dialog this component owns. SettingsModal
+    // handles its own, so it is deliberately not listed here.
+    if (event.key === 'Escape') {
+      if (showImportErrors) {
+        showImportErrors = false;
+        return;
+      }
+      if (showTargets) {
+        showTargets = false;
+        return;
+      }
     }
   }
 </script>

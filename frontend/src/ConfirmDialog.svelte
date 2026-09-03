@@ -18,14 +18,21 @@
   const confirm = () => dispatch('confirm');
 </script>
 
+<!-- Escape on the window, not on the overlay: a keydown starts at whatever
+     has focus — a field inside the dialog — and the box below stops clicks,
+     which used to stop keys with them. The overlay handler never ran. -->
+<svelte:window on:keydown={(e) => {
+  if (e.key !== 'Escape') return;
+    cancel();
+}} />
+
 <div
   class="modal-overlay"
   on:click={cancel}
-  on:keydown={(e) => e.key === 'Escape' && cancel()}
   role="button"
   tabindex="-1"
 >
-  <div class="confirm-dialog" on:click|stopPropagation on:keydown|stopPropagation role="dialog" tabindex="-1">
+  <div class="confirm-dialog" on:click|stopPropagation role="dialog" tabindex="-1">
     <h3 class="confirm-title">
       {#if titleIcon}<Icon name={titleIcon} class="icon-warning" size={18} />{/if}
       {title}

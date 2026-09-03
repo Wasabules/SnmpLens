@@ -141,6 +141,14 @@
       test = (s) => String(s).toLowerCase().includes(lower);
     }
     return rows.filter(row => {
+      // What is on screen. Once the index is decoded, the raw sub-OID is
+      // displayed nowhere — typing the interface name a column header invites
+      // you to type matched nothing at all.
+      if (row.indexParts) {
+        for (const part of row.indexParts) {
+          if (test(String(part.display)) || test(part.name || '')) return true;
+        }
+      }
       if (test(String(row.index))) return true;
       for (const col of columns) {
         const cell = row.cells[col.oid];
@@ -303,11 +311,11 @@
   }
 
   // Right-click a table cell → context menu with copy actions.
-  function openCellMenu(event, row, col, columns) {
+  function openCellMenu(event, row, col, columns, target) {
     event.preventDefault();
     event.stopPropagation();
     const cell = row.cells[col.oid];
-    cellMenuCtx = { row, col, columns, cell };
+    cellMenuCtx = { row, col, columns, cell, target };
     const t = get(_);
     cellMenu = {
       visible: true,
@@ -338,7 +346,7 @@
     const ctx = cellMenuCtx;
     cellMenu = { ...cellMenu, visible: false };
     if (!ctx) return;
-    const { row, col, columns, cell } = ctx;
+    const { row, col, columns, cell, target } = ctx;
     const t = get(_);
     if (action === 'value') copyToClipboard(cellText(cell), t('common.value'));
     else if (action === 'oid') copyToClipboard(cell?.fullOid || '', t('common.oid'));
@@ -349,7 +357,7 @@
       const cells = [row.index, ...columns.map(c => cellText(row.cells[c.oid]))];
       copyToClipboard(cells.join('\t'), t('results.tableView'));
     }
-    else if (action === 'destroyRow') destroyRow = row;
+    else if (action === 'destroyRow') destroyRow = { ...row, target };
   }
 
   // ============ TABLE EDITING ============
@@ -360,9 +368,10 @@
   let newRow = null;
   let destroyRow = null;
 
-  function startNewRow() {
+  function startNewRow(target) {
     if (!tableInfo?.rowStatusOid) return;
     newRow = {
+      target,
       index: tableInfo.index.map(() => ''),
       values: {},
       // createAndGo asks the agent to activate the row at once; createAndWait
@@ -384,6 +393,10 @@
       return;
     }
     dispatch('tableRowWrite', {
+      // The device whose table this row belongs to. Without it the write goes
+      // to every configured target — including devices the user never looked
+      // at, whose same-numbered row is a different thing entirely.
+      target: newRow.target,
       vars: buildRowVarbinds(tableInfo, instance, newRow.values, newRow.status),
       label: tableInfo.name + ' [' + newRow.index.join(', ') + ']',
       kind: 'create',
@@ -409,6 +422,7 @@
   function confirmDestroy() {
     if (!destroyRow || !tableInfo?.rowStatusOid) return;
     dispatch('tableRowWrite', {
+      target: destroyRow.target,
       vars: buildDestroyVarbinds(tableInfo, destroyRow.index),
       label: tableInfo.name + ' [' + destroyRow.index + ']',
       kind: 'destroy',
@@ -482,7 +496,13 @@
       indexesFor = null;
       return;
     }
-    const token = oid + '|' + (results[0]?.result?.value?.length ?? 0) + '|' + results.length;
+    // Every target's varbind count, not results[0]'s: the first target may be
+    // the unreachable one, in which case the old token was permanently
+    // "oid|0|n" and every later walk short-circuited as already decoded —
+    // including the re-walk after creating a row, so the new row never showed
+    // a decoded index.
+    const token = oid + '|' + results.length + '|' +
+      results.map(r => (Array.isArray(r?.result?.value) ? r.result.value.length : -1)).join(',');
     if (indexesFor === token) return;
     indexesFor = token;
 
@@ -504,10 +524,16 @@
     if (indexesFor !== token) return;
 
     const cols = getTableColumnDefs(node);
-    const first = results.find(r => !r.error && Array.isArray(r.result?.value));
-    const instances = [...new Set(
-      pivot(first?.result?.value || [], cols).rows.map(r => r.index)
-    )];
+    // The union across targets. Decoding only the first one's instances left
+    // every OTHER device's rows undecoded — rendered as the raw sub-OID in an
+    // italic cell, which is precisely the string this feature removes — and
+    // two switches rarely have the same interface numbering.
+    const seen = new Set();
+    for (const r of results) {
+      if (r?.error || !Array.isArray(r?.result?.value)) continue;
+      for (const row of pivot(r.result.value, cols).rows) seen.add(row.index);
+    }
+    const instances = [...seen];
 
     let decoded = [];
     try {
@@ -566,8 +592,8 @@
     {/if}
 
     {#if newRow && tableInfo}
-      <div class="modal-backdrop" on:click={() => (newRow = null)} role="presentation">
-        <div class="row-modal" on:click|stopPropagation role="presentation">
+      <div class="modal-backdrop" on:mousedown={() => (newRow = null)} role="presentation">
+        <div class="row-modal" on:mousedown|stopPropagation role="presentation">
           <h4>{$_('results.newRowIn', { values: { table: tableInfo.name } })}</h4>
 
           <p class="hint">{$_('results.newRowIndexHint')}</p>
@@ -620,8 +646,8 @@
     {/if}
 
     {#if destroyRow && tableInfo}
-      <div class="modal-backdrop" on:click={() => (destroyRow = null)} role="presentation">
-        <div class="row-modal" on:click|stopPropagation role="presentation">
+      <div class="modal-backdrop" on:mousedown={() => (destroyRow = null)} role="presentation">
+        <div class="row-modal" on:mousedown|stopPropagation role="presentation">
           <h4>{$_('results.deleteRow')}</h4>
           <p>{$_('results.deleteRowConfirm', { values: { table: tableInfo.name, index: destroyRow.index } })}</p>
           <p class="hint">{$_('results.deleteRowHint')}</p>
@@ -725,7 +751,7 @@
             </div>
             {#if tableInfo?.rowStatusOid}
               <div class="table-edit-bar">
-                <button class="btn-small" on:click={startNewRow}>
+                <button class="btn-small" on:click={() => startNewRow(res.target)}>
                   <Icon name="plus" size={13} /> {$_('results.newRow')}
                 </button>
                 <span class="hint-inline">{$_('results.rowStatusHint', { values: { table: tableInfo.name } })}</span>
@@ -789,7 +815,7 @@
                           title={row.cells[col.oid]?.fullOid || ''}
                           on:click={() => row.cells[col.oid] && dispatch('walkResultClick', {oid: row.cells[col.oid].fullOid, value: row.cells[col.oid].value, type: row.cells[col.oid].type})}
                           on:keydown={(e) => e.key === 'Enter' && row.cells[col.oid] && dispatch('walkResultClick', {oid: row.cells[col.oid].fullOid, value: row.cells[col.oid].value, type: row.cells[col.oid].type})}
-                          on:contextmenu={(e) => openCellMenu(e, row, col, tableData.columns)}
+                          on:contextmenu={(e) => openCellMenu(e, row, col, tableData.columns, res.target)}
                         >
                           {row.cells[col.oid]?.value !== undefined ? formatValueWithEnum(row.cells[col.oid].value, row.cells[col.oid].fullOid || '', row.cells[col.oid].type) : '-'}
                         </td>
@@ -1299,6 +1325,19 @@
   .hint-inline {
     font-size: 11px;
     color: var(--text-muted, #888);
+  }
+
+  .modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: var(--backdrop-color, rgba(0, 0, 0, 0.5));
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
   }
 
   .row-modal {
