@@ -1,6 +1,6 @@
 <script>
-  import { SnmpGet, SnmpSet, SnmpWalk, SnmpGetNext, SnmpGetBulk, ResolveOids } from '../wailsjs/go/main/App';
-  import { buildSnmpRequest, buildSetRequest, buildGetBulkRequest } from './utils/snmpParams';
+  import { SnmpGet, SnmpSet, SnmpSetMultiple, SnmpWalk, SnmpGetNext, SnmpGetBulk, ResolveOids } from '../wailsjs/go/main/App';
+  import { buildSnmpRequest, buildSetRequest, buildSetMultiRequest, buildGetBulkRequest } from './utils/snmpParams';
   import { notificationStore } from './stores/notifications';
   import { settingsStore } from './stores/settingsStore';
   import { historyStore } from './stores/historyStore';
@@ -361,6 +361,39 @@
     );
     const resultArrays = await Promise.all(promises);
     return resultArrays.flat();
+  }
+
+  // A conceptual row being created or destroyed, from the table view.
+  //
+  // It runs through executeGrouped like every other operation, so a row is
+  // written with the same per-target credentials the rest of the panel uses —
+  // a second connection path would be a second place for those to be wrong.
+  // The walk is re-run afterwards because a created row is invisible until it
+  // is read back, and "did it work" is the only question that matters here.
+  async function handleTableRowWrite(e) {
+    const { vars, label, kind } = e.detail;
+    const t = get(_);
+    if (!vars?.length) return;
+
+    isLoading = true;
+    try {
+      const results = await executeGrouped('', SnmpSetMultiple, buildSetMultiRequest, vars);
+      const failed = results.filter(r => r?.error);
+      if (failed.length) {
+        notificationStore.add(
+          t('results.rowWriteFailed', { values: { label, error: failed[0].error } }), 'error');
+      } else {
+        notificationStore.add(
+          t(kind === 'destroy' ? 'results.rowDestroyed' : 'results.rowCreated',
+            { values: { label } }), 'success');
+        if (activeOperation === 'WALK') await handleSnmpWalk();
+        else if (activeOperation === 'GETBULK') await handleSnmpGetBulk();
+      }
+    } catch (err) {
+      notificationStore.add(String(err?.message || err), 'error');
+    } finally {
+      isLoading = false;
+    }
   }
 
   // ============ SNMP OPERATION HANDLERS ============
@@ -925,6 +958,7 @@
     {oidInfoCache}
     mibTree={$mibStore.tree}
     on:walkResultClick={handleWalkResultClickEvent}
+    on:tableRowWrite={handleTableRowWrite}
   />
 
   <RecentHistory on:openHistory on:viewInHistory />

@@ -2,8 +2,6 @@ package snmp
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/gosnmp/gosnmp"
@@ -153,46 +151,12 @@ func (c *Client) setSingle(target, oid, community, value, valueType, version str
 	}
 	defer g.Conn.Close()
 
-	var pdu gosnmp.SnmpPDU
-	pdu.Name = oid
-
-	lowerType := strings.ToLower(valueType)
-	switch {
-	case strings.Contains(lowerType, "integer") || strings.Contains(lowerType, "gauge") ||
-		strings.Contains(lowerType, "unsigned") || strings.Contains(lowerType, "counter32") ||
-		strings.Contains(lowerType, "timeticks") || lowerType == "truthvalue" ||
-		lowerType == "testandincr" || lowerType == "rowstatus" || lowerType == "storagetype":
-		val, err := strconv.Atoi(value)
-		if err != nil {
-			return nil, fmt.Errorf("value '%s' is not a valid integer", value)
-		}
-		pdu.Type = gosnmp.Integer
-		pdu.Value = val
-	case strings.Contains(lowerType, "counter64"):
-		val, err := strconv.ParseUint(value, 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("value '%s' is not a valid counter64", value)
-		}
-		pdu.Type = gosnmp.Counter64
-		pdu.Value = val
-	case strings.Contains(lowerType, "ipaddress"):
-		pdu.Type = gosnmp.IPAddress
-		pdu.Value = value
-	case strings.Contains(lowerType, "octet") || strings.Contains(lowerType, "string") ||
-		strings.Contains(lowerType, "displaystring") || strings.Contains(lowerType, "hexstring"):
-		pdu.Type = gosnmp.OctetString
-		pdu.Value = []byte(value)
-	case strings.Contains(lowerType, "objectidentifier") || strings.Contains(lowerType, "oid"):
-		pdu.Type = gosnmp.ObjectIdentifier
-		pdu.Value = value
-	default:
-		if val, err := strconv.Atoi(value); err == nil {
-			pdu.Type = gosnmp.Integer
-			pdu.Value = val
-		} else {
-			pdu.Type = gosnmp.OctetString
-			pdu.Value = []byte(value)
-		}
+	// One mapping of SMI syntax to ASN.1 tag, shared with SetMultiple: two of
+	// them drift, and a wrong tag comes back as wrongType with nothing saying
+	// which mapping produced it.
+	pdu, err := buildPDU(oid, value, valueType)
+	if err != nil {
+		return nil, err
 	}
 
 	packet, err := g.Set([]gosnmp.SnmpPDU{pdu})

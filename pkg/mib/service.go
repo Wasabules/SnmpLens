@@ -41,23 +41,25 @@ func (s *Service) LoadAll() ([]*Node, error) {
 
 	log.Println("Loading all MIBs from:", s.path)
 
-	files, err := os.ReadDir(s.path)
+	// The same list the UI offers, rather than a second opinion about what a
+	// MIB file looks like. This used to require a .mib or .txt suffix, which
+	// the bundled standard MIBs do not have — they are extension-less files
+	// named after their module — so "load everything" loaded none of them and
+	// the tree came back empty with only a line in the log.
+	files, err := ListMibFiles(s.path)
 	if err != nil {
 		return nil, fmt.Errorf("could not read MIB directory %s: %v", s.path, err)
 	}
 
 	loadedModuleNames := []string{}
-	for _, file := range files {
-		fileName := file.Name()
-		if !file.IsDir() && (strings.HasSuffix(strings.ToLower(fileName), ".mib") || strings.HasSuffix(strings.ToLower(fileName), ".txt")) {
-			moduleName, err := gosmi.LoadModule(fileName)
-			if err != nil {
-				log.Printf("Warning: could not load MIB module '%s': %v", fileName, err)
-			} else {
-				log.Printf("Successfully loaded MIB module '%s' from file '%s'", moduleName, fileName)
-				loadedModuleNames = append(loadedModuleNames, moduleName)
-			}
+	for _, fileName := range files {
+		moduleName, err := gosmi.LoadModule(fileName)
+		if err != nil {
+			log.Printf("Warning: could not load MIB module '%s': %v", fileName, err)
+			continue
 		}
+		log.Printf("Successfully loaded MIB module '%s' from file '%s'", moduleName, fileName)
+		loadedModuleNames = append(loadedModuleNames, moduleName)
 	}
 
 	if len(loadedModuleNames) == 0 {

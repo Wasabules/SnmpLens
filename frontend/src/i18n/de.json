@@ -165,7 +165,20 @@
     "identical": "Identisch",
     "different": "Unterschiedlich",
     "missing": "Fehlend",
-    "exportComparison": "CSV exportieren"
+    "exportComparison": "CSV exportieren",
+    "newRow": "Neue Zeile",
+    "rowStatusHint": "{table} hat eine RowStatus-Spalte, Zeilen können also angelegt und gelöscht werden.",
+    "newRowIn": "Neue Zeile in {table}",
+    "newRowIndexHint": "Der Index identifiziert die Zeile und kann später nicht geändert werden.",
+    "newRowColumnsHint": "Spalten, die in derselben Anfrage gesetzt werden. Leer lassen, um sie wegzulassen.",
+    "rowStatus": "RowStatus",
+    "createRow": "Zeile anlegen",
+    "deleteRow": "Zeile löschen",
+    "deleteRowConfirm": "Zeile {index} von {table} zerstören?",
+    "deleteRowHint": "Schreibt RowStatus = destroy(6). Der Agent entfernt die Zeile; von hier aus nicht rückgängig zu machen.",
+    "rowCreated": "Zeile in {label} angelegt",
+    "rowDestroyed": "Zeile zerstört: {label}",
+    "rowWriteFailed": "{label} wurde abgelehnt: {error}"
   },
   "savedQueries": {
     "title": "Gespeicherte Abfragen",
@@ -361,7 +374,13 @@
     "enterTarget": "Bitte geben Sie eine Ziel-IP ein.",
     "enterTrapOid": "Bitte geben Sie eine Trap OID ein.",
     "snmpv1Trap": "SNMPv1 Trap",
-    "snmpv2v3Inform": "SNMPv2/v3 Inform"
+    "snmpv2v3Inform": "SNMPv2/v3 Inform",
+    "kindLabel": "Typ",
+    "kindTrap": "Trap (ohne Bestätigung)",
+    "kindInform": "Inform (bestätigt)",
+    "informAcked": "Inform von {target} in {ms} ms bestätigt",
+    "informFailed": "Inform nicht bestätigt: {error}",
+    "informNoAck": "keine Antwort vom Empfänger"
   },
   "monitor": {
     "live": "LIVE",

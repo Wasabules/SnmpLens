@@ -36,6 +36,25 @@ export function buildSetRequest(settings, targets, oid, value, valueType) {
 }
 
 /**
+ * Build a SetMultiRequest: several varbinds written in ONE PDU.
+ *
+ * Mirrors snmp.SetMultiRequest in pkg/snmp/params.go — the JSON field names
+ * are the contract, and nothing checks them.
+ *
+ * @param {object} settings
+ * @param {string[]} targets
+ * @param {string} _oid unused; kept so executeGrouped can call this like the others
+ * @param {Array<{oid: string, value: string, type: string}>} vars
+ * @returns {object}
+ */
+export function buildSetMultiRequest(settings, targets, _oid, vars) {
+  return {
+    ...buildSnmpRequest(settings, targets, ''),
+    vars,
+  };
+}
+
+/**
  * Build a GetBulkRequest object.
  * @param {object} settings
  * @param {string[]} targets

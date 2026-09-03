@@ -51,3 +51,10 @@ type TrapListenerRequest struct {
 	Port int      `json:"port"`
 	V3   V3Params `json:"v3"`
 }
+
+// SetMultiRequest writes several varbinds in one PDU, which is what creating
+// or destroying a conceptual row takes.
+type SetMultiRequest struct {
+	SnmpRequest
+	Vars []SetVar `json:"vars"`
+}

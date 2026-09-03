@@ -190,8 +190,42 @@ func (c *Client) recordTrap(source, ts, pduType string, packet *gosnmp.SnmpPacke
 	}
 }
 
+// InformResult reports what came back from an INFORM.
+//
+// A trap is fire-and-forget; an INFORM is acknowledged, and the acknowledgement
+// is the entire reason to send one. Reporting only "no error" would throw away
+// the one thing that distinguishes it from a trap.
+type InformResult struct {
+	Acknowledged   bool   `json:"acknowledged"`
+	ResponseTimeMs int64  `json:"responseTimeMs"`
+	Error          string `json:"error,omitempty"`
+}
+
 // SendTrap sends an SNMP trap to a target.
 func (c *Client) SendTrap(target string, port int, community, version, trapOid string, variables []TrapVariable) error {
+	_, err := c.sendNotification(target, port, community, version, trapOid, variables, false)
+	return err
+}
+
+// SendInform sends an INFORM and waits for the receiver to acknowledge it.
+//
+// v1 is refused rather than silently downgraded to a trap: RFC 1157 has no
+// InformRequest PDU at all, so there is nothing to send, and a caller who
+// asked for a confirmed notification must not be told one was delivered.
+func (c *Client) SendInform(target string, port int, community, version, trapOid string, variables []TrapVariable) InformResult {
+	start := time.Now()
+	if version == "v1" {
+		return InformResult{Error: "SNMPv1 has no INFORM: use v2c or v3, or send a trap"}
+	}
+	acked, err := c.sendNotification(target, port, community, version, trapOid, variables, true)
+	res := InformResult{Acknowledged: acked, ResponseTimeMs: time.Since(start).Milliseconds()}
+	if err != nil {
+		res.Error = err.Error()
+	}
+	return res
+}
+
+func (c *Client) sendNotification(target string, port int, community, version, trapOid string, variables []TrapVariable, inform bool) (bool, error) {
 	g := &gosnmp.GoSNMP{
 		Target:    netaddr.NormaliseTarget(target),
 		Port:      normalisePort(port, DefaultTrapPort),
@@ -205,16 +239,21 @@ func (c *Client) SendTrap(target string, port int, community, version, trapOid s
 	case "v2c":
 		g.Version = gosnmp.Version2c
 	default:
-		return fmt.Errorf("trap sending supports v1 and v2c only")
+		return false, fmt.Errorf("trap sending supports v1 and v2c only")
 	}
 
 	if err := g.Connect(); err != nil {
-		return fmt.Errorf("connect failed: %v", err)
+		return false, fmt.Errorf("connect failed: %v", err)
 	}
 	defer g.Conn.Close()
 
 	trap := gosnmp.SnmpTrap{
 		Variables: []gosnmp.SnmpPDU{},
+		IsInform:  inform,
+	}
+
+	if inform && g.Version == gosnmp.Version1 {
+		return false, fmt.Errorf("SNMPv1 has no INFORM")
 	}
 
 	if g.Version == gosnmp.Version2c {
@@ -257,6 +296,22 @@ func (c *Client) SendTrap(target string, port int, community, version, trapOid s
 		trap.Variables = append(trap.Variables, pdu)
 	}
 
-	_, err := g.SendTrap(trap)
-	return err
+	packet, err := g.SendTrap(trap)
+	if err != nil {
+		return false, err
+	}
+	if !inform {
+		return false, nil
+	}
+	// A response arrived. Whether it says yes is a separate question: an
+	// unknown trap OID or a refused varbind comes back as an error status, and
+	// treating that as delivered is exactly the mistake an INFORM exists to
+	// prevent.
+	if packet == nil {
+		return false, fmt.Errorf("no response to the inform")
+	}
+	if packet.Error != gosnmp.NoError {
+		return false, fmt.Errorf("the receiver refused the inform: %s", packet.Error.String())
+	}
+	return true, nil
 }

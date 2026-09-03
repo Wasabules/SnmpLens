@@ -10,6 +10,11 @@
   import { _ } from 'svelte-i18n';
   import { get } from 'svelte/store';
   import { anonMode, anonymizeIp } from '../utils/anonymize';
+  import {
+    buildTableData as pivot, withDecodedIndexes, sortRows,
+    buildRowVarbinds, buildDestroyVarbinds,
+  } from './tableRows';
+  import { MibTable, MibDecodeIndexes, MibEncodeIndex } from '../../wailsjs/go/main/App';
 
   const dispatch = createEventDispatcher();
 
@@ -32,6 +37,14 @@
   let tableViewEnabled = false;
   let sortColumn = null;
   let sortAscending = true;
+
+  // The table's INDEX clause and one decoded instance per row. Both come from
+  // Go: splitting an instance needs the SYNTAX of each index object, whether
+  // its size is fixed, and whether the row says IMPLIED — none of which is in
+  // the walk. Absent, the table still renders with the raw instance.
+  let tableInfo = null;
+  let decodedIndexes = [];
+  let indexesFor = null; // the (table, results) the decode above describes
 
   // The default view (raw/table) is decided exactly once per result set. This
   // guard is what stops the view from flipping — and the filter input from
@@ -232,12 +245,21 @@
     const tableData = buildTableData(firstRes.result.value, colDefs, sortColumn, sortAscending);
     const lines = [];
 
-    // Header
-    lines.push(['Index', ...tableData.columns.map(c => c.name)].map(escapeCSV).join(','));
+    // Header. The decoded index columns when there are any, so the file says
+    // the same thing the screen does rather than one opaque instance.
+    const idxHeaders = tableData.indexColumns
+      ? tableData.indexColumns.map(c => c.name)
+      : ['Index'];
+    lines.push([...idxHeaders, ...tableData.columns.map(c => c.name)].map(escapeCSV).join(','));
 
     // Rows
     for (const row of tableData.rows) {
-      const cells = [row.index, ...tableData.columns.map(col => {
+      const idxCells = tableData.indexColumns
+        ? (row.indexParts
+            ? row.indexParts.map(p => p.display)
+            : [row.index, ...Array(tableData.indexColumns.length - 1).fill('')])
+        : [row.index];
+      const cells = [...idxCells, ...tableData.columns.map(col => {
         const cell = row.cells[col.oid];
         if (!cell) return '';
         return typeof cell.value === 'string' ? cell.value : JSON.stringify(cell.value);
@@ -299,6 +321,14 @@
         { label: t('results.copyRow'), icon: 'table', action: 'row' },
         { label: t('results.copyIndex'), icon: 'copy', action: 'index' },
         { label: t('results.copyColumn'), icon: 'columns-3', action: 'column' },
+        // RFC 2579 gives no other way to remove a conceptual row, so without a
+        // RowStatus column there is nothing to offer.
+        ...(tableInfo?.rowStatusOid
+          ? [
+              { label: '---', action: 'sep' },
+              { label: t('results.deleteRow'), icon: 'trash-2', action: 'destroyRow' },
+            ]
+          : []),
       ],
     };
   }
@@ -319,6 +349,56 @@
       const cells = [row.index, ...columns.map(c => cellText(row.cells[c.oid]))];
       copyToClipboard(cells.join('\t'), t('results.tableView'));
     }
+    else if (action === 'destroyRow') destroyRow = row;
+  }
+
+  // ============ TABLE EDITING ============
+
+  // A row being created, and one pending destruction. Both are confirmed
+  // before anything is sent: a SET changes a device, and destroy(6) cannot be
+  // taken back from here.
+  let newRow = null;
+  let destroyRow = null;
+
+  function startNewRow() {
+    if (!tableInfo?.rowStatusOid) return;
+    newRow = {
+      index: tableInfo.index.map(() => ''),
+      values: {},
+      // createAndGo asks the agent to activate the row at once; createAndWait
+      // leaves it notReady so the remaining columns can be filled in after.
+      status: 4,
+      error: '',
+      busy: false,
+    };
+  }
+
+  async function submitNewRow() {
+    if (!newRow || newRow.busy) return;
+    newRow = { ...newRow, busy: true, error: '' };
+    let instance;
+    try {
+      instance = await MibEncodeIndex(tableInfo.oid, newRow.index);
+    } catch (e) {
+      newRow = { ...newRow, busy: false, error: String(e?.message || e) };
+      return;
+    }
+    dispatch('tableRowWrite', {
+      vars: buildRowVarbinds(tableInfo, instance, newRow.values, newRow.status),
+      label: tableInfo.name + ' [' + newRow.index.join(', ') + ']',
+      kind: 'create',
+    });
+    newRow = null;
+  }
+
+  function confirmDestroy() {
+    if (!destroyRow || !tableInfo?.rowStatusOid) return;
+    dispatch('tableRowWrite', {
+      vars: buildDestroyVarbinds(tableInfo, destroyRow.index),
+      label: tableInfo.name + ' [' + destroyRow.index + ']',
+      kind: 'destroy',
+    });
+    destroyRow = null;
   }
 
   // ============ TABLE VIEW FUNCTIONS ============
@@ -351,64 +431,12 @@
   }
 
   // Reconstruct WALK results into a structured table
+  // The pivot itself lives in tableRows.js so it can be tested without a
+  // browser; what stays here is the wiring to the MIB-decoded index.
   function buildTableData(walkResults, columnDefs, sortCol = null, sortAsc = true) {
-    const columns = columnDefs.map(col => ({ name: col.name, oid: col.oid, syntax: col.syntax || '' }));
-    const rowMap = {};
-
-    // gosnmp returns walk OIDs with a leading dot (".1.3.6...") while MIB column
-    // OIDs do not, so normalize both sides before matching — otherwise no cell
-    // matches its column and the table renders headers with no rows.
-    const stripDot = (o) => (o && o.charAt(0) === '.' ? o.slice(1) : o);
-    for (const item of walkResults) {
-      const itemOid = stripDot(item.oid);
-      let matchedCol = null;
-      let instanceIdx = '';
-      for (const col of columnDefs) {
-        const colOid = stripDot(col.oid);
-        if (itemOid.startsWith(colOid + '.')) {
-          matchedCol = col;
-          instanceIdx = itemOid.substring(colOid.length + 1);
-          break;
-        }
-      }
-      if (!matchedCol) continue;
-
-      if (!rowMap[instanceIdx]) {
-        rowMap[instanceIdx] = {};
-      }
-      rowMap[instanceIdx][matchedCol.oid] = {
-        value: item.value,
-        type: item.type,
-        fullOid: item.oid
-      };
-    }
-
-    let rows = Object.entries(rowMap).map(([index, cells]) => ({ index, cells }));
-
-    // Apply sorting
-    if (sortCol) {
-      rows.sort((a, b) => {
-        let aVal, bVal;
-        if (sortCol === '__index') {
-          aVal = a.index;
-          bVal = b.index;
-        } else {
-          aVal = a.cells[sortCol]?.value ?? '';
-          bVal = b.cells[sortCol]?.value ?? '';
-        }
-        const aNum = Number(aVal);
-        const bNum = Number(bVal);
-        let cmp;
-        if (!isNaN(aNum) && !isNaN(bNum)) {
-          cmp = aNum - bNum;
-        } else {
-          cmp = String(aVal).localeCompare(String(bVal));
-        }
-        return sortAsc ? cmp : -cmp;
-      });
-    }
-
-    return { columns, rows };
+    const base = pivot(walkResults, columnDefs);
+    const withIdx = withDecodedIndexes(base, decodedIndexes, tableInfo?.index);
+    return { ...withIdx, rows: sortRows(withIdx.rows, sortCol, sortAsc) };
   }
 
   $: autoDetectedTableNode = (() => {
@@ -424,6 +452,54 @@
     // Try to detect table from first few OIDs
     return findTableParentNode(firstRes.result.value[0].oid, mibTree);
   })();
+
+  // Load the table's INDEX and decode every instance, once per result set.
+  //
+  // Batched: a table has as many instances as rows, and one bridge call each
+  // would cost more than the walk did. The answer is applied only if it still
+  // describes what is on screen — these overlap when someone walks twice, and
+  // nothing orders them.
+  async function loadIndexes(node, results) {
+    const oid = node?.oid;
+    if (!oid || !results?.length) {
+      tableInfo = null;
+      decodedIndexes = [];
+      indexesFor = null;
+      return;
+    }
+    const token = oid + '|' + (results[0]?.result?.value?.length ?? 0) + '|' + results.length;
+    if (indexesFor === token) return;
+    indexesFor = token;
+
+    let info = null;
+    try {
+      info = await MibTable(oid);
+    } catch (e) {
+      tableInfo = null;
+      decodedIndexes = [];
+      return;
+    }
+    if (indexesFor !== token) return;
+
+    const cols = getTableColumnDefs(node);
+    const first = results.find(r => !r.error && Array.isArray(r.result?.value));
+    const instances = [...new Set(
+      pivot(first?.result?.value || [], cols).rows.map(r => r.index)
+    )];
+
+    let decoded = [];
+    try {
+      decoded = instances.length ? await MibDecodeIndexes(info.oid, instances) : [];
+    } catch (e) {
+      decoded = [];
+    }
+    if (indexesFor !== token) return;
+
+    tableInfo = info;
+    decodedIndexes = decoded;
+  }
+
+  $: if (tableViewEnabled) loadIndexes(effectiveTableNode, bulkResults);
 
   // Use detected table node as fallback for table view
   $: effectiveTableNode = (selectedNode && canShowTableView(selectedNode, bulkResults)) ? selectedNode : autoDetectedTableNode;
@@ -464,6 +540,75 @@
         on:close={() => (cellMenu = { ...cellMenu, visible: false })}
       />
     {/if}
+
+    {#if newRow && tableInfo}
+      <div class="modal-backdrop" on:click={() => (newRow = null)} on:keydown={(e) => e.key === 'Escape' && (newRow = null)} role="presentation">
+        <div class="row-modal" on:click|stopPropagation on:keydown|stopPropagation role="presentation">
+          <h4>{$_('results.newRowIn', { values: { table: tableInfo.name } })}</h4>
+
+          <p class="hint">{$_('results.newRowIndexHint')}</p>
+          {#each tableInfo.index as part, i}
+            <label class="fld">
+              <span>{part.name}<em>{part.syntax}</em></span>
+              <input type="text" bind:value={newRow.index[i]} />
+            </label>
+          {/each}
+
+          <p class="hint">{$_('results.newRowColumnsHint')}</p>
+          <div class="row-columns">
+            {#each tableInfo.columns.filter(c => c.writable && !c.isIndex && c.oid !== tableInfo.rowStatusOid) as col}
+              <label class="fld">
+                <span>{col.name}<em>{col.syntax}</em></span>
+                {#if col.enumValues}
+                  <select bind:value={newRow.values[col.oid]}>
+                    <option value="">—</option>
+                    {#each Object.entries(col.enumValues) as [name, value]}
+                      <option value={String(value)}>{name} ({value})</option>
+                    {/each}
+                  </select>
+                {:else}
+                  <input type="text" bind:value={newRow.values[col.oid]} />
+                {/if}
+              </label>
+            {/each}
+          </div>
+
+          <label class="fld">
+            <span>{$_('results.rowStatus')}</span>
+            <select bind:value={newRow.status}>
+              <option value={4}>createAndGo (4)</option>
+              <option value={5}>createAndWait (5)</option>
+            </select>
+          </label>
+
+          {#if newRow.error}
+            <p class="row-error"><Icon name="circle-x" size={13} /> {newRow.error}</p>
+          {/if}
+
+          <div class="row-actions">
+            <button class="btn-small" on:click={() => (newRow = null)}>{$_('common.cancel')}</button>
+            <button class="btn-small primary" on:click={submitNewRow} disabled={newRow.busy}>
+              {$_('results.createRow')}
+            </button>
+          </div>
+        </div>
+      </div>
+    {/if}
+
+    {#if destroyRow && tableInfo}
+      <div class="modal-backdrop" on:click={() => (destroyRow = null)} on:keydown={(e) => e.key === 'Escape' && (destroyRow = null)} role="presentation">
+        <div class="row-modal" on:click|stopPropagation on:keydown|stopPropagation role="presentation">
+          <h4>{$_('results.deleteRow')}</h4>
+          <p>{$_('results.deleteRowConfirm', { values: { table: tableInfo.name, index: destroyRow.index } })}</p>
+          <p class="hint">{$_('results.deleteRowHint')}</p>
+          <div class="row-actions">
+            <button class="btn-small" on:click={() => (destroyRow = null)}>{$_('common.cancel')}</button>
+            <button class="btn-small danger" on:click={confirmDestroy}>{$_('common.delete')}</button>
+          </div>
+        </div>
+      </div>
+    {/if}
+
     <div class="results-header">
       <h4>{$_('results.title')}</h4>
       <div class="export-buttons">
@@ -554,16 +699,37 @@
                 <button class="btn-copy-small" on:click={() => walkFilter = ''} title={$_('common.clear')}>&times;</button>
               {/if}
             </div>
+            {#if tableInfo?.rowStatusOid}
+              <div class="table-edit-bar">
+                <button class="btn-small" on:click={startNewRow}>
+                  <Icon name="plus" size={13} /> {$_('results.newRow')}
+                </button>
+                <span class="hint-inline">{$_('results.rowStatusHint', { values: { table: tableInfo.name } })}</span>
+              </div>
+            {/if}
             <div class="table-view-results">
               <table>
                 <thead>
                   <tr>
-                    <th
-                      class="sortable"
-                      on:click={() => handleColumnSort('__index')}
-                    >
-                      {$_('results.index')} {sortColumn === '__index' ? (sortAscending ? '▲' : '▼') : ''}
-                    </th>
+                    {#if tableData.indexColumns}
+                      {#each tableData.indexColumns as idxCol, i}
+                        <th
+                          class="sortable index-col"
+                          on:click={() => handleColumnSort('__index:' + i)}
+                          title={idxCol.syntax}
+                        >
+                          {idxCol.name}
+                          {#if sortColumn === '__index:' + i}{sortAscending ? '▲' : '▼'}{/if}
+                        </th>
+                      {/each}
+                    {:else}
+                      <th
+                        class="sortable index-col"
+                        on:click={() => handleColumnSort('__index')}
+                      >
+                        {$_('results.index')} {sortColumn === '__index' ? (sortAscending ? '▲' : '▼') : ''}
+                      </th>
+                    {/if}
                     {#each tableData.columns as col}
                       <th
                         class="sortable"
@@ -581,7 +747,18 @@
                 <tbody>
                   {#each tableRows as row}
                     <tr>
-                      <td class="index-cell">{row.index}</td>
+                      {#if tableData.indexColumns && row.indexParts}
+                        {#each row.indexParts as part}
+                          <td class="index-cell" title="{part.name} = {part.display}">{part.display}</td>
+                        {/each}
+                      {:else if tableData.indexColumns}
+                        <!-- This row's instance did not decode; say so rather
+                             than leaving cells that look like real values. -->
+                        <td class="index-cell undecoded" colspan={tableData.indexColumns.length}
+                            title={row.indexError}>{row.index}</td>
+                      {:else}
+                        <td class="index-cell">{row.index}</td>
+                      {/if}
                       {#each tableData.columns as col}
                         <td
                           class="table-value-cell clickable"
@@ -1033,6 +1210,10 @@
     color: var(--accent-color);
   }
 
+  .undecoded {
+    font-style: italic;
+    opacity: 0.75;
+  }
   .index-cell {
     font-family: 'Courier New', monospace;
     color: var(--oid-color);
@@ -1083,4 +1264,73 @@
     background-color: var(--accent-subtle-medium);
   }
 
+
+  .table-edit-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  .hint-inline {
+    font-size: 11px;
+    color: var(--text-muted, #888);
+  }
+
+  .row-modal {
+    background: var(--bg-panel, #fff);
+    color: var(--text-primary, #222);
+    border-radius: 8px;
+    padding: 18px;
+    width: min(560px, 92vw);
+    max-height: 84vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+  }
+
+  .row-modal h4 {
+    margin: 0 0 10px;
+  }
+
+  .row-modal .fld {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  .row-modal .fld > span {
+    flex: 0 0 190px;
+    font-size: 12px;
+  }
+
+  .row-modal .fld em {
+    display: block;
+    font-style: normal;
+    font-size: 10px;
+    color: var(--text-muted, #888);
+  }
+
+  .row-modal .fld input,
+  .row-modal .fld select {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .row-columns {
+    max-height: 34vh;
+    overflow-y: auto;
+  }
+
+  .row-error {
+    color: var(--danger, #c0392b);
+    font-size: 12px;
+  }
+
+  .row-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 14px;
+  }
 </style>

@@ -5,7 +5,7 @@
   import { trapStore } from './stores/trapStore';
   import { settingsStore } from './stores/settingsStore';
   import { notificationStore } from './stores/notifications';
-  import { SendTrap } from '../wailsjs/go/main/App';
+  import { SendTrap, SendInform } from '../wailsjs/go/main/App';
   import Trap from './Trap.svelte';
   import { escapeCSV, downloadFile } from './utils/csv';
   import { anonMode, anonymizeIp, maskString } from './utils/anonymize';
@@ -19,6 +19,10 @@
 
   // Send Trap state
   let showSendTrap = false;
+  // Trap or inform. An inform is acknowledged by the receiver, which is the
+  // only reason to send one — and the reason its result is reported
+  // differently: a trap that vanished and a trap that arrived look identical.
+  let sendKind = 'trap';
   let sendTarget = '';
   let sendPort = 162;
   let sendCommunity = '';
@@ -47,15 +51,30 @@
     }
     isSending = true;
     try {
-      await SendTrap(
+      const args = [
         sendTarget.trim(),
         sendPort,
         sendCommunity || $settingsStore.community,
         sendVersion,
         sendTrapOid.trim(),
-        sendVarbinds.filter(v => v.oid.trim())
-      );
-      notificationStore.add(t('traps.trapSent', { values: { target: sendTarget, port: sendPort } }), 'success');
+        sendVarbinds.filter(v => v.oid.trim()),
+      ];
+
+      if (sendKind === 'inform') {
+        const res = await SendInform(...args);
+        if (res.error || !res.acknowledged) {
+          // Not a notification failure to gloss over: an unacknowledged inform
+          // is an inform that did NOT arrive, which is the whole distinction.
+          notificationStore.add(
+            t('traps.informFailed', { values: { error: res.error || t('traps.informNoAck') } }), 'error');
+        } else {
+          notificationStore.add(
+            t('traps.informAcked', { values: { target: sendTarget, ms: res.responseTimeMs } }), 'success');
+        }
+      } else {
+        await SendTrap(...args);
+        notificationStore.add(t('traps.trapSent', { values: { target: sendTarget, port: sendPort } }), 'success');
+      }
     } catch (err) {
       notificationStore.add(t('traps.trapSendFailed', { values: { error: err } }), 'error');
     } finally {
@@ -169,8 +188,13 @@
         <div class="send-row">
           <label for="send-version">{$_('traps.versionLabel')}</label>
           <select id="send-version" bind:value={sendVersion}>
-            <option value="v1">v1</option>
+            <option value="v1" disabled={sendKind === 'inform'}>v1</option>
             <option value="v2c">v2c</option>
+          </select>
+          <label for="send-kind">{$_('traps.kindLabel')}</label>
+          <select id="send-kind" bind:value={sendKind} on:change={() => { if (sendKind === 'inform' && sendVersion === 'v1') sendVersion = 'v2c'; }}>
+            <option value="trap">{$_('traps.kindTrap')}</option>
+            <option value="inform">{$_('traps.kindInform')}</option>
           </select>
           <label for="send-community">{$_('traps.communityLabel')}</label>
           <input id="send-community" type="text" bind:value={sendCommunity} placeholder={$anonMode ? maskString($settingsStore.community) : $settingsStore.community} />

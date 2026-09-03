@@ -165,7 +165,20 @@
     "identical": "Idéntico",
     "different": "Diferente",
     "missing": "Faltante",
-    "exportComparison": "Exportar CSV"
+    "exportComparison": "Exportar CSV",
+    "newRow": "Nueva fila",
+    "rowStatusHint": "{table} tiene una columna RowStatus, por lo que se pueden crear y destruir filas.",
+    "newRowIn": "Nueva fila en {table}",
+    "newRowIndexHint": "El índice identifica la fila y no podrá cambiarse después.",
+    "newRowColumnsHint": "Columnas a establecer en la misma petición. Deje vacío para omitirlas.",
+    "rowStatus": "RowStatus",
+    "createRow": "Crear fila",
+    "deleteRow": "Eliminar fila",
+    "deleteRowConfirm": "¿Destruir la fila {index} de {table}?",
+    "deleteRowHint": "Escribe RowStatus = destroy(6). El agente elimina la fila; no se puede deshacer desde aquí.",
+    "rowCreated": "Fila creada en {label}",
+    "rowDestroyed": "Fila destruida: {label}",
+    "rowWriteFailed": "{label} fue rechazado: {error}"
   },
   "savedQueries": {
     "title": "Consultas guardadas",
@@ -361,7 +374,13 @@
     "enterTarget": "Por favor, introduzca una IP de objetivo.",
     "enterTrapOid": "Por favor, introduzca un OID de Trap.",
     "snmpv1Trap": "Trap SNMPv1",
-    "snmpv2v3Inform": "Inform SNMPv2/v3"
+    "snmpv2v3Inform": "Inform SNMPv2/v3",
+    "kindLabel": "Tipo",
+    "kindTrap": "Trap (sin confirmación)",
+    "kindInform": "Inform (confirmado)",
+    "informAcked": "Inform confirmado por {target} en {ms} ms",
+    "informFailed": "Inform no confirmado: {error}",
+    "informNoAck": "sin respuesta del receptor"
   },
   "monitor": {
     "live": "LIVE",

@@ -80,7 +80,7 @@ The frontend calls Go through auto-generated bindings in `frontend/wailsjs/`, wh
 ## Backend layout (`pkg/`)
 
 - `pkg/mib/service.go` — MIB loading/parsing and tree construction via **gosmi**. `LoadAll`/`LoadSpecific`/`LoadWithDiagnostics` (the diagnostics variant returns per-file load errors for the drag-&-drop import UI). Also OID translation/resolution (`Translate`, `ResolveOid(s)`).
-- `pkg/snmp/` — SNMP over **gosnmp**: `client.go` (connection config, v3 security-protocol mapping, concurrent fan-out via `concurrentExecute`, debug ring-buffer logger), `operations.go` (GET/SET/GETNEXT/GETBULK/WALK), `trap.go` (listener + sender), `discovery.go` (CIDR scan, capped at `MaxDiscoveryHosts` — the prefix sizes the allocation before a packet is
+- `pkg/snmp/` — SNMP over **gosnmp**: `client.go` (connection config, v3 security-protocol mapping, concurrent fan-out via `concurrentExecute`, debug ring-buffer logger), `operations.go` (GET/SET/GETNEXT/GETBULK/WALK), `trap.go` (listener + sender, traps and acknowledged INFORMs — v1 is refused rather than downgraded, since RFC 1157 has no InformRequest PDU), `discovery.go` (CIDR scan, capped at `MaxDiscoveryHosts` — the prefix sizes the allocation before a packet is
   sent, so `10.0.0.0/8` was 16.7M strings and an IPv6 `/64` never finished expanding), `params.go` (bridge request structs).
 - `pkg/monitor/` — the poll clock and the alerting engine. `scheduler.go` owns one goroutine per monitoring session (this is what makes background mode real — the clock used to be a `setInterval` in the renderer, so closing the window silently stopped every session and every alert with it); `breach.go` turns samples into threshold/reachability episodes; `counters.go` corrects counter wraps and derives rates from the time that actually elapsed.
 - `pkg/events/`, `pkg/notify/`, `pkg/secrets/`, `pkg/service/`, `pkg/tray/`, `pkg/autostart/` — the event journal vocabulary, notification routing (syslog over UDP/TCP/**TLS per RFC5425**, webhook, email, with a durable outbox), OS-protected credential storage, the pre-GUI preference file, the fail-soft system-tray icon, and the per-user login entry (HKCU Run key / LaunchAgent / XDG autostart — never machine-wide, so it never needs elevation).
@@ -120,6 +120,29 @@ Contains `mibs/` (extracted + user MIBs) and `monitoring.db`.
 
 - **Credentials are encrypted at rest.** `settingsStore` stores plaintext in memory but encrypts sensitive fields (`community`, v3 passphrases, per-target overrides) via `crypto.js` before writing to localStorage. When adding a new sensitive field, extend `SENSITIVE_PATHS` (and the per-target override handling) in `crypto.js`, or it will be persisted in clear.
 - **Anonymous Mode** is purely frontend masking and is intentionally **non-persistent** (always off on restart) — see `settingsStore.js` forcing `anonymousMode = false` on load. Don't make it persist.
+
+## Conceptual tables
+
+A walk is a flat list; a table is that list pivoted by column and split by INDEX. The pivot is
+`frontend/src/operations/tableRows.js` (pure, unit-tested); the split is `pkg/mib/table.go`, and it has to be in
+Go because the rules are RFC 2578 7.7 and they live in the MIB: how many sub-identifiers an index object consumes
+depends on its SYNTAX, on whether its size is fixed, and on whether the row says IMPLIED. Before this the
+instance was kept as the raw sub-OID, so `tcpConnTable` — INDEX of four objects — rendered one opaque
+`10.0.0.5.161.192.168.1.9.50000` per row, a name-keyed table showed decimal bytes, and every table sorted 10
+before 9.
+
+`EncodeIndex` is the same rules read backwards, and deliberately NOT gosmi's `Type.IndexValue`: that one always
+writes a length prefix for an OCTET STRING unless IMPLIED, and a fixed-SIZE index carries no length at all — an
+`IpAddress` index encoded its way is five sub-identifiers and addresses a row that does not exist. A round-trip
+test over ifTable, ipAddrTable, ipNetToMediaTable and tcpConnTable holds the two halves together.
+
+Row creation writes every column **and** RowStatus in ONE `SnmpSetMultiple`: RFC 3416 makes a SET atomic across
+its varbinds, so one-at-a-time asks the agent to accept a row that is incomplete at every step and leaves half of
+one behind when it refuses. Index columns are never written — their value is carried by the instance. A table is
+editable only if it has a `RowStatus` column, because RFC 2579 gives no other way to create or destroy a row.
+
+`gosmi.GetNodeByOID` returns the closest known ANCESTOR with `err == nil` rather than failing, so an unknown OID
+resolves to `iso`. `pkg/mib` checks `Kind` rather than trusting the lookup.
 
 ## MIB editor
 

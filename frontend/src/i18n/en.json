@@ -165,7 +165,20 @@
     "identical": "Identical",
     "different": "Different",
     "missing": "Missing",
-    "exportComparison": "Export CSV"
+    "exportComparison": "Export CSV",
+    "newRow": "New row",
+    "rowStatusHint": "{table} has a RowStatus column, so rows can be created and destroyed.",
+    "newRowIn": "New row in {table}",
+    "newRowIndexHint": "The index identifies the row. It cannot be changed afterwards.",
+    "newRowColumnsHint": "Columns to set in the same request. Leave a field empty to omit it.",
+    "rowStatus": "RowStatus",
+    "createRow": "Create row",
+    "deleteRow": "Delete row",
+    "deleteRowConfirm": "Destroy row {index} of {table}?",
+    "deleteRowHint": "This writes RowStatus = destroy(6). The agent removes the row; it cannot be undone from here.",
+    "rowCreated": "Row created in {label}",
+    "rowDestroyed": "Row destroyed: {label}",
+    "rowWriteFailed": "{label} was refused: {error}"
   },
   "savedQueries": {
     "title": "Saved Queries",
@@ -361,7 +374,13 @@
     "enterTarget": "Please enter a target IP.",
     "enterTrapOid": "Please enter a Trap OID.",
     "snmpv1Trap": "SNMPv1 Trap",
-    "snmpv2v3Inform": "SNMPv2/v3 Inform"
+    "snmpv2v3Inform": "SNMPv2/v3 Inform",
+    "kindLabel": "Type",
+    "kindTrap": "Trap (fire and forget)",
+    "kindInform": "Inform (acknowledged)",
+    "informAcked": "Inform acknowledged by {target} in {ms} ms",
+    "informFailed": "Inform not acknowledged: {error}",
+    "informNoAck": "no response from the receiver"
   },
   "monitor": {
     "live": "LIVE",

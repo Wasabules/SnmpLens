@@ -299,6 +299,48 @@ func (a *App) SnmpDiscover(req snmp.DiscoverRequest) []snmp.DiscoveryResult {
 	return a.snmpClient.Discover(req.CIDR, req.Community, req.Version, req.Port, req.Timeout, req.V3)
 }
 
+// SnmpSetMultiple writes several varbinds in a single SET.
+//
+// Row creation needs this: RFC 3416 makes a SET atomic across its varbinds, so
+// a row and its RowStatus arrive together or not at all. Setting the columns
+// one at a time asks the agent to accept a row that is incomplete at every
+// step, and leaves half of one behind when it refuses.
+func (a *App) SnmpSetMultiple(req snmp.SetMultiRequest) []*snmp.BulkResult {
+	results := a.snmpClient.SetMultiple(req.Targets, req.Vars, req.Community, req.Version, req.Port, req.Timeout, req.Retries, req.V3)
+	if len(req.Vars) > 0 {
+		// One audit entry per refused request, not per varbind: the SET is
+		// atomic, so a dozen entries would describe one event a dozen times.
+		audit := snmp.SetRequest{SnmpRequest: req.SnmpRequest}
+		audit.OID = req.Vars[0].Oid
+		a.auditFailedSets(audit, results)
+	}
+	return results
+}
+
+// MibTable returns the conceptual table containing oid — the table itself, its
+// row, or any column of it.
+func (a *App) MibTable(oid string) (*mib.TableInfo, error) {
+	return a.mibService.Table(oid)
+}
+
+// MibDecodeIndexes splits each row instance into the values the INDEX clause
+// declares. Batched because a table has as many instances as it has rows, and
+// one bridge call each would cost more than the walk did.
+func (a *App) MibDecodeIndexes(tableOid string, instances []string) []mib.DecodedIndex {
+	return a.mibService.DecodeIndexes(tableOid, instances)
+}
+
+// MibEncodeIndex builds a row's instance sub-OID from one value per INDEX
+// object, which is how a new row gets its identity.
+func (a *App) MibEncodeIndex(tableOid string, values []string) (string, error) {
+	return a.mibService.EncodeIndex(tableOid, values)
+}
+
+// SendInform sends an acknowledged notification and reports the answer.
+func (a *App) SendInform(target string, port int, community, version, trapOid string, variables []snmp.TrapVariable) snmp.InformResult {
+	return a.snmpClient.SendInform(target, port, community, version, trapOid, variables)
+}
+
 // SendTrap sends an SNMP trap to a target.
 func (a *App) SendTrap(target string, port int, community, version, trapOid string, variables []snmp.TrapVariable) error {
 	return a.snmpClient.SendTrap(target, port, community, version, trapOid, variables)

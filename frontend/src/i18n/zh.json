@@ -165,7 +165,20 @@
     "identical": "相同",
     "different": "不同",
     "missing": "缺失",
-    "exportComparison": "导出 CSV"
+    "exportComparison": "导出 CSV",
+    "newRow": "新建行",
+    "rowStatusHint": "{table} 含有 RowStatus 列，因此可以创建和删除行。",
+    "newRowIn": "在 {table} 中新建行",
+    "newRowIndexHint": "索引标识该行，创建后无法更改。",
+    "newRowColumnsHint": "在同一请求中设置的列。留空则不发送该字段。",
+    "rowStatus": "RowStatus",
+    "createRow": "创建行",
+    "deleteRow": "删除行",
+    "deleteRowConfirm": "销毁 {table} 的第 {index} 行？",
+    "deleteRowHint": "写入 RowStatus = destroy(6)。代理将移除该行，此处无法撤销。",
+    "rowCreated": "已在 {label} 中创建行",
+    "rowDestroyed": "已销毁行：{label}",
+    "rowWriteFailed": "{label} 被拒绝：{error}"
   },
   "savedQueries": {
     "title": "已保存的查询",
@@ -361,7 +374,13 @@
     "enterTarget": "请输入目标 IP。",
     "enterTrapOid": "请输入 Trap OID。",
     "snmpv1Trap": "SNMPv1 Trap",
-    "snmpv2v3Inform": "SNMPv2/v3 Inform"
+    "snmpv2v3Inform": "SNMPv2/v3 Inform",
+    "kindLabel": "类型",
+    "kindTrap": "Trap（不确认）",
+    "kindInform": "Inform（需确认）",
+    "informAcked": "{target} 已在 {ms} 毫秒内确认 Inform",
+    "informFailed": "Inform 未被确认：{error}",
+    "informNoAck": "接收方无响应"
   },
   "monitor": {
     "live": "实时",

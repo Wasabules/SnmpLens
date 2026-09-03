@@ -165,7 +165,20 @@
     "identical": "Identique",
     "different": "Différent",
     "missing": "Manquant",
-    "exportComparison": "Exporter CSV"
+    "exportComparison": "Exporter CSV",
+    "newRow": "Nouvelle ligne",
+    "rowStatusHint": "{table} possède une colonne RowStatus : les lignes peuvent être créées et supprimées.",
+    "newRowIn": "Nouvelle ligne dans {table}",
+    "newRowIndexHint": "L'index identifie la ligne. Il ne pourra pas être modifié ensuite.",
+    "newRowColumnsHint": "Colonnes à définir dans la même requête. Laissez vide pour ne pas envoyer le champ.",
+    "rowStatus": "RowStatus",
+    "createRow": "Créer la ligne",
+    "deleteRow": "Supprimer la ligne",
+    "deleteRowConfirm": "Détruire la ligne {index} de {table} ?",
+    "deleteRowHint": "Écrit RowStatus = destroy(6). L'agent supprime la ligne ; c'est irréversible depuis ici.",
+    "rowCreated": "Ligne créée dans {label}",
+    "rowDestroyed": "Ligne détruite : {label}",
+    "rowWriteFailed": "{label} a été refusé : {error}"
   },
   "savedQueries": {
     "title": "Requêtes sauvegardées",
@@ -361,7 +374,13 @@
     "enterTarget": "Veuillez saisir une adresse IP cible.",
     "enterTrapOid": "Veuillez saisir un Trap OID.",
     "snmpv1Trap": "Trap SNMPv1",
-    "snmpv2v3Inform": "Inform SNMPv2/v3"
+    "snmpv2v3Inform": "Inform SNMPv2/v3",
+    "kindLabel": "Type",
+    "kindTrap": "Trap (sans accusé)",
+    "kindInform": "Inform (avec accusé)",
+    "informAcked": "Inform acquitté par {target} en {ms} ms",
+    "informFailed": "Inform non acquitté : {error}",
+    "informNoAck": "aucune réponse du récepteur"
   },
   "monitor": {
     "live": "LIVE",
