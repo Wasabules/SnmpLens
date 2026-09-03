@@ -496,7 +496,7 @@
   },
   "discovery": {
     "cidrLabel": "CIDR / IP:",
-    "cidrPlaceholder": "192.168.1.0/24 o 10.0.0.1",
+    "cidrPlaceholder": "192.168.1.0/24, 2001:db8::/120 o ::1",
     "timeoutLabel": "Tiempo de espera:",
     "scanning": "Escaneando...",
     "scan": "Escanear",

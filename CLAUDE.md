@@ -80,10 +80,17 @@ The frontend calls Go through auto-generated bindings in `frontend/wailsjs/`, wh
 ## Backend layout (`pkg/`)
 
 - `pkg/mib/service.go` — MIB loading/parsing and tree construction via **gosmi**. `LoadAll`/`LoadSpecific`/`LoadWithDiagnostics` (the diagnostics variant returns per-file load errors for the drag-&-drop import UI). Also OID translation/resolution (`Translate`, `ResolveOid(s)`).
-- `pkg/snmp/` — SNMP over **gosnmp**: `client.go` (connection config, v3 security-protocol mapping, concurrent fan-out via `concurrentExecute`, debug ring-buffer logger), `operations.go` (GET/SET/GETNEXT/GETBULK/WALK), `trap.go` (listener + sender), `discovery.go` (CIDR scan), `params.go` (bridge request structs).
+- `pkg/snmp/` — SNMP over **gosnmp**: `client.go` (connection config, v3 security-protocol mapping, concurrent fan-out via `concurrentExecute`, debug ring-buffer logger), `operations.go` (GET/SET/GETNEXT/GETBULK/WALK), `trap.go` (listener + sender), `discovery.go` (CIDR scan, capped at `MaxDiscoveryHosts` — the prefix sizes the allocation before a packet is
+  sent, so `10.0.0.0/8` was 16.7M strings and an IPv6 `/64` never finished expanding), `params.go` (bridge request structs).
 - `pkg/monitor/` — the poll clock and the alerting engine. `scheduler.go` owns one goroutine per monitoring session (this is what makes background mode real — the clock used to be a `setInterval` in the renderer, so closing the window silently stopped every session and every alert with it); `breach.go` turns samples into threshold/reachability episodes; `counters.go` corrects counter wraps and derives rates from the time that actually elapsed.
 - `pkg/events/`, `pkg/notify/`, `pkg/secrets/`, `pkg/service/`, `pkg/tray/`, `pkg/autostart/` — the event journal vocabulary, notification routing (syslog over UDP/TCP/**TLS per RFC5425**, webhook, email, with a durable outbox), OS-protected credential storage, the pre-GUI preference file, the fail-soft system-tray icon, and the per-user login entry (HKCU Run key / LaunchAgent / XDG autostart — never machine-wide, so it never needs elevation).
-- `pkg/network/tools.go` — pure-Go ping & traceroute (**pro-bing**); no elevated privileges required.
+- `pkg/netaddr/address.go` — address handling shared by `pkg/snmp` and `pkg/network`. `NormaliseTarget` strips
+  the brackets people paste around an IPv6 literal, because gosnmp adds its own via `JoinHostPort` and
+  `[[::1]]:161` fails naming neither; zones (`fe80::1%eth0`) are kept. `ListenAddress` returns the bare `:port`
+  wildcard, which Go opens as a DUAL-STACK socket — `0.0.0.0` behaves identically but reads like a deliberate
+  IPv4-only choice, which is how it gets "fixed" into one. `LastAddressIn` parses rather than pattern-matches.
+- `pkg/network/tools.go` — pure-Go ping & traceroute (**pro-bing**); no elevated privileges required. macOS ships
+  traceroute as IPv4-only with v6 in a separate binary, so an IPv6 target there runs `traceroute6`.
 - `pkg/storage/storage.go` — SQLite (**modernc.org/sqlite**, WAL mode) for monitoring history. Data points are **batch-buffered**: `QueueDataPoints` appends to an in-memory batch flushed by a ticker goroutine, not written per-call. Sessions keyed by generated UUID.
 
 Multi-target operations run concurrently with goroutines; one `BulkResult` per target is collected and returned.

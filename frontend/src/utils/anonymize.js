@@ -1,5 +1,6 @@
 import { derived } from 'svelte/store';
 import { settingsStore } from '../stores/settingsStore';
+import { replaceAddresses } from './ipText';
 
 /**
  * Derived store: true when anonymous mode is active.
@@ -46,13 +47,14 @@ export function anonymizeHost(name) {
 }
 
 /**
- * Replace all IPv4 addresses in free text with their anonymized labels.
+ * Replace every IP address in free text with its anonymized label.
+ *
+ * Both families: an IPv6 address in a trap varbind, a description or an error
+ * message used to pass through untouched, which is the one thing anonymous
+ * mode exists to prevent.
  */
 export function anonymizeText(text) {
-  if (!text) return text;
-  return String(text).replace(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/g, (match) => {
-    return anonymizeIp(match);
-  });
+  return replaceAddresses(text, anonymizeIp);
 }
 
 /**

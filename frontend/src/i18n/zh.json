@@ -496,7 +496,7 @@
   },
   "discovery": {
     "cidrLabel": "CIDR / IP：",
-    "cidrPlaceholder": "192.168.1.0/24 或 10.0.0.1",
+    "cidrPlaceholder": "192.168.1.0/24、2001:db8::/120 或 ::1",
     "timeoutLabel": "超时：",
     "scanning": "扫描中...",
     "scan": "扫描",

@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"SnmpLens/pkg/events"
+	"SnmpLens/pkg/netaddr"
 
 	"github.com/gosnmp/gosnmp"
 )
@@ -136,7 +137,7 @@ func concurrentExecute(targets []string, fn func(target string) *BulkResult) []*
 // newGoSNMP creates and configures a GoSNMP instance.
 func (c *Client) newGoSNMP(target, community, version string, port, timeoutSec, retries int, v3 V3Params) (*gosnmp.GoSNMP, error) {
 	g := &gosnmp.GoSNMP{
-		Target:    target,
+		Target:    netaddr.NormaliseTarget(target),
 		Port:      normalisePort(port, DefaultPort),
 		Community: community,
 		Timeout:   time.Duration(timeoutSec) * time.Second,

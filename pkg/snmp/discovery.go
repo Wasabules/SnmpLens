@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -105,21 +106,49 @@ func (c *Client) Discover(cidr, community, version string, port, timeoutSec int,
 	return results
 }
 
+// MaxDiscoveryHosts caps a scan.
+//
+// Not a preference. expandCIDR materialises every address into a slice and
+// Discover allocates one channel slot per address, so the prefix decides the
+// allocation before a single packet is sent: 10.0.0.0/8 is 16.7 million
+// strings, and an IPv6 /64 is 1.8e19 — the loop never terminates and the
+// process dies with nothing on screen to say why. Nothing stopped either from
+// being typed.
+const MaxDiscoveryHosts = 65536
+
 func expandCIDR(cidr string) ([]string, error) {
-	if net.ParseIP(cidr) != nil {
-		return []string{cidr}, nil
+	if ip := net.ParseIP(strings.TrimSpace(cidr)); ip != nil {
+		return []string{ip.String()}, nil
 	}
 
-	ip, ipNet, err := net.ParseCIDR(cidr)
+	ip, ipNet, err := net.ParseCIDR(strings.TrimSpace(cidr))
 	if err != nil {
 		return nil, fmt.Errorf("invalid CIDR or IP: %s", cidr)
 	}
 
-	var ips []string
+	// Counted from the prefix, never by walking: walking is the thing that
+	// cannot be allowed to start.
+	ones, bits := ipNet.Mask.Size()
+	if bits == 0 {
+		return nil, fmt.Errorf("invalid netmask in %s", cidr)
+	}
+	hostBits := bits - ones
+	if hostBits > 31 || uint64(1)<<uint(hostBits) > MaxDiscoveryHosts {
+		return nil, fmt.Errorf(
+			"%s covers more than %d addresses; scan a smaller prefix (/%d or longer)",
+			cidr, MaxDiscoveryHosts, bits-16)
+	}
+
+	ips := make([]string, 0, uint64(1)<<uint(hostBits))
 	for ip := ip.Mask(ipNet.Mask); ipNet.Contains(ip); incrementIP(ip) {
 		ips = append(ips, ip.String())
 	}
-	if len(ips) > 2 {
+
+	// The first and last addresses of an IPv4 subnet are the network and the
+	// broadcast, and neither answers SNMP. IPv6 has no broadcast and no
+	// reserved subnet-router address a host cannot also hold, so dropping them
+	// there just skips two real hosts — 2001:db8::/126 lost ::0 and ::3.
+	if ipNet.IP.To4() != nil && len(ips) > 2 {
 		ips = ips[1 : len(ips)-1]
 	}
 	return ips, nil

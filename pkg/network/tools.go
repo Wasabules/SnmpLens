@@ -4,12 +4,15 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"net"
 	"os/exec"
 	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
+
+	"SnmpLens/pkg/netaddr"
 
 	probing "github.com/prometheus-community/pro-bing"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -42,8 +45,11 @@ func Ping(target string, count int) (PingResult, error) {
 	if count <= 0 {
 		count = 4
 	}
+	target = netaddr.NormaliseTarget(target)
 	result := PingResult{Target: target}
 
+	// pro-bing resolves the name and picks ICMPv4 or ICMPv6 from the answer,
+	// so IPv6 needs nothing here beyond an address it can parse.
 	pinger, err := probing.NewPinger(target)
 	if err != nil {
 		return result, fmt.Errorf("resolve target: %w", err)
@@ -80,11 +86,18 @@ func Ping(target string, count int) (PingResult, error) {
 // Traceroute uses system traceroute/tracert command with OS-specific arguments.
 // Emits "tracerouteProgress" events per hop via Wails runtime.
 func Traceroute(ctx context.Context, target string) ([]TracerouteHop, error) {
+	target = netaddr.NormaliseTarget(target)
+
 	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
+	switch {
+	case runtime.GOOS == "windows":
+		// tracert reads the family from the address itself.
 		cmd = exec.CommandContext(ctx, "tracert", "-d", "-w", "2000", target)
-	} else {
-		// Linux / macOS
+	case runtime.GOOS == "darwin" && isIPv6Target(target):
+		// macOS ships traceroute as IPv4-only and puts v6 in a SEPARATE
+		// binary; asking traceroute for an IPv6 address there just fails.
+		cmd = exec.CommandContext(ctx, "traceroute6", "-n", "-w", "2", target)
+	default:
 		cmd = exec.CommandContext(ctx, "traceroute", "-n", "-w", "2", target)
 	}
 
@@ -100,10 +113,15 @@ func Traceroute(ctx context.Context, target string) ([]TracerouteHop, error) {
 	var hops []TracerouteHop
 	scanner := bufio.NewScanner(stdout)
 
+	// Emitting is the caller's business; the parsers stay pure so they can be
+	// run against recorded output of both families.
+	emit := func(hop TracerouteHop) {
+		wailsRuntime.EventsEmit(ctx, "tracerouteProgress", hop)
+	}
 	if runtime.GOOS == "windows" {
-		hops = parseWindowsTraceroute(ctx, scanner)
+		hops = parseWindowsTraceroute(scanner, emit)
 	} else {
-		hops = parseUnixTraceroute(ctx, scanner)
+		hops = parseUnixTraceroute(scanner, emit)
 	}
 
 	cmd.Wait()
@@ -112,10 +130,9 @@ func Traceroute(ctx context.Context, target string) ([]TracerouteHop, error) {
 
 // parseWindowsTraceroute parses Windows tracert output.
 // Format: "  1     1 ms     1 ms     1 ms  192.168.1.1"
-func parseWindowsTraceroute(ctx context.Context, scanner *bufio.Scanner) []TracerouteHop {
+func parseWindowsTraceroute(scanner *bufio.Scanner, emit func(TracerouteHop)) []TracerouteHop {
 	hopRe := regexp.MustCompile(`^\s*(\d+)\s+(.+)$`)
 	rttRe := regexp.MustCompile(`(\d+)\s*ms|\*`)
-	ipRe := regexp.MustCompile(`(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})`)
 
 	var hops []TracerouteHop
 	for scanner.Scan() {
@@ -132,12 +149,8 @@ func parseWindowsTraceroute(ctx context.Context, scanner *bufio.Scanner) []Trace
 		rttMatches := rttRe.FindAllString(rest, 3)
 		rtts := formatRTTs(rttMatches)
 
-		// Extract IP (last IP-like pattern on the line)
-		ipMatch := ipRe.FindAllString(rest, -1)
-		ip := ""
-		if len(ipMatch) > 0 {
-			ip = ipMatch[len(ipMatch)-1]
-		}
+		// The last address on the line, in either family.
+		ip := netaddr.LastAddressIn(rest)
 
 		hop := TracerouteHop{
 			Hop:     hopNum,
@@ -148,17 +161,16 @@ func parseWindowsTraceroute(ctx context.Context, scanner *bufio.Scanner) []Trace
 			Timeout: rtts[0] == "*" && rtts[1] == "*" && rtts[2] == "*",
 		}
 		hops = append(hops, hop)
-		wailsRuntime.EventsEmit(ctx, "tracerouteProgress", hop)
+		emit(hop)
 	}
 	return hops
 }
 
 // parseUnixTraceroute parses Linux/macOS traceroute output.
 // Format: " 1  192.168.1.1  1.234 ms  0.987 ms  1.123 ms"
-func parseUnixTraceroute(ctx context.Context, scanner *bufio.Scanner) []TracerouteHop {
+func parseUnixTraceroute(scanner *bufio.Scanner, emit func(TracerouteHop)) []TracerouteHop {
 	hopRe := regexp.MustCompile(`^\s*(\d+)\s+(.+)$`)
 	rttRe := regexp.MustCompile(`([\d.]+)\s*ms|\*`)
-	ipRe := regexp.MustCompile(`(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})`)
 
 	var hops []TracerouteHop
 	for scanner.Scan() {
@@ -171,9 +183,8 @@ func parseUnixTraceroute(ctx context.Context, scanner *bufio.Scanner) []Tracerou
 		hopNum, _ := strconv.Atoi(m[1])
 		rest := m[2]
 
-		// Extract IP
-		ipMatch := ipRe.FindString(rest)
-		ip := ipMatch
+		// The last address on the line, in either family.
+		ip := netaddr.LastAddressIn(rest)
 
 		// Extract RTTs
 		rttMatches := rttRe.FindAllStringSubmatch(rest, 3)
@@ -196,7 +207,7 @@ func parseUnixTraceroute(ctx context.Context, scanner *bufio.Scanner) []Tracerou
 			Timeout: rtts[0] == "*" && rtts[1] == "*" && rtts[2] == "*",
 		}
 		hops = append(hops, hop)
-		wailsRuntime.EventsEmit(ctx, "tracerouteProgress", hop)
+		emit(hop)
 	}
 	return hops
 }
@@ -219,4 +230,17 @@ func formatRTTs(matches []string) [3]string {
 		}
 	}
 	return rtts
+}
+
+// isIPv6Target reports whether a traceroute should go over IPv6.
+//
+// Resolved, not just parsed: a hostname with only a AAAA record needs
+// traceroute6 on macOS exactly as much as a literal does, and the name gives
+// no hint of that.
+func isIPv6Target(target string) bool {
+	if ip := net.ParseIP(strings.Split(target, "%")[0]); ip != nil {
+		return ip.To4() == nil
+	}
+	addr, err := net.ResolveIPAddr("ip", target)
+	return err == nil && addr.IP.To4() == nil
 }

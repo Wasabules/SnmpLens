@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"SnmpLens/pkg/events"
+	"SnmpLens/pkg/netaddr"
 
 	"github.com/gosnmp/gosnmp"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -74,7 +75,7 @@ func (c *Client) StartTrapListener(port int, v3 V3Params) error {
 			c.trapListener = nil
 		}()
 		log.Printf("Starting trap listener on port %d", port)
-		err := c.trapListener.Listen(fmt.Sprintf("0.0.0.0:%d", port))
+		err := c.trapListener.Listen(netaddr.ListenAddress(port))
 		if err != nil && !strings.Contains(err.Error(), "closed") {
 			log.Printf("Error in trap listener: %v", err)
 			runtime.EventsEmit(c.ctx, "trapError", fmt.Sprintf("Error in listener: %v", err))
@@ -192,7 +193,7 @@ func (c *Client) recordTrap(source, ts, pduType string, packet *gosnmp.SnmpPacke
 // SendTrap sends an SNMP trap to a target.
 func (c *Client) SendTrap(target string, port int, community, version, trapOid string, variables []TrapVariable) error {
 	g := &gosnmp.GoSNMP{
-		Target:    target,
+		Target:    netaddr.NormaliseTarget(target),
 		Port:      normalisePort(port, DefaultTrapPort),
 		Community: community,
 		Timeout:   5 * time.Second,
@@ -224,6 +225,9 @@ func (c *Client) SendTrap(target string, port int, community, version, trapOid s
 		})
 	} else {
 		trap.Enterprise = trapOid
+		// agent-addr is a NetworkAddress in RFC1157, which is four octets and
+		// has no IPv6 form at all. The wildcard says "look at the source
+		// address of the datagram", which is the only honest answer over IPv6.
 		trap.AgentAddress = "0.0.0.0"
 		trap.GenericTrap = 6
 		trap.SpecificTrap = 0
