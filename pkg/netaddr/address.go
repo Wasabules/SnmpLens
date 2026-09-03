@@ -1,6 +1,7 @@
 package netaddr
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -67,7 +68,7 @@ func ListenAddress(port int) string {
 func LastAddressIn(line string) string {
 	last := ""
 	fields := strings.FieldsFunc(line, func(r rune) bool {
-		return r == ' ' || r == '	' || r == '(' || r == ')' || r == ',' || r == ''
+		return r == ' ' || r == '\t' || r == '(' || r == ')' || r == ',' || r == '\r'
 	})
 	for _, f := range fields {
 		f = strings.TrimSuffix(strings.TrimPrefix(f, "["), "]")
@@ -76,4 +77,66 @@ func LastAddressIn(line string) string {
 		}
 	}
 	return last
+}
+
+// ErrNotATarget is returned for something that cannot be a host.
+var ErrNotATarget = errors.New("not an IP address or hostname")
+
+// ValidTarget reports whether s can be handed to a program as a host.
+//
+// This exists because ping and traceroute are EXECUTED, and a value is passed
+// as an argument rather than through a shell. There is no command injection —
+// but there is option injection: measured, `tracert -d -w 2000 -h` answers
+// "Une valeur doit être fournie pour l'option -h", so a target beginning with
+// a dash is read as a flag and not as a host. No flag of tracert, traceroute
+// or traceroute6 writes a file or runs anything, so the ceiling is low; the
+// input is still one a person typed and one nothing checked.
+//
+// Deliberately a whitelist. A blacklist of "-" would let through the next
+// shape somebody's traceroute treats specially, and every legitimate target is
+// an address or a hostname.
+func ValidTarget(s string) error {
+	t := NormaliseTarget(s)
+	if t == "" {
+		return fmt.Errorf("%w: empty", ErrNotATarget)
+	}
+	if len(t) > 253 {
+		return fmt.Errorf("%w: too long", ErrNotATarget)
+	}
+	if IsIPLiteral(t) {
+		return nil
+	}
+	if isHostname(t) {
+		return nil
+	}
+	return fmt.Errorf("%q is %w", s, ErrNotATarget)
+}
+
+// isHostname applies RFC 1123 host syntax.
+//
+// A leading dash is refused as a consequence of the rules rather than as a
+// special case: a label may contain a hyphen and may not begin or end with
+// one.
+func isHostname(s string) bool {
+	s = strings.TrimSuffix(s, ".")
+	if s == "" {
+		return false
+	}
+	for _, label := range strings.Split(s, ".") {
+		if len(label) == 0 || len(label) > 63 {
+			return false
+		}
+		if label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for i := 0; i < len(label); i++ {
+			c := label[i]
+			switch {
+			case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '-':
+			default:
+				return false
+			}
+		}
+	}
+	return true
 }

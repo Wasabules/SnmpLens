@@ -103,13 +103,21 @@ func (a *App) startup(ctx context.Context) {
 		// goroutine, before anything is emitted to the webview.
 		a.snmpClient.SetRecorder(events.RecorderFunc(a.recordEvent))
 		a.initEvaluator()
-		if store, err := secrets.Open(filepath.Join(configDir, "SnmpLens")); err != nil {
-			log.Printf("WARNING: secret storage unavailable, sinks needing a credential will fail: %v", err)
-		} else {
-			a.secrets = store
-			log.Printf("Secret storage backend: %s", store.Backend())
-		}
 		a.initDispatcher()
+	}
+
+	// The secret store, INDEPENDENT of the database.
+	//
+	// It used to open only inside the else branch above, so a corrupt
+	// monitoring.db took the credentials with it. Sink secrets could survive
+	// that; the SNMP credentials that now live here cannot, and locking
+	// someone out of their own community string because a history database
+	// failed to open is not a trade anyone would choose.
+	if store, err := secrets.Open(filepath.Join(configDir, "SnmpLens")); err != nil {
+		log.Printf("WARNING: secret storage unavailable, stored credentials cannot be read: %v", err)
+	} else {
+		a.secrets = store
+		log.Printf("Secret storage backend: %s", store.Backend())
 	}
 
 	// 4. Load core MIBs

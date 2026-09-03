@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -153,5 +154,159 @@ func TestBackendIsNamed(t *testing.T) {
 func TestSinkRefShape(t *testing.T) {
 	if got := SinkRef("uuid-1"); got != "sink/uuid-1/secret" {
 		t.Errorf("SinkRef = %q", got)
+	}
+}
+
+// keyProtector stub whose failures we choose.
+type flakyProtector struct {
+	key     []byte
+	loadErr error
+	saves   int
+	saveErr error
+}
+
+func (p *flakyProtector) name() string { return "flaky" }
+func (p *flakyProtector) loadKey() ([]byte, error) {
+	if p.loadErr != nil {
+		return nil, p.loadErr
+	}
+	return p.key, nil
+}
+func (p *flakyProtector) saveKey(key []byte) error {
+	p.saves++
+	if p.saveErr != nil {
+		return p.saveErr
+	}
+	p.key = key
+	return nil
+}
+
+// A key that cannot be READ is not a key that is ABSENT.
+//
+// Open used to answer any loadKey error by generating a replacement and
+// writing it over the old one. A locked keychain, a permissions blip, a
+// profile restored under a different Windows user — one second of failure and
+// every stored secret decrypts to "cannot decrypt the store", permanently.
+func TestOpenDoesNotMintAKeyOverAnUnreadableOne(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{
+		{"permission denied", os.ErrPermission},
+		{"locked keychain", errors.New("keychain lookup: exit status 51")},
+		{"dpapi refused", errors.New("unprotect: access denied")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := &flakyProtector{key: []byte("the-real-key-nobody-may-replace!!"), loadErr: tc.err}
+
+			if _, err := resolveKey(p); err == nil {
+				t.Fatalf("%v was answered with a new key", tc.err)
+			}
+			if p.saves != 0 {
+				t.Errorf("the key was rewritten %d time(s) despite being unreadable", p.saves)
+			}
+		})
+	}
+}
+
+// First run must still work: absent means absent.
+func TestOpenMintsAKeyOnlyWhenThereIsNone(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatalf("first Open: %v", err)
+	}
+	if err := s.Set(SinkRef("a"), "hunter2"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Reopening finds the key and the secret.
+	again, err := Open(dir)
+	if err != nil {
+		t.Fatalf("second Open: %v", err)
+	}
+	got, err := again.Get(SinkRef("a"))
+	if err != nil || got != "hunter2" {
+		t.Fatalf("secret did not survive a reopen: %q %v", got, err)
+	}
+}
+
+// The end-to-end consequence, on the real store: make the key unreadable and
+// Open must refuse rather than start a new one and orphan the secrets.
+func TestOpenRefusesWhenTheKeyIsUnreadable(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod does not deny the owner on Windows")
+	}
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Set(SinkRef("a"), "hunter2"); err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keyFile string
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".key") {
+			keyFile = filepath.Join(dir, e.Name())
+		}
+	}
+	if keyFile == "" {
+		t.Skip("this platform keeps its key outside the directory")
+	}
+	if err := os.Chmod(keyFile, 0o000); err != nil {
+		t.Skip("cannot make the key unreadable here")
+	}
+	defer os.Chmod(keyFile, 0o600)
+
+	if _, err := Open(dir); err == nil {
+		t.Error("Open succeeded with an unreadable key; it has minted a new one over it")
+	}
+}
+
+// Absent means absent: first run must still mint one, exactly once.
+func TestResolveKeyMintsOnceWhenAbsent(t *testing.T) {
+	p := &flakyProtector{loadErr: os.ErrNotExist}
+	key, err := resolveKey(p)
+	if err != nil {
+		t.Fatalf("first run refused: %v", err)
+	}
+	if len(key) != 32 {
+		t.Errorf("key is %d bytes", len(key))
+	}
+	if p.saves != 1 {
+		t.Errorf("saved %d times, want 1", p.saves)
+	}
+
+	// Now it exists, and must be returned rather than replaced.
+	p.loadErr = nil
+	again, err := resolveKey(p)
+	if err != nil || string(again) != string(key) {
+		t.Errorf("the stored key was not reused: %v", err)
+	}
+	if p.saves != 1 {
+		t.Errorf("saved again on a key that was present (%d)", p.saves)
+	}
+}
+
+// macOS reports "no such item" as an exit status, which used to be
+// indistinguishable from a locked keychain.
+func TestKeychainNotFoundIsAMissingKeyAndNothingElseIs(t *testing.T) {
+	if !isMissingKey(errNoKeyYet) {
+		t.Error("errNoKeyYet is not recognised as a missing key")
+	}
+	for _, err := range []error{
+		os.ErrPermission,
+		errors.New("keychain lookup: exit status 51"),
+		errors.New("secrets: cannot decrypt the store"),
+	} {
+		if isMissingKey(err) {
+			t.Errorf("%v was treated as a missing key", err)
+		}
 	}
 }

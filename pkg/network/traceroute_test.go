@@ -2,6 +2,7 @@ package network
 
 import (
 	"bufio"
+	"context"
 	"strings"
 	"testing"
 )
@@ -114,6 +115,18 @@ func TestIPv6TargetDetection(t *testing.T) {
 	for in, want := range cases {
 		if got := isIPv6Target(in); got != want {
 			t.Errorf("isIPv6Target(%q) = %v, want %v", in, got, want)
+		}
+	}
+}
+
+// The validation must be on the path that builds argv, not merely available.
+func TestPingAndTracerouteRefuseAnOptionAsATarget(t *testing.T) {
+	for _, target := range []string{"-h", "--help", "-w 2000", "", "host name"} {
+		if _, err := Ping(target, 1); err == nil {
+			t.Errorf("Ping(%q) was attempted", target)
+		}
+		if _, err := Traceroute(context.Background(), target); err == nil {
+			t.Errorf("Traceroute(%q) was attempted", target)
 		}
 	}
 }

@@ -97,3 +97,63 @@ func TestListenAddressIsDualStack(t *testing.T) {
 func itoa(n int) string { return strconv.Itoa(n) }
 
 func deadline() time.Time { return time.Now().Add(2 * time.Second) }
+
+// A target becomes argv for ping and traceroute. There is no shell, so nothing
+// can be injected as a command — but a value beginning with a dash IS read as
+// an option: measured, `tracert -d -w 2000 -h` answers "a value must be
+// supplied for the option -h" while an ordinary name is resolved.
+func TestValidTargetAcceptsRealHosts(t *testing.T) {
+	for _, in := range []string{
+		"192.168.1.1", "8.8.8.8", "::1", "2001:db8::1", "[2001:db8::1]",
+		"fe80::1%eth0", "switch-01", "switch-01.example.com", "a.b.c.d.e",
+		"example.com.", "XN--BCHER-KVA.example", "0", "host-with-many-hyphens-1",
+	} {
+		if err := ValidTarget(in); err != nil {
+			t.Errorf("ValidTarget(%q) = %v, want nil", in, err)
+		}
+	}
+}
+
+func TestValidTargetRefusesWhatIsNotAHost(t *testing.T) {
+	for _, in := range []string{
+		"", "   ",
+		// The reason this function exists.
+		"-h", "-d", "--help", "-w 2000", "-j 1.2.3.4",
+		// A label may not start or end with a hyphen.
+		"-leading.example.com", "trailing-.example.com", "mid..dot",
+		// Not host syntax at all.
+		"host name", "host;name", "host|name", "host$(id)", "host\ttab",
+		"host/../etc", "*.example.com", "héllo.example.com",
+	} {
+		if err := ValidTarget(in); err == nil {
+			t.Errorf("ValidTarget(%q) was accepted", in)
+		}
+	}
+}
+
+// Everything ValidTarget accepts must be safe to place in argv: never read as
+// an option by anything, on any platform.
+func TestEveryAcceptedTargetIsArgvSafe(t *testing.T) {
+	for _, in := range []string{
+		"192.168.1.1", "::1", "[2001:db8::1]", "fe80::1%eth0", "switch-01.example.com",
+	} {
+		if err := ValidTarget(in); err != nil {
+			t.Fatalf("%q should be accepted: %v", in, err)
+		}
+		got := NormaliseTarget(in)
+		if strings.HasPrefix(got, "-") {
+			t.Errorf("%q normalises to %q, which argv reads as an option", in, got)
+		}
+	}
+}
+
+// A name longer than a hostname can be is refused before it reaches a resolver.
+func TestValidTargetBoundsLength(t *testing.T) {
+	if err := ValidTarget(strings.Repeat("a", 64) + ".example.com"); err == nil {
+		t.Error("a 64-character label was accepted")
+	}
+	long := strings.TrimSuffix(strings.Repeat("ab.", 100), ".")
+	if err := ValidTarget(long); err == nil {
+		t.Error("a 299-character name was accepted")
+	}
+}

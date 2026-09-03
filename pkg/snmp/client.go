@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -196,7 +197,10 @@ func (c *Client) newGoSNMP(target, community, version string, port, timeoutSec, 
 
 	// Attach debug logger if enabled
 	if c.debugEnabled {
-		g.Logger = gosnmp.NewLogger(log.New(&ringLogWriter{client: c}, "", 0))
+		g.Logger = gosnmp.NewLogger(log.New(&ringLogWriter{
+			client:  c,
+			secrets: []string{community, v3.AuthPass, v3.PrivPass},
+		}, "", 0))
 	}
 
 	return g, nil
@@ -205,10 +209,13 @@ func (c *Client) newGoSNMP(target, community, version string, port, timeoutSec, 
 // ringLogWriter adapts ringLogger as io.Writer for log.New
 type ringLogWriter struct {
 	client *Client
+	// secrets are the credential values of the request that created this
+	// writer, removed from every line before it is buffered.
+	secrets []string
 }
 
 func (w *ringLogWriter) Write(p []byte) (n int, err error) {
-	msg := strings.TrimSpace(string(p))
+	msg := scrubSecrets(strings.TrimSpace(string(p)), w.secrets)
 	if msg == "" {
 		return len(p), nil
 	}
@@ -352,4 +359,44 @@ func isPrintableOctet(b []byte) bool {
 		}
 	}
 	return true
+}
+
+// redacted is what a credential looks like in the debug log.
+const redacted = "[redacted]"
+
+// Fields gosnmp prints in the clear. SnmpPacket.SafeString is not safe: it
+// formats "Community:%s" on every SENDING PACKET (marshal.go:159), and
+// unmarshalling logs "Parsed community %s" (marshal.go:1010).
+var (
+	communityField  = regexp.MustCompile(`Community:[^,]*`)
+	parsedCommunity = regexp.MustCompile(`Parsed community \S*`)
+)
+
+// scrubSecrets removes credential values from one debug line.
+//
+// At the writer, not at the display. The buffer is read by SnmpGetDebugLog and
+// shown in the debug panel, where Anonymous Mode masked IP addresses and
+// nothing else — so a screen share or a screenshot with debug enabled put the
+// community string on someone else's monitor. Keeping it out of the buffer
+// also covers every future reader of that buffer, which masking at one panel
+// does not.
+//
+// Both halves matter. The patterns catch a community this writer was not told
+// about — a trap sender's, say. The values catch a credential printed in a
+// shape the patterns do not know, which is the failure mode a gosnmp upgrade
+// would introduce silently.
+func scrubSecrets(msg string, secrets []string) string {
+	msg = communityField.ReplaceAllString(msg, "Community:"+redacted)
+	msg = parsedCommunity.ReplaceAllString(msg, "Parsed community "+redacted)
+
+	for _, secret := range secrets {
+		// Below three characters a value is as likely to be ordinary text as a
+		// credential, and replacing every "a" in the log would destroy it.
+		// Those are still covered by the patterns above.
+		if len(secret) < 3 {
+			continue
+		}
+		msg = strings.ReplaceAll(msg, secret, redacted)
+	}
+	return msg
 }

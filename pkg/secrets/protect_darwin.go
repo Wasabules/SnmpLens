@@ -4,6 +4,7 @@ package secrets
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -22,10 +23,20 @@ func newProtector(dir string) keyProtector {
 
 func (p *keychainProtector) name() string { return "macos-keychain" }
 
+// keychainItemNotFound is what `security` exits with when the item has never
+// been created. Every other non-zero status — a locked keychain, a denied
+// prompt, no access to the login keychain — means the key exists and cannot be
+// read now, which must NOT be answered by minting a new one over it.
+const keychainItemNotFound = 44
+
 func (p *keychainProtector) loadKey() ([]byte, error) {
 	out, err := exec.Command("security", "find-generic-password",
 		"-s", p.service, "-a", p.account, "-w").Output()
 	if err != nil {
+		var exit *exec.ExitError
+		if errors.As(err, &exit) && exit.ExitCode() == keychainItemNotFound {
+			return nil, errNoKeyYet
+		}
 		return nil, fmt.Errorf("keychain lookup: %w", err)
 	}
 	return base64.StdEncoding.DecodeString(strings.TrimSpace(string(out)))

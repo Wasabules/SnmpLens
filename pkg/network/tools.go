@@ -47,6 +47,9 @@ func Ping(target string, count int) (PingResult, error) {
 	}
 	target = netaddr.NormaliseTarget(target)
 	result := PingResult{Target: target}
+	if err := netaddr.ValidTarget(target); err != nil {
+		return result, err
+	}
 
 	// pro-bing resolves the name and picks ICMPv4 or ICMPv6 from the answer,
 	// so IPv6 needs nothing here beyond an address it can parse.
@@ -87,6 +90,12 @@ func Ping(target string, count int) (PingResult, error) {
 // Emits "tracerouteProgress" events per hop via Wails runtime.
 func Traceroute(ctx context.Context, target string) ([]TracerouteHop, error) {
 	target = netaddr.NormaliseTarget(target)
+	// Checked before it becomes argv. There is no shell here, so nothing can
+	// be injected as a command — but a value starting with a dash IS read as
+	// an option by tracert and by traceroute, and nothing checked.
+	if err := netaddr.ValidTarget(target); err != nil {
+		return nil, err
+	}
 
 	var cmd *exec.Cmd
 	switch {

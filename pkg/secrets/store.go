@@ -34,6 +34,11 @@ const MaxSecretLen = 2048
 var (
 	// ErrNotFound means no secret is stored under that reference.
 	ErrNotFound = errors.New("secrets: not found")
+
+	// errNoKeyYet is what a protector returns when it has never held a key, as
+	// distinct from holding one it cannot read right now. Only the first case
+	// may mint a replacement.
+	errNoKeyYet = errors.New("secrets: no key yet")
 	// ErrTooLong means the secret exceeds MaxSecretLen.
 	ErrTooLong = errors.New("secrets: secret is too long")
 )
@@ -84,18 +89,52 @@ func Open(dir string) (Store, error) {
 		path:      filepath.Join(dir, "sinks.secrets"),
 		protector: newProtector(dir),
 	}
-	key, err := s.protector.loadKey()
+	key, err := resolveKey(s.protector)
 	if err != nil {
+		return nil, err
+	}
+	s.key = key
+	return s, nil
+}
+
+// resolveKey returns the protector's key, creating one ONLY when the
+// protector has never held one.
+//
+// Anything else — a permissions problem, a locked keychain, a profile restored
+// under a different Windows user — must not mint a replacement: it would
+// overwrite the real key, and every stored secret would then fail to decrypt
+// with "cannot decrypt the store". Unrecoverable, from a failure that may have
+// lasted one second.
+func resolveKey(p keyProtector) ([]byte, error) {
+	key, err := p.loadKey()
+	switch {
+	case err == nil:
+		return key, nil
+	case isMissingKey(err):
 		key = make([]byte, 32)
 		if _, err := rand.Read(key); err != nil {
 			return nil, fmt.Errorf("secrets: generate key: %w", err)
 		}
-		if err := s.protector.saveKey(key); err != nil {
+		if err := p.saveKey(key); err != nil {
 			return nil, fmt.Errorf("secrets: persist key: %w", err)
 		}
+		return key, nil
 	}
-	s.key = key
-	return s, nil
+	return nil, fmt.Errorf("secrets: read key: %w", err)
+}
+
+// isMissingKey reports whether the protector has no key yet, as opposed to
+// having one it could not read.
+//
+// The distinction is the whole point: "not there" means first run, and
+// anything else means do not touch what is there.
+func isMissingKey(err error) bool {
+	if errors.Is(err, os.ErrNotExist) || errors.Is(err, ErrNotFound) {
+		return true
+	}
+	// The macOS protector shells out to `security`, which reports a missing
+	// item as an exit status rather than as os.ErrNotExist.
+	return errors.Is(err, errNoKeyYet)
 }
 
 // Backend reports the key protection in effect.
