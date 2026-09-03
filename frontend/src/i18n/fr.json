@@ -48,7 +48,8 @@
       "missingImports": "Imports impossibles à satisfaire",
       "reason": {
         "absent": "(absent du répertoire des MIBs)",
-        "failed": "(présent, mais ne charge pas non plus)"
+        "failed": "(présent, et ne charge pas)",
+        "notloaded": "(présent, mais non chargé — peut-être désactivé)"
       },
       "usedFor": "utilisé pour : {symbols}",
       "rawDetail": "Message du chargeur"

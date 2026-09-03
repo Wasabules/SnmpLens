@@ -48,7 +48,8 @@
       "missingImports": "Importaciones que no se pueden satisfacer",
       "reason": {
         "absent": "(no está en el directorio de MIBs)",
-        "failed": "(presente, pero tampoco carga)"
+        "failed": "(presente, y no carga)",
+        "notloaded": "(presente, pero no cargado — puede estar desactivado)"
       },
       "usedFor": "usado para: {symbols}",
       "rawDetail": "Mensaje del cargador"

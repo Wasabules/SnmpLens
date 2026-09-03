@@ -48,7 +48,8 @@
       "missingImports": "Imports that could not be satisfied",
       "reason": {
         "absent": "(not in the MIB directory)",
-        "failed": "(present, but does not load either)"
+        "failed": "(present, and does not load)",
+        "notloaded": "(present, but not loaded — it may be disabled)"
       },
       "usedFor": "used for: {symbols}",
       "rawDetail": "Loader message"

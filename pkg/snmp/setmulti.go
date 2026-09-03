@@ -2,6 +2,7 @@ package snmp
 
 import (
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -87,6 +88,21 @@ func (c *Client) setMultipleSingle(target string, vars []SetVar, community, vers
 // by the agent as wrongType with nothing saying which of the two was used.
 func buildPDU(oid, value, valueType string) (gosnmp.SnmpPDU, error) {
 	pdu := gosnmp.SnmpPDU{Name: oid}
+
+	// An exact wire type first. pkg/mib works one out from the column's BASE
+	// type, which is the only place the answer actually is; the substring
+	// matching below is for the manual SET form, where the user picks a name
+	// from a list and "Gauge32" arriving as INTEGER is refused as wrongType.
+	if t, ok := wireTypes[valueType]; ok {
+		v, err := encodeWire(t, value)
+		if err != nil {
+			return pdu, err
+		}
+		pdu.Type = t
+		pdu.Value = v
+		return pdu, nil
+	}
+
 	lowerType := strings.ToLower(valueType)
 
 	switch {
@@ -136,3 +152,51 @@ const (
 	RowStatusCreateAndWait = 5
 	RowStatusDestroy       = 6
 )
+
+// wireTypes maps the exact names pkg/mib emits onto ASN.1 tags.
+var wireTypes = map[string]gosnmp.Asn1BER{
+	"Integer":     gosnmp.Integer,
+	"Gauge32":     gosnmp.Gauge32,
+	"Counter32":   gosnmp.Counter32,
+	"Counter64":   gosnmp.Counter64,
+	"TimeTicks":   gosnmp.TimeTicks,
+	"IpAddress":   gosnmp.IPAddress,
+	"OctetString": gosnmp.OctetString,
+	// 0x44, not OpaqueFloat (0x78): Opaque wraps arbitrary bytes, and the
+	// float variants are a different tag with a different payload.
+	"Opaque":           gosnmp.Opaque,
+	"ObjectIdentifier": gosnmp.ObjectIdentifier,
+}
+
+// encodeWire turns the text a person typed into the Go value gosnmp expects
+// for that tag.
+func encodeWire(t gosnmp.Asn1BER, value string) (interface{}, error) {
+	switch t {
+	case gosnmp.Integer:
+		n, err := strconv.ParseInt(value, 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("value %q is not an integer", value)
+		}
+		return int(n), nil
+	case gosnmp.Gauge32, gosnmp.Counter32, gosnmp.TimeTicks:
+		n, err := strconv.ParseUint(value, 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("value %q is not an unsigned 32-bit number", value)
+		}
+		return uint32(n), nil
+	case gosnmp.Counter64:
+		n, err := strconv.ParseUint(value, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("value %q is not an unsigned 64-bit number", value)
+		}
+		return n, nil
+	case gosnmp.IPAddress:
+		if net.ParseIP(value) == nil {
+			return nil, fmt.Errorf("value %q is not an IP address", value)
+		}
+		return value, nil
+	case gosnmp.ObjectIdentifier:
+		return value, nil
+	}
+	return []byte(value), nil
+}

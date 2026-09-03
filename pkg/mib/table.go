@@ -2,6 +2,7 @@ package mib
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -46,9 +47,15 @@ type TableInfo struct {
 
 // TableColumn is one column of a conceptual table.
 type TableColumn struct {
-	Name       string           `json:"name"`
-	Oid        string           `json:"oid"`
-	Syntax     string           `json:"syntax"`
+	Name   string `json:"name"`
+	Oid    string `json:"oid"`
+	Syntax string `json:"syntax"`
+	// WireType is the ASN.1 type a SET must carry for this column, decided
+	// here where the base type is known. The frontend used to send Syntax —
+	// the SMI or textual-convention NAME — into a substring matcher, which
+	// mapped Gauge32, TimeTicks and Counter32 onto INTEGER and made every
+	// agent that type-checks refuse the whole atomic row-creation SET.
+	WireType   string           `json:"wireType"`
 	Access     string           `json:"access"`
 	IsIndex    bool             `json:"isIndex"`
 	Writable   bool             `json:"writable"`
@@ -81,6 +88,21 @@ type IndexValue struct {
 	Sort float64 `json:"sort"`
 	// Numeric says whether Sort means anything.
 	Numeric bool `json:"numeric"`
+}
+
+// effectiveImplied reports whether the row's last INDEX object is IMPLIED,
+// following AUGMENTS.
+//
+// gosmi.Table.Implied does not: GetImplied reads the flag off the augmenting
+// row, and the builder sets that flag only on a row carrying its own INDEX
+// clause. So snmpTargetAddrExtEntry — which AUGMENTS a row whose INDEX is
+// { IMPLIED snmpTargetAddrName } — reports false, and every one of its
+// instances is then read as length-prefixed.
+func effectiveImplied(node gosmi.SmiNode) bool {
+	if aug := node.GetAugment(); aug.Name != "" {
+		return aug.GetImplied()
+	}
+	return node.GetImplied()
 }
 
 // Table returns the conceptual table containing oid, which may name the table,
@@ -125,8 +147,15 @@ func tableInfo(oid string) (*TableInfo, error) {
 		Name:    node.Name,
 		RowOid:  row.Oid.String(),
 		RowName: row.Name,
-		Implied: table.Implied,
+		Implied: effectiveImplied(node),
 	}
+	// gosmi's GetIndex follows AUGMENTS; its GetImplied does not, and the
+	// builder only sets Implied on a row that has its own INDEX — so an
+	// augmenting row always claims false. Take it from the row the INDEX
+	// actually came from, or an IMPLIED last index is read as
+	// length-prefixed: the base table decodes and its extension does not,
+	// and EncodeIndex writes a spurious length that addresses a row which
+	// does not exist.
 	if aug := node.GetAugment(); aug.Name != "" {
 		info.Augments = aug.Name
 	}
@@ -139,7 +168,7 @@ func tableInfo(oid string) (*TableInfo, error) {
 		}
 		// IMPLIED applies to the last index object and only there does it
 		// change how many sub-identifiers to read.
-		part.Implied = table.Implied && i == len(table.Index)-1
+		part.Implied = info.Implied && i == len(table.Index)-1
 		info.Index = append(info.Index, part)
 		indexNames[idx.Name] = true
 	}
@@ -155,6 +184,7 @@ func tableInfo(oid string) (*TableInfo, error) {
 		}
 		if col.Type != nil {
 			c.Syntax = col.Type.Name
+			c.WireType = wireTypeOf(col.Type)
 			if col.Type.Name == "RowStatus" {
 				info.RowStatusOid = c.Oid
 			}
@@ -191,14 +221,15 @@ func (s *Service) DecodeIndexes(tableOid string, instances []string) []DecodedIn
 		return out
 	}
 	table := node.AsTable()
+	implied := effectiveImplied(node)
 
 	for i, raw := range instances {
-		out[i] = decodeInstance(table, raw)
+		out[i] = decodeInstance(table, implied, raw)
 	}
 	return out
 }
 
-func decodeInstance(table gosmi.Table, raw string) DecodedIndex {
+func decodeInstance(table gosmi.Table, tableImplied bool, raw string) DecodedIndex {
 	res := DecodedIndex{Raw: raw}
 	subs, err := parseSubIDs(raw)
 	if err != nil {
@@ -212,7 +243,7 @@ func decodeInstance(table gosmi.Table, raw string) DecodedIndex {
 
 	pos := 0
 	for i, idx := range table.Index {
-		implied := table.Implied && i == len(table.Index)-1
+		implied := tableImplied && i == len(table.Index)-1
 		value, used, err := decodeOne(idx, subs[pos:], implied)
 		if err != nil {
 			res.Error = fmt.Sprintf("%s: %v", idx.Name, err)
@@ -242,6 +273,13 @@ func decodeOne(node gosmi.SmiNode, subs []uint32, implied bool) (IndexValue, int
 	switch node.Type.BaseType {
 	case types.BaseTypeEnum:
 		v := int64(subs[0])
+		// Enum can be nil on a BaseTypeEnum: gosmi's getEnum returns nothing
+		// when the labels did not resolve, and Enum.Name is a pointer method
+		// that locks — so this is a nil-receiver panic on a walk of a MIB
+		// nobody controls, not a wrong label.
+		if node.Type.Enum == nil {
+			return IndexValue{Display: strconv.FormatInt(v, 10), Sort: float64(v), Numeric: true}, 1, nil
+		}
 		return IndexValue{
 			Display: fmt.Sprintf("%s(%d)", node.Type.Enum.Name(v), v),
 			Sort:    float64(v), Numeric: true,
@@ -302,11 +340,13 @@ func lengthOf(subs []uint32, implied bool, fixed int) (n, start int, err error) 
 	case implied:
 		return len(subs), 0, nil
 	default:
-		n = int(subs[0])
-		if len(subs) < n+1 {
-			return 0, 0, fmt.Errorf("length %d exceeds the %d sub-identifiers left", n, len(subs)-1)
+		// From the wire, so bounded before it becomes an int: on a 32-bit
+		// build a sub-identifier above 2^31 makes int(subs[0]) negative, and
+		// make([]byte, n) below panics on data an agent chose.
+		if uint64(subs[0]) > uint64(len(subs)-1) {
+			return 0, 0, fmt.Errorf("length %d exceeds the %d sub-identifiers left", subs[0], len(subs)-1)
 		}
-		return n, 1, nil
+		return int(subs[0]), 1, nil
 	}
 }
 
@@ -423,6 +463,7 @@ func (s *Service) EncodeIndex(tableOid string, values []string) (string, error) 
 		return "", err
 	}
 	table := node.AsTable()
+	tableImplied := effectiveImplied(node)
 	if len(table.Index) == 0 {
 		return "", fmt.Errorf("%s declares no INDEX", tableOid)
 	}
@@ -432,7 +473,7 @@ func (s *Service) EncodeIndex(tableOid string, values []string) (string, error) 
 
 	var subs []uint32
 	for i, idx := range table.Index {
-		implied := table.Implied && i == len(table.Index)-1
+		implied := tableImplied && i == len(table.Index)-1
 		enc, err := encodeOne(idx, strings.TrimSpace(values[i]), implied)
 		if err != nil {
 			return "", fmt.Errorf("%s: %w", idx.Name, err)
@@ -461,9 +502,12 @@ func encodeOne(node gosmi.SmiNode, value string, implied bool) ([]uint32, error)
 
 	switch node.Type.BaseType {
 	case types.BaseTypeEnum:
-		// A label is what the UI shows, so it has to be accepted back.
-		if v, err := node.Type.Enum.Value(value); err == nil {
-			return []uint32{uint32(v)}, nil
+		// A label is what the UI shows, so it has to be accepted back — when
+		// there are labels at all.
+		if node.Type.Enum != nil {
+			if v, err := node.Type.Enum.Value(value); err == nil {
+				return []uint32{uint32(v)}, nil
+			}
 		}
 		fallthrough
 
@@ -492,6 +536,14 @@ func encodeOne(node gosmi.SmiNode, value string, implied bool) ([]uint32, error)
 				return nil, err
 			}
 			octets = ip
+		} else if hex, ok := parseHexOctets(value); ok {
+			// The form renderOctets shows for a non-printable string, which is
+			// what a MAC address is. Without this the two halves do not meet:
+			// the row reads 00:1b:44:11:3a:b7 and typing that back gave 17
+			// octets — refused for a fixed SIZE(6), and silently accepted as a
+			// 17-octet index for a variable-length one, creating a row at an
+			// address nobody asked for.
+			octets = hex
 		} else {
 			octets = make([]uint32, 0, len(value))
 			for _, b := range []byte(value) {
@@ -515,8 +567,12 @@ func withLength(subs []uint32, implied bool, fixed int) ([]uint32, error) {
 	case implied:
 		return subs, nil
 	default:
-		if len(subs) > 0xffffffff {
-			return nil, fmt.Errorf("value too long")
+		// A length sub-identifier is a uint32. The old guard compared against
+		// 0xffffffff as an untyped constant, which does not fit in a 32-bit
+		// int — pkg/mib stopped compiling for GOARCH=386 and arm — and could
+		// never be true on 64-bit anyway.
+		if uint64(len(subs)) > math.MaxUint32 {
+			return nil, fmt.Errorf("value too long to index")
 		}
 		return append([]uint32{uint32(len(subs))}, subs...), nil
 	}
@@ -536,4 +592,79 @@ func parseDottedQuad(s string) ([]uint32, error) {
 		out[i] = uint32(v)
 	}
 	return out, nil
+}
+
+// wireTypeOf names the ASN.1 type a value of this SMI type is encoded as.
+//
+// By BASE type, not by name: a textual convention is written as whatever it
+// refines, and InterfaceIndex, Percent or DisplayString say nothing about
+// their tag. The application types that do not follow from the base type are
+// recognised by name, because RFC 2578 gives them their own tags.
+//
+// Unsigned32 and Gauge32 deliberately share one answer: RFC 2578 gives them
+// the same tag (APPLICATION 2), so the distinction is one of meaning, not of
+// encoding.
+func wireTypeOf(t *models.Type) string {
+	switch t.Name {
+	case "IpAddress":
+		return "IpAddress"
+	case "TimeTicks":
+		return "TimeTicks"
+	case "Counter32":
+		return "Counter32"
+	case "Counter64":
+		return "Counter64"
+	case "Opaque":
+		return "Opaque"
+	}
+
+	switch t.BaseType {
+	case types.BaseTypeInteger32, types.BaseTypeEnum:
+		return "Integer"
+	case types.BaseTypeUnsigned32:
+		return "Gauge32"
+	case types.BaseTypeUnsigned64:
+		return "Counter64"
+	case types.BaseTypeObjectIdentifier:
+		return "ObjectIdentifier"
+	case types.BaseTypeOctetString, types.BaseTypeBits:
+		return "OctetString"
+	}
+	return ""
+}
+
+// parseHexOctets reads the colon- or hyphen-separated hex renderOctets emits.
+//
+// Deliberately strict: every group exactly two hex digits, at least two
+// groups. "ab" is a two-character STRING index and must stay one, and a
+// DisplayString that happens to read "de:ad" is three characters, not two
+// octets — requiring the pairs to be exactly two digits each is what keeps
+// those apart from a real MAC.
+func parseHexOctets(s string) ([]uint32, bool) {
+	sep := ""
+	switch {
+	case strings.Contains(s, ":"):
+		sep = ":"
+	case strings.Contains(s, "-"):
+		sep = "-"
+	default:
+		return nil, false
+	}
+
+	parts := strings.Split(s, sep)
+	if len(parts) < 2 {
+		return nil, false
+	}
+	out := make([]uint32, len(parts))
+	for i, p := range parts {
+		if len(p) != 2 {
+			return nil, false
+		}
+		v, err := strconv.ParseUint(p, 16, 8)
+		if err != nil {
+			return nil, false
+		}
+		out[i] = uint32(v)
+	}
+	return out, true
 }

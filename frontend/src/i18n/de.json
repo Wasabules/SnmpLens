@@ -48,7 +48,8 @@
       "missingImports": "Nicht erfüllbare Importe",
       "reason": {
         "absent": "(nicht im MIB-Verzeichnis)",
-        "failed": "(vorhanden, lädt aber ebenfalls nicht)"
+        "failed": "(vorhanden, lädt aber nicht)",
+        "notloaded": "(vorhanden, aber nicht geladen — evtl. deaktiviert)"
       },
       "usedFor": "verwendet für: {symbols}",
       "rawDetail": "Meldung des Laders"

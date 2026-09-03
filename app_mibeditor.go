@@ -31,6 +31,10 @@ import (
 // its stale content would win, silently, with no error anywhere.
 const mibBackupDirName = "mib-backups"
 
+// mibTempDirName holds the write-then-rename staging file, a sibling of the
+// MIB folder for exactly the reason above.
+const mibTempDirName = "mib-temp"
+
 // resolveMibPath maps a file name to a path inside the MIB directory, and
 // refuses anything that would land outside it.
 func (a *App) resolveMibPath(name string) (string, error) {
@@ -198,7 +202,16 @@ func (a *App) MibEditorSave(name, content, baseSha256 string, force bool) (mib.S
 	// Write to a temporary file on the SAME volume, then rename: a crash
 	// halfway through must not leave a truncated MIB that breaks every module
 	// importing from it.
-	tmp := path + ".tmp"
+	// In a SIBLING directory, for the same reason backups and drafts are:
+	// ListMibFiles returns everything in mibs/ that is not a dotfile, so a
+	// crash between the write and the rename left IF-MIB.tmp beside IF-MIB —
+	// and os.ReadDir being alphabetical, the half-written copy loaded second
+	// and won, gosmi's module map being last-wins.
+	tmpDir := filepath.Join(filepath.Dir(a.persistentMibDir), mibTempDirName)
+	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
+		return result, err
+	}
+	tmp := filepath.Join(tmpDir, filepath.Base(path)+".tmp")
 	if err := os.WriteFile(tmp, payload, 0o644); err != nil {
 		return result, err
 	}

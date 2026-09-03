@@ -65,8 +65,9 @@ type LoadDiagnosis struct {
 
 // Reasons an imported module is unavailable.
 const (
-	ImportAbsent = "absent" // no file for it anywhere in the MIB directory
-	ImportFailed = "failed" // the file is there and does not load either
+	ImportAbsent    = "absent"    // no file for it anywhere in the MIB directory
+	ImportFailed    = "failed"    // the file is there and has a problem of its own
+	ImportNotLoaded = "notloaded" // the file is fine; it is simply not loaded
 )
 
 // MissingModule is one entry of an IMPORTS clause that cannot be satisfied.
@@ -85,14 +86,45 @@ type MissingModule struct {
 // something has already gone wrong, or when someone asks, and an answer that
 // takes 40 ms and names the line beats one that is instant and says nothing.
 func (s *Service) Diagnose(fileName string) LoadDiagnosis {
-	gosmiMu.Lock()
-	defer gosmiMu.Unlock()
-	return s.diagnose(fileName, map[string]bool{})
+	gosmiMu.RLock()
+	defer gosmiMu.RUnlock()
+	return s.diagnose(fileName, newDiagContext(s), "")
 }
 
-// diagnose does the work. `visiting` breaks import cycles, which exist in real
-// vendor MIB sets and would otherwise recurse until the stack ends.
-func (s *Service) diagnose(fileName string, visiting map[string]bool) LoadDiagnosis {
+// diagContext is the per-request state a diagnosis shares with the ones it
+// triggers: the directory listing, and the modules already visited.
+//
+// The listing costs an Open and an 8 KB read of every file in the folder. It
+// used to be rebuilt at every recursion level, so a directory of 200 vendor
+// MIBs with 50 failures did that fifty times over — thousands of file opens,
+// all of them inside the lock.
+type diagContext struct {
+	visiting  map[string]bool
+	available map[string]string
+	hasFiles  bool
+}
+
+func newDiagContext(s *Service) *diagContext {
+	return &diagContext{visiting: map[string]bool{}}
+}
+
+func (c *diagContext) files(s *Service) map[string]string {
+	if !c.hasFiles {
+		c.available = s.availableModules()
+		c.hasFiles = true
+	}
+	return c.available
+}
+
+// diagnose does the work.
+//
+// It READS. It does not call gosmi.LoadModule, and neither does anything it
+// calls: an explanation that loads modules as a side effect would re-enable
+// MIBs the user switched off — they stay in the global node index while
+// absent from the tree, so Translate, ResolveOid, Table and Symbols all start
+// answering from a module nobody asked for. `printed` carries what gosmi said
+// when the caller tried the load itself.
+func (s *Service) diagnose(fileName string, ctx *diagContext, printed string) LoadDiagnosis {
 	d := LoadDiagnosis{FileName: fileName, Stage: StageRead}
 
 	path, err := s.resolve(fileName)
@@ -150,7 +182,7 @@ func (s *Service) diagnose(fileName string, visiting map[string]bool) LoadDiagno
 
 	// --- imports ---
 	d.Stage = StageImports
-	d.Missing = s.missingImports(module, visiting)
+	d.Missing = s.missingImports(module, ctx)
 	if len(d.Missing) > 0 {
 		d.Summary = summariseMissing(d.Missing)
 		d.Hints = append(d.Hints, "put the missing module in the MIB directory, named after the module itself")
@@ -158,15 +190,9 @@ func (s *Service) diagnose(fileName string, visiting map[string]bool) LoadDiagno
 		// problems, and listing only the first wastes the round trip.
 	}
 
-	// --- the load itself, with gosmi's own message recovered ---
+	// --- what the loader made of it ---
 	d.Stage = StageBuild
-	printed := captureStdout(func() {
-		name, err := gosmi.LoadModule(fileName)
-		d.Loaded = err == nil && name != ""
-		if d.Loaded {
-			d.ModuleName = name
-		}
-	})
+	d.Loaded = d.ModuleName != "" && gosmi.IsLoaded(d.ModuleName)
 	printed = shortenPaths(strings.TrimSpace(printed), s.path)
 
 	if !d.Loaded {
@@ -183,8 +209,10 @@ func (s *Service) diagnose(fileName string, visiting map[string]bool) LoadDiagno
 	}
 
 	// --- loaded, which is not the same as correct ---
+	// analyseParsed, not Analyse: the module is already parsed above, and a
+	// 185 KB MIB costs about 40 ms to parse a second time for nothing.
 	cat := symbolsLocked()
-	for _, diag := range Analyse(content, cat) {
+	for _, diag := range analyseParsed(content, module, nil, cat) {
 		if diag.Severity == SevError {
 			d.Diagnostics = append(d.Diagnostics, diag)
 		}
@@ -302,12 +330,12 @@ func describeNonMib(raw []byte) (summary, hint string, bad bool) {
 // The symbols matter: "CISCO-SMI is missing" is a fact, and "CISCO-SMI is
 // missing, which is where ciscoMgmt comes from" is the same fact with the
 // reason this file needs it.
-func (s *Service) missingImports(module *parser.Module, visiting map[string]bool) []MissingModule {
+func (s *Service) missingImports(module *parser.Module, ctx *diagContext) []MissingModule {
 	if module == nil || module.Body.Imports == nil {
 		return nil
 	}
 
-	available := s.availableModules()
+	available := ctx.files(s)
 	var out []MissingModule
 
 	for _, imp := range module.Body.Imports {
@@ -330,18 +358,19 @@ func (s *Service) missingImports(module *parser.Module, visiting map[string]bool
 			continue
 		}
 
-		// The file is here and the module is not loaded, so it failed too.
-		// Follow it once, so the chain is reported at its root.
-		entry := MissingModule{Module: name, Symbols: symbols, Reason: ImportFailed}
-		if !visiting[strings.ToUpper(name)] {
-			visiting[strings.ToUpper(name)] = true
-			sub := s.diagnose(file, visiting)
-			if !sub.Loaded {
+		// The file is here and the module is not loaded. Two very different
+		// reasons: it is broken, or it is simply switched off. Look, and say
+		// which — "does not load either" was wrong for the second, and the
+		// second is the common one.
+		entry := MissingModule{Module: name, Symbols: symbols, Reason: ImportNotLoaded}
+		if !ctx.visiting[strings.ToUpper(name)] {
+			ctx.visiting[strings.ToUpper(name)] = true
+			sub := s.diagnose(file, ctx, "")
+			switch sub.Stage {
+			case StageRead, StageContent, StageParse:
+				// A problem of its own, at its root.
+				entry.Reason = ImportFailed
 				entry.Cause = sub.Summary
-			} else {
-				// It loads on its own; the earlier failure was ordering or a
-				// cycle, and saying "failed" would be wrong.
-				continue
 			}
 		}
 		out = append(out, entry)
@@ -444,10 +473,13 @@ func summariseMissing(missing []MissingModule) string {
 	}
 	if len(missing) == 1 {
 		m := missing[0]
-		if m.Reason == ImportAbsent {
+		switch m.Reason {
+		case ImportAbsent:
 			return fmt.Sprintf("it imports %s, which is not in the MIB directory", m.Module)
+		case ImportFailed:
+			return fmt.Sprintf("it imports %s, which is present and does not load", m.Module)
 		}
-		return fmt.Sprintf("it imports %s, which is present but does not load either", m.Module)
+		return fmt.Sprintf("it imports %s, which is present but not loaded — it may be disabled", m.Module)
 	}
 	return fmt.Sprintf("it imports %d modules that are unavailable: %s",
 		len(missing), strings.Join(names, ", "))
@@ -476,19 +508,49 @@ func after(s, marker string) string {
 
 // excerpt shows the offending line with a caret under the column, which is the
 // difference between "line 412" and seeing what is wrong on line 412.
+// excerptWidth is how much of the offending line to show.
+const excerptWidth = 160
+
 func excerpt(content string, line, column int) string {
 	lines := strings.Split(content, "\n")
 	if line < 1 || line > len(lines) {
 		return ""
 	}
 	text := strings.ReplaceAll(lines[line-1], "\t", " ")
-	if len(text) > 160 {
-		text = text[:160] + "…"
-	}
+
 	if column < 1 || column > len(text)+1 {
+		if len(text) > excerptWidth {
+			text = text[:excerptWidth] + "…"
+		}
 		return text
 	}
-	return text + "\n" + strings.Repeat(" ", column-1) + "^"
+
+	// Around the column, not from the start of the line. Truncating at a fixed
+	// width from column 1 drops the reported position entirely on a long vendor
+	// line, and the caret was then omitted — leaving an excerpt that does not
+	// contain the thing it is an excerpt of.
+	caret := column - 1
+	if len(text) > excerptWidth {
+		start := 0
+		if caret > excerptWidth/2 {
+			start = caret - excerptWidth/2
+		}
+		end := start + excerptWidth
+		if end > len(text) {
+			end = len(text)
+			start = end - excerptWidth
+		}
+		prefix, suffix := "", ""
+		if start > 0 {
+			prefix = "…"
+		}
+		if end < len(text) {
+			suffix = "…"
+		}
+		caret = caret - start + len([]rune(prefix))
+		text = prefix + text[start:end] + suffix
+	}
+	return text + "\n" + strings.Repeat(" ", caret) + "^"
 }
 
 func plural(n int, one, many string) string {

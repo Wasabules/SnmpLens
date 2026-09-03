@@ -48,7 +48,8 @@
       "missingImports": "无法满足的导入",
       "reason": {
         "absent": "（不在 MIB 目录中）",
-        "failed": "（存在，但同样无法加载）"
+        "failed": "（存在，但无法加载）",
+        "notloaded": "（存在但未加载 — 可能已被禁用）"
       },
       "usedFor": "用于：{symbols}",
       "rawDetail": "加载器消息"

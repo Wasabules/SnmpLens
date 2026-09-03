@@ -368,3 +368,243 @@ func TestReadCreateTableIsReportedWritable(t *testing.T) {
 		t.Errorf("no column of %s reported as writable: %+v", info.Name, info.Columns)
 	}
 }
+
+// A row that AUGMENTS one with an IMPLIED index.
+//
+// No bundled MIB has this shape, and gosmi gets it wrong in a way that only
+// shows here: GetIndex follows the augment, GetImplied does not, and the
+// builder sets Implied only on a row carrying its own INDEX. So the
+// augmenting row claims IMPLIED=false, its last index object is read as
+// length-prefixed, and the two halves of one conceptual row disagree —
+// EncodeIndex being the damaging half, since it then writes a length prefix
+// that addresses a row which does not exist.
+const impliedBase = `BASE-MIB DEFINITIONS ::= BEGIN
+IMPORTS OBJECT-TYPE, Integer32, enterprises FROM SNMPv2-SMI;
+
+baseTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF BaseEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION "a table keyed by a name"
+    ::= { enterprises 77 }
+
+baseEntry OBJECT-TYPE
+    SYNTAX      BaseEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION "one row"
+    INDEX       { IMPLIED baseName }
+    ::= { baseTable 1 }
+
+BaseEntry ::= SEQUENCE { baseName OCTET STRING, baseValue Integer32 }
+
+baseName OBJECT-TYPE
+    SYNTAX      OCTET STRING
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "the name"
+    ::= { baseEntry 1 }
+
+baseValue OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION "a value"
+    ::= { baseEntry 2 }
+END
+`
+
+const impliedExt = `EXT-MIB DEFINITIONS ::= BEGIN
+IMPORTS OBJECT-TYPE, Integer32, enterprises FROM SNMPv2-SMI
+        baseEntry FROM BASE-MIB;
+
+extTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF ExtEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION "an extension of baseTable"
+    ::= { enterprises 78 }
+
+extEntry OBJECT-TYPE
+    SYNTAX      ExtEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION "one row, keyed by baseEntry's index"
+    AUGMENTS    { baseEntry }
+    ::= { extTable 1 }
+
+ExtEntry ::= SEQUENCE { extValue Integer32 }
+
+extValue OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION "a value"
+    ::= { extEntry 1 }
+END
+`
+
+func TestAugmentedRowInheritsImplied(t *testing.T) {
+	s := diagDir(t, map[string]string{
+		"SNMPv2-SMI": smiStub,
+		"BASE-MIB":   impliedBase,
+		"EXT-MIB":    impliedExt,
+	})
+	if _, err := s.LoadSpecific([]string{"SNMPv2-SMI", "BASE-MIB", "EXT-MIB"}); err != nil {
+		t.Skipf("the fixtures did not load: %v", err)
+	}
+
+	base, err := s.Table("1.3.6.1.4.1.77")
+	if err != nil {
+		t.Skipf("baseTable did not resolve: %v", err)
+	}
+	ext, err := s.Table("1.3.6.1.4.1.78")
+	if err != nil {
+		t.Skipf("extTable did not resolve: %v", err)
+	}
+
+	if !base.Implied {
+		t.Fatalf("the base row lost its own IMPLIED: %+v", base)
+	}
+	if ext.Augments == "" {
+		t.Fatalf("extEntry does not report what it augments: %+v", ext)
+	}
+	if !ext.Implied {
+		t.Errorf("the augmenting row reports IMPLIED=%v; it inherits the base row's index and must inherit its IMPLIED with it", ext.Implied)
+	}
+
+	// "abc" as an IMPLIED index is its bytes and nothing else.
+	const instance = "97.98.99"
+	for _, tbl := range []*TableInfo{base, ext} {
+		got := s.DecodeIndexes(tbl.Oid, []string{instance})[0]
+		if got.Error != "" {
+			t.Errorf("%s: %q did not decode: %s", tbl.Name, instance, got.Error)
+			continue
+		}
+		if len(got.Parts) != 1 || got.Parts[0].Display != "abc" {
+			t.Errorf("%s: decoded as %+v, want abc", tbl.Name, got.Parts)
+		}
+
+		enc, err := s.EncodeIndex(tbl.Oid, []string{"abc"})
+		if err != nil {
+			t.Errorf("%s: encode: %v", tbl.Name, err)
+			continue
+		}
+		if enc != instance {
+			t.Errorf("%s: encoded %q as %q, want %q — a length prefix here addresses a row that does not exist",
+				tbl.Name, "abc", enc, instance)
+		}
+	}
+}
+
+// What the screen shows must be what you can type back.
+//
+// A MAC-keyed table renders its index as 00:1b:44:11:3a:b7 (renderOctets, for
+// anything not printable). Typing that into the New-row dialog used to be
+// byte-copied: 17 octets, refused for a SIZE(6) index and — worse — accepted
+// for a variable-length one, creating a row at an address nobody asked for.
+func TestHexOctetIndexRoundTrips(t *testing.T) {
+	cases := map[string]struct {
+		want []uint32
+		ok   bool
+	}{
+		"00:1b:44:11:3a:b7": {[]uint32{0x00, 0x1b, 0x44, 0x11, 0x3a, 0xb7}, true},
+		"00-1b-44-11-3a-b7": {[]uint32{0x00, 0x1b, 0x44, 0x11, 0x3a, 0xb7}, true},
+		"AB:CD":             {[]uint32{0xab, 0xcd}, true},
+		// Not hex octets: ordinary strings that merely contain a separator.
+		"eth0":        {nil, false},
+		"a:b":         {nil, false},
+		"de:adbeef":   {nil, false},
+		"switch-01":   {nil, false},
+		"192.168.1.1": {nil, false},
+		"":            {nil, false},
+		"zz:zz":       {nil, false},
+	}
+	for in, want := range cases {
+		got, ok := parseHexOctets(in)
+		if ok != want.ok {
+			t.Errorf("parseHexOctets(%q) ok = %v, want %v (got %v)", in, ok, want.ok, got)
+			continue
+		}
+		if !ok {
+			continue
+		}
+		if len(got) != len(want.want) {
+			t.Errorf("%q -> %v, want %v", in, got, want.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != want.want[i] {
+				t.Errorf("%q -> %v, want %v", in, got, want.want)
+				break
+			}
+		}
+	}
+}
+
+// The display and the encoder must agree on a fixed-size octet index, end to
+// end through a real MIB.
+func TestMacIndexRoundTripsThroughATable(t *testing.T) {
+	s := diagDir(t, map[string]string{
+		"SNMPv2-SMI": smiStub,
+		"MAC-MIB": `MAC-MIB DEFINITIONS ::= BEGIN
+IMPORTS OBJECT-TYPE, Integer32, enterprises FROM SNMPv2-SMI;
+
+macTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF MacEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION "keyed by a six-octet address"
+    ::= { enterprises 79 }
+
+macEntry OBJECT-TYPE
+    SYNTAX      MacEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION "one row"
+    INDEX       { macAddress }
+    ::= { macTable 1 }
+
+MacEntry ::= SEQUENCE { macAddress OCTET STRING, macPort Integer32 }
+
+macAddress OBJECT-TYPE
+    SYNTAX      OCTET STRING (SIZE (6))
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "the address"
+    ::= { macEntry 1 }
+
+macPort OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION "a port"
+    ::= { macEntry 2 }
+END
+`})
+	if _, err := s.LoadSpecific([]string{"SNMPv2-SMI", "MAC-MIB"}); err != nil {
+		t.Skipf("fixture did not load: %v", err)
+	}
+	info, err := s.Table("1.3.6.1.4.1.79")
+	if err != nil {
+		t.Skipf("macTable did not resolve: %v", err)
+	}
+
+	const instance = "0.27.68.17.58.183"
+	shown := s.DecodeIndexes(info.Oid, []string{instance})[0]
+	if shown.Error != "" {
+		t.Fatalf("decode: %s", shown.Error)
+	}
+	display := shown.Parts[0].Display
+	if display != "00:1b:44:11:3a:b7" {
+		t.Fatalf("displayed as %q", display)
+	}
+
+	back, err := s.EncodeIndex(info.Oid, []string{display})
+	if err != nil {
+		t.Fatalf("what the screen shows was refused by the encoder: %v", err)
+	}
+	if back != instance {
+		t.Errorf("round trip gave %q, want %q", back, instance)
+	}
+}

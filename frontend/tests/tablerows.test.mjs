@@ -169,4 +169,40 @@ const TABLE = {
     vars[0].oid === '1.3.6.1.2.1.99.1.1.4.7' && vars[0].value === '6');
 }
 
+// A two-part raw instance is not a number. Number('1.10') is 1.1, so sorting
+// coerced it and produced 1.10, 1.2, 1.9 — the ordering this module exists to
+// fix, on any table whose MIB is not loaded.
+{
+  const rows = ['1.2', '1.10', '1.9', '2.1'].map((index) => ({ index, cells: {} }));
+  const sorted = sortRows(rows, '__index', true).map((r) => r.index);
+  check('a multi-part raw instance sorts naturally',
+    sorted.join(' ') === '1.2 1.9 1.10 2.1', sorted.join(' '));
+}
+
+// The wire type decided in Go must be what travels, not the SMI name.
+{
+  const table = {
+    rowStatusOid: '1.1.4',
+    columns: [
+      { name: 'k', oid: '1.1.1', syntax: 'Integer32', wireType: 'Integer', isIndex: true },
+      { name: 'rate', oid: '1.1.2', syntax: 'Gauge32', wireType: 'Gauge32' },
+      { name: 'up', oid: '1.1.3', syntax: 'TimeTicks', wireType: 'TimeTicks' },
+      { name: 'st', oid: '1.1.4', syntax: 'RowStatus', wireType: 'Integer' },
+    ],
+  };
+  const vars = buildRowVarbinds(table, '7', { '1.1.2': '100', '1.1.3': '42' }, 4);
+  const byOid = Object.fromEntries(vars.map((v) => [v.oid, v.type]));
+  check('a Gauge32 column is sent as Gauge32, not INTEGER',
+    byOid['1.1.2.7'] === 'Gauge32', byOid['1.1.2.7']);
+  check('a TimeTicks column keeps its own tag',
+    byOid['1.1.3.7'] === 'TimeTicks', byOid['1.1.3.7']);
+
+  // Without a wireType — an unresolved column — the SMI name is still better
+  // than nothing, and must not become an empty string.
+  const legacy = buildRowVarbinds(
+    { rowStatusOid: '1.1.4', columns: [{ name: 'n', oid: '1.1.2', syntax: 'DisplayString' }] },
+    '7', { '1.1.2': 'x' }, 4);
+  check('the SMI name is the fallback', legacy[0].type === 'DisplayString', legacy[0].type);
+}
+
 process.exit(failures ? 1 : 0);

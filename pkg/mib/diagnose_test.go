@@ -357,3 +357,159 @@ func TestCaptureStdoutRestoresItEvenOnPanic(t *testing.T) {
 		t.Error("stdout was not restored")
 	}
 }
+
+// A diagnosis explains; it must not load.
+//
+// It used to call gosmi.LoadModule on the file and, through missingImports,
+// on every dependency it could find — so asking why a MIB failed pulled
+// modules into the global node index that the user had switched off. They are
+// absent from the tree and present in gosmi, which means Translate,
+// ResolveOid, Table and Symbols answer from them app-wide.
+func TestDiagnoseLoadsNothing(t *testing.T) {
+	s := diagDir(t, map[string]string{
+		"SNMPv2-SMI": smiStub,
+		"DEP-MIB": `DEP-MIB DEFINITIONS ::= BEGIN
+IMPORTS OBJECT-TYPE, enterprises FROM SNMPv2-SMI;
+thing OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "perfectly loadable, and deliberately not loaded"
+    ::= { enterprises 1 }
+END
+`,
+		"USER-MIB": `USER-MIB DEFINITIONS ::= BEGIN
+IMPORTS thing FROM DEP-MIB;
+END
+`})
+
+	for _, m := range []string{"DEP-MIB", "USER-MIB", "SNMPv2-SMI"} {
+		if gosmi.IsLoaded(m) {
+			t.Fatalf("%s was already loaded; the fixture is not clean", m)
+		}
+	}
+
+	d := s.Diagnose("USER-MIB")
+	t.Logf("stage=%s summary=%s missing=%+v", d.Stage, d.Summary, d.Missing)
+
+	for _, m := range []string{"DEP-MIB", "USER-MIB", "SNMPv2-SMI"} {
+		if gosmi.IsLoaded(m) {
+			t.Errorf("diagnosing USER-MIB loaded %s as a side effect", m)
+		}
+	}
+}
+
+// The recovered position must survive the move: it now comes from the load
+// site rather than from a retry inside the diagnosis, and that is the only
+// place it exists.
+func TestLoadWithDiagnosticsCarriesTheRecoveredPosition(t *testing.T) {
+	s := diagDir(t, map[string]string{
+		"BROKEN-MIB": "BROKEN-MIB DEFINITIONS ::= BEGIN\n((((\nEND\n",
+	})
+
+	resp := s.LoadWithDiagnostics([]string{"BROKEN-MIB"})
+	if len(resp.Diagnostics) != 1 {
+		t.Fatalf("%d diagnostics", len(resp.Diagnostics))
+	}
+	d := resp.Diagnostics[0]
+	if d.Success {
+		t.Fatal("a file that is not a MIB loaded")
+	}
+	if d.Diagnosis == nil {
+		t.Fatal("no diagnosis attached to the failure")
+	}
+	// Either the parse stage located it from our own parser, or gosmi's
+	// discarded message did. Both name the line; the old error named nothing.
+	located := strings.Contains(d.Error, "line") ||
+		strings.Contains(d.Diagnosis.Detail, ":2:")
+	if !located {
+		t.Errorf("the failure is still unlocated: error=%q detail=%q",
+			d.Error, d.Diagnosis.Detail)
+	}
+	if strings.Contains(d.Error, "Could not load module at") {
+		t.Errorf("gosmi's useless message reached the user: %q", d.Error)
+	}
+}
+
+// The caret must land under the column the message names, on a long line too.
+//
+// Truncating at a fixed width from the start of the line dropped the reported
+// position entirely on a vendor MIB with everything on one line, and the
+// excerpt was then shown without a caret at all.
+func TestExcerptKeepsTheColumnInView(t *testing.T) {
+	long := strings.Repeat("x", 400) + "HERE" + strings.Repeat("y", 400)
+	content := "line one\n" + long + "\n"
+
+	col := 401 // 1-based: the H of HERE
+	out := excerpt(content, 2, col)
+	if out == "" {
+		t.Fatal("no excerpt")
+	}
+	parts := strings.SplitN(out, "\n", 2)
+	if len(parts) != 2 {
+		t.Fatalf("no caret line: %q", out)
+	}
+	shown, caretLine := parts[0], parts[1]
+	if !strings.Contains(shown, "HERE") {
+		t.Errorf("the excerpt does not contain the reported position: %q", shown)
+	}
+	caret := strings.Index(caretLine, "^")
+	if caret < 0 {
+		t.Fatalf("no caret: %q", caretLine)
+	}
+	if []rune(shown)[caret] != 'H' {
+		t.Errorf("the caret is under %q, not the reported character",
+			string([]rune(shown)[caret]))
+	}
+}
+
+// A short line keeps working, caret and all.
+func TestExcerptOnAShortLine(t *testing.T) {
+	out := excerpt("alpha beta\n", 1, 7)
+	want := "alpha beta\n      ^"
+	if out != want {
+		t.Errorf("excerpt = %q, want %q", out, want)
+	}
+}
+
+// The containment check must be PROVEN, not merely reached: asserting only
+// that the stage is "read" passes for a file that is simply missing, so
+// removing SafeMibPath entirely would not fail this.
+func TestDiagnoseCannotReachOutsideTheDirectory(t *testing.T) {
+	dir := t.TempDir()
+	mibs := filepath.Join(dir, "mibs")
+	if err := os.MkdirAll(mibs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// A real, readable, perfectly valid MIB one level UP — exactly where
+	// monitoring.db and the secret store live.
+	outside := filepath.Join(dir, "OUTSIDE-MIB")
+	if err := os.WriteFile(outside, []byte(goodMib), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gosmi.Exit()
+	gosmi.Init()
+	gosmi.SetPath(mibs)
+	s := NewService(mibs)
+
+	for _, name := range []string{
+		"../OUTSIDE-MIB", "..\\OUTSIDE-MIB", filepath.Join("..", "OUTSIDE-MIB"), outside,
+	} {
+		d := s.Diagnose(name)
+		if d.Bytes > 0 || d.ModuleName != "" {
+			t.Errorf("%q was read from outside the MIB directory: %+v", name, d)
+		}
+		if d.Stage != StageRead {
+			t.Errorf("%q: stage = %q", name, d.Stage)
+		}
+	}
+
+	// And the same name INSIDE the directory is read, so the test would
+	// notice if resolve simply refused everything.
+	if err := os.WriteFile(filepath.Join(mibs, "OUTSIDE-MIB"), []byte(goodMib), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if d := s.Diagnose("OUTSIDE-MIB"); d.Bytes == 0 {
+		t.Errorf("a file inside the directory was not read: %+v", d)
+	}
+}

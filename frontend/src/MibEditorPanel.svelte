@@ -316,22 +316,23 @@
   // The MIBs the user actually enabled. Passing an empty list used to make the
   // backend fall back to "everything on disk", which silently switched back on
   // every MIB somebody had deliberately turned off.
-  function enabledMibFiles() {
-    const state = get(mibPathsStore);
-    const out = [];
-    for (const perPath of Object.values(state.enabledMibs || {})) {
-      for (const [name, on] of Object.entries(perPath || {})) {
-        if (on) out.push(name);
-      }
-    }
-    return [...new Set(out)];
+  // The same list the MIB tab loads.
+  //
+  // This used to walk enabledMibs itself and keep only entries explicitly
+  // true, which is the OPPOSITE default from mibStore's (unknown means
+  // enabled). A fresh profile has no entries at all, so saving in the editor
+  // reloaded with [] — gosmi torn down to the two core modules, the health
+  // probe failing on sysDescr and ifInOctets, and a "major" system event sent
+  // to every configured syslog, webhook and mail sink.
+  async function enabledMibFiles() {
+    return mibStore.getEnabledMibFiles();
   }
 
   // Rebuilding is the only way to see the effect of an edit: gosmi has no
   // unload, so without a full teardown the previously parsed module stays.
   async function reload() {
     try {
-      const res = await MibEditorReload(enabledMibFiles());
+      const res = await MibEditorReload(await enabledMibFiles());
       const failed = (res.diagnostics || []).filter((d) => !d.success);
       if (res.health && !res.health.ok) {
         notificationStore.add(

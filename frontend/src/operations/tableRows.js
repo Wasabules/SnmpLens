@@ -109,7 +109,7 @@ export function sortRows(rows, sortCol, ascending = true) {
   const out = [...rows];
 
   const key = (row) => {
-    if (sortCol === '__index') return { text: row.index, num: partNumber(row, -1) };
+    if (sortCol === '__index') return { text: row.index, num: partNumber(row) };
     if (sortCol.startsWith('__index:')) {
       const i = Number(sortCol.slice('__index:'.length));
       const part = row.indexParts?.[i];
@@ -135,10 +135,17 @@ export function sortRows(rows, sortCol, ascending = true) {
   return out;
 }
 
-/** The sortable number for a whole instance: only when it is a single number. */
-function partNumber(row, _i) {
-  const n = Number(row.index);
-  return Number.isNaN(n) ? NaN : n;
+/**
+ * The sortable number for a whole raw instance — only when the instance IS a
+ * single number.
+ *
+ * Number('1.10') is 1.1, not NaN, so a two-part instance was silently coerced
+ * to a float and "1.10, 1.2, 1.9" came out in that order: the exact ordering
+ * bug this module says it fixes. Anything with a dot falls through to the
+ * numeric-aware string compare, which orders those correctly.
+ */
+function partNumber(row) {
+  return /^\d+$/.test(String(row.index)) ? Number(row.index) : NaN;
 }
 
 /**
@@ -162,7 +169,15 @@ export function buildRowVarbinds(tableInfo, instance, values, status) {
     if (col.oid === tableInfo.rowStatusOid) continue;
     const v = values[col.oid];
     if (v === undefined || v === '') continue;
-    vars.push({ oid: `${col.oid}.${instance}`, value: String(v), type: col.syntax || '' });
+    // The wire type, worked out in Go from the column's base type. Sending
+    // col.syntax put an SMI or textual-convention NAME into a substring
+    // matcher, which mapped Gauge32 and TimeTicks onto INTEGER — and since a
+    // SET is atomic, one wrong tag refuses the whole row.
+    vars.push({
+      oid: `${col.oid}.${instance}`,
+      value: String(v),
+      type: col.wireType || col.syntax || '',
+    });
   }
   vars.push({
     oid: `${tableInfo.rowStatusOid}.${instance}`,

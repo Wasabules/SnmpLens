@@ -192,27 +192,26 @@ func (a *App) LoadAllMibs() ([]*mib.Node, error) {
 
 // LoadEnabledMibs loads only the specified (enabled) MIBs from the persistent directory.
 func (a *App) LoadEnabledMibs(enabledFiles []string) ([]*mib.Node, error) {
+	// Same rule as LoadMibsWithDiagnostics: the store returns everything when
+	// nothing has been chosen, so an empty list is a deliberate "none".
 	if len(enabledFiles) == 0 {
-		log.Println("No enabled MIBs specified, loading all MIBs")
-		return a.mibService.LoadAll()
+		log.Println("Every MIB is disabled; loading none")
+		return []*mib.Node{}, nil
 	}
 	return a.mibService.LoadSpecific(enabledFiles)
 }
 
 // LoadMibsWithDiagnostics loads MIBs and returns both tree and per-file load diagnostics.
 func (a *App) LoadMibsWithDiagnostics(enabledFiles []string) mib.MibLoadResponse {
-	// "Nothing selected" means "everything" HERE and nowhere deeper: the
-	// editor's reload calls the service directly with the enabled list, and an
-	// empty list there must stay empty or every MIB the user switched off
-	// comes back on.
+	// An empty list means empty, here as everywhere else.
+	//
+	// The store defaults an unknown MIB to ENABLED, so it returns the whole
+	// directory when the user has expressed no preference; [] therefore only
+	// arrives when every file was explicitly switched off. Treating that as
+	// "load everything" turned Disable All into the maximal tree — the exact
+	// opposite of what was asked.
 	if len(enabledFiles) == 0 {
-		log.Println("No enabled MIBs specified, loading all MIBs with diagnostics")
-		found, err := mib.ListMibFiles(a.persistentMibDir)
-		if err != nil {
-			log.Printf("Could not list MIB files: %v", err)
-			return mib.MibLoadResponse{Tree: []*mib.Node{}, Diagnostics: []mib.MibLoadResult{}}
-		}
-		enabledFiles = found
+		log.Println("Every MIB is disabled; loading none")
 	}
 	return a.mibService.LoadWithDiagnostics(enabledFiles)
 }

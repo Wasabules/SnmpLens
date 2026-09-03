@@ -211,13 +211,27 @@ func (s *Service) LoadWithDiagnostics(fileNames []string) MibLoadResponse {
 	// or .txt suffix, and the bundled MIBs are extension-less, so the
 	// fallback quietly loaded nothing and looked correct.
 
+	// Shared across every diagnosis this loop triggers: the directory listing
+	// is the same for all of them.
+	ctx := newDiagContext(s)
+
 	for _, fileName := range fileNames {
-		moduleName, err := gosmi.LoadModule(fileName)
+		// Around the load, because this is the only moment gosmi's real error
+		// exists: smi.LoadModule prints it and returns an empty string. The
+		// diagnosis afterwards is READ-only and cannot recover it by retrying
+		// — retrying would also load the file's dependencies as a side effect,
+		// re-enabling MIBs the user switched off.
+		var moduleName string
+		var err error
+		printed := captureStdout(func() {
+			moduleName, err = gosmi.LoadModule(fileName)
+		})
+
 		if err != nil {
 			// gosmi says "Could not load module at X" for a missing file, a
 			// PDF, a syntax error on line 412 and an unsatisfiable IMPORTS
 			// clause alike. Work out which, while we still hold the lock.
-			diag := s.diagnose(fileName, map[string]bool{})
+			diag := s.diagnose(fileName, ctx, printed)
 			log.Printf("Diagnostic: failed to load '%s' at stage %s: %s", fileName, diag.Stage, diag.Summary)
 			diagnostics = append(diagnostics, MibLoadResult{
 				FileName:  fileName,
@@ -279,7 +293,17 @@ func (s *Service) Translate(oid string) OidDetails {
 func (s *Service) ResolveOid(oid string) OidInfo {
 	gosmiMu.RLock()
 	defer gosmiMu.RUnlock()
+	return resolveOidLocked(oid)
+}
 
+// resolveOidLocked is ResolveOid for callers already holding gosmiMu.
+//
+// sync.RWMutex is not recursive, and a read lock taken while another is held
+// blocks as soon as a writer is queued — Go parks new readers behind a pending
+// writer to keep it from starving. ResolveOids held the outer lock and called
+// ResolveOid for every OID of a walk, so one MIB load arriving mid-batch hung
+// both goroutines and the window with them.
+func resolveOidLocked(oid string) OidInfo {
 	smiOid, err := types.OidFromString(oid)
 	if err != nil {
 		return OidInfo{Name: oid}
@@ -308,7 +332,7 @@ func (s *Service) ResolveOids(oids []string) map[string]OidInfo {
 
 	result := make(map[string]OidInfo, len(oids))
 	for _, oid := range oids {
-		result[oid] = s.ResolveOid(oid)
+		result[oid] = resolveOidLocked(oid)
 	}
 	return result
 }
@@ -340,13 +364,34 @@ func ListMibFiles(dirPath string) ([]string, error) {
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			name := entry.Name()
-			if name[0] != '.' && name != "README" && name != "LICENSE" {
+			if name[0] != '.' && name != "README" && name != "LICENSE" && !isTransient(name) {
 				mibFiles = append(mibFiles, name)
 			}
 		}
 	}
 
 	return mibFiles, nil
+}
+
+// isTransient reports whether a name is an editor or editor-crash artefact
+// rather than a MIB.
+//
+// gosmi's module map is last-wins and os.ReadDir is alphabetical, so
+// IF-MIB.bak beside IF-MIB loads second and replaces the real one for every
+// IMPORTS in the directory. The staging file now lives outside mibs/; this is
+// the second line of defence, and it covers the ones an editor or a backup
+// tool leaves behind too.
+func isTransient(name string) bool {
+	lower := strings.ToLower(name)
+	if strings.HasSuffix(lower, "~") {
+		return true
+	}
+	for _, suffix := range []string{".tmp", ".bak", ".old", ".orig", ".swp", ".save"} {
+		if strings.HasSuffix(lower, suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 func isOidLess(oid1, oid2 string) bool {

@@ -140,6 +140,15 @@ A module can load AND be broken: gosmi resolves imports lazily and returns nil r
 importing a module you do not have reports success and resolves to nothing. That is why `Diagnose` is offered on
 successes too, and why the missing import stays the headline rather than the unresolved references it causes.
 
+`Diagnose` READS. It never calls `gosmi.LoadModule`, and neither does anything it calls: an explanation that
+loads modules as a side effect re-enables MIBs the user switched off — they stay in the global node index while
+absent from the tree, so `Translate`, `ResolveOid`, `Table` and `Symbols` all start answering from a module
+nobody asked for. gosmi's discarded message is captured around the load in `LoadWithDiagnostics`, which is the
+only moment it exists.
+
+An import that is present but not loaded is reported as `notloaded`, not `failed`: it is usually disabled, not
+broken. Only a dependency whose own diagnosis stops at read/content/parse is `failed`, with its cause.
+
 `LoadWithDiagnostics` runs it automatically on failures only — it re-reads and re-parses, which is worth doing
 once something is wrong and not for two hundred working vendor MIBs.
 
@@ -206,6 +215,14 @@ gets nothing, breaks, and adds the object regardless. So `Analyse` checks what n
 only) nor `LoadModule` (a boolean that is not even true) will: unknown types, duplicate OIDs, unresolved parents,
 missing modules in `FROM`, undefined `INDEX`, readable conceptual rows. The bar is zero errors on the 14 bundled
 MIBs, and that is a test.
+
+Row creation sends the **wire type** `pkg/mib` works out from the column's BASE type, not the SMI or textual-
+convention name: the name went into a substring matcher that mapped Gauge32, TimeTicks and Counter32 onto
+INTEGER, and a SET being atomic, one wrong tag refuses the whole row. `gosmi.Table.Implied` does NOT follow
+AUGMENTS although `GetIndex` does, so `effectiveImplied` reads it from the row the INDEX actually came from —
+otherwise an augmenting row's IMPLIED last index is encoded with a length prefix and addresses a row that does
+not exist. An OCTET STRING index accepts the colon-separated hex `renderOctets` displays, or a MAC-keyed table
+could be read and never written.
 
 `AnalyseAll` is the entry point the bridge uses, and it exists for one reason: `parser.Parse` costs about 40 ms
 on a 185 KB MIB, and calling `Validate`, `CheckImports` and `Analyse` in turn parsed the file three times on every

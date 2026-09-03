@@ -97,6 +97,10 @@ function createMibStore() {
     subscribe,
     load: () => loadInternal(false),
     loadSilent: () => loadInternal(true),
+    // Exposed so the editor's reload asks the same question this store does.
+    // It had its own copy with the opposite default for an unknown MIB, so
+    // the two panels disagreed about the same directory.
+    getEnabledMibFiles,
   };
 }
 
