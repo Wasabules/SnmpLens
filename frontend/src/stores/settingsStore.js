@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import { encryptSettings, decryptSettings, forgetCredentials } from '../utils/crypto';
+import { encryptSettings, decryptSettings, forgetCredentials, initCredentialState } from '../utils/crypto';
 
 // Default settings
 const defaults = {
@@ -76,6 +76,12 @@ function createSettingsStore() {
     decryptSettings(initialSettings).then(decrypted => {
       set(decrypted);
     });
+  } else {
+    // No stored blob to open — but the store's state still has to be known.
+    // Without this a fresh profile kept credentialState at its 'ok' default,
+    // so no banner appeared on a machine with no credential store at all, and
+    // the first save believed it could seal.
+    initCredentialState();
   }
 
   return {
@@ -83,7 +89,11 @@ function createSettingsStore() {
     save: async (settings) => {
       set(settings); // Update store immediately with plaintext
       try {
-        const encrypted = await encryptSettings(settings);
+        // The blob as it stands on disk. encryptSettings needs it to carry
+        // the sealed credentials forward untouched when the store cannot seal
+        // — otherwise a save of an unrelated setting writes blanks over them.
+        const stored = JSON.parse(localStorage.getItem('settings') || 'null');
+        const encrypted = await encryptSettings(settings, stored);
         localStorage.setItem('settings', JSON.stringify(encrypted));
       } catch (e) {
         // Sealing failed — a locked keychain, no store on this machine.

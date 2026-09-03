@@ -17,6 +17,19 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 let failures = 0;
+
+// Anything that escapes is a failure, not a silent death. Without this a
+// mutation that made an unrelated block throw ended the process while the
+// checks that would have caught it had not run yet — and the run read as
+// clean.
+process.on('uncaughtException', (e) => {
+  console.log('FAIL  unexpected error — ' + (e && e.message));
+  process.exit(1);
+});
+process.on('unhandledRejection', (e) => {
+  console.log('FAIL  unexpected rejection — ' + (e && e.message));
+  process.exit(1);
+});
 const check = (name, ok, extra = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${extra ? ' — ' + extra : ''}`);
   if (!ok) failures++;
@@ -47,7 +60,12 @@ const dir = mkdtempSync(join(tmpdir(), 'snmplens-cred-'));
 writeFileSync(join(dir, 'stub.js'), stubSource);
 
 const bundle = await esbuild.build({
-  entryPoints: [join(process.cwd(), 'src/utils/crypto.js')],
+  // settingsStore, not crypto alone. crypto.js never writes the settings blob
+  // — settingsStore.js does — so asserting "nothing was written to
+  // localStorage" against crypto.js proved nothing: a plaintext fallback added
+  // to the store passed the suite untouched. Bundling both is what makes the
+  // invariant testable where it actually lives.
+  entryPoints: [join(process.cwd(), 'tests/fixtures/credentials-entry.js')],
   bundle: true,
   format: 'esm',
   write: false,
@@ -70,6 +88,23 @@ async function load(stub, storage) {
   return import(url);
 }
 load.n = 0;
+
+/**
+ * Wait for a condition instead of for a duration.
+ *
+ * The store decrypts asynchronously after import, and a fixed sleep made these
+ * scenarios race: when the wait was short the store still held the SEALED
+ * values, sealing them again was a no-op, and the test passed while the code
+ * under it was broken. Polling the state is the difference between a test and
+ * a coin flip.
+ */
+async function waitFor(cond, what) {
+  for (let i = 0; i < 200; i++) {
+    if (cond()) return;
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  throw new Error(`timed out waiting for ${what}`);
+}
 
 const settings = () => ({
   community: 'enc:SEALED-COMMUNITY',
@@ -126,12 +161,143 @@ const working = {
     s.community === '' && s.v3.authPass === '',
     JSON.stringify([s.community, s.v3.authPass]));
 
-  let threw = false;
-  try { await m.encryptSettings({ community: 'public', v3: {}, targetOverrides: {} }); }
-  catch (e) { threw = true; }
-  check('sealing fails loudly rather than writing plaintext', threw);
+  // The contract is not "throw": it is "never put a credential in
+  // localStorage". Carrying the stored values forward satisfies that and lets
+  // unrelated settings still persist, which throwing did not.
+  // Reported, not thrown: an unexpected throw here used to kill the process
+  // before the later scenarios ran, so a mutation that broke them looked like
+  // a clean run.
+  let out = null;
+  let threw = null;
+  try {
+    out = await m.encryptSettings({ community: 'public', v3: {}, targetOverrides: {} }, null);
+  } catch (e) {
+    threw = e;
+  }
+  check('an unsealable credential is not written as plaintext',
+    threw !== null || (out && out.community === ''),
+    threw ? String(threw.message) : JSON.stringify(out && out.community));
   check('nothing was written to localStorage', Object.keys(store.data).length === 0,
     JSON.stringify(store.data));
+}
+
+// The invariant at the layer that actually writes.
+//
+// These four ran green while settingsStore could be mutated into writing the
+// plaintext, because the old suite only ever called crypto.js. The scenario is
+// the one the review reproduced: the store is locked, decryptSettings blanks
+// the in-memory copies, and the user then changes something unrelated.
+for (const scenario of [
+  { name: 'locked', expected: 'locked',
+    stub: { SettingsOpen: async () => { throw new Error('locked'); } },
+    status: { backend: 'windows-dpapi', available: true, hasKey: true } },
+  { name: 'no store', expected: 'nostore', stub: {
+      SettingsOpen: async () => { throw new Error('none'); },
+      SettingsSeal: async () => { throw new Error('none'); } },
+    status: { backend: 'unavailable', available: false, hasKey: false } },
+]) {
+  const expected = scenario.expected;
+  const original = JSON.stringify(settings());
+  const store = makeStorage({ settings: original });
+  const m = await load({
+    ...working,
+    ...scenario.stub,
+    SettingsKeyStatus: async () => scenario.status,
+  }, store);
+
+  // Let the store finish its startup decrypt, which is what blanks memory.
+  await waitFor(() => m.getState() === expected, `state ${expected}`);
+
+  let current;
+  const stop = m.settingsStore.subscribe((v) => { current = v; });
+  await m.settingsStore.save({ ...current, theme: 'dark' });
+  stop();
+
+  const after = JSON.parse(store.getItem('settings'));
+  check(`[${scenario.name}] the stored community survives an unrelated save`,
+    after.community === 'enc:SEALED-COMMUNITY', JSON.stringify(after.community));
+  check(`[${scenario.name}] the stored v3 passphrase survives`,
+    after.v3.authPass === 'enc:SEALED-AUTH', JSON.stringify(after.v3.authPass));
+  check(`[${scenario.name}] the per-target override survives`,
+    after.targetOverrides['10.0.0.1'].community === 'enc:SEALED-OVERRIDE',
+    JSON.stringify(after.targetOverrides['10.0.0.1'].community));
+  check(`[${scenario.name}] no credential was written in the clear`,
+    !JSON.stringify(after).includes('SEALED-COMMUNITY"') || after.community.startsWith('enc:'));
+  check(`[${scenario.name}] the unrelated change still persisted`,
+    after.theme === 'dark', JSON.stringify(after.theme));
+}
+
+// The scenario that actually distinguishes the guard: opening FAILS while
+// sealing WORKS — a wrong or rotated key, a corrupt blob, a profile moved
+// between accounts. Without the state check, encryptSettings would happily
+// seal the values decryptSettings just blanked and write enc:"" over the real
+// credentials. Both stubs succeed, so nothing throws and no catch can save it.
+{
+  const store = makeStorage({ settings: JSON.stringify(settings()) });
+  const m = await load({
+    ...working,
+    SettingsKeyStatus: async () => ({ backend: 'windows-dpapi', available: true, hasKey: true }),
+    SettingsOpen: async () => { throw new Error('cannot be decrypted with the stored key'); },
+    // Sealing is fine: the key is readable, it just does not open this blob.
+  }, store);
+  const expected = 'locked';
+  await waitFor(() => m.getState() === expected, `state ${expected}`);
+
+  let current;
+  const stop = m.settingsStore.subscribe((v) => { current = v; });
+  await m.settingsStore.save({ ...current, theme: 'dark' });
+  stop();
+
+  const after = JSON.parse(store.getItem('settings'));
+  check('[open fails, seal works] the credential is not re-sealed from blanks',
+    after.community === 'enc:SEALED-COMMUNITY', JSON.stringify(after.community));
+  check('[open fails, seal works] the override is not re-sealed from blanks',
+    after.targetOverrides['10.0.0.1'].community === 'enc:SEALED-OVERRIDE',
+    JSON.stringify(after.targetOverrides['10.0.0.1'].community));
+}
+
+// And the scenario that reaches the catch: the state is fine, so sealing is
+// attempted, and it fails between the status check and the seal. The stored
+// blob must be left alone — writing the plaintext "so the setting is not lost"
+// is the tempting answer and the wrong one.
+{
+  const before = JSON.stringify(settings());
+  const store = makeStorage({ settings: before });
+  const m = await load({
+    ...working,
+    SettingsSeal: async () => { throw new Error('the store went away mid-save'); },
+  }, store);
+  const expected = 'ok';
+  await waitFor(() => m.getState() === expected, `state ${expected}`);
+
+  let current;
+  const stop = m.settingsStore.subscribe((v) => { current = v; });
+  await m.settingsStore.save({ ...current, community: 'typed-just-now', theme: 'dark' });
+  stop();
+
+  const after = store.getItem('settings');
+  check('[seal throws] the stored blob is untouched', after === before,
+    after === before ? '' : after);
+  check('[seal throws] the typed credential is not written in the clear',
+    !after.includes('typed-just-now'), after.slice(0, 120));
+}
+
+// And with a working store the credentials are re-sealed normally, so the
+// carry-forward path cannot quietly become permanent.
+{
+  const store = makeStorage({ settings: JSON.stringify(settings()) });
+  const m = await load(working, store);
+  const expected = 'ok';
+  await waitFor(() => m.getState() === expected, `state ${expected}`);
+
+  let current;
+  const stop = m.settingsStore.subscribe((v) => { current = v; });
+  await m.settingsStore.save({ ...current, community: 'brand-new-community' });
+  stop();
+
+  const after = JSON.parse(store.getItem('settings'));
+  check('a working store still seals a new credential',
+    after.community === 'enc:brand-new-community', JSON.stringify(after.community));
 }
 
 // --- locked store: the stored values must be left ALONE ---

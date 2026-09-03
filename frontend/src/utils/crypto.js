@@ -69,16 +69,19 @@ function fields(settings) {
   const out = [];
   for (const path of SENSITIVE_PATHS) {
     out.push({
+      key: path.join('.'),
       get: () => getNestedValue(settings, path),
       set: (v) => setNestedValue(settings, path, v),
     });
   }
   for (const addr of Object.keys(settings.targetOverrides || {})) {
     const ov = settings.targetOverrides[addr];
-    out.push({ get: () => ov.community, set: (v) => { ov.community = v; } });
+    // A key, not a position: restoring the previous blob has to survive a
+    // target being added or removed while the store was locked.
+    out.push({ key: `o:${addr}.community`, get: () => ov.community, set: (v) => { ov.community = v; } });
     if (ov.v3) {
-      out.push({ get: () => ov.v3.authPass, set: (v) => { ov.v3.authPass = v; } });
-      out.push({ get: () => ov.v3.privPass, set: (v) => { ov.v3.privPass = v; } });
+      out.push({ key: `o:${addr}.v3.authPass`, get: () => ov.v3.authPass, set: (v) => { ov.v3.authPass = v; } });
+      out.push({ key: `o:${addr}.v3.privPass`, get: () => ov.v3.privPass, set: (v) => { ov.v3.privPass = v; } });
     }
   }
   return out;
@@ -111,23 +114,53 @@ async function refreshStatus() {
  * the credentials in localStorage in the clear, which is worse than the
  * problem this file exists to solve.
  */
-export async function encryptSettings(settings) {
+export async function encryptSettings(settings, previous) {
   const clone = JSON.parse(JSON.stringify(settings));
   const slots = fields(clone);
+
+  // Decided by the STATE, never inferred from the values.
+  //
+  // When the store is locked, decryptSettings has already blanked the
+  // in-memory credentials — so "every sensitive field is empty" is exactly
+  // what a locked store looks like, and an earlier version of this function
+  // read that as "nothing to seal", returned without calling the bridge and
+  // without throwing, and let the caller write those blanks over the user's
+  // intact ciphertext. That is credential loss caused by the guard meant to
+  // prevent it.
+  if (get(credentialState) !== 'ok') {
+    carryForward(slots, previous);
+    return clone;
+  }
+
   const values = slots.map((s) => {
     const v = s.get();
     return typeof v === 'string' ? v : '';
   });
-
-  if (!values.some((v) => v !== '')) {
-    return clone;
-  }
 
   const sealed = await SettingsSeal(values);
   slots.forEach((s, i) => {
     if (values[i] !== '' || sealed[i] !== '') s.set(sealed[i]);
   });
   return clone;
+}
+
+/**
+ * Put the previously stored sealed values back, by key.
+ *
+ * The rest of the object — theme, targets, everything that is not a credential
+ * — is written normally, so a locked keychain does not stop the app from
+ * remembering anything at all. Only the credentials are left exactly as they
+ * were on disk.
+ */
+function carryForward(slots, previous) {
+  const stored = new Map();
+  if (previous && typeof previous === 'object') {
+    for (const s of fields(previous)) stored.set(s.key, s.get());
+  }
+  for (const s of slots) {
+    const was = stored.get(s.key);
+    s.set(typeof was === 'string' ? was : '');
+  }
 }
 
 /**
@@ -210,6 +243,18 @@ async function migrateLegacyKey(settings) {
   } catch (e) {
     console.warn('keeping the local settings key: the store did not take it:', e);
   }
+}
+
+/**
+ * Learn the store's state without needing a stored blob to open.
+ *
+ * decryptSettings only runs when localStorage already holds settings, so on a
+ * fresh profile nothing ever asked the store anything: credentialState kept
+ * its 'ok' default, the banner never appeared, and the first save assumed it
+ * could seal.
+ */
+export async function initCredentialState() {
+  await refreshStatus();
 }
 
 /** Forget the key, for "reset settings". */
