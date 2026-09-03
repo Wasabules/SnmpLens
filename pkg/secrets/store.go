@@ -63,6 +63,14 @@ func SinkRef(sinkID string) string { return "sink/" + sinkID + "/secret" }
 // produce a confusing "auth works, privacy does not" failure.
 func SessionRef(sessionID string) string { return "session/" + sessionID + "/snmp" }
 
+// SettingsKeyRef is the key the renderer's settings blob is sealed with.
+//
+// One ref with no id: there is exactly one renderer profile. The KEY lives
+// here rather than the credentials themselves — the credentials stay in
+// localStorage, sealed, and what changes is that nothing in that folder can
+// open them any more.
+func SettingsKeyRef() string { return "settings/local/key" }
+
 // keyProtector guards the data-encryption key. Each OS gets the strongest
 // mechanism available without a new dependency.
 type keyProtector interface {

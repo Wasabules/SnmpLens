@@ -24,6 +24,14 @@ globalThis.__stub = {
   MonitorLoadSessionData: async () => [],
   MonitorDeleteSession: async () => {},
   EventsOn: (name, fn) => { handlers[name] = fn; },
+  // The settings store now seals its credentials through the bridge, and
+  // pollingStore imports it. A store that is present and empty is the shape
+  // this test wants: nothing sealed, nothing to open.
+  SettingsKeyStatus: async () => ({ backend: 'test', available: true, hasKey: false }),
+  SettingsSeal: async (values) => values.map((v) => (v ? 'enc:' + v : v)),
+  SettingsOpen: async (values) => values.map((v) => (typeof v === 'string' && v.startsWith('enc:') ? v.slice(4) : v)),
+  SettingsAdoptKey: async () => {},
+  SettingsForgetKey: async () => {},
 };
 
 const stub = `const s = globalThis.__stub;
@@ -35,7 +43,12 @@ export const MonitorSaveDataPoints = (...a) => s.MonitorSaveDataPoints(...a);
 export const MonitorLoadSessions = (...a) => s.MonitorLoadSessions(...a);
 export const MonitorLoadSessionData = (...a) => s.MonitorLoadSessionData(...a);
 export const MonitorDeleteSession = (...a) => s.MonitorDeleteSession(...a);
-export const EventsOn = (...a) => s.EventsOn(...a);`;
+export const EventsOn = (...a) => s.EventsOn(...a);
+export const SettingsKeyStatus = (...a) => s.SettingsKeyStatus(...a);
+export const SettingsSeal = (...a) => s.SettingsSeal(...a);
+export const SettingsOpen = (...a) => s.SettingsOpen(...a);
+export const SettingsAdoptKey = (...a) => s.SettingsAdoptKey(...a);
+export const SettingsForgetKey = (...a) => s.SettingsForgetKey(...a);`;
 
 const dir = mkdtempSync(join(tmpdir(), 'snmplens-smoke-'));
 writeFileSync(join(dir, 'stub.js'), stub);

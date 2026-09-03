@@ -693,7 +693,10 @@
       "enterTarget": "Por favor, introduzca una dirección IP o nombre de host",
       "testSuccess": "Conexión exitosa a {target}",
       "testFailed": "Falló: {error}",
-      "testError": "Error: {error}"
+      "testError": "Error: {error}",
+      "credStored": "Las credenciales están selladas con una clave que guarda {backend}, fuera del almacenamiento de la app. Siguen legibles en memoria mientras se ejecuta.",
+      "credNoStore": "No hay almacén de credenciales del sistema aquí: las credenciales sirven para esta sesión y no se guardan.",
+      "credLocked": "{backend} no pudo abrir las credenciales guardadas. Las almacenadas no se han tocado — vuelva a introducirlas, o restaure el acceso y reinicie."
     }
   },
   "diff": {

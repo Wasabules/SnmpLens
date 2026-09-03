@@ -693,7 +693,10 @@
       "enterTarget": "Veuillez saisir une adresse IP ou un hostname",
       "testSuccess": "Connexion réussie à {target}",
       "testFailed": "Échec : {error}",
-      "testError": "Erreur : {error}"
+      "testError": "Erreur : {error}",
+      "credStored": "Les identifiants sont scellés avec une clé détenue par {backend}, hors du stockage de l’application. Ils restent lisibles en mémoire pendant l’exécution.",
+      "credNoStore": "Aucun magasin d’identifiants système ici : les identifiants fonctionnent pour cette session et ne sont pas enregistrés.",
+      "credLocked": "{backend} a refusé d’ouvrir les identifiants enregistrés. Ceux-ci sont intacts — ressaisissez-les, ou rétablissez l’accès et redémarrez."
     }
   },
   "diff": {

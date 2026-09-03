@@ -693,7 +693,10 @@
       "enterTarget": "Please enter an IP address or hostname",
       "testSuccess": "Connection successful to {target}",
       "testFailed": "Failed: {error}",
-      "testError": "Error: {error}"
+      "testError": "Error: {error}",
+      "credStored": "Credentials are sealed with a key held by {backend}, outside this app’s storage. They are still readable in memory while SnmpLens runs.",
+      "credNoStore": "No OS credential store on this machine: credentials work for this session and are not saved.",
+      "credLocked": "{backend} refused to open the stored credentials. The saved ones have been left untouched — re-enter them, or restore access and restart."
     }
   },
   "diff": {

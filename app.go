@@ -41,6 +41,10 @@ type App struct {
 	evaluator        *monitor.Evaluator
 	dispatcher       *notify.Dispatcher
 	secrets          secrets.Store
+	// settingsKeyCache holds the renderer's sealing key. Every secrets.Get is
+	// a whole-file read and decrypt, and a settings save seals one value per
+	// sensitive field plus three per target override.
+	settingsKeyCache []byte
 	updater          *updater.Service
 
 	// Background-mode state. configDir is the SnmpLens directory, kept here

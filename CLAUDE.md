@@ -80,7 +80,10 @@ The frontend calls Go through auto-generated bindings in `frontend/wailsjs/`, wh
 ## Backend layout (`pkg/`)
 
 - `pkg/mib/service.go` — MIB loading/parsing and tree construction via **gosmi**. `LoadAll`/`LoadSpecific`/`LoadWithDiagnostics` (the diagnostics variant returns per-file load errors for the drag-&-drop import UI). Also OID translation/resolution (`Translate`, `ResolveOid(s)`).
-- `pkg/snmp/` — SNMP over **gosnmp**: `client.go` (connection config, v3 security-protocol mapping, concurrent fan-out via `concurrentExecute`, debug ring-buffer logger), `operations.go` (GET/SET/GETNEXT/GETBULK/WALK), `trap.go` (listener + sender, traps and acknowledged INFORMs — v1 is refused rather than downgraded, since RFC 1157 has no InformRequest PDU), `discovery.go` (CIDR scan, capped at `MaxDiscoveryHosts` — the prefix sizes the allocation before a packet is
+- `pkg/snmp/` — SNMP over **gosnmp**: `client.go` (connection config, v3 security-protocol mapping, concurrent fan-out via `concurrentExecute`, debug
+  ring-buffer logger — scrubbed at the WRITER, because gosnmp's `SnmpPacket.SafeString` is not safe: it prints
+  `Community:%s` on every SENDING PACKET and `Parsed community %s` on every receive, and the buffer is what the
+  debug panel shows), `operations.go` (GET/SET/GETNEXT/GETBULK/WALK), `trap.go` (listener + sender, traps and acknowledged INFORMs — v1 is refused rather than downgraded, since RFC 1157 has no InformRequest PDU), `discovery.go` (CIDR scan, capped at `MaxDiscoveryHosts` — the prefix sizes the allocation before a packet is
   sent, so `10.0.0.0/8` was 16.7M strings and an IPv6 `/64` never finished expanding), `params.go` (bridge request structs).
 - `pkg/monitor/` — the poll clock and the alerting engine. `scheduler.go` owns one goroutine per monitoring session (this is what makes background mode real — the clock used to be a `setInterval` in the renderer, so closing the window silently stopped every session and every alert with it); `breach.go` turns samples into threshold/reachability episodes; `counters.go` corrects counter wraps and derives rates from the time that actually elapsed.
 - `pkg/events/`, `pkg/notify/`, `pkg/secrets/`, `pkg/service/`, `pkg/tray/`, `pkg/autostart/` — the event journal vocabulary, notification routing (syslog over UDP/TCP/**TLS per RFC5425**, webhook, email, with a durable outbox), OS-protected credential storage, the pre-GUI preference file, the fail-soft system-tray icon, and the per-user login entry (HKCU Run key / LaunchAgent / XDG autostart — never machine-wide, so it never needs elevation).
@@ -89,7 +92,10 @@ The frontend calls Go through auto-generated bindings in `frontend/wailsjs/`, wh
   `[[::1]]:161` fails naming neither; zones (`fe80::1%eth0`) are kept. `ListenAddress` returns the bare `:port`
   wildcard, which Go opens as a DUAL-STACK socket — `0.0.0.0` behaves identically but reads like a deliberate
   IPv4-only choice, which is how it gets "fixed" into one. `LastAddressIn` parses rather than pattern-matches.
-- `pkg/network/tools.go` — pure-Go ping & traceroute (**pro-bing**); no elevated privileges required. macOS ships
+- `pkg/network/tools.go` — pure-Go ping & traceroute (**pro-bing**); no elevated privileges required. Targets go
+  through `netaddr.ValidTarget` before they become argv: there is no shell, so nothing can be injected as a
+  command, but a value starting with `-` IS read as an option — measured, `tracert -d -w 2000 -h` answers "a value
+  must be supplied for the option -h". A whitelist (IP literal or RFC 1123 hostname), not a `-` blacklist. macOS ships
   traceroute as IPv4-only with v6 in a separate binary, so an IPv6 target there runs `traceroute6`.
 - `pkg/storage/storage.go` — SQLite (**modernc.org/sqlite**, WAL mode) for monitoring history. Data points are **batch-buffered**: `QueueDataPoints` appends to an in-memory batch flushed by a ticker goroutine, not written per-call. Sessions keyed by generated UUID.
 
@@ -118,7 +124,32 @@ Contains `mibs/` (extracted + user MIBs) and `monitoring.db`.
 
 ### Frontend conventions worth knowing
 
-- **Credentials are encrypted at rest.** `settingsStore` stores plaintext in memory but encrypts sensitive fields (`community`, v3 passphrases, per-target overrides) via `crypto.js` before writing to localStorage. When adding a new sensitive field, extend `SENSITIVE_PATHS` (and the per-target override handling) in `crypto.js`, or it will be persisted in clear.
+- **Credential custody.** The renderer seals the sensitive settings fields (`community`, the v3 passphrases,
+  per-target overrides — `SENSITIVE_PATHS` in `crypto.js`) and stores them in localStorage as before, in the same
+  `enc:` + base64(12-byte IV ‖ GCM output) format. What changed is that the KEY is no longer beside them: it lives
+  in `pkg/secrets` (`SettingsKeyRef`) and the renderer never holds it. `app_settings.go` seals and opens in
+  batches, because a save covers one value per sensitive field plus three per target override.
+
+  Be precise about what that buys, because it differs: DPAPI and the Keychain tie the key to the account, while
+  the Linux file backend keeps it away from OTHER accounts and out of a copied profile and nothing more. The
+  banner in `SnmpSettings.svelte` names the backend rather than saying "encrypted". And the plaintext still lives
+  in renderer memory while the app runs — every request builder reads it from the settings store. Moving that too
+  means Go resolving credentials by profile, which is a much larger change and is NOT what this is.
+
+  Two rules carry the safety. Sealing that fails must never fall back to writing the plaintext, and must never
+  overwrite good ciphertext with a half-sealed object — `settingsStore.save` leaves the stored blob alone and the
+  session keeps working from memory. Opening that fails blanks the IN-MEMORY value only: an `enc:…` string must
+  never reach `buildSnmpRequest` and go on the wire as a community, and blanking the STORED copy — which the old
+  code did on any error — turned one locked keychain into permanently lost credentials.
+
+  The migration adopts the legacy JWK and removes localStorage's copy only after the store has been observed
+  opening that user's own ciphertext. GCM authenticates, so a successful open IS proof the key is right; there is
+  no window in which the credentials exist in neither place.
+
+  `secrets.Open` mints a key ONLY when the protector has never held one. Answering any read failure with a new key
+  — which it used to — writes over the real one, and every stored secret then fails to decrypt permanently. macOS
+  distinguishes `security` exit 44 (no such item) from a locked keychain for the same reason. The store also opens
+  independently of `storage.Init`: a corrupt `monitoring.db` must not take the credentials with it.
 - **Anonymous Mode** is purely frontend masking and is intentionally **non-persistent** (always off on restart) — see `settingsStore.js` forcing `anonymousMode = false` on load. Don't make it persist.
 
 ## Why a MIB did not load

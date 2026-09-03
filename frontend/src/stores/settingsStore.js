@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import { encryptSettings, decryptSettings } from '../utils/crypto';
+import { encryptSettings, decryptSettings, forgetCredentials } from '../utils/crypto';
 
 // Default settings
 const defaults = {
@@ -82,12 +82,26 @@ function createSettingsStore() {
     subscribe,
     save: async (settings) => {
       set(settings); // Update store immediately with plaintext
-      const encrypted = await encryptSettings(settings);
-      localStorage.setItem('settings', JSON.stringify(encrypted));
+      try {
+        const encrypted = await encryptSettings(settings);
+        localStorage.setItem('settings', JSON.stringify(encrypted));
+      } catch (e) {
+        // Sealing failed — a locked keychain, no store on this machine.
+        //
+        // This session keeps working: `set(settings)` above already published
+        // the plaintext. What must NOT happen is writing that plaintext to
+        // localStorage as a fallback, or writing a half-sealed object over
+        // ciphertext that is still good. Leaving the stored blob untouched
+        // means the credentials are still there when the store comes back.
+        console.warn('settings not saved: credentials could not be sealed:', e);
+      }
     },
-    reset: () => {
+    reset: async () => {
       localStorage.removeItem('settings');
-      set(defaults);
+      // The key too. Leaving it behind kept custody of credentials that no
+      // longer exist, and the next save would then seal under an old key.
+      await forgetCredentials();
+      set({ ...defaults });
     }
   };
 }

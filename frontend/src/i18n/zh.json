@@ -693,7 +693,10 @@
       "enterTarget": "请输入 IP 地址或主机名",
       "testSuccess": "已成功连接到 {target}",
       "testFailed": "失败：{error}",
-      "testError": "错误：{error}"
+      "testError": "错误：{error}",
+      "credStored": "凭据由 {backend} 保管的密钥封存，不在本应用的存储中。运行期间仍可在内存中读取。",
+      "credNoStore": "本机没有系统凭据存储：凭据仅在本次会话有效，不会保存。",
+      "credLocked": "{backend} 无法打开已保存的凭据。已保存的内容未被改动 — 请重新输入，或恢复访问后重启。"
     }
   },
   "diff": {

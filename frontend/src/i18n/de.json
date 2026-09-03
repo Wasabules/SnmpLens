@@ -693,7 +693,10 @@
       "enterTarget": "Bitte geben Sie eine IP-Adresse oder einen Hostnamen ein",
       "testSuccess": "Verbindung zu {target} erfolgreich",
       "testFailed": "Fehlgeschlagen: {error}",
-      "testError": "Fehler: {error}"
+      "testError": "Fehler: {error}",
+      "credStored": "Zugangsdaten sind mit einem Schlüssel von {backend} versiegelt, außerhalb des App-Speichers. Während der Laufzeit bleiben sie im Speicher lesbar.",
+      "credNoStore": "Kein Anmeldespeicher des Betriebssystems: Zugangsdaten gelten für diese Sitzung und werden nicht gespeichert.",
+      "credLocked": "{backend} konnte die gespeicherten Zugangsdaten nicht öffnen. Die gespeicherten bleiben unverändert — neu eingeben oder Zugriff wiederherstellen und neu starten."
     }
   },
   "diff": {

@@ -6,6 +6,7 @@
   import { buildTestRequest } from '../utils/snmpParams';
   import { anonMode, maskString, maskSysDescr } from '../utils/anonymize';
   import Icon from '../Icon.svelte';
+  import { credentialState, credentialBackend } from '../utils/crypto';
 
   export let settings;
 
@@ -41,6 +42,28 @@
     }
   }
 </script>
+
+<!-- Where the credentials are typed is where the honest statement about them
+     belongs. It names the backend rather than saying "encrypted", because what
+     that word buys differs per platform: DPAPI and the Keychain tie the key to
+     the account, while the file backend keeps it away from OTHER accounts and
+     from a copied profile, and nothing more. -->
+{#if $credentialState === 'nostore'}
+  <p class="cred-banner warn">
+    <Icon name="triangle-alert" size={14} />
+    {$_('settings.snmp.credNoStore')}
+  </p>
+{:else if $credentialState === 'locked'}
+  <p class="cred-banner err">
+    <Icon name="circle-x" size={14} />
+    {$_('settings.snmp.credLocked', { values: { backend: $credentialBackend } })}
+  </p>
+{:else if $credentialBackend}
+  <p class="cred-banner ok">
+    <Icon name="shield-check" size={14} />
+    {$_('settings.snmp.credStored', { values: { backend: $credentialBackend } })}
+  </p>
+{/if}
 
 <fieldset>
   <legend>{$_('settings.snmp.v1v2cTitle')}</legend>
@@ -256,5 +279,30 @@
   .result-text {
     word-break: break-word;
     flex: 1;
+  }
+
+  .cred-banner {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    margin: 0 0 10px;
+    padding: 6px 8px;
+    border-radius: 4px;
+  }
+
+  .cred-banner.ok {
+    color: var(--text-secondary, #555);
+    background: var(--bg-hover, #f2f2f2);
+  }
+
+  .cred-banner.warn {
+    color: var(--warning, #b7791f);
+    background: var(--bg-hover, #fdf6e3);
+  }
+
+  .cred-banner.err {
+    color: var(--danger, #c0392b);
+    background: var(--bg-hover, #fdf0ef);
   }
 </style>
