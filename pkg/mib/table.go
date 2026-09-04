@@ -109,8 +109,8 @@ func effectiveImplied(node gosmi.SmiNode) bool {
 // its row, or any of its columns — the three things someone might have
 // selected in the tree.
 func (s *Service) Table(oid string) (*TableInfo, error) {
-	gosmiMu.RLock()
-	defer gosmiMu.RUnlock()
+	gosmiMu.Lock()
+	defer gosmiMu.Unlock()
 	return tableInfo(oid)
 }
 
@@ -207,8 +207,8 @@ func tableInfo(oid string) (*TableInfo, error) {
 // DecodeIndexes splits each instance sub-OID into the values its INDEX clause
 // declares. An instance is the part of a walk result's OID after the column.
 func (s *Service) DecodeIndexes(tableOid string, instances []string) []DecodedIndex {
-	gosmiMu.RLock()
-	defer gosmiMu.RUnlock()
+	gosmiMu.Lock()
+	defer gosmiMu.Unlock()
 
 	out := make([]DecodedIndex, len(instances))
 	node, err := lookupTableNode(tableOid)
@@ -455,8 +455,8 @@ func lookupTableNode(oid string) (gosmi.SmiNode, error) {
 // sub-identifiers long and addresses a row that does not exist. This mirrors
 // decodeOne rule for rule, and a round-trip test holds the two together.
 func (s *Service) EncodeIndex(tableOid string, values []string) (string, error) {
-	gosmiMu.RLock()
-	defer gosmiMu.RUnlock()
+	gosmiMu.Lock()
+	defer gosmiMu.Unlock()
 
 	node, err := lookupTableNode(tableOid)
 	if err != nil {

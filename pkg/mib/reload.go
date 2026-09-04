@@ -16,9 +16,19 @@ import (
 // makes it far more likely, because saving a MIB tears the world down and
 // rebuilds it while the rest of the app carries on resolving OIDs.
 //
-// One RWMutex for the package: writers are the loaders and the rebuild,
-// readers are the lookups.
-var gosmiMu sync.RWMutex
+// One EXCLUSIVE mutex for the package, not an RWMutex.
+//
+// gosmi has no read-only operations. internal.(*Object).GetSmiNode is a
+// getter that memoises: on first call it writes x.Oid and x.OidLen. Two
+// goroutines holding a read lock and resolving the same OID therefore write
+// the same fields at the same time — reproduced under -race with four
+// concurrent Translate/ResolveOids/Table callers, which is exactly what the
+// app does while a walk resolves names in several tabs.
+//
+// A shared lock would be correct only if reading were reading. Serialising is
+// the price of a dependency whose accessors mutate; the lock is held for a
+// batch rather than per OID, so a 300-varbind walk takes it once.
+var gosmiMu sync.Mutex
 
 // Reloaded reports what a rebuild produced.
 type Reloaded struct {
@@ -55,10 +65,22 @@ var healthProbes = []struct{ oid, want string }{
 // the table and the editor would appear to do nothing. The search path is
 // reapplied inside the lock because Init resets it.
 func (s *Service) Rebuild(fileNames []string) Reloaded {
+	// ONE lock, held from the teardown to the health probe.
+	//
+	// It used to be released right after the core modules, so readers were let
+	// into a world holding only SNMPv2-SMI and SNMPv2-TC: measured, 12 reads
+	// of sysDescr came back with a different name during three rebuilds — not
+	// an error, a WRONG ANSWER, which is worse. And two rebuilds at once
+	// interleaved, each Exit/Init destroying what the other had just loaded,
+	// so the health probe reported a failure that was not real — which
+	// app_mibeditor.go records as a "major" system event and routes to every
+	// configured syslog, webhook and mail sink.
 	gosmiMu.Lock()
+	defer gosmiMu.Unlock()
+
 	gosmi.Exit()
 	gosmi.Init()
-	gosmi.AppendPath(s.path)
+	gosmi.SetPath(s.path)
 
 	// The core modules first: everything else imports from them, and loading
 	// them explicitly makes a broken one show up as itself rather than as a
@@ -73,22 +95,25 @@ func (s *Service) Rebuild(fileNames []string) Reloaded {
 			log.Printf("mib: core module %s failed to reload: %v", core, err)
 		}
 	}
-	gosmiMu.Unlock()
-
-	resp := s.LoadWithDiagnostics(fileNames)
+	resp := s.loadWithDiagnosticsLocked(fileNames)
 	resp.Diagnostics = append(diagnostics, resp.Diagnostics...)
 
 	return Reloaded{
 		Tree:        resp.Tree,
 		Diagnostics: resp.Diagnostics,
-		Health:      checkHealth(),
+		Health:      checkHealthLocked(),
 	}
 }
 
 // checkHealth resolves a few OIDs that must work.
 func checkHealth() Health {
-	gosmiMu.RLock()
-	defer gosmiMu.RUnlock()
+	gosmiMu.Lock()
+	defer gosmiMu.Unlock()
+	return checkHealthLocked()
+}
+
+// checkHealthLocked is checkHealth for a caller already holding gosmiMu.
+func checkHealthLocked() Health {
 
 	h := Health{Ok: true, Failures: []string{}, Modules: len(gosmi.GetLoadedModules())}
 	for _, probe := range healthProbes {

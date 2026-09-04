@@ -36,8 +36,8 @@ type Catalogue struct {
 // Read-locked: the editor asks for this while other tabs resolve OIDs, and a
 // reload can be rebuilding the world at the same time.
 func Symbols() Catalogue {
-	gosmiMu.RLock()
-	defer gosmiMu.RUnlock()
+	gosmiMu.Lock()
+	defer gosmiMu.Unlock()
 	return symbolsLocked()
 }
 

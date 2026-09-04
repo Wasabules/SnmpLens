@@ -72,7 +72,11 @@ jobs:
 
       - name: Go tests
         if: runner.os == 'Linux'
-        run: go test -tags webkit2_41 ./...
+        # -race, because pkg/mib holds a package-wide lock around a library
+        # whose "read" accessors mutate: internal.(*Object).GetSmiNode memoises
+        # on first call. Two concurrent readers raced for as long as that lock
+        # was an RWMutex, and nothing in CI could see it.
+        run: go test -race -tags webkit2_41 ./...
 
       # Runs the polling store against a stubbed Wails bridge. node_modules is
       # already present: wails build installed it.

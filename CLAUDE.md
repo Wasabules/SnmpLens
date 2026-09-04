@@ -32,7 +32,7 @@ CI verification gate (`.github/workflows/ci.yml`, all run from repo root):
 
 ```bash
 go vet -tags webkit2_41 ./...
-go test -tags webkit2_41 ./...
+go test -race -tags webkit2_41 ./...
 staticcheck ./...                 # go install honnef.co/go/tools/cmd/staticcheck@latest
 go mod tidy && git diff --exit-code go.mod go.sum   # go.mod must stay tidy
 govulncheck ./...
@@ -281,8 +281,17 @@ used without being imported, and which module it comes from. Only names the load
 keeps false positives near zero, and the fix edits the IMPORTS clause as TEXT — a MIB carries comments and
 alignment no AST printer would preserve.
 
-`pkg/mib` now takes a package-level `RWMutex` around gosmi. Its state is global, Wails dispatches each bound
-method on its own goroutine, and the editor's reload tears the world down while the rest of the app resolves OIDs.
+`pkg/mib` takes a package-level **exclusive** `Mutex` around gosmi — not an RWMutex, because gosmi has no read-only
+operations: `internal.(*Object).GetSmiNode` is a getter that MEMOISES, writing `x.Oid` and `x.OidLen` on first
+call. Two goroutines holding a read lock and resolving the same OID write the same fields at once, reproduced
+under `-race`. gosmi's state is global and Wails dispatches each bound method on its own goroutine, so the lock
+is held for a batch rather than per OID: a 300-varbind walk takes it once.
+
+`Rebuild` holds that lock from the teardown through the health probe. Releasing it after the core modules let
+readers into a world holding only `SNMPv2-SMI` and `SNMPv2-TC` — measured, 12 reads of sysDescr came back with a
+DIFFERENT NAME, not an error — and let two rebuilds interleave, each `Exit`/`Init` destroying what the other had
+loaded, so the probe reported a failure that was not real and `app_mibeditor.go` routed it to every sink as a
+"major" event. CI runs `-race` for exactly this class.
 
 ## Background mode
 

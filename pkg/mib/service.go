@@ -195,6 +195,13 @@ type MibLoadResponse struct {
 func (s *Service) LoadWithDiagnostics(fileNames []string) MibLoadResponse {
 	gosmiMu.Lock()
 	defer gosmiMu.Unlock()
+	return s.loadWithDiagnosticsLocked(fileNames)
+}
+
+// loadWithDiagnosticsLocked is LoadWithDiagnostics for a caller already holding
+// gosmiMu — Rebuild, which must not release it between tearing gosmi down and
+// building it back up.
+func (s *Service) loadWithDiagnosticsLocked(fileNames []string) MibLoadResponse {
 
 	log.Printf("Loading %d MIBs with diagnostics from: %s", len(fileNames), s.path)
 
@@ -285,8 +292,8 @@ type OidInfo struct {
 
 // GetOidDetails takes a raw OID string and returns its translated details if found.
 func (s *Service) Translate(oid string) OidDetails {
-	gosmiMu.RLock()
-	defer gosmiMu.RUnlock()
+	gosmiMu.Lock()
+	defer gosmiMu.Unlock()
 
 	smiOid, err := types.OidFromString(oid)
 	if err != nil {
@@ -302,8 +309,8 @@ func (s *Service) Translate(oid string) OidDetails {
 
 // ResolveOid returns detailed MIB info for a single OID, including enum values.
 func (s *Service) ResolveOid(oid string) OidInfo {
-	gosmiMu.RLock()
-	defer gosmiMu.RUnlock()
+	gosmiMu.Lock()
+	defer gosmiMu.Unlock()
 	return resolveOidLocked(oid)
 }
 
@@ -338,8 +345,8 @@ func resolveOidLocked(oid string) OidInfo {
 
 // ResolveOids returns detailed MIB info for a batch of OIDs.
 func (s *Service) ResolveOids(oids []string) map[string]OidInfo {
-	gosmiMu.RLock()
-	defer gosmiMu.RUnlock()
+	gosmiMu.Lock()
+	defer gosmiMu.Unlock()
 
 	result := make(map[string]OidInfo, len(oids))
 	for _, oid := range oids {

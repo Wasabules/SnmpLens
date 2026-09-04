@@ -86,8 +86,8 @@ type MissingModule struct {
 // something has already gone wrong, or when someone asks, and an answer that
 // takes 40 ms and names the line beats one that is instant and says nothing.
 func (s *Service) Diagnose(fileName string) LoadDiagnosis {
-	gosmiMu.RLock()
-	defer gosmiMu.RUnlock()
+	gosmiMu.Lock()
+	defer gosmiMu.Unlock()
 	return s.diagnose(fileName, newDiagContext(s), "")
 }
 
