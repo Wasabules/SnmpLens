@@ -322,8 +322,29 @@ The webhook sink **does not follow redirects**, on purpose. Go rewrites a redire
 body, so a receiver behind a 302 answers 200 having been sent nothing — and the delivery would be recorded as
 successful. Errors returned by a receiver are scrubbed of the token before they reach `notify_outbox.last_error`,
 because a debug endpoint that echoes request headers would otherwise write the credential into `monitoring.db`.
-A custom header value may contain `{{secret}}` (`notify.SecretPlaceholder`) to draw on the stored credential:
-header values are persisted with the configuration, so a credential typed directly into one would not be.
+A custom header value **or the URL** may contain `{{secret}}` (`notify.SecretPlaceholder`) to draw on the stored
+credential: both are persisted with the configuration, so a credential typed directly into one would not be. The
+URL matters most — Slack, Teams and Discord authenticate by the URL alone, so for those receivers the address IS
+the credential and there is otherwise no path into `pkg/secrets` at all. Substituted BEFORE the URL is parsed, or
+the braces are percent-encoded and the placeholder is requested literally.
+
+The **outbox** is what makes a notification survive a closed window; five of its rules are load-bearing and each
+one was a lost alert. **Whether to retry is decided by the reply CODE, never the text** — `*textproto.Error` for
+SMTP (RFC 5321 4.2.1: 4yz transient, 5yz permanent) and a typed `HTTPStatusError` for webhooks, because the error
+text ends with what the peer wrote and a 503 reading "invalid upstream" was being thrown away. An error carrying
+no code is RETRIED: six attempts cost half an hour of backoff, discarding one loses the incident. Scrubbing a
+credential out of an error must therefore keep the chain (`scrubbedError` overrides `Error()` and keeps
+`Unwrap()`), or the code disappears with it. **A dead letter is never routed back to the sink that produced it**
+(`deadLetterSink` in `app.go`), or one unreachable collector grows the journal without bound. **A disabled or
+deleted sink is never queued for**, because the dispatcher's only answer is a dead letter and a dead letter is a
+MAJOR event — switching a sink off used to alarm on every event. **The drain is one goroutine per DESTINATION,
+serial within one**: parallel across sinks so an unreachable relay does not hold up a healthy webhook, serial
+within a sink because twenty parallel SMTP conversations is how a sender gets blocked. Each delivery is
+`recover`ed — this is a background goroutine, so a panic in one sink ended the process. `Stop` waits for a
+delivery on the wire but BOUNDS the wait (`StopGrace`) and stops starting new ones, because an app that will not
+close is worse than an interrupted POST. Delivered rows are trimmed periodically (`OutboxRetention`); pending and
+dead rows never are, since a pending row is an alert still owed and a dead letter is the only record that one was
+lost — and the delivery log in the settings page is where the operator sees them.
 
 Sinks may carry a **message template** (`pkg/notify/template.go`): `{{variable}}`, `{{variable|default}}` and
 `{{#variable}}…{{/variable}}`, over a frozen vocabulary that `TemplateVariables()` also serves to the settings UI
@@ -334,10 +355,16 @@ templating, because a template can name fields the built-in rendering never show
 to `renderDefault`, byte for byte.
 
 Event text is not all ours: a trap arrives from the network unauthenticated and its trap-OID value reaches the
-rendered body, so anything written into a protocol where a newline or a dot changes meaning is escaped —
-`dotStuff` (RFC5321 4.5.2, on CRLF-normalised lines), `headerValue` for the raw mail headers, and the RFC5424
-header sanitiser. The mail subject relies on `mime.QEncoding` encoding every byte below 0x20; that is standard
-library behaviour we depend on rather than implement, so `injection_test.go` pins it. Redaction is applied to the
+rendered body, so anything written into a protocol where a newline or a dot changes meaning is escaped.
+Dot-stuffing (RFC5321 4.5.2) is **net/smtp's**: `client.Data()` returns a dataCloser wrapping textproto's
+`DotWriter`. We only normalise line endings (`normaliseLines`) — doing it ourselves as well put two dots on the
+wire and left one in the mailbox, so the dot tests drive a real connection, which is the only layer where the
+property holds. `headerValue` escapes the raw mail headers, `foldAddressList` keeps `To:` inside the RFC 5322
+998-octet line limit, and the RFC5424 header sanitiser does the syslog side. The mail subject relies on
+`mime.QEncoding` encoding every byte below 0x20; that is standard library behaviour we depend on rather than
+implement, so `injection_test.go` pins it. `capEncodedSubject` binary-searches the rune count rather than
+stepping, because encoding is monotonic in runes kept and a stepping cut overshoots and is never walked back — a
+non-ASCII subject over ~300 characters used to arrive as a bare ellipsis. Redaction is applied to the
 event when the delivery is QUEUED, not only to the rendered text, because the webhook embeds the whole event as
 JSON.
 
