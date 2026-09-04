@@ -19,6 +19,12 @@
 
   /** The body IS the request payload, so it has to be valid JSON. */
   $: jsonPayload = sink.kind === 'webhook' && sink.webhook?.payloadMode === 'template';
+  // Whether this sink masks addresses, so the variable list can say which
+  // values will be redacted. It was left behind as a bare `redact` when this
+  // component moved from four props to the whole sink: Svelte compiled it to a
+  // reference to nothing and warned, the build passed, and the two branches
+  // below threw ReferenceError the moment the variable list was opened.
+  $: redact = !!sink.redact;
 
   // The vocabulary comes from Go rather than being mirrored here: a hand-copied
   // list is a list that drifts, and the first symptom would be a variable the
