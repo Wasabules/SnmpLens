@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/sleepinggenius2/gosmi/parser"
 )
@@ -114,11 +115,12 @@ const bomPrefix = "\ufeff"
 var positionRe = regexp.MustCompile(`^(\d+):(\d+):\s*(.*)$`)
 
 // moduleNameRe finds the module name in the DEFINITIONS line.
-// endRe finds the module terminator. Hoisted: it used to be compiled inside
-// structureDiagnostics, so every keystroke paid for building the automaton.
-var endRe = regexp.MustCompile(`(?m)^\s*END\s*$`)
-
 var moduleNameRe = regexp.MustCompile(`(?m)^\s*([A-Za-z][A-Za-z0-9-]*)\s+DEFINITIONS\b`)
+
+// endRe finds the module terminator. Hoisted: it used to be compiled inside
+// the function. A trailing comment is allowed — a file ending `END -- that is
+// all` IS closed, and was reported as an error saying it never was.
+var endRe = regexp.MustCompile(`(?m)^\s*END\s*(--.*)?$`)
 
 // Validate reports every problem it can find in MIB source text.
 //
@@ -214,10 +216,13 @@ func styleDiagnostics(content string) []Diagnostic {
 		if tabsAt == 0 && strings.Contains(text, "\t") {
 			tabsAt = line
 		}
-		if len(text) > maxLineLength {
+		// Runes, not bytes. len() counts bytes, so a line of 100 accented
+		// characters was reported as 203 characters long — and the column the
+		// caret is sent to was equally wrong.
+		if width := utf8.RuneCountInString(text); width > maxLineLength {
 			diags = append(diags, Diagnostic{
 				Line: line, Column: maxLineLength, Severity: SevInfo, Code: CodeLongLine,
-				Message: fmt.Sprintf("line is %d characters long", len(text)),
+				Message: fmt.Sprintf("line is %d characters long", width),
 			})
 		}
 	}

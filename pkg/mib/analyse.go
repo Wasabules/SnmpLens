@@ -372,9 +372,18 @@ func (a *analysis) checkDescriptions() {
 // checkUnusedImports is advice: an import nobody uses is clutter that survives
 // every copy-paste.
 func (a *analysis) checkUnusedImports() {
-	// Anything mentioned anywhere in the text counts as used: macros and
-	// compliance statements reference names the AST does not expose.
-	mentioned := scanIdentifiers(a.rawSource)
+	// Anything mentioned AFTER the IMPORTS clause counts as used: macros and
+	// compliance statements reference names the AST does not expose, so
+	// use.used is false for every one of them.
+	//
+	// After, not anywhere. scanIdentifiers records only the FIRST appearance
+	// of a name, and for an imported symbol that is its own IMPORTS line — so
+	// comparing against use.line could not tell "mentioned only in IMPORTS"
+	// from "mentioned in IMPORTS and used below". Measured: 50 false
+	// unused-import diagnostics across 12 of the 14 bundled MIBs, every one of
+	// them a macro (OBJECT-TYPE, MODULE-IDENTITY, TEXTUAL-CONVENTION,
+	// MODULE-COMPLIANCE, OBJECT-GROUP).
+	mentioned := scanIdentifiers(bodyAfterImports(a.rawSource))
 
 	names := make([]string, 0, len(a.imports))
 	for n := range a.imports {
@@ -387,11 +396,8 @@ func (a *analysis) checkUnusedImports() {
 		if use.used {
 			continue
 		}
-		if count, ok := mentioned[name]; ok && count[0] > 0 {
-			// Appears in the text somewhere other than its own IMPORTS line.
-			if count[0] != use.line {
-				continue
-			}
+		if _, ok := mentioned[name]; ok {
+			continue
 		}
 		a.add(at(use.line, use.column), SevInfo, CodeUnusedImport,
 			fmt.Sprintf("%q is imported from %s but never used", name, use.module), name)
@@ -426,4 +432,47 @@ func AnalyseAll(content string, cat Catalogue) Analysis {
 		out.Missing = []MissingImport{}
 	}
 	return out
+}
+
+// bodyAfterImports returns the source with the IMPORTS clause removed.
+//
+// Everything up to and including the clause's terminating semicolon is
+// replaced by blank lines rather than deleted, so any position computed from
+// the result still refers to the right line.
+// bodyAfterImports returns the source with the IMPORTS clause blanked out.
+//
+// Blanked rather than deleted, so any position computed from the result still
+// refers to the right line.
+func bodyAfterImports(content string) string {
+	lines := strings.Split(content, "\n")
+	importsAt, semicolonAt := -1, -1
+	for i, l := range lines {
+		code := stripComment(l)
+		if importsAt < 0 && containsWord(code, "IMPORTS") {
+			importsAt = i
+		}
+		if importsAt >= 0 && i >= importsAt && strings.IndexByte(code, ';') >= 0 {
+			semicolonAt = i
+			break
+		}
+	}
+	if importsAt < 0 || semicolonAt < 0 {
+		return content
+	}
+
+	out := make([]string, len(lines))
+	copy(out, lines)
+	for i := importsAt; i <= semicolonAt; i++ {
+		// Keep whatever follows the semicolon on its line: a single-line
+		// clause can be followed by real code.
+		if i == semicolonAt {
+			code := stripComment(lines[i])
+			if at := strings.IndexByte(code, ';'); at >= 0 && at+1 < len(lines[i]) {
+				out[i] = strings.Repeat(" ", at+1) + lines[i][at+1:]
+				continue
+			}
+		}
+		out[i] = ""
+	}
+	return strings.Join(out, "\n")
 }
