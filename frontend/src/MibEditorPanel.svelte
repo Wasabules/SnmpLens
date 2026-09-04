@@ -245,7 +245,7 @@
     syncHistoryFlags();
 
     mibEditorStore.setBuffer(after);
-    updateCompletion();
+    updateCompletion(after);
   }
 
   // The selection BEFORE the edit is what undo has to restore, and it is gone
@@ -558,10 +558,21 @@
   // Completion, anchored at the caret. Possible here because the mirror
   // guarantees identical layout; in a bare textarea the caret has no
   // measurable position at all.
-  function updateCompletion() {
+  /**
+   * @param {string} [text] the buffer as it is NOW.
+   *
+   * Passed in from onInput rather than read from the `$:` local: Svelte only
+   * reassigns that during the flush microtask, so inside a synchronous input
+   * handler it still holds the text from BEFORE the keystroke. The caret
+   * offset came from the live textarea, so `end` was computed one character
+   * short of `offset`, the `offset !== end` guard fired every time, and the
+   * completion popup never opened at all.
+   */
+  function updateCompletion(text) {
     if (!textarea) return;
+    const src = typeof text === 'string' ? text : buffer;
     const offset = textarea.selectionStart;
-    const { word, start, end } = wordAt(buffer, offset);
+    const { word, start, end } = wordAt(src, offset);
     if (word.length < 2 || offset !== end) { completion = null; return; }
 
     const items = catalogue.symbols
@@ -569,8 +580,10 @@
       .slice(0, 12);
     if (items.length === 0) { completion = null; return; }
 
-    const { line, column } = lineColumnAt(buffer, start);
-    const pos = positionOf(lines, line, column, cw, LINE_HEIGHT);
+    const { line, column } = lineColumnAt(src, start);
+    // From `src` too: `lines` is derived from the same stale local, so the
+    // popup would be placed against the previous text.
+    const pos = positionOf(src.split('\n'), line, column, cw, LINE_HEIGHT);
     completion = {
       x: pos.x - scrollLeft + 8,
       y: pos.y - scrollTop + LINE_HEIGHT + 8,

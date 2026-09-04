@@ -93,9 +93,30 @@ func checkHealth() Health {
 	h := Health{Ok: true, Failures: []string{}, Modules: len(gosmi.GetLoadedModules())}
 	for _, probe := range healthProbes {
 		node, err := gosmi.GetNode(probe.want)
-		if err != nil || node.Name != probe.want {
+		switch {
+		case err != nil || node.Name != probe.want:
 			h.Ok = false
 			h.Failures = append(h.Failures, probe.want+" ("+probe.oid+") no longer resolves")
+
+		case node.Oid.String() != probe.oid:
+			// The OID, which the probe has always carried and never compared.
+			//
+			// gosmi resolves imports lazily and returns nil rather than
+			// failing, so gutting SNMPv2-SMI leaves every dependent module
+			// "loaded" with its objects still present BY NAME — and an empty
+			// OID, because the parent chain resolves to nothing. Measured: the
+			// tree came back with 0 roots, Translate(1.3.6.1.2.1.1.1.0)
+			// answered "iso", and this function reported ok=true with 15
+			// modules. The editor then showed a green "reloaded" toast over a
+			// destroyed tree.
+			h.Ok = false
+			got := node.Oid.String()
+			if got == "" {
+				got = "nothing"
+			}
+			h.Failures = append(h.Failures,
+				probe.want+" resolves to "+got+" instead of "+probe.oid+
+					" — a module it depends on is missing or empty")
 		}
 	}
 	return h
