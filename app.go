@@ -724,6 +724,20 @@ func (a *App) recordEvent(e events.Event, payload string) error {
 	return nil
 }
 
+// deadLetterSink names the sink a dead-letter event is ABOUT, or "".
+//
+// Read from the event rather than passed alongside it, so any future path that
+// records one is protected without having to remember to.
+func deadLetterSink(e events.Event) string {
+	if e.Kind != events.KindSystemSinkDeadLetter {
+		return ""
+	}
+	if id, ok := e.Params["sink"].(string); ok {
+		return id
+	}
+	return ""
+}
+
 // routeEvent matches an event against the rules and queues one delivery per
 // selected sink.
 func (a *App) routeEvent(e events.Event) {
@@ -732,6 +746,27 @@ func (a *App) routeEvent(e events.Event) {
 		return
 	}
 	sinkIDs := notify.Select(routes, e, time.Now())
+
+	// A dead letter must never go back to the sink that produced it.
+	//
+	// The failure becomes an event, the event is routed, and a catch-all rule
+	// — the natural thing to write — selects the sink that just failed. That
+	// delivery fails, produces another dead letter, and so on: one unreachable
+	// collector grows the event journal and the outbox without bound, and each
+	// cycle is another six attempts against a machine that is not answering.
+	//
+	// It still goes to the OTHER sinks, which is the useful case: "the mail
+	// relay is down" is exactly what you want to hear over syslog.
+	if failing := deadLetterSink(e); failing != "" {
+		kept := sinkIDs[:0]
+		for _, id := range sinkIDs {
+			if id != failing {
+				kept = append(kept, id)
+			}
+		}
+		sinkIDs = kept
+	}
+
 	if len(sinkIDs) == 0 {
 		return
 	}
