@@ -1,0 +1,884 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Documentation — SnmpLens</title>
+<meta name="description" content="How to use SnmpLens: SNMP operations, MIB management and diagnostics, the MIB editor, conceptual tables, traps and informs, monitoring, alert routing, and configuration." />
+<link rel="canonical" href="https://wasabules.github.io/SnmpLens/documentation.html" />
+<link rel="icon" href="assets/img/SnmpLens.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/site.css" />
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="./"><img src="assets/img/SnmpLens.png" alt="" width="26" height="26" />SnmpLens</a>
+    <nav class="nav" aria-label="Main">
+      <a href="documentation.html" aria-current="page">Documentation</a>
+      <a href="download.html">Download</a>
+      <a href="changelog.html" class="hide-sm">Changelog</a>
+      <a href="contributing.html" class="hide-sm">Contributing</a>
+      <a class="gh" href="https://github.com/Wasabules/SnmpLens">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        GitHub
+      </a>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="wrap docs">
+
+  <!-- ================= TOC ================= -->
+  <nav class="toc" aria-label="On this page">
+    <strong>Start</strong>
+    <a href="#install">Installing</a>
+    <a href="#first-query">Your first query</a>
+    <a href="#test-agent">A device to practise on</a>
+
+    <strong>Reading devices</strong>
+    <a href="#operations">Operations</a>
+    <a href="#versions">Versions and credentials</a>
+    <a href="#targets">Targets and overrides</a>
+    <a href="#tables">Conceptual tables</a>
+
+    <strong>MIBs</strong>
+    <a href="#mibs">Managing MIBs</a>
+    <a href="#mib-failed">Why a MIB did not load</a>
+    <a href="#mib-editor">The MIB editor</a>
+
+    <strong>Watching</strong>
+    <a href="#traps">Traps and informs</a>
+    <a href="#monitoring">Monitoring</a>
+    <a href="#background">Running in the background</a>
+
+    <strong>Alerting</strong>
+    <a href="#events">The event journal</a>
+    <a href="#routes">Rules</a>
+    <a href="#sinks">Destinations</a>
+    <a href="#templates">Message templates</a>
+    <a href="#outbox">Delivery and retries</a>
+
+    <strong>Rest</strong>
+    <a href="#discovery">Discovery and network tools</a>
+    <a href="#privacy">Privacy</a>
+    <a href="#config">Files and configuration</a>
+    <a href="#shortcuts">Keyboard shortcuts</a>
+    <a href="#troubleshooting">Troubleshooting</a>
+  </nav>
+
+  <!-- ================= BODY ================= -->
+  <div class="doc-body">
+
+    <h1 style="margin-bottom:0.35em">Documentation</h1>
+    <p class="lede">
+      Everything SnmpLens does, and the reasoning where the reasoning matters.
+      If something here disagrees with the application, the application is right —
+      please <a href="https://github.com/Wasabules/SnmpLens/issues">open an issue</a>.
+    </p>
+
+    <hr />
+
+    <!-- ---------------------------------------------------------------- -->
+    <section id="install">
+      <h2>Installing</h2>
+      <p>
+        SnmpLens is one executable with no runtime to install. Pick the asset for your
+        platform on the <a href="download.html">download page</a>, which also lists the
+        checksums and how to verify them.
+      </p>
+      <p>
+        Nothing is written outside your user configuration directory, and no service is
+        registered unless you ask for one in Settings.
+      </p>
+      <div class="note">
+        <p style="margin:0">
+          <strong>Linux:</strong> the application needs GTK 3 and WebKit2GTK at runtime. On
+          Debian and Ubuntu, <code>libgtk-3-0</code> and <code>libwebkit2gtk-4.1-0</code>.
+          The <code>.deb</code> declares them; the tarball does not.
+        </p>
+      </div>
+    </section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section id="first-query">
+      <h2>Your first query</h2>
+      <ol>
+        <li>Open the <strong>Operations</strong> tab (<kbd>Ctrl 1</kbd>).</li>
+        <li>Type a target — a hostname, an IPv4 address, or an IPv6 literal.</li>
+        <li>Set the version and community, or the v3 credentials, in Settings (<kbd>Ctrl ,</kbd>).</li>
+        <li>Pick an OID from the MIB tree on the left, or type one, and press <strong>GET</strong>.</li>
+      </ol>
+      <p>
+        Double-clicking a node in the tree performs a GET on it directly. For a whole
+        subtree, use <strong>WALK</strong> — or <strong>GETBULK</strong> against a v2c or v3
+        device, which asks for many rows per request instead of one.
+      </p>
+      <p>
+        Addresses may be written the way you would write them anywhere else. An IPv6
+        literal can be bracketed or not, and a link-local address keeps its zone:
+        <code>fe80::1%eth0</code> works.
+      </p>
+    </section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section id="test-agent">
+      <h2>A device to practise on</h2>
+      <p>
+        The repository carries a Python SNMP agent so you can use everything here without
+        touching production equipment. It needs Python 3.10 or newer, and
+        <code>pycryptodome</code> only if you want v3 privacy.
+      </p>
+      <pre><code>pip install pycryptodome
+python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
+      <p>
+        It serves realistic OIDs — <code>system</code>, <code>ifTable</code>,
+        <code>ifXTable</code>, IP, SNMP statistics, <code>hrSystem</code>,
+        <code>hrStorage</code> — with five interfaces whose counters actually move, and it
+        sends periodic traps.
+      </p>
+      <div class="table-scroll">
+        <table>
+          <caption class="visually-hidden">Credentials accepted by the test agent</caption>
+          <thead>
+            <tr><th>Version</th><th>User</th><th>Authentication</th><th>Privacy</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>v1 / v2c</td><td>—</td><td>community <code>public</code></td><td>—</td></tr>
+            <tr><td>v3</td><td><code>snmplens</code></td><td>SHA / <code>authpass123</code></td><td>AES-128 / <code>privpass123</code></td></tr>
+            <tr><td>v3</td><td><code>sha256user</code></td><td>SHA-256 / <code>authpass123</code></td><td>AES-128 / <code>privpass123</code></td></tr>
+            <tr><td>v3</td><td><code>sha512user</code></td><td>SHA-512 / <code>authpass123</code></td><td>AES-256 / <code>privpass123</code></td></tr>
+            <tr><td>v3</td><td><code>authonly</code></td><td>SHA / <code>authpass123</code></td><td>none</td></tr>
+            <tr><td>v3</td><td><code>noauthuser</code></td><td>none</td><td>none</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <hr />
+
+    <!-- ---------------------------------------------------------------- -->
+    <section id="operations">
+      <h2>Operations</h2>
+      <p>
+        GET, SET, GETNEXT, GETBULK and WALK. Give several targets — separated by commas or
+        newlines — and they are queried concurrently, one result block per device.
+      </p>
+
+      <h3>Reading the results</h3>
+      <p>
+        A walk comes back as a flat list of OIDs. When the OIDs belong to a table, the
+        <strong>table view</strong> pivots them into columns and splits them into rows; see
+        <a href="#tables">conceptual tables</a> for what that involves.
+      </p>
+      <p>
+        Values are formatted for reading rather than for machines: TimeTicks become a
+        duration such as <code>127d 3h 46m</code>, large counters get thousand separators,
+        and an OCTET STRING that is not printable is shown as hex. The raw value is always a
+        click away, and any cell can be copied on its own.
+      </p>
+      <p>
+        The filter bar above a result set accepts a regular expression and searches OIDs,
+        resolved names, types and values at once — useful for finding one interface in a
+        walk of two hundred.
+      </p>
+
+      <h3>Writing</h3>
+      <p>
+        SET writes a value with the wire type worked out from the object's base type in the
+        MIB, not from the name of its textual convention. That distinction matters: a
+        Gauge32, a TimeTicks and a Counter32 are not INTEGERs on the wire, and one wrong tag
+        makes an agent refuse the request.
+      </p>
+      <div class="note note-warn">
+        <p style="margin:0">
+          A SET is a write to live equipment. SnmpLens does not simulate it, ask twice, or
+          keep an undo. Read <a href="#tables">conceptual tables</a> before creating rows.
+        </p>
+      </div>
+
+      <h3>Comparing devices</h3>
+      <p>
+        With more than one target, results can be shown side by side with the delta and the
+        percentage difference between them — the quick way to find the one switch whose
+        configuration drifted.
+      </p>
+
+      <h3>Watching the wire</h3>
+      <p>
+        The debug panel shows the packets as they are sent and received, with a live
+        refresh. Community strings and v3 passphrases are removed at the point the entry is
+        written, not when it is displayed, so they are never in the buffer to begin with.
+      </p>
+    </section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section id="versions">
+      <h2>Versions and credentials</h2>
+      <p>SNMP v1, v2c and v3 are supported everywhere, including traps and informs.</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>v3 security</th><th>Supported</th></tr></thead>
+          <tbody>
+            <tr><td>Authentication</td><td>MD5, SHA-1, SHA-224, SHA-256, SHA-384, SHA-512</td></tr>
+            <tr><td>Privacy</td><td>DES, AES-128, AES-192, AES-256</td></tr>
+            <tr><td>Levels</td><td>noAuthNoPriv, authNoPriv, authPriv</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Credentials are held by the operating system's own protection — DPAPI on Windows,
+        the Keychain on macOS, a file readable only by your account on Linux — and are never
+        written beside the database. The settings screen names the backend actually in use,
+        because those three protect against genuinely different things: the first two tie
+        the key to your account, while the Linux file keeps it away from other accounts and
+        out of a copied profile, and nothing more.
+      </p>
+      <p class="muted small">
+        If the protector cannot be opened — a locked keychain, a directory that cannot be
+        written — saving a credential fails and says so. It is never silently discarded, and
+        good ciphertext is never overwritten with a half-sealed value.
+      </p>
+    </section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section id="targets">
+      <h2>Targets and overrides</h2>
+      <p>
+        Targets can be grouped, and any one of them can override the defaults: a different
+        version, community, port, or set of v3 credentials. That is the usual shape of a
+        real estate, where the core switches were migrated to v3 and the rest were not.
+      </p>
+      <p>
+        <strong>Test connection</strong> checks reachability and credentials before you run
+        an operation against fifty devices.
+      </p>
+    </section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section id="tables">
+      <h2>Conceptual tables</h2>
+      <p>
+        A walk is a flat list; a table is that list pivoted by column and split by INDEX.
+        The split has to follow the MIB, because how many sub-identifiers an index object
+        consumes depends on its SYNTAX, on whether its size is fixed, and on whether the row
+        declares IMPLIED — RFC 2578 §7.7.
+      </p>
+      <p>
+        This is the difference between <code>tcpConnTable</code> — whose INDEX is four
+        objects — rendering as a local address, a local port, a remote address and a remote
+        port, and rendering as one opaque <code>10.0.0.5.161.192.168.1.9.50000</code> per
+        row. It is also why tables here sort 9 before 10 rather than after it.
+      </p>
+
+      <h3>Creating and deleting rows</h3>
+      <p>
+        A table is editable only if it has a <code>RowStatus</code> column, because RFC 2579
+        gives no other way to create or destroy a row.
+      </p>
+      <p>
+        Creating a row writes every column <em>and</em> the RowStatus in a single SET. RFC
+        3416 makes a SET atomic across its varbinds, so doing it one column at a time would
+        ask the agent to accept a row that is incomplete at every step, and leave half of one
+        behind when it refuses. Index columns are never written — their value is carried by
+        the instance.
+      </p>
+      <p class="muted small">
+        An OCTET STRING index accepts the colon-separated hexadecimal the table displays, so
+        a MAC-keyed table can be written as well as read.
+      </p>
+    </section>
+
+    <hr />
+
+    <!-- ---------------------------------------------------------------- -->
+    <section id="mibs">
+      <h2>Managing MIBs</h2>
+      <p>
+        The standard SNMPv2 MIBs are compiled into the binary and extracted on first run
+        into your configuration directory. That directory is the single source of truth
+        afterwards: MIBs you add live beside them and are loaded the same way.
+      </p>
+      <p>
+        Add your own by dropping files — or whole folders — anywhere on the window. Folders
+        are scanned recursively, duplicates are detected, and if anything fails to load you
+        get a report naming each file and what went wrong rather than a single count.
+      </p>
+      <div class="note">
+        <p style="margin:0">
+          MIBs can be switched off individually. An empty selection means <em>none</em>, not
+          <em>all</em> — turning everything off loads nothing, rather than quietly loading
+          the whole directory.
+        </p>
+      </div>
+      <p><kbd>F5</kbd> reloads every MIB from disk without restarting.</p>
+    </section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section id="mib-failed">
+      <h2>Why a MIB did not load</h2>
+      <p>
+        The library underneath answers <em>“Could not load module at X”</em> for a missing
+        file, a PDF, a syntax error on line 412 and an unsatisfiable IMPORTS clause alike —
+        the same sentence for four unrelated problems. SnmpLens recovers the real message
+        and reports:
+      </p>
+      <ul>
+        <li>a <strong>stage</strong> — read, content, parse, imports, build, semantic, loaded — so you know how far it got;</li>
+        <li>the <strong>position</strong>, with an excerpt of the file and a caret under the offending token;</li>
+        <li>the <strong>imports that cannot be satisfied</strong>, and the symbols each one was needed for;</li>
+        <li>a <strong>dependency chain</strong> followed to its root when the failure is in something this MIB imports.</li>
+      </ul>
+      <p>
+        It also recognises the files people download by mistake — an HTML error page, a PDF,
+        a zip archive, a UTF-16 file — because all four otherwise arrive as that same
+        sentence. And it warns when a file's name does not match the module inside it, which
+        loads perfectly and then cannot be found by anything that imports it.
+      </p>
+      <div class="note">
+        <p style="margin:0">
+          <strong>A module can load and still be broken.</strong> Imports resolve lazily, so
+          a MIB importing a module you do not have reports success and then resolves to
+          nothing. Diagnostics are therefore offered on successes too, and a missing import
+          stays the headline rather than the unresolved references it causes.
+        </p>
+      </div>
+    </section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section id="mib-editor">
+      <h2>The MIB editor</h2>
+      <p>
+        <kbd>Ctrl 7</kbd>. Edits the MIBs in your configuration directory, or opens one from
+        anywhere and saves it in.
+      </p>
+
+      <h3>Three kinds of checking</h3>
+      <p>Because three different things can be wrong, and each is found by a different pass:</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Pass</th><th>Finds</th><th>When</th></tr></thead>
+          <tbody>
+            <tr><td>Parser</td><td>Syntax errors, with line and column</td><td>As you type</td></tr>
+            <tr><td>Loader</td><td>Whether the module can be built at all</td><td>On demand</td></tr>
+            <tr><td>Analysis</td><td>Unknown types, duplicate OIDs, unresolved parents, missing modules in <code>FROM</code>, undefined <code>INDEX</code> objects, readable conceptual rows</td><td>On pause</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        The third exists because of a measurement: a MIB declaring <code>SYNTAX Integerr32</code>
+        <em>and</em> assigning the same OID twice loads with no error at all, then resolves
+        both objects to a nil type and an empty OID with nothing anywhere saying a word.
+      </p>
+
+      <h3>Imports</h3>
+      <p>
+        The editor reports which symbols are used without being imported and which module
+        each comes from, and can insert them. The fix edits the IMPORTS clause as text
+        rather than reprinting the file, because a MIB carries comments and alignment that
+        no printer would preserve.
+      </p>
+
+      <h3>Safety</h3>
+      <p>
+        Editing is safe to attempt — a failed load leaves the previously loaded tree
+        untouched. What is not safe is succeeding at saving a broken standard MIB, since
+        nearly everything imports from <code>SNMPv2-SMI</code> and <code>SNMPv2-TC</code>.
+        So bundled MIBs are marked, backed up automatically before they are overwritten,
+        restorable to the shipped version, and the tree is health-checked after a reload.
+      </p>
+      <p class="muted small">
+        Backups go to a sibling directory rather than beside the MIB, because
+        <code>IF-MIB.123.bak</code> next to <code>IF-MIB</code> would be loaded first as the
+        same module and win. Unsaved work is mirrored to a draft file, so it survives closing
+        the window.
+      </p>
+    </section>
+
+    <hr />
+
+    <!-- ---------------------------------------------------------------- -->
+    <section id="traps">
+      <h2>Traps and informs</h2>
+      <p>
+        The listener receives v1, v2c and v3 notifications on a port you choose, resolves the
+        trap OID through your MIBs, and can raise a native desktop notification. Received
+        traps can be filtered and exported to CSV.
+      </p>
+      <p>
+        Every trap is written to the <a href="#events">event journal</a> before anything else
+        happens with it. That ordering is what makes collection work with the window closed:
+        the on-screen list is a view, the journal is the record.
+      </p>
+
+      <h3>Sending</h3>
+      <p>
+        Traps can be sent to test a receiver, and so can <strong>informs</strong> — the
+        acknowledged form. The acknowledgement is reported, because it is the entire reason
+        to send one rather than a trap.
+      </p>
+      <div class="note">
+        <p style="margin:0">
+          An inform on v1 is <strong>refused</strong>, not downgraded to a trap. RFC 1157 has
+          no InformRequest PDU, so there is nothing to send, and a caller who asked for a
+          confirmed notification must not be told they got one.
+        </p>
+      </div>
+      <p class="muted small">
+        Binding uses the bare <code>:port</code> wildcard, which Go opens as a dual-stack
+        socket, so an IPv4 and an IPv6 device reach the same listener.
+      </p>
+    </section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section id="monitoring">
+      <h2>Monitoring</h2>
+      <p>
+        A monitoring session polls a set of OIDs on a set of targets at an interval, stores
+        every sample, and charts them. Sessions can be paused, resumed and deleted, and are
+        restored when the application starts.
+      </p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>View</th><th>Shows</th></tr></thead>
+          <tbody>
+            <tr><td>Value</td><td>The counter or gauge as read</td></tr>
+            <tr><td>Delta</td><td>The change since the previous sample</td></tr>
+            <tr><td>Rate</td><td>Change per second, over the time that actually elapsed</td></tr>
+            <tr><td>Latency</td><td>How long the device took to answer</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Counter wraps are corrected rather than plotted as a cliff, and rates are derived
+        from the measured interval rather than the configured one — a poll that ran late
+        would otherwise show as a spike.
+      </p>
+
+      <h3>Thresholds</h3>
+      <p>
+        Each monitored OID can carry a minimum, a maximum, and a duration it must be breached
+        for. Crossing one opens an <em>episode</em>; coming back closes it. Both are events,
+        which is what makes an alert de-duplicate: a value oscillating around its threshold
+        produces one incident, not forty.
+      </p>
+      <p>
+        A device that stops answering is its own kind of episode, separate from any
+        threshold — the distinction between “this is too high” and “I cannot tell”.
+      </p>
+    </section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section id="background">
+      <h2>Running in the background</h2>
+      <p>
+        The poll clock lives in the Go backend, one scheduler per session, so closing the
+        window does not stop monitoring. Optionally SnmpLens can keep running in the system
+        tray and start with your session — a per-user login entry, never machine-wide, so it
+        never needs elevation.
+      </p>
+      <p class="muted small">
+        The tray is fail-soft on purpose: a desktop with no status-notifier host never calls
+        back rather than returning an error, so the decision about whether closing the window
+        should quit is taken after the tray has answered, not before. An application that
+        refuses to close with no tray to quit from is unusable.
+      </p>
+    </section>
+
+    <hr />
+
+    <!-- ---------------------------------------------------------------- -->
+    <section id="events">
+      <h2>The event journal</h2>
+      <p>
+        <kbd>Ctrl 6</kbd>. One list for everything worth remembering, whatever produced it:
+      </p>
+      <ul>
+        <li><strong>Traps</strong> received, with their varbinds;</li>
+        <li><strong>Thresholds</strong> opened and resolved;</li>
+        <li><strong>Reachability</strong> — a device stopped or resumed answering;</li>
+        <li><strong>Operations</strong> worth auditing, such as a failed SET;</li>
+        <li><strong>System</strong> — a notification that could not be delivered, an update, a MIB reload.</li>
+      </ul>
+      <p>
+        Events are stored with a translation key and their parameters rather than a finished
+        sentence, so an event recorded a year ago still reads correctly in a language added
+        since. Retention is per category, because traps arrive in bursts while system events
+        trickle, and one shared limit would let a trap storm evict everything else.
+      </p>
+    </section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section id="routes">
+      <h2>Rules</h2>
+      <p>
+        A rule decides which events reach which destinations. It can match on category, kind,
+        severity, session, state, source, OID prefix, a substring of the summary, and quiet
+        hours. An empty field matches everything.
+      </p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Field</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Source</td>
+              <td>An address, a CIDR range, a glob such as <code>sw-*</code>, or a literal hostname. <code>0.0.0.0/0</code> and <code>::/0</code> both mean every device, of either family. A pattern that cannot match anything is refused when you save it.</td>
+            </tr>
+            <tr>
+              <td>OID prefix</td>
+              <td>Matched by sub-identifier, not by text — <code>1.3.6.1.2.1.2</code> is <code>interfaces</code> and does not match <code>1.3.6.1.2.1.25</code>, which is a different subtree that merely starts with the same characters.</td>
+            </tr>
+            <tr>
+              <td>Quiet hours</td>
+              <td>A window in which the rule does <em>not</em> match, so nothing is delivered. Evaluated against the time the event happened.</td>
+            </tr>
+            <tr>
+              <td>Priority</td>
+              <td>Rules are evaluated in ascending order; <code>0</code> is first. Combined with <em>stop</em>, this decides which destinations an event reaches at all.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section id="sinks">
+      <h2>Destinations</h2>
+      <div class="grid grid-3" style="margin:1.5rem 0">
+        <div class="feature">
+          <h3>Syslog</h3>
+          <p>
+            RFC 5424 messages over UDP, TCP, or TLS per RFC 5425. Mutual TLS is supported; the
+            client certificate lives with the configuration and its private key with the
+            other credentials.
+          </p>
+        </div>
+        <div class="feature">
+          <h3>Webhook</h3>
+          <p>
+            POST, PUT or PATCH with custom headers. Sends either the SnmpLens envelope or
+            whatever your template renders, which is how you talk to Slack, Teams or
+            Alertmanager.
+          </p>
+        </div>
+        <div class="feature">
+          <h3>Email</h3>
+          <p>
+            SMTP with implicit TLS or STARTTLS, AUTH PLAIN or LOGIN. Credentials are never
+            sent before the connection is encrypted.
+          </p>
+        </div>
+      </div>
+
+      <p>
+        All three accept a <strong>CA certificate in PEM</strong>, so an internal collector or
+        relay can be trusted without turning verification off — the alternative pushes people
+        towards the insecure option for the exact situation that has a secure answer.
+      </p>
+
+      <h3>Credentials in a destination</h3>
+      <p>
+        Each destination has one secret: the SMTP password, the webhook bearer token, or the
+        syslog client private key. It is held by the operating system's protection, never
+        written with the configuration.
+      </p>
+      <p>
+        A custom header value <em>or the URL</em> may contain <code>{{secret}}</code> to draw
+        on it. The URL matters most: Slack, Teams and Discord authenticate by the URL alone,
+        so without this the address — which <em>is</em> the credential — would sit in the
+        database in the clear.
+      </p>
+      <div class="note">
+        <p style="margin:0">
+          A webhook <strong>does not follow redirects</strong>, deliberately. Go rewrites a
+          redirected POST as a GET and drops the body, so a receiver behind a 302 would answer
+          200 having been sent nothing — and the delivery would be recorded as successful.
+        </p>
+      </div>
+    </section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section id="templates">
+      <h2>Message templates</h2>
+      <p>
+        A destination can carry its own subject and body template, over a fixed vocabulary:
+        <code>{{variable}}</code>, <code>{{variable|default}}</code> and
+        <code>{{#variable}}…{{/variable}}</code> for a section that only appears when the
+        variable has a value. The settings screen lists every variable available.
+      </p>
+      <p>
+        It is deliberately not a general template language. A fixed vocabulary can be listed,
+        validated when you save, and cannot reach a field nobody chose to expose.
+      </p>
+      <p>
+        Two rules carry the safety. Substituted text is <strong>never re-scanned</strong>, so
+        a trap OID that happens to read <code>{{secret}}</code> comes out as those characters.
+        And masking is applied to the event <em>before</em> templating, because a template can
+        name fields the built-in rendering never showed.
+      </p>
+      <p>
+        For a webhook whose payload <em>is</em> the template, substituted values are escaped
+        as JSON string fragments while your own punctuation is left alone — a trap arrives
+        from the network unauthenticated, and one quote in its OID would otherwise turn a
+        hand-written payload into a different document. The result is checked with a JSON
+        parser before it is sent, and when you save, against a sample of each kind of event.
+      </p>
+      <p class="muted small">
+        The preview renders through the same path the destination uses, so what is on screen
+        is what will be posted, with its size and its parse result.
+      </p>
+    </section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section id="outbox">
+      <h2>Delivery and retries</h2>
+      <p>
+        Nothing is sent from the screen. A matched event is queued in a durable outbox and
+        sent by a background worker, so a slow relay can never stall a trap listener, and a
+        notification survives the window being closed.
+      </p>
+      <p>
+        A failure is retried with exponential backoff, up to six attempts. Whether it is
+        retried at all is decided by the <strong>protocol reply code</strong> and never by
+        the text a receiver wrote: RFC 5321 makes an SMTP 4yz transient and a 5yz permanent,
+        and an HTTP 408, 425 or 429 asks to be tried again while other 4xx codes will never
+        be accepted. An error carrying no code is retried, because six attempts cost half an
+        hour of backoff while discarding one loses the incident.
+      </p>
+      <p>
+        A delivery finally given up on becomes a <strong>dead letter</strong>. It is kept, not
+        deleted, because it is the only record that a notification never arrived — and it is
+        listed with the relay's own error and a button to try again. Successful deliveries are
+        trimmed after two weeks; pending and dead ones never are.
+      </p>
+      <p class="muted small">
+        One unreachable destination does not delay the others: deliveries run in parallel
+        across destinations and in series within one, because twenty simultaneous SMTP
+        conversations with one relay is how a sender gets blocked.
+      </p>
+    </section>
+
+    <hr />
+
+    <!-- ---------------------------------------------------------------- -->
+    <section id="discovery">
+      <h2>Discovery and network tools</h2>
+      <p>
+        <kbd>Ctrl 5</kbd>. Sweep a CIDR range for devices that answer SNMP with the
+        credentials you gave, then ping or traceroute any of them. Both tools are pure Go and
+        need no elevated privileges.
+      </p>
+      <div class="note">
+        <p style="margin:0">
+          Scans are capped by host count. The prefix sizes the work before a single packet is
+          sent, so <code>10.0.0.0/8</code> is refused rather than attempted — and an IPv6
+          <code>/64</code> would never have finished expanding at all.
+        </p>
+      </div>
+      <p class="muted small">
+        On macOS, an IPv6 traceroute runs <code>traceroute6</code>, because the system
+        <code>traceroute</code> there is IPv4-only.
+      </p>
+    </section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section id="privacy">
+      <h2>Privacy</h2>
+      <p>
+        <strong>Anonymous Mode</strong> (<kbd>Ctrl Shift A</kbd>) replaces everything
+        identifying on screen with a stable alias: addresses become <code>Device-1</code>,
+        <code>Device-2</code> and so on, consistently for the rest of the session, so a
+        screenshot still makes sense. It covers addresses in free text as well as in columns —
+        summaries, tooltips, trap sources, debug output — and handles IPv6, which is the case a
+        screenshot is most likely to leak.
+      </p>
+      <p>
+        It is <strong>always off at startup</strong>, deliberately. A privacy mode that
+        persists is a mode that eventually hides something you needed to see without your
+        remembering you turned it on.
+      </p>
+      <p class="muted small">
+        It is a display mask, not encryption: the underlying data is unchanged, and an export
+        contains real values.
+      </p>
+    </section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section id="config">
+      <h2>Files and configuration</h2>
+      <p>Settings are in the application (<kbd>Ctrl ,</kbd>). What lands on disk:</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Platform</th><th>Directory</th></tr></thead>
+          <tbody>
+            <tr><td>Windows</td><td><code>%APPDATA%\SnmpLens\</code></td></tr>
+            <tr><td>macOS</td><td><code>~/.config/SnmpLens/</code></td></tr>
+            <tr><td>Linux</td><td><code>~/.config/SnmpLens/</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Item</th><th>What it is</th></tr></thead>
+          <tbody>
+            <tr><td><code>mibs/</code></td><td>The bundled MIBs, extracted on first run, plus everything you added</td></tr>
+            <tr><td><code>mib-backups/</code></td><td>Automatic backups taken before a bundled MIB is overwritten</td></tr>
+            <tr><td><code>mib-drafts/</code></td><td>Unsaved editor buffers, so they survive closing the window</td></tr>
+            <tr><td><code>monitoring.db</code></td><td>SQLite: history, events, sessions, rules, destinations, the outbox</td></tr>
+            <tr><td><code>service.json</code></td><td>The few preferences that must be read before the window exists</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted small">
+        Credentials are not in any of these. They are held by the operating system's own
+        protection, under a reference the database stores.
+      </p>
+    </section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section id="shortcuts">
+      <h2>Keyboard shortcuts</h2>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Keys</th><th>Action</th></tr></thead>
+          <tbody>
+            <tr><td><kbd>Ctrl 1</kbd></td><td>Operations</td></tr>
+            <tr><td><kbd>Ctrl 2</kbd></td><td>Traps</td></tr>
+            <tr><td><kbd>Ctrl 3</kbd></td><td>History</td></tr>
+            <tr><td><kbd>Ctrl 4</kbd></td><td>Monitor</td></tr>
+            <tr><td><kbd>Ctrl 5</kbd></td><td>Discovery</td></tr>
+            <tr><td><kbd>Ctrl 6</kbd></td><td>Events</td></tr>
+            <tr><td><kbd>Ctrl 7</kbd></td><td>MIB editor</td></tr>
+            <tr><td><kbd>Ctrl ,</kbd></td><td>Settings</td></tr>
+            <tr><td><kbd>Ctrl Shift A</kbd></td><td>Toggle Anonymous Mode</td></tr>
+            <tr><td><kbd>F5</kbd></td><td>Reload MIBs from disk</td></tr>
+            <tr><td><kbd>Esc</kbd></td><td>Close the open dialog</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted small">On macOS, <kbd>Cmd</kbd> replaces <kbd>Ctrl</kbd>.</p>
+    </section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section id="troubleshooting">
+      <h2>Troubleshooting</h2>
+
+      <h3>A device does not answer</h3>
+      <p>
+        Check the version first — a v2c request to a v1-only agent is simply ignored, with no
+        error to report. Then the community or v3 credentials, then the port, then whether
+        anything between you and the device filters UDP 161. <strong>Test connection</strong>
+        on the target distinguishes these faster than a walk does.
+      </p>
+
+      <h3>A MIB will not load</h3>
+      <p>
+        Use the diagnostics — see <a href="#mib-failed">above</a>. The commonest causes, in
+        order: the file is an HTML error page rather than a MIB, it imports a module you do
+        not have, or its filename does not match the module name inside it.
+      </p>
+
+      <h3>An OID shows the wrong name</h3>
+      <p>
+        A lookup for an unknown OID returns the nearest ancestor rather than failing, so a
+        badly-resolved OID looks like a shallow one. If a name looks wrong, the MIB defining
+        it is probably not loaded.
+      </p>
+
+      <h3>An alert never arrived</h3>
+      <p>
+        Look at the delivery log in Settings. Every attempt is there with the relay's own
+        error, and a dead letter is kept precisely so this question has an answer. If nothing
+        was ever queued, the rule did not match — check its source pattern and OID prefix, and
+        that the destination is switched on.
+      </p>
+
+      <h3>Traps are not being received</h3>
+      <p>
+        Ports below 1024 need privileges the application deliberately does not ask for; use
+        1162 and redirect if you need 162. Check the listener is started, and that your
+        firewall allows inbound UDP on that port.
+      </p>
+    </section>
+
+    <hr />
+
+    <p class="muted">
+      Something missing or wrong here?
+      <a href="https://github.com/Wasabules/SnmpLens/issues/new">Open an issue</a> — the
+      documentation is part of the repository and takes patches like anything else.
+    </p>
+
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <a class="brand" href="./" style="margin-bottom:0.6rem"><img src="assets/img/SnmpLens.png" alt="" width="26" height="26" />SnmpLens</a>
+        <p class="muted small" style="max-width:34ch">A desktop SNMP MIB browser, editor and alert router. MIT licensed, built in the open.</p>
+      </div>
+      <div>
+        <h4>Project</h4>
+        <ul>
+          <li><a href="documentation.html">Documentation</a></li>
+          <li><a href="download.html">Download</a></li>
+          <li><a href="changelog.html">Changelog</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Contribute</h4>
+        <ul>
+          <li><a href="contributing.html">Contributing guide</a></li>
+          <li><a href="security.html">Security policy</a></li>
+          <li><a href="https://github.com/Wasabules/SnmpLens/issues">Issue tracker</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Source</h4>
+        <ul>
+          <li><a href="https://github.com/Wasabules/SnmpLens">Repository</a></li>
+          <li><a href="https://github.com/Wasabules/SnmpLens/releases">Releases</a></li>
+          <li><a href="https://github.com/Wasabules/SnmpLens/blob/main/LICENSE">MIT licence</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="colophon">
+      <p>© 2026 Geoffrey Lecoq · Released under the MIT licence.</p>
+      <p>Built with <a href="https://wails.io/">Wails</a>, <a href="https://go.dev/">Go</a> and <a href="https://svelte.dev/">Svelte</a>.</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+// Highlight the section currently on screen in the table of contents.
+// Progressive: without it every link still works, it just does not follow you.
+(function () {
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+  var map = {};
+  links.forEach(function (a) {
+    var el = document.getElementById(a.hash.slice(1));
+    if (el) map[a.hash.slice(1)] = a;
+  });
+  if (!('IntersectionObserver' in window)) return;
+
+  var seen = {};
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) { seen[e.target.id] = e.isIntersecting; });
+    var current = null;
+    Object.keys(map).forEach(function (id) { if (seen[id] && !current) current = id; });
+    links.forEach(function (a) { a.classList.remove('current'); });
+    if (current && map[current]) map[current].classList.add('current');
+  }, { rootMargin: '-80px 0px -70% 0px' });
+
+  Object.keys(map).forEach(function (id) { io.observe(document.getElementById(id)); });
+})();
+</script>
+</body>
+</html>

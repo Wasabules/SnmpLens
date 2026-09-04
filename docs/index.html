@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SnmpLens — desktop SNMP browser, MIB editor and alert router</title>
+<meta name="description" content="A cross-platform desktop SNMP MIB browser, MIB editor and alerting tool. Walk devices over v1, v2c and v3, read conceptual tables as tables, and route alerts to syslog, a webhook or email. One native binary. MIT licensed." />
+<link rel="canonical" href="https://wasabules.github.io/SnmpLens/" />
+<link rel="icon" href="assets/img/SnmpLens.png" />
+
+<meta property="og:type" content="website" />
+<meta property="og:title" content="SnmpLens — desktop SNMP browser, MIB editor and alert router" />
+<meta property="og:description" content="Walk devices over v1, v2c and v3, read conceptual tables as tables, edit MIBs with real diagnostics, and route alerts to syslog, a webhook or email. One native binary for Windows, macOS and Linux." />
+<meta property="og:url" content="https://wasabules.github.io/SnmpLens/" />
+<meta property="og:image" content="https://wasabules.github.io/SnmpLens/assets/img/operations-dark.png" />
+<meta name="twitter:card" content="summary_large_image" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/site.css" />
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="./">
+      <img src="assets/img/SnmpLens.png" alt="" width="26" height="26" />
+      SnmpLens
+    </a>
+    <nav class="nav" aria-label="Main">
+      <a href="documentation.html">Documentation</a>
+      <a href="download.html">Download</a>
+      <a href="changelog.html" class="hide-sm">Changelog</a>
+      <a href="contributing.html" class="hide-sm">Contributing</a>
+      <a class="gh" href="https://github.com/Wasabules/SnmpLens">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        GitHub
+      </a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- ================= HERO ================= -->
+  <section class="wrap hero">
+    <p class="eyebrow">Open source SNMP tooling</p>
+    <h1>A desktop SNMP browser, MIB editor and alert router.</h1>
+    <p class="lede">
+      One native binary for Windows, macOS and Linux. Walk devices over v1, v2c or v3,
+      read conceptual tables as tables, edit MIBs with diagnostics that name the line,
+      and route what matters to syslog, a webhook or your inbox.
+    </p>
+
+    <div class="btn-row">
+      <a class="btn btn-primary" href="download.html">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M7.47 10.78a.75.75 0 0 0 1.06 0l3.75-3.75a.75.75 0 0 0-1.06-1.06L8.75 8.44V1.75a.75.75 0 0 0-1.5 0v6.69L4.78 5.97a.75.75 0 0 0-1.06 1.06l3.75 3.75ZM3.75 13a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z"/></svg>
+        Download
+      </a>
+      <a class="btn" href="documentation.html">Read the documentation</a>
+      <a class="btn" href="https://github.com/Wasabules/SnmpLens">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        Source
+      </a>
+    </div>
+
+    <div class="hero-meta">
+      <span>MIT licensed</span>
+      <span>Windows · macOS · Linux</span>
+      <span>SNMP v1 / v2c / v3</span>
+      <span>No agent, no account</span>
+    </div>
+  </section>
+
+  <!-- ================= REPO STATS ================= -->
+  <section class="wrap" style="padding-bottom:3rem">
+    <dl class="repo-stats" data-gh="stats">
+      <div>
+        <dt>Stars</dt>
+        <dd><span class="skeleton" data-stat="stars" data-fallback="—">0000</span></dd>
+      </div>
+      <div>
+        <dt>Forks</dt>
+        <dd><span class="skeleton" data-stat="forks" data-fallback="—">000</span></dd>
+      </div>
+      <div>
+        <dt>Open issues</dt>
+        <dd><span class="skeleton" data-stat="issues" data-fallback="—">00</span></dd>
+      </div>
+      <div>
+        <dt>Last commit</dt>
+        <dd style="font-size:1rem"><span class="skeleton" data-stat="updated" data-fallback="see GitHub">Loading</span></dd>
+      </div>
+      <div>
+        <dt>Latest release</dt>
+        <dd style="font-size:1rem" data-gh="release">
+          <a data-release="link" href="https://github.com/Wasabules/SnmpLens/releases/latest"><span class="skeleton" data-release="tag" data-fallback="Releases">v0.0.0</span></a>
+        </dd>
+      </div>
+    </dl>
+  </section>
+
+  <!-- ================= SCREENSHOT ================= -->
+  <section class="wrap" style="padding-bottom:4.5rem">
+    <figure class="shot">
+      <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i><b>SnmpLens — Operations</b></div>
+      <img src="assets/img/operations-dark.png" alt="The Operations tab: a MIB tree on the left, a walk result rendered as a sortable table on the right." width="1600" height="1000" />
+      <figcaption>A walk of <code>ifTable</code>, pivoted into columns and split by INDEX.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ================= WHAT IT IS ================= -->
+  <section class="section">
+    <div class="wrap wrap-narrow">
+      <p class="eyebrow">What it is</p>
+      <h2 style="margin-top:0">A single binary that does the whole loop.</h2>
+      <p>
+        Most SNMP work is the same loop: find the OID, read it from a device, work out
+        whether the number is a problem, and tell somebody. SnmpLens does all four in one
+        application, on the machine in front of you — there is no collector to deploy, no
+        server to run, and no account to make.
+      </p>
+      <p>
+        The backend is Go, the interface is Svelte, and
+        <a href="https://wails.io/">Wails</a> compiles them into one native executable with
+        no runtime to install. Its state — the MIBs you added and the history it recorded —
+        lives in a directory you own, as files you can read.
+      </p>
+      <p class="muted small">
+        The only server SnmpLens contacts on its own is GitHub, to check whether a newer
+        release exists. Everything else on the wire is a device you named or a destination
+        you configured.
+      </p>
+    </div>
+  </section>
+
+  <!-- ================= FEATURES ================= -->
+  <section class="section">
+    <div class="wrap">
+      <p class="eyebrow">Capabilities</p>
+      <h2 style="margin-top:0">Seven workspaces</h2>
+      <p class="lede" style="margin-bottom:2.5rem">
+        Each tab is a job, and the keyboard shortcut is in brackets.
+      </p>
+
+      <div class="grid grid-3">
+        <div class="feature">
+          <h3>Operations <kbd>Ctrl 1</kbd></h3>
+          <p>
+            GET, SET, GETNEXT, GETBULK and WALK across many targets at once. Results arrive as
+            a flat list or as a real table — pivoted by column and split by INDEX, following
+            RFC 2578 §7.7, so <code>tcpConnTable</code> reads as four index fields rather than
+            one opaque sub-OID. Rows can be created and deleted where the MIB defines a
+            <code>RowStatus</code>.
+          </p>
+        </div>
+        <div class="feature">
+          <h3>Traps <kbd>Ctrl 2</kbd></h3>
+          <p>
+            Receive v1, v2c and v3 traps on any port, with the trap OID resolved through your
+            MIBs. Send traps to test a receiver, or acknowledged INFORMs — refused on v1
+            rather than quietly downgraded, because RFC 1157 has no such PDU.
+          </p>
+        </div>
+        <div class="feature">
+          <h3>History <kbd>Ctrl 3</kbd></h3>
+          <p>
+            Every operation is kept with its results, so you can diff two walks side by side
+            and see what changed on a device between Tuesday and now. Frequent queries can be
+            saved and re-run.
+          </p>
+        </div>
+        <div class="feature">
+          <h3>Monitor <kbd>Ctrl 4</kbd></h3>
+          <p>
+            Poll OIDs on a schedule and chart them as raw values, deltas, per-second rates or
+            latency. Counter wraps are corrected and rates derived from the time that actually
+            elapsed. The clock lives in the Go backend, so closing the window does not stop
+            the session.
+          </p>
+        </div>
+        <div class="feature">
+          <h3>Discovery <kbd>Ctrl 5</kbd></h3>
+          <p>
+            Scan a CIDR range for devices that answer SNMP, then ping and traceroute them.
+            Both are pure Go and need no elevated privileges. IPv6 throughout, including
+            link-local addresses with a zone.
+          </p>
+        </div>
+        <div class="feature">
+          <h3>Events <kbd>Ctrl 6</kbd></h3>
+          <p>
+            One journal for everything worth remembering: traps received, thresholds opened
+            and resolved, devices that stopped answering, deliveries that failed. Filterable,
+            exportable, and the source for every alert that gets routed.
+          </p>
+        </div>
+        <div class="feature">
+          <h3>MIB editor <kbd>Ctrl 7</kbd></h3>
+          <p>
+            Edit the MIBs in your own directory with syntax highlighting, live validation as
+            you type, and a semantic pass that catches what loading does not — unknown types,
+            duplicate OIDs, undefined INDEX objects. Standard MIBs are backed up before they
+            are overwritten and can be restored.
+          </p>
+        </div>
+        <div class="feature">
+          <h3>Alert routing</h3>
+          <p>
+            Rules match events by category, severity, source, OID prefix or quiet hours, and
+            send them to syslog (UDP, TCP or TLS per RFC 5425), a webhook, or email. Delivery
+            goes through a durable outbox with retries, so an alert survives a relay being
+            down and a window being closed.
+          </p>
+        </div>
+        <div class="feature">
+          <h3>Privacy</h3>
+          <p>
+            Anonymous Mode replaces every address, credential and hostname on screen with a
+            stable alias, so a screenshot or a screen-share is safe. It is deliberately
+            non-persistent: it is always off at startup, so it can never hide something you
+            needed to see.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= DEPTH ================= -->
+  <section class="section">
+    <div class="wrap">
+      <p class="eyebrow">Under it</p>
+      <h2 style="margin-top:0">The parts that are easy to get wrong</h2>
+      <p class="lede" style="margin-bottom:2.5rem">
+        A tool is judged by what it does when things are not fine.
+      </p>
+
+      <div class="grid grid-2">
+        <div class="panel">
+          <h3>A MIB that will not load tells you why</h3>
+          <p>
+            The underlying library answers <em>“Could not load module at X”</em> for a missing
+            file, a PDF, a syntax error on line 412 and an unsatisfiable IMPORTS alike.
+            SnmpLens recovers the real message and reports a stage — read, content, parse,
+            imports, build, semantic — with the position, an excerpt with a caret, and the
+            modules that could not be satisfied along with the symbols each was needed for.
+          </p>
+          <p class="muted small" style="margin-bottom:0">
+            It recognises the files people download by mistake: an HTML error page, a PDF, a
+            zip, a UTF-16 file. All four otherwise arrive as the same sentence.
+          </p>
+        </div>
+
+        <div class="panel">
+          <h3>Credentials are not kept beside the data</h3>
+          <p>
+            Community strings and v3 passphrases are sealed with a key held by the operating
+            system — DPAPI on Windows, the Keychain on macOS, a 0600 file on Linux — and never
+            written next to the database. The settings screen names the backend actually in
+            use rather than saying “encrypted”, because those three protect against different
+            things.
+          </p>
+          <p class="muted small" style="margin-bottom:0">
+            Sealing that fails never falls back to writing plaintext, and never overwrites
+            good ciphertext with a half-sealed object.
+          </p>
+        </div>
+
+        <div class="panel">
+          <h3>Updates are signed, not just downloaded</h3>
+          <p>
+            Every release ships a SHA-256 manifest and an Ed25519 signature over it. The
+            application verifies the signature against a key compiled into the binary, then
+            checks the asset against the now-authenticated manifest — the same model a Linux
+            package repository uses. A build whose signature is missing refuses the update
+            rather than applying it.
+          </p>
+        </div>
+
+        <div class="panel">
+          <h3>An alert that fails leaves a record</h3>
+          <p>
+            Deliveries are queued in a durable outbox and retried with backoff. Whether a
+            failure is retried is decided by the protocol reply code — 4xx transient and 5xx
+            permanent for SMTP, per RFC 5321 — never by searching the text a receiver wrote.
+            A delivery finally given up on is kept and listed, because it is the only record
+            that a notification never arrived.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= INSTALL ================= -->
+  <section class="section">
+    <div class="wrap">
+      <p class="eyebrow">Install</p>
+      <h2 style="margin-top:0">Get it running</h2>
+
+      <div class="grid grid-3" style="margin-top:2rem">
+        <div data-platform="windows">
+          <h3 style="margin-top:0">Windows <span class="badge" data-platform-hint hidden>your platform</span></h3>
+          <p class="small muted">Installer, or a portable executable with nothing to install.</p>
+          <div data-gh="release">
+            <a class="btn btn-primary" data-asset="SnmpLens-windows-amd64-setup.exe"
+               href="https://github.com/Wasabules/SnmpLens/releases/latest">Installer (.exe)</a>
+          </div>
+        </div>
+        <div data-platform="macos">
+          <h3 style="margin-top:0">macOS <span class="badge" data-platform-hint hidden>your platform</span></h3>
+          <p class="small muted">Universal — Apple Silicon and Intel in one image.</p>
+          <div data-gh="release">
+            <a class="btn btn-primary" data-asset="SnmpLens-macos-universal.dmg"
+               href="https://github.com/Wasabules/SnmpLens/releases/latest">Disk image (.dmg)</a>
+          </div>
+        </div>
+        <div data-platform="linux">
+          <h3 style="margin-top:0">Linux <span class="badge" data-platform-hint hidden>your platform</span></h3>
+          <p class="small muted">Debian package, or a tarball for everyone else.</p>
+          <div data-gh="release">
+            <a class="btn btn-primary" data-asset="SnmpLens-linux-amd64.deb"
+               href="https://github.com/Wasabules/SnmpLens/releases/latest">Package (.deb)</a>
+          </div>
+        </div>
+      </div>
+
+      <p style="margin-top:2rem">
+        Every asset, its checksum and the signature are on the
+        <a href="download.html">download page</a>, with instructions for verifying them.
+        Building from source takes three commands — see
+        <a href="contributing.html">contributing</a>.
+      </p>
+    </div>
+  </section>
+
+  <!-- ================= MORE SCREENSHOTS ================= -->
+  <section class="section">
+    <div class="wrap">
+      <p class="eyebrow">More of it</p>
+      <h2 style="margin-top:0">Screenshots</h2>
+
+      <div class="grid grid-2" style="margin-top:2rem">
+        <figure class="shot">
+          <img src="assets/img/mib-browser.png" alt="The MIB tree browser with a search field and a node detail panel." loading="lazy" />
+          <figcaption>The MIB tree, searchable across name, OID, description and syntax.</figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="assets/img/monitor-charts.png" alt="Monitoring charts plotting several OIDs over time." loading="lazy" />
+          <figcaption>Polling sessions charted as values, deltas, rates or latency.</figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="assets/img/trap-listener.png" alt="A list of received SNMP traps with their varbinds." loading="lazy" />
+          <figcaption>Received traps, with the trap OID resolved through your MIBs.</figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="assets/img/network-discovery.png" alt="A CIDR scan listing devices that answered, with ping and traceroute." loading="lazy" />
+          <figcaption>A CIDR sweep, then ping and traceroute without elevated privileges.</figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="assets/img/history-diff.png" alt="Two query results shown side by side with the differences highlighted." loading="lazy" />
+          <figcaption>Two walks of the same device, diffed.</figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="assets/img/anonymous-mode.png" alt="The same screen with addresses and credentials replaced by stable aliases." loading="lazy" />
+          <figcaption>Anonymous Mode: every address becomes a stable alias.</figcaption>
+        </figure>
+      </div>
+      <p class="muted small" style="margin-top:1.25rem">
+        Screenshots are from a recent release; the interface keeps moving. The
+        <a href="changelog.html">changelog</a> is the authority on what shipped when.
+      </p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <a class="brand" href="./" style="margin-bottom:0.6rem">
+          <img src="assets/img/SnmpLens.png" alt="" width="26" height="26" />
+          SnmpLens
+        </a>
+        <p class="muted small" style="max-width:34ch">
+          A desktop SNMP MIB browser, editor and alert router. MIT licensed, built in the
+          open.
+        </p>
+      </div>
+      <div>
+        <h4>Project</h4>
+        <ul>
+          <li><a href="documentation.html">Documentation</a></li>
+          <li><a href="download.html">Download</a></li>
+          <li><a href="changelog.html">Changelog</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Contribute</h4>
+        <ul>
+          <li><a href="contributing.html">Contributing guide</a></li>
+          <li><a href="security.html">Security policy</a></li>
+          <li><a href="https://github.com/Wasabules/SnmpLens/issues">Issue tracker</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Source</h4>
+        <ul>
+          <li><a href="https://github.com/Wasabules/SnmpLens">Repository</a></li>
+          <li><a href="https://github.com/Wasabules/SnmpLens/releases">Releases</a></li>
+          <li><a href="https://github.com/Wasabules/SnmpLens/blob/main/LICENSE">MIT licence</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="colophon">
+      <p>© 2026 Geoffrey Lecoq · Released under the MIT licence.</p>
+      <p>Built with <a href="https://wails.io/">Wails</a>, <a href="https://go.dev/">Go</a> and <a href="https://svelte.dev/">Svelte</a>.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/github.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Security — SnmpLens</title>
+<meta name="description" content="How to report a vulnerability in SnmpLens, and what the application does about credentials, transport security, release signing and the data it stores." />
+<link rel="canonical" href="https://wasabules.github.io/SnmpLens/security.html" />
+<link rel="icon" href="assets/img/SnmpLens.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/site.css" />
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="./"><img src="assets/img/SnmpLens.png" alt="" width="26" height="26" />SnmpLens</a>
+    <nav class="nav" aria-label="Main">
+      <a href="documentation.html">Documentation</a>
+      <a href="download.html">Download</a>
+      <a href="changelog.html" class="hide-sm">Changelog</a>
+      <a href="contributing.html" class="hide-sm">Contributing</a>
+      <a class="gh" href="https://github.com/Wasabules/SnmpLens">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        GitHub
+      </a>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="wrap wrap-narrow" style="padding-block:3.5rem 2rem">
+
+  <p class="eyebrow">Security</p>
+  <h1 style="margin-bottom:0.3em">Security policy</h1>
+  <p class="lede">
+    SnmpLens handles credentials for network equipment. That deserves a page saying exactly
+    what it does with them and how to tell us when it gets it wrong.
+  </p>
+
+  <h2>Reporting a vulnerability</h2>
+  <div class="note">
+    <p style="margin:0 0 0.5rem"><strong>Please do not open a public issue for a security problem.</strong></p>
+    <p style="margin:0">
+      Use GitHub's private vulnerability reporting on the repository —
+      <a href="https://github.com/Wasabules/SnmpLens/security/advisories/new">Security → Report a vulnerability</a>.
+      It creates a private thread visible only to the maintainers.
+    </p>
+  </div>
+  <p>What helps:</p>
+  <ul>
+    <li>The version affected and the platform.</li>
+    <li>What an attacker gains, and what access they need to start.</li>
+    <li>Steps to reproduce. A failing test is the clearest possible form.</li>
+  </ul>
+  <p>
+    This is a project maintained in someone's own time, so please do not expect a same-day
+    answer. Reports are acknowledged, and a fix ships in a release with the problem described
+    in its notes.
+  </p>
+
+  <h2>Supported versions</h2>
+  <p>
+    Fixes go into the next release from <code>main</code>. There are no long-term support
+    branches; the application updates itself, and the answer to “am I affected” is normally
+    “update”.
+  </p>
+
+  <hr />
+
+  <h2>What the application does</h2>
+
+  <h3>Credentials</h3>
+  <p>
+    Community strings, v3 passphrases, SMTP passwords, webhook tokens and syslog client keys
+    are held by the operating system's own protection: DPAPI on Windows, the Keychain on
+    macOS, a file readable only by your account on Linux. They are not stored beside the
+    database, and the settings screen names the backend in use rather than saying
+    “encrypted”, because those three defend against different things.
+  </p>
+  <p class="muted small">
+    Be precise about what that buys: DPAPI and the Keychain tie the key to your account,
+    while the Linux file keeps it away from other accounts and out of a copied profile, and
+    nothing more. While the application runs, credentials are in its memory in the clear —
+    every request builder needs them.
+  </p>
+
+  <h3>What is never written down</h3>
+  <ul>
+    <li>Community strings and passphrases are removed from debug log entries <em>as they are written</em>, not when displayed, so they are never in the buffer.</li>
+    <li>A receiver's error is scrubbed of the credential before it is recorded, including the base64 forms SMTP actually puts on the wire — a relay that echoes an <code>AUTH</code> line would otherwise write the password into the database.</li>
+    <li>A sink's secret is write-only across the interface: the application never sends a stored credential back to the screen.</li>
+  </ul>
+
+  <h3>Transport</h3>
+  <ul>
+    <li>Syslog over TLS follows RFC 5425, with certificate verification on and the hostname checked, and supports mutual TLS.</li>
+    <li>SMTP supports implicit TLS and STARTTLS, and refuses to send credentials before the connection is encrypted.</li>
+    <li>A webhook carrying a credential over plaintext <code>http</code> is refused unless you explicitly enable it, and never for a non-loopback host by accident.</li>
+    <li>All three accept a private CA in PEM, so an internal collector can be trusted <em>without</em> turning verification off. Every option that loosens verification is named for what it actually does.</li>
+  </ul>
+
+  <h3>Content that arrives from the network</h3>
+  <p>
+    A trap is unauthenticated and its values end up in rendered messages. Anything written
+    into a protocol where a character changes meaning is escaped: dot-stuffing for SMTP data
+    per RFC 5321, header encoding that turns a newline into an escape rather than a new
+    header, and sanitising for the RFC 5424 syslog header. Values substituted into a template
+    are never re-scanned, so a trap OID that reads like a placeholder stays text.
+  </p>
+
+  <h3>Releases</h3>
+  <p>
+    Each release carries a SHA-256 manifest and an Ed25519 signature over it. The application
+    verifies the signature against a key compiled into the binary before it trusts the
+    manifest, and a build whose signature is missing refuses the update rather than applying
+    it. See <a href="download.html#verify">verifying a download</a>.
+  </p>
+
+  <h3>Privileges</h3>
+  <p>
+    SnmpLens does not ask for elevation and does not need it. Ping and traceroute are pure Go
+    rather than wrapped system tools, autostart is a per-user login entry and never
+    machine-wide, and a trap listener on a port below 1024 will simply fail rather than
+    prompt.
+  </p>
+
+  <h3>In the repository</h3>
+  <p>
+    CodeQL runs over the Go and frontend code on every push and weekly — weekly as well,
+    because a query added after a commit landed would otherwise never see it. Dependencies
+    are reviewed on pull requests, scanned with <code>govulncheck</code> and
+    <code>npm audit</code>, and pinned by commit SHA with automated updates, since pinning
+    without something to move the pins just freezes them.
+  </p>
+
+  <hr />
+
+  <h2>Scope</h2>
+  <p>These are known and are not vulnerabilities:</p>
+  <ul>
+    <li><strong>SNMP v1 and v2c send the community string in the clear.</strong> That is the protocol. SnmpLens supports them because networks still use them; use v3 where you can.</li>
+    <li><strong>Anonymous Mode is a display mask, not encryption.</strong> The underlying data is unchanged and an export contains real values.</li>
+    <li><strong>Anyone with your user account can read what your user account can read.</strong> The credential store defends against a copied profile and other accounts on the machine, not against code already running as you.</li>
+    <li><strong>A SET writes to live equipment.</strong> There is no confirmation step by design.</li>
+  </ul>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <a class="brand" href="./" style="margin-bottom:0.6rem"><img src="assets/img/SnmpLens.png" alt="" width="26" height="26" />SnmpLens</a>
+        <p class="muted small" style="max-width:34ch">A desktop SNMP MIB browser, editor and alert router. MIT licensed, built in the open.</p>
+      </div>
+      <div>
+        <h4>Project</h4>
+        <ul>
+          <li><a href="documentation.html">Documentation</a></li>
+          <li><a href="download.html">Download</a></li>
+          <li><a href="changelog.html">Changelog</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Contribute</h4>
+        <ul>
+          <li><a href="contributing.html">Contributing guide</a></li>
+          <li><a href="security.html">Security policy</a></li>
+          <li><a href="https://github.com/Wasabules/SnmpLens/issues">Issue tracker</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Source</h4>
+        <ul>
+          <li><a href="https://github.com/Wasabules/SnmpLens">Repository</a></li>
+          <li><a href="https://github.com/Wasabules/SnmpLens/releases">Releases</a></li>
+          <li><a href="https://github.com/Wasabules/SnmpLens/blob/main/LICENSE">MIT licence</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="colophon">
+      <p>© 2026 Geoffrey Lecoq · Released under the MIT licence.</p>
+      <p>Built with <a href="https://wails.io/">Wails</a>, <a href="https://go.dev/">Go</a> and <a href="https://svelte.dev/">Svelte</a>.</p>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
