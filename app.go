@@ -796,7 +796,21 @@ func (a *App) routeEvent(e events.Event) {
 	groups := map[string]*group{}
 
 	for _, id := range sinkIDs {
-		cfg := configBySink[id]
+		cfg, known := configBySink[id]
+
+		// A sink that is switched off is not written to, and a route naming a
+		// sink that no longer exists queues nothing.
+		//
+		// Only the dispatcher used to look at Enabled — where a disabled sink
+		// cannot be resolved and the delivery is dead-lettered, and a dead
+		// letter is a MAJOR system event. So switching the mail sink off for
+		// the weekend answered EVERY event with a major alarm saying the mail
+		// sink could not be reached, which is the opposite of what the switch
+		// means. A missing sink took the same path to the same place, having
+		// never had any chance of being delivered.
+		if !known || !cfg.Enabled {
+			continue
+		}
 
 		// Masking happens BEFORE templating, always. A template can name
 		// fields the built-in rendering never showed — dedupKey, params — so
