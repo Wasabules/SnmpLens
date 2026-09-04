@@ -123,3 +123,96 @@ func TestDeletingASinkWithNoStoreStillRemovesIt(t *testing.T) {
 		}
 	}
 }
+
+// Deleting a destination must unbind it from every rule that named it.
+//
+// The id was left in each route's SinkIDs: the rule then rendered a raw UUID in
+// the list — sinkName() falls back to the id — and every matching event queued
+// a delivery nothing could resolve. A rule pointing at one live destination and
+// one dead id looks like it works, and half of it does not.
+func TestDeletingASinkUnbindsItFromRoutes(t *testing.T) {
+	a := newTestApp(t)
+
+	gone, err := a.NotifySaveSink(notify.SinkConfig{
+		Name: "old", Kind: notify.SinkWebhook, Enabled: true,
+		Webhook: notify.WebhookConfig{URL: "https://a.example/x"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stays, err := a.NotifySaveSink(notify.SinkConfig{
+		Name: "kept", Kind: notify.SinkWebhook, Enabled: true,
+		Webhook: notify.WebhookConfig{URL: "https://b.example/x"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	both, err := a.storage.SaveRoute(notify.Route{
+		Name: "both", Enabled: true, SinkIDs: []string{gone.ID, stays.ID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	only, err := a.storage.SaveRoute(notify.Route{
+		Name: "only the one being deleted", Enabled: true, SinkIDs: []string{gone.ID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := a.NotifyDeleteSink(gone.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	routes, err := a.NotifyListRoutes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]notify.Route{}
+	for _, r := range routes {
+		byID[r.ID] = r
+	}
+
+	for _, r := range routes {
+		for _, id := range r.SinkIDs {
+			if id == gone.ID {
+				t.Errorf("route %q still names the deleted destination", r.Name)
+			}
+		}
+	}
+	if got := byID[both.ID].SinkIDs; len(got) != 1 || got[0] != stays.ID {
+		t.Errorf("the surviving destination was lost from the rule: %v", got)
+	}
+	if !byID[both.ID].Enabled {
+		t.Error("a rule that still has a destination was disabled")
+	}
+
+	// A rule left with nothing is disabled, not deleted: it carries the match
+	// conditions, which are the part that took thought.
+	left, ok := byID[only.ID]
+	if !ok {
+		t.Fatal("the rule was deleted along with its destination")
+	}
+	if left.Enabled {
+		t.Error("a rule with no destinations left is still enabled, so it matches " +
+			"events and delivers to nothing")
+	}
+}
+
+// A list binding that could not be read must be reported, not answered with an
+// empty configuration that reads as "you have none".
+func TestListingWithNoDatabaseIsAnError(t *testing.T) {
+	a := &App{}
+
+	if _, err := a.NotifyListSinks(); err == nil {
+		t.Error("NotifyListSinks answered an empty list and no error, which the " +
+			"settings page renders as a fresh install")
+	}
+	if _, err := a.NotifyListRoutes(); err == nil {
+		t.Error("NotifyListRoutes answered an empty list and no error")
+	}
+	if _, err := a.NotifyListDeliveries("", 10); err == nil {
+		t.Error("NotifyListDeliveries answered an empty list and no error")
+	}
+}

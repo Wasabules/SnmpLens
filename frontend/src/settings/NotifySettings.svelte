@@ -147,7 +147,16 @@
         editingRoute.match.sources = editingRoute.match.sourcesRaw.split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean);
         delete editingRoute.match.sourcesRaw;
       }
-      editingRoute.priority = Number(editingRoute.priority) || 100;
+      // `Number(x) || 100` turns a typed 0 into 100. Routes are evaluated in
+      // ASCENDING priority, so 0 is the natural way to say "evaluate this
+      // first" — and combined with `stop` it decides which destinations an
+      // event reaches at all. The highest-priority rule an operator can express
+      // was silently demoted to the default, and the list re-rendered showing
+      // 100 with no message.
+      const raw = editingRoute.priority;
+      const typed = Number(raw);
+      const given = raw !== null && raw !== undefined && String(raw).trim() !== '';
+      editingRoute.priority = given && Number.isFinite(typed) ? typed : 100;
       await NotifySaveRoute(editingRoute);
       editingRoute = null;
       await reload();

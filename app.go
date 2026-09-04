@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -1044,11 +1045,22 @@ func (a *App) SecretsBackend() string {
 	return a.secrets.Backend()
 }
 
+// errNoStorage is what the notification bindings answer when monitoring.db
+// could not be opened.
+//
+// They used to answer an EMPTY LIST and a nil error, so the settings page
+// rendered "no destinations yet" — visually identical to a fresh install. An
+// operator whose database failed to open saw their entire notification
+// configuration as GONE, and only found out it was still on disk when a save
+// answered "storage not initialized". Nothing is a fact; it must not be
+// reported as one when it is really "I could not look".
+var errNoStorage = errors.New("the monitoring database is not open, so the notification configuration cannot be read")
+
 // NotifyListSinks returns the configured destinations. Credentials are never
 // included — only whether one is on file.
 func (a *App) NotifyListSinks() ([]notify.SinkConfig, error) {
 	if a.storage == nil {
-		return []notify.SinkConfig{}, nil
+		return []notify.SinkConfig{}, errNoStorage
 	}
 	sinks, err := a.storage.ListSinks()
 	if err != nil {
@@ -1141,7 +1153,56 @@ func (a *App) NotifyDeleteSink(id string) error {
 			return fmt.Errorf("the destination was kept: its stored credential could not be removed: %w", err)
 		}
 	}
-	return a.storage.DeleteSink(id)
+	if err := a.storage.DeleteSink(id); err != nil {
+		return err
+	}
+
+	// And unbind it from every rule that named it.
+	//
+	// Deleting the destination left its id in each route's SinkIDs. The rule
+	// then rendered a raw UUID in the list — sinkName() falls back to the id —
+	// and every matching event queued a delivery that nothing could ever
+	// resolve. A rule pointing at one live destination and one dead id looks
+	// like it works and half of it does not.
+	//
+	// Best effort AFTER the delete: the destination is gone either way, and a
+	// rule that still names it is a cosmetic and routing problem, not a reason
+	// to refuse the operator's action.
+	if err := a.unbindSinkFromRoutes(id); err != nil {
+		log.Printf("notify: the destination was deleted but some rules still name it: %v", err)
+	}
+	return nil
+}
+
+// unbindSinkFromRoutes removes a deleted sink's id from every routing rule.
+//
+// A rule left with NO destinations is disabled rather than deleted: it carries
+// the operator's match conditions, which are the part that took thought, and
+// silently removing their rules is worse than leaving one they can re-point.
+func (a *App) unbindSinkFromRoutes(sinkID string) error {
+	routes, err := a.storage.ListRoutes()
+	if err != nil {
+		return err
+	}
+	for _, r := range routes {
+		kept := make([]string, 0, len(r.SinkIDs))
+		for _, id := range r.SinkIDs {
+			if id != sinkID {
+				kept = append(kept, id)
+			}
+		}
+		if len(kept) == len(r.SinkIDs) {
+			continue
+		}
+		r.SinkIDs = kept
+		if len(kept) == 0 {
+			r.Enabled = false
+		}
+		if _, err := a.storage.SaveRoute(r); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // NotifyTestSink sends a synthetic event so the operator can verify a
@@ -1274,7 +1335,7 @@ func (a *App) NotifyPreviewTemplate(cfg notify.SinkConfig, kind string) Template
 // NotifyListRoutes returns the routing rules.
 func (a *App) NotifyListRoutes() ([]notify.Route, error) {
 	if a.storage == nil {
-		return []notify.Route{}, nil
+		return []notify.Route{}, errNoStorage
 	}
 	return a.storage.ListRoutes()
 }
@@ -1299,7 +1360,7 @@ func (a *App) NotifyDeleteRoute(id string) error {
 // "sent" or "dead".
 func (a *App) NotifyListDeliveries(state string, limit int) ([]storage.Delivery, error) {
 	if a.storage == nil {
-		return []storage.Delivery{}, nil
+		return []storage.Delivery{}, errNoStorage
 	}
 	return a.storage.ListDeliveries(state, limit)
 }
