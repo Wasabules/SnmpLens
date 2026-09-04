@@ -19,15 +19,48 @@ export const MAX_MATCHES = 2000;
  * @param {string} term
  * @returns {number[]} character offsets, ascending
  */
-export function findMatches(text, term, limit = MAX_MATCHES) {
+export function findMatches(text, term, limit = MAX_MATCHES, caseSensitive = false) {
   if (!term) return [];
-  const hay = String(text ?? '').toLowerCase();
-  const needle = term.toLowerCase();
+  const hay = String(text ?? '');
   const out = [];
-  let at = hay.indexOf(needle);
-  while (at >= 0 && out.length < limit) {
-    out.push(at);
-    at = hay.indexOf(needle, at + needle.length);
+
+  if (caseSensitive) {
+    let at = hay.indexOf(term);
+    while (at >= 0 && out.length < limit) {
+      out.push(at);
+      at = hay.indexOf(term, at + term.length);
+    }
+    return out;
+  }
+
+  const lower = hay.toLowerCase();
+  const needle = term.toLowerCase();
+
+  // The fast path is only safe while case folding preserves LENGTH.
+  //
+  // It does not always: U+0130 (İ) lowercases to two code units, so every
+  // offset after one is shifted by a character — and applyReplaceAll then
+  // applies them to the ORIGINAL text. Measured: replacing "foo" in a file
+  // whose DESCRIPTION contained "İstanbul" produced "fbarOBJECT-TYPE", eating
+  // a character and the space after it. A MIB written by a Turkish vendor is
+  // not exotic.
+  if (lower.length === hay.length) {
+    let at = lower.indexOf(needle);
+    while (at >= 0 && out.length < limit) {
+      out.push(at);
+      at = lower.indexOf(needle, at + needle.length);
+    }
+    return out;
+  }
+
+  // Otherwise compare in the original string, where the offsets are real.
+  for (let i = 0; i + term.length <= hay.length && out.length < limit; ) {
+    if (hay.substr(i, term.length).toLowerCase() === needle) {
+      out.push(i);
+      i += term.length;
+    } else {
+      i++;
+    }
   }
   return out;
 }
@@ -44,8 +77,8 @@ export function findMatches(text, term, limit = MAX_MATCHES) {
  * @param {string} term
  * @returns {number[]}
  */
-export function findAllMatches(text, term) {
-  return findMatches(text, term, Infinity);
+export function findAllMatches(text, term, caseSensitive = false) {
+  return findMatches(text, term, Infinity, caseSensitive);
 }
 
 /**

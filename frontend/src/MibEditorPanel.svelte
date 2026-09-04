@@ -7,7 +7,7 @@
   import { notificationStore } from './stores/notifications';
   import { highlight, SNIPPETS, stringStateAt } from './mibeditor/tokenize.js';
   import { charWidth, positionOf, lineColumnAt, wordAt, offsetAt, lineStarts, lineColumnFrom } from './mibeditor/metrics.js';
-  import { findMatches, findAllMatches, applyReplaceAll, nextIndex } from './mibeditor/search.js';
+  import { findMatches, findAllMatches, applyReplaceAll, nextIndex, MAX_MATCHES } from './mibeditor/search.js';
   import { createHistory } from './mibeditor/history.js';
   import { mibEditorStore } from './stores/mibEditorStore';
   import { mibPathsStore } from './stores/mibPathsStore';
@@ -74,6 +74,16 @@
   let findTerm = '';
   let replaceTerm = '';
   let findIndex = 0;
+  // Case sensitivity. Off by default, which is what someone hunting for a name
+  // wants — but `Counter32` and `counter32` are different things in a MIB, and
+  // replacing one used to rewrite the other with no way to say otherwise.
+  let matchCase = false;
+  // Where to resume after a replace, so the Replace button advances instead of
+  // rewriting the same spot when the replacement contains the search term.
+  let resumeFrom = -1;
+  // Set when the term changes: the first match must be scrolled to, and it can
+  // only be done once `matches` has been recomputed.
+  let pendingFirst = false;
   let findCount = 0;
 
   $: lines = buffer.split('\n');
@@ -430,9 +440,29 @@
   // which is what used to throw you out of the search box on Enter. The
   // overlay lets focus stay where you are typing, which is how every editor
   // behaves and what makes Enter-to-cycle usable at all.
-  $: matches = findOpen ? findMatches(buffer, findTerm) : [];
+  $: matches = findOpen ? findMatches(buffer, findTerm, MAX_MATCHES, matchCase) : [];
+  // Whether the list stops short of the real total. The counter used to read
+  // "1/2000" with nothing saying it was a cap, and Enter could not reach past
+  // it.
+  $: matchesCapped = matches.length >= MAX_MATCHES;
   $: findCount = matches.length;
   $: if (findIndex >= matches.length) findIndex = matches.length ? matches.length - 1 : 0;
+
+  // Land on the FIRST match when the term changes, and on the one after a
+  // replacement otherwise. Typing a term used to leave the view where it was
+  // and show "1/N" for a match nobody had scrolled to, so the first Enter
+  // jumped to the SECOND one.
+  $: if (findOpen && matches.length) {
+    if (pendingFirst) {
+      pendingFirst = false;
+      gotoMatch(0);
+    } else if (resumeFrom >= 0) {
+      const at = resumeFrom;
+      resumeFrom = -1;
+      const next = matches.findIndex((m) => m >= at);
+      gotoMatch(next >= 0 ? next : 0);
+    }
+  }
   // Only the on-screen matches become boxes; a file can hold thousands.
   // Line starts once per buffer, then a binary search per match.
   //
@@ -491,6 +521,10 @@
   function replaceCurrent() {
     if (!matches.length || !findTerm) return;
     const at = matches[findIndex];
+    // Resume PAST the replacement, so the button advances. Without this,
+    // replacing "ip" with "ipAddress" found the "ip" inside the replacement
+    // and rewrote the same spot on every click, for ever.
+    resumeFrom = at + replaceTerm.length;
     replaceRange(at, at + findTerm.length, replaceTerm);
   }
 
@@ -502,7 +536,7 @@
   // a file half-rewritten, which is worse than refusing.
   function replaceAll() {
     if (!findTerm) return;
-    const all = findAllMatches(buffer, findTerm);
+    const all = findAllMatches(buffer, findTerm, matchCase);
     if (!all.length) return;
     replaceRange(0, buffer.length, applyReplaceAll(buffer, all, findTerm.length, replaceTerm));
     findIndex = 0;
@@ -812,14 +846,20 @@
             <div class="find-row">
               <Icon name="search" size={13} />
               <input id="mib-find" type="search" bind:value={findTerm}
-                on:input={() => (findIndex = 0)}
+                on:input={() => { findIndex = 0; pendingFirst = true; }}
                 on:keydown={(e) => {
                   if (e.key === 'Enter') { e.preventDefault(); findNext(e.shiftKey); }
                   else if (e.key === 'Escape') { e.preventDefault(); closeFind(); }
                 }}
                 placeholder={$_('mibEditor.find')} />
-              <span class="find-count">
-                {findCount ? `${findIndex + 1}/${findCount}` : $_('mibEditor.noMatch')}
+              <button class="btn-copy-small" class:active={matchCase}
+                on:click={() => { matchCase = !matchCase; findIndex = 0; pendingFirst = true; }}
+                title={$_('mibEditor.matchCase')} aria-pressed={matchCase}>Aa</button>
+              <span class="find-count" class:capped={matchesCapped}
+                title={matchesCapped ? $_('mibEditor.matchesCapped', { values: { max: MAX_MATCHES } }) : ''}>
+                {findCount
+                  ? `${findIndex + 1}/${findCount}${matchesCapped ? '+' : ''}`
+                  : $_('mibEditor.noMatch')}
               </span>
               <button class="btn-copy-small" on:click={() => findNext(true)} title={$_('mibEditor.findPrev')}>
                 <Icon name="chevron-up" size={13} />
@@ -1568,5 +1608,15 @@
     font-size: 0.9em;
     position: static;
     flex: none;
+  }
+
+  .find-count.capped {
+    color: var(--warning, #b7791f);
+    cursor: help;
+  }
+
+  .btn-copy-small.active {
+    background: var(--bg-hover, #e5e5e5);
+    font-weight: 600;
   }
 </style>

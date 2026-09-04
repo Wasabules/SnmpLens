@@ -1036,6 +1036,8 @@
     "noMatch": "kein Treffer",
     "replacedAll": "{count} Vorkommen ersetzt.",
     "undo": "Rückgängig",
-    "redo": "Wiederholen"
+    "redo": "Wiederholen",
+    "matchCase": "Groß-/Kleinschreibung",
+    "matchesCapped": "Nur die ersten {max} Treffer werden aufgeführt; es gibt weitere."
   }
 }

@@ -1036,6 +1036,8 @@
     "noMatch": "无匹配",
     "replacedAll": "已替换 {count} 处。",
     "undo": "撤销",
-    "redo": "重做"
+    "redo": "重做",
+    "matchCase": "区分大小写",
+    "matchesCapped": "仅列出前 {max} 个匹配项，还有更多。"
   }
 }

@@ -1036,6 +1036,8 @@
     "noMatch": "aucun",
     "replacedAll": "{count} occurrence(s) remplacée(s).",
     "undo": "Annuler",
-    "redo": "Rétablir"
+    "redo": "Rétablir",
+    "matchCase": "Respecter la casse",
+    "matchesCapped": "Seules les {max} premières correspondances sont listées ; il y en a d'autres."
   }
 }

@@ -81,4 +81,65 @@ const fully = applyReplaceAll(huge, uncapped, 1, 'y');
 check('an uncapped replace-all rewrites the whole file',
   fully === 'y'.repeat(MAX_MATCHES + 500) && !fully.includes('x'));
 
+
+// --- case folding must not move the offsets ---
+//
+// findMatches lowercased the whole haystack and searched THAT, then handed the
+// offsets to applyReplaceAll, which applies them to the ORIGINAL text. Most
+// case mappings preserve length; U+0130 (Turkish dotted capital I) lowercases
+// to two code units, so every offset after one was shifted by a character.
+// Measured: replacing "foo" in a file whose DESCRIPTION held "İstanbul"
+// produced "fbarOBJECT-TYPE" — a character eaten and the space with it.
+{
+  const text = 'DESCRIPTION \"\u0130stanbul\"\nfoo OBJECT-TYPE\n';
+  check('the fixture really has a length-changing character',
+    'İ'.length === 2 || 'İ'.toLowerCase().length === 2);
+
+  const m = findMatches(text, 'foo');
+  check('the match offset points at the match',
+    m.length === 1 && text.substr(m[0], 3) === 'foo',
+    JSON.stringify([m, text.substr(m[0] ?? 0, 3)]));
+
+  const out = applyReplaceAll(text, m, 3, 'bar');
+  check('replace-all does not eat the neighbouring characters',
+    out === 'DESCRIPTION \"\u0130stanbul\"\nbar OBJECT-TYPE\n', JSON.stringify(out));
+}
+
+// --- case sensitivity ---
+//
+// Counter32 and counter32 are different things in a MIB, and replacing one
+// used to rewrite the other with no way to say otherwise.
+{
+  const text = 'Counter32 counter32 COUNTER32';
+  check('insensitive finds all three', findMatches(text, 'counter32').length === 3);
+  check('sensitive finds only the exact one',
+    findMatches(text, 'counter32', 2000, true).length === 1);
+  check('sensitive finds the one that is there',
+    findMatches(text, 'Counter32', 2000, true)[0] === 0);
+  check('findAllMatches carries the flag',
+    findAllMatches(text, 'counter32', true).length === 1);
+}
+
+// --- the cap is a display cap, not a rewrite cap ---
+{
+  const text = 'ip '.repeat(3000);
+  const shown = findMatches(text, 'ip');
+  const all = findAllMatches(text, 'ip');
+  check('the display list stops at the cap', shown.length === MAX_MATCHES, String(shown.length));
+  check('replace-all sees every one', all.length === 3000, String(all.length));
+
+  const out = applyReplaceAll(text, all, 2, 'x');
+  check('and rewrites every one', out.indexOf('ip') < 0,
+    out.indexOf('ip') >= 0 ? 'an ip survived at ' + out.indexOf('ip') : '');
+}
+
+// --- a replacement containing the search term ---
+{
+  const text = 'ip ip ip';
+  const all = findAllMatches(text, 'ip');
+  const out = applyReplaceAll(text, all, 2, 'ipAddress');
+  check('a replacement containing the term is not replaced again',
+    out === 'ipAddress ipAddress ipAddress', JSON.stringify(out));
+}
+
 process.exit(failures ? 1 : 0);

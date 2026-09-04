@@ -1036,6 +1036,8 @@
     "noMatch": "no match",
     "replacedAll": "{count} occurrence(s) replaced.",
     "undo": "Undo",
-    "redo": "Redo"
+    "redo": "Redo",
+    "matchCase": "Match case",
+    "matchesCapped": "Only the first {max} matches are listed; there are more."
   }
 }

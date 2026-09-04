@@ -1036,6 +1036,8 @@
     "noMatch": "sin coincidencias",
     "replacedAll": "{count} aparición(es) reemplazada(s).",
     "undo": "Deshacer",
-    "redo": "Rehacer"
+    "redo": "Rehacer",
+    "matchCase": "Distinguir mayúsculas",
+    "matchesCapped": "Solo se listan las primeras {max} coincidencias; hay más."
   }
 }
