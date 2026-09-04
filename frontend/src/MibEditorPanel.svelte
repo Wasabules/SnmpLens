@@ -6,7 +6,7 @@
   import { renderWindow } from './mibeditor/render';
   import { notificationStore } from './stores/notifications';
   import { highlight, SNIPPETS, stringStateAt } from './mibeditor/tokenize.js';
-  import { charWidth, positionOf, lineColumnAt, wordAt, offsetAt } from './mibeditor/metrics.js';
+  import { charWidth, positionOf, lineColumnAt, wordAt, offsetAt, lineStarts, lineColumnFrom } from './mibeditor/metrics.js';
   import { findMatches, findAllMatches, applyReplaceAll, nextIndex } from './mibeditor/search.js';
   import { createHistory } from './mibeditor/history.js';
   import { mibEditorStore } from './stores/mibEditorStore';
@@ -434,16 +434,19 @@
   $: findCount = matches.length;
   $: if (findIndex >= matches.length) findIndex = matches.length ? matches.length - 1 : 0;
   // Only the on-screen matches become boxes; a file can hold thousands.
+  // Line starts once per buffer, then a binary search per match.
+  //
+  // lineColumnAt slices the whole prefix and splits it, and this called it
+  // TWICE per match for up to 2000 matches — measured at 212 ms per keystroke
+  // on IP-MIB with the find bar open, against 2.7 ms with it closed. Typing
+  // was unusable, and the same recompute fired on every scroll.
+  $: starts = lineStarts(lines);
   $: matchBoxes = matches
-    .map((at, i) => ({ at, i }))
-    .filter(({ at }) => {
-      const line = lineColumnAt(buffer, at).line;
-      return line >= firstVisible && line <= lastVisible;
-    })
-    .map(({ at, i }) => {
-      const { line, column } = lineColumnAt(buffer, at);
-      const pos = positionOf(lines, line, column, cw, LINE_HEIGHT);
-      return { x: pos.x, y: pos.y, width: findTerm.length * cw, current: i === findIndex };
+    .map((at, i) => ({ at, i, pos: lineColumnFrom(starts, at) }))
+    .filter(({ pos }) => pos.line >= firstVisible && pos.line <= lastVisible)
+    .map(({ i, pos }) => {
+      const xy = positionOf(lines, pos.line, pos.column, cw, LINE_HEIGHT);
+      return { x: xy.x, y: xy.y, width: findTerm.length * cw, current: i === findIndex };
     });
 
   // Move to a match WITHOUT focusing the textarea: scrolling works unfocused,

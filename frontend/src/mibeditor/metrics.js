@@ -81,6 +81,49 @@ export function positionOf(lines, line, column, cw, lh) {
  * @param {string} text
  * @param {number} offset
  */
+/**
+ * The character offset at which each line starts.
+ *
+ * Computed once per buffer so a caller with many offsets to resolve does not
+ * re-slice the whole prefix for each of them. The find overlay did exactly
+ * that — lineColumnAt twice per match, up to 2000 matches, each slicing up to
+ * 185 KB — and cost 212 ms per keystroke with the find bar open, measured on
+ * IP-MIB. Typing was unusable.
+ *
+ * @param {string[]} lines
+ * @returns {number[]} starts[i] is the offset of line i (0-based)
+ */
+export function lineStarts(lines) {
+  const starts = new Array(lines.length);
+  let at = 0;
+  for (let i = 0; i < lines.length; i++) {
+    starts[i] = at;
+    at += lines[i].length + 1; // + the newline
+  }
+  return starts;
+}
+
+/**
+ * lineColumnAt against a precomputed index: a binary search instead of a
+ * copy of everything before the offset.
+ *
+ * @param {number[]} starts from lineStarts
+ * @param {number} offset
+ * @returns {{line: number, column: number}} both 1-based, as lineColumnAt
+ */
+export function lineColumnFrom(starts, offset) {
+  if (offset <= 0 || starts.length === 0) return { line: 1, column: 1 };
+
+  let lo = 0;
+  let hi = starts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (starts[mid] <= offset) lo = mid;
+    else hi = mid - 1;
+  }
+  return { line: lo + 1, column: offset - starts[lo] + 1 };
+}
+
 export function lineColumnAt(text, offset) {
   const upto = text.slice(0, Math.max(0, offset));
   const lines = upto.split('\n');

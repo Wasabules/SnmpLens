@@ -1,9 +1,10 @@
+import { readFileSync } from 'node:fs';
 // Position arithmetic for the editor's overlays.
 //
 // Squiggles, hover cards and the completion popup all reduce to "where is
 // (line, column) in pixels". Getting it wrong by one tab stop puts a red
 // underline under the wrong word, which is worse than no underline at all.
-import { visualColumn, positionOf, lineColumnAt, wordAt, offsetAt } from '../src/mibeditor/metrics.js';
+import { visualColumn, positionOf, lineColumnAt, wordAt, offsetAt, lineStarts, lineColumnFrom } from '../src/mibeditor/metrics.js';
 
 let failures = 0;
 const check = (name, ok, extra = '') => {
@@ -48,5 +49,67 @@ for (const [line, column] of [[1, 1], [1, 5], [2, 3], [3, 2]]) {
 
 check('a click below the last line returns null',
   offsetAt(lines, lines.join('\n'), 0, lh * 99, cw, lh) === null);
+
+
+// --- resolving many offsets at once ---
+//
+// The find overlay called lineColumnAt twice per match for up to 2000 matches,
+// and lineColumnAt slices the whole prefix and splits it. Measured on
+// mibs/IP-MIB with the find bar open: 212 ms per keystroke, against 2.7 ms
+// with it closed. Typing was unusable, and the same recompute fired on every
+// scroll.
+{
+  const text = readFileSync(new URL('../../mibs/IP-MIB', import.meta.url), 'utf8');
+  const lines = text.split('\n');
+  const starts = lineStarts(lines);
+
+  check('the index has one entry per line', starts.length === lines.length,
+    `${starts.length} vs ${lines.length}`);
+  check('the first line starts at 0', starts[0] === 0);
+
+  // It must AGREE with the function it replaces, everywhere. A faster answer
+  // that differs is not an optimisation.
+  let mismatch = 0;
+  for (let at = 0; at < text.length; at += 137) {
+    const a = lineColumnAt(text, at);
+    const b = lineColumnFrom(starts, at);
+    if (a.line !== b.line || a.column !== b.column) mismatch++;
+  }
+  check('it agrees with lineColumnAt across the whole file', mismatch === 0,
+    `${mismatch} disagreements`);
+
+  // And at the awkward offsets.
+  for (const at of [0, 1, text.length - 1, text.length, text.indexOf('\n'), text.indexOf('\n') + 1]) {
+    const a = lineColumnAt(text, at);
+    const b = lineColumnFrom(starts, at);
+    check(`offset ${at} agrees`, a.line === b.line && a.column === b.column,
+      `${JSON.stringify(a)} vs ${JSON.stringify(b)}`);
+  }
+
+  // Resolving every match must be fast enough to happen on a keystroke.
+  const offsets = [];
+  for (let i = text.indexOf('ip'); i >= 0 && offsets.length < 2000; i = text.indexOf('ip', i + 1)) {
+    offsets.push(i);
+  }
+  const started = process.hrtime.bigint();
+  for (let round = 0; round < 9; round++) {
+    for (const at of offsets) lineColumnFrom(starts, at);
+  }
+  const ms = Number(process.hrtime.bigint() - started) / 1e6;
+  check('2000 offsets resolved 9 times is a keystroke, not a pause', ms < 50,
+    `${ms.toFixed(1)} ms for 9 rounds`);
+}
+
+// Negative and out-of-range offsets must not throw.
+{
+  const starts = lineStarts(['a', 'bb', 'ccc']);
+  for (const at of [-5, 0, 99999]) {
+    let threw = null;
+    try { lineColumnFrom(starts, at); } catch (e) { threw = e; }
+    check(`offset ${at} does not throw`, threw === null, threw && threw.message);
+  }
+  check('an empty index answers 1:1',
+    JSON.stringify(lineColumnFrom([], 10)) === JSON.stringify({ line: 1, column: 1 }));
+}
 
 process.exit(failures ? 1 : 0);
