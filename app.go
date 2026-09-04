@@ -733,10 +733,48 @@ func deadLetterSink(e events.Event) string {
 	if e.Kind != events.KindSystemSinkDeadLetter {
 		return ""
 	}
+	// "sinkId", not "sink". `sink` carries the sink's NAME, because that is what
+	// an operator reads in "Delivery to {sink} given up" — and comparing a name
+	// against the ids in a route silently disabled this guard the moment the
+	// message was made legible. The event now carries both; the id is the one
+	// that means something to the router.
+	if id, ok := e.Params["sinkId"].(string); ok && id != "" {
+		return id
+	}
+	// Events journalled before the id was recorded carry only the name, which
+	// was also the id back when they were written.
 	if id, ok := e.Params["sink"].(string); ok {
 		return id
 	}
 	return ""
+}
+
+// deadLetterEvent builds the event announcing that a delivery was given up on.
+//
+// Extracted so a test can drive the same construction production does. The
+// version of this test that built the event by hand passed throughout the
+// window in which the guard above was broken, because a hand-written event puts
+// whatever the test author expects into Params.
+func (a *App) deadLetterEvent(q notify.Queued, err error) events.Event {
+	name := a.sinkName(q.SinkID)
+	return events.Event{
+		Category: events.CategorySystem,
+		Kind:     events.KindSystemSinkDeadLetter,
+		Severity: events.SevMajor.String(),
+		TitleKey: "events.kind." + events.KindSystemSinkDeadLetter,
+		Params: map[string]any{
+			// The NAME, because "{sink}" is what the operator reads. A raw UUID
+			// names nothing they have ever seen, in the one message telling them
+			// an alert never arrived.
+			"sink": name,
+			// And the ID, because the routing guard needs to compare it against
+			// the ids a rule holds.
+			"sinkId":   q.SinkID,
+			"attempts": q.Attempts + 1,
+			"error":    err.Error(),
+		},
+		Summary: "Delivery to " + name + " given up: " + err.Error(),
+	}
 }
 
 // routeEvent matches an event against the rules and queues one delivery per
@@ -1005,22 +1043,7 @@ func (a *App) initDispatcher() {
 		}
 		// A dead letter is the only signal an operator gets that a
 		// notification never arrived, so it becomes an event of its own.
-		a.recordEvent(events.Event{
-			Category: events.CategorySystem,
-			Kind:     events.KindSystemSinkDeadLetter,
-			Severity: events.SevMajor.String(),
-			TitleKey: "events.kind." + events.KindSystemSinkDeadLetter,
-			Params: map[string]any{
-				// The NAME, because "{sink}" is what the operator reads. A raw
-				// UUID names nothing they have ever seen, in the one message
-				// telling them an alert never arrived.
-				"sink":     a.sinkName(q.SinkID),
-				"sinkId":   q.SinkID,
-				"attempts": q.Attempts + 1,
-				"error":    err.Error(),
-			},
-			Summary: "Delivery to " + a.sinkName(q.SinkID) + " given up: " + err.Error(),
-		}, "")
+		a.recordEvent(a.deadLetterEvent(q, err), "")
 	}
 	d.Start()
 	a.dispatcher = d

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"strings"
 	"testing"
 
 	"SnmpLens/pkg/events"
@@ -18,9 +20,9 @@ func TestDeadLetterIsNotRoutedBackToItsOwnSink(t *testing.T) {
 	a := newTestApp(t)
 
 	for _, s := range []notify.SinkConfig{
-		{ID: "mail", Name: "mail", Kind: notify.SinkEmail, Enabled: true,
+		{ID: "sink-uuid-mail", Name: "Ops mailbox", Kind: notify.SinkEmail, Enabled: true,
 			Email: notify.EmailConfig{Host: "127.0.0.1", Port: 1, From: "a@b", To: []string{"c@d"}}},
-		{ID: "log", Name: "log", Kind: notify.SinkSyslog, Enabled: true,
+		{ID: "sink-uuid-log", Name: "Central syslog", Kind: notify.SinkSyslog, Enabled: true,
 			Syslog: notify.SyslogConfig{Address: "127.0.0.1:1", Protocol: "udp"}},
 	} {
 		if _, err := a.storage.SaveSink(s); err != nil {
@@ -30,7 +32,7 @@ func TestDeadLetterIsNotRoutedBackToItsOwnSink(t *testing.T) {
 	// The catch-all somebody would actually write.
 	if _, err := a.storage.SaveRoute(notify.Route{
 		ID: "all", Name: "everything", Enabled: true, Priority: 1,
-		SinkIDs: []string{"mail", "log"},
+		SinkIDs: []string{"sink-uuid-mail", "sink-uuid-log"},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +48,7 @@ func TestDeadLetterIsNotRoutedBackToItsOwnSink(t *testing.T) {
 		Kind:     events.KindSystemSinkDeadLetter,
 		Severity: events.SevMajor.String(),
 		Summary:  "Delivery to mail given up: connection refused",
-		Params:   map[string]any{"sink": "mail"},
+		Params:   map[string]any{"sink": "sink-uuid-mail"},
 	})
 
 	after, err := a.storage.ListDeliveries("", 200)
@@ -57,9 +59,9 @@ func TestDeadLetterIsNotRoutedBackToItsOwnSink(t *testing.T) {
 	var toMail, toLog int
 	for _, d := range after[len(before):] {
 		switch d.SinkID {
-		case "mail":
+		case "sink-uuid-mail":
 			toMail++
-		case "log":
+		case "sink-uuid-log":
 			toLog++
 		}
 	}
@@ -78,7 +80,7 @@ func TestDeadLetterIsNotRoutedBackToItsOwnSink(t *testing.T) {
 func TestAnOrdinaryEventStillReachesEverySink(t *testing.T) {
 	a := newTestApp(t)
 
-	for _, id := range []string{"mail", "log"} {
+	for _, id := range []string{"sink-uuid-mail", "sink-uuid-log"} {
 		if _, err := a.storage.SaveSink(notify.SinkConfig{
 			ID: id, Name: id, Kind: notify.SinkSyslog, Enabled: true,
 			Syslog: notify.SyslogConfig{Address: "127.0.0.1:1", Protocol: "udp"},
@@ -88,7 +90,7 @@ func TestAnOrdinaryEventStillReachesEverySink(t *testing.T) {
 	}
 	if _, err := a.storage.SaveRoute(notify.Route{
 		ID: "all", Name: "everything", Enabled: true, Priority: 1,
-		SinkIDs: []string{"mail", "log"},
+		SinkIDs: []string{"sink-uuid-mail", "sink-uuid-log"},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +104,7 @@ func TestAnOrdinaryEventStillReachesEverySink(t *testing.T) {
 		Summary:  "ifInOctets above 900",
 		// A params map naming a sink must NOT trigger the exclusion: only the
 		// dead-letter kind does.
-		Params: map[string]any{"sink": "mail"},
+		Params: map[string]any{"sink": "Ops mailbox", "sinkId": "sink-uuid-mail"},
 	})
 	after, _ := a.storage.ListDeliveries("", 200)
 
@@ -119,9 +121,9 @@ func TestDeadLetterSink(t *testing.T) {
 		want string
 	}{
 		{"a dead letter names its sink",
-			events.Event{Kind: events.KindSystemSinkDeadLetter, Params: map[string]any{"sink": "mail"}}, "mail"},
+			events.Event{Kind: events.KindSystemSinkDeadLetter, Params: map[string]any{"sink": "sink-uuid-mail"}}, "sink-uuid-mail"},
 		{"another kind never does",
-			events.Event{Kind: events.KindThresholdOpened, Params: map[string]any{"sink": "mail"}}, ""},
+			events.Event{Kind: events.KindThresholdOpened, Params: map[string]any{"sink": "sink-uuid-mail"}}, ""},
 		{"a dead letter with no params",
 			events.Event{Kind: events.KindSystemSinkDeadLetter}, ""},
 		{"a dead letter whose sink is not a string",
@@ -131,5 +133,60 @@ func TestDeadLetterSink(t *testing.T) {
 		if got := deadLetterSink(c.e); got != c.want {
 			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
 		}
+	}
+}
+
+// The guard must survive the event being made READABLE.
+//
+// `Params["sink"]` carries the sink's NAME, because "Delivery to {sink} given
+// up" is what an operator reads and a raw UUID names nothing they have seen.
+// The guard compared that name against the ids a route holds, so it silently
+// stopped firing the moment the message was improved — and the unbounded
+// event/outbox storm it exists to prevent came back.
+//
+// This test drives the SAME construction production uses. The version that
+// built the event by hand passed throughout the window in which the guard was
+// broken, and its fixture used ID: "mail", Name: "mail" — two fields a test
+// cannot tell apart once it makes them equal.
+func TestTheDeadLetterGuardReadsTheIdNotTheName(t *testing.T) {
+	a := newTestApp(t)
+
+	saved, err := a.storage.SaveSink(notify.SinkConfig{
+		ID: "sink-uuid-noc", Name: "NOC webhook", Kind: notify.SinkWebhook, Enabled: true,
+		Webhook: notify.WebhookConfig{URL: "https://hooks.example.com/x"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ev := a.deadLetterEvent(
+		notify.Queued{ID: 1, SinkID: saved.ID, Attempts: 5},
+		errors.New("webhook returned 503 Service Unavailable"),
+	)
+
+	// The operator reads the name...
+	if !strings.Contains(ev.Summary, "NOC webhook") {
+		t.Errorf("the summary does not name the destination: %q", ev.Summary)
+	}
+	if ev.Params["sink"] != "NOC webhook" {
+		t.Errorf(`Params["sink"] = %v, want the name`, ev.Params["sink"])
+	}
+
+	// ...and the router gets the id.
+	if got := deadLetterSink(ev); got != saved.ID {
+		t.Errorf("deadLetterSink = %q, want %q — the loop guard compares this "+
+			"against the ids a route holds, so a name here disables it", got, saved.ID)
+	}
+}
+
+// An event journalled before the id was recorded carries only the name, which
+// back then was also the id. Those must still be recognised.
+func TestTheDeadLetterGuardStillReadsOlderEvents(t *testing.T) {
+	old := events.Event{
+		Kind:   events.KindSystemSinkDeadLetter,
+		Params: map[string]any{"sink": "sink-uuid-legacy"},
+	}
+	if got := deadLetterSink(old); got != "sink-uuid-legacy" {
+		t.Errorf("deadLetterSink on an older event = %q", got)
 	}
 }
