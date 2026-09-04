@@ -334,3 +334,53 @@ func TestAnalyseReturnsEverythingInOneCall(t *testing.T) {
 		t.Error("Missing is nil; it crosses the bridge as null and every access has to guard")
 	}
 }
+
+// A file that is not valid UTF-8 must not reach the editor.
+//
+// Wails marshals every bound result with encoding/json, which replaces each
+// invalid byte with U+FFFD — so a Latin-1 vendor MIB arrived already mangled,
+// and saving it with NO edits wrote the replacement characters back over the
+// original bytes. Measured: 0x8a and 0xe9 both became ef bf bd. Irreversible,
+// and nothing said a word.
+func TestReadRefusesNonUtf8RatherThanCorruptingIt(t *testing.T) {
+	a, dir := newMibApp(t)
+
+	// Latin-1, which is what an old vendor MIB with accented names is.
+	latin1 := []byte("BAD-MIB DEFINITIONS ::= BEGIN\n-- r\xe9sum\xe9 caf\x8a\nEND\n")
+	path := filepath.Join(dir, "BAD-MIB")
+	if err := os.WriteFile(path, latin1, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := a.MibEditorRead("BAD-MIB"); err == nil {
+		t.Fatal("a non-UTF-8 file was opened for editing")
+	} else if !strings.Contains(err.Error(), "UTF-8") {
+		t.Errorf("the error should say what is wrong: %v", err)
+	}
+
+	// And the file on disk is untouched by the refusal.
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(latin1) {
+		t.Errorf("the file was modified by a failed open:\n before % x\n after  % x", latin1, after)
+	}
+}
+
+// Ordinary UTF-8 with non-ASCII in a DESCRIPTION still opens: the guard is
+// about INVALID bytes, not about non-English text.
+func TestReadAcceptsValidUtf8(t *testing.T) {
+	a, dir := newMibApp(t)
+	body := "OK-MIB DEFINITIONS ::= BEGIN\n-- résumé café ✓\nEND\n"
+	if err := os.WriteFile(filepath.Join(dir, "OK-MIB"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	src, err := a.MibEditorRead("OK-MIB")
+	if err != nil {
+		t.Fatalf("valid UTF-8 was refused: %v", err)
+	}
+	if src.Content != body {
+		t.Errorf("content changed:\n want %q\n got  %q", body, src.Content)
+	}
+}

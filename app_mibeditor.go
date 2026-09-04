@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"SnmpLens/pkg/events"
 	"SnmpLens/pkg/mib"
@@ -90,6 +91,22 @@ func (a *App) MibEditorRead(name string) (mib.Source, error) {
 	if err != nil {
 		return mib.Source{}, err
 	}
+	// Refuse a file that cannot survive the round trip.
+	//
+	// Wails marshals every bound result with encoding/json, which replaces
+	// each invalid UTF-8 byte with U+FFFD. So a Latin-1 vendor MIB reached the
+	// editor already mangled, and saving it — even with NO edits — wrote the
+	// replacement characters back over the original bytes. Measured: 0x8a and
+	// 0xe9 both came back as ef bf bd. Irreversible, and silent.
+	//
+	// An SMI module is ASCII by grammar, so this is a broken file rather than
+	// a limitation: say so, and let the user convert it.
+	if !utf8.Valid(raw) {
+		return mib.Source{}, fmt.Errorf(
+			"%s is not valid UTF-8 and cannot be edited without corrupting it — convert it to UTF-8 first (MIBs are ASCII by grammar)",
+			filepath.Base(name))
+	}
+
 	content, eol := mib.NormaliseSource(raw)
 	_, bundled := a.bundledContent(name)
 
@@ -126,6 +143,12 @@ func (a *App) MibEditorOpenExternal() (mib.Source, error) {
 	if err != nil {
 		return mib.Source{}, err
 	}
+	if !utf8.Valid(raw) {
+		return mib.Source{}, fmt.Errorf(
+			"%s is not valid UTF-8 and cannot be edited without corrupting it — convert it to UTF-8 first",
+			filepath.Base(path))
+	}
+
 	content, eol := mib.NormaliseSource(raw)
 
 	// Offer the module's own name rather than the file name: gosmi resolves a

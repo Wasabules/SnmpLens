@@ -66,6 +66,13 @@
 
   // Jump straight from "this MIB failed to load" to the editor showing where.
   async function openInEditor(fileName) {
+    // Ask, like the editor's own file list does. This path went straight to
+    // the store, so unsaved work was replaced with no prompt. It is now also
+    // flushed to a draft rather than dropped, but replacing someone's buffer
+    // without asking is still a surprise.
+    if (mibEditorStore.dirty() && !window.confirm(get(_)('mibEditor.discardConfirm'))) {
+      return;
+    }
     try {
       await mibEditorStore.open(fileName);
     } catch (e) {

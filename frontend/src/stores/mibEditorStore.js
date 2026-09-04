@@ -32,6 +32,13 @@ function createMibEditorStore() {
 
   let checkTimer;
   let draftTimer;
+  // Which open() call owns the store. Reading a MIB is a bridge round trip
+  // whose cost is dominated by the parse — measured at 54 ms for IP-MIB and
+  // 8 ms for SNMPv2-MIB — so clicking a big file and then a small one landed
+  // the answers out of order, and the slow one overwrote the file the user was
+  // already typing into. refresh() below has had this guard since it was
+  // written; open() never did.
+  let openToken = 0;
 
   function isDirty(state) {
     return state.source !== null && state.buffer !== state.source.content;
@@ -43,8 +50,14 @@ function createMibEditorStore() {
   }
 
   async function open(name) {
-    clearTimeout(draftTimer); // whatever was pending belongs to the file being left
+    // Flush, do not cancel. The pending write belongs to the file being LEFT,
+    // and cancelling it was how work typed just before a switch stopped
+    // existing anywhere — not in the store, not in a draft, not on disk.
+    await flushDraft();
+
+    const token = ++openToken;
     const source = await MibEditorRead(name);
+    if (token !== openToken) return { source, recovered: false, superseded: true };
     // A draft for this file means a previous session left work behind.
     let draft = '';
     try {
@@ -52,6 +65,8 @@ function createMibEditorStore() {
     } catch (e) {
       draft = '';
     }
+    if (token !== openToken) return { source, recovered: false, superseded: true };
+
     const recovered = draft && draft !== source.content;
 
     set({
@@ -64,8 +79,20 @@ function createMibEditorStore() {
     return { source, recovered };
   }
 
+  /**
+   * Replace the buffer with a source the caller already has — the restore of a
+   * bundled MIB, or a file opened from outside the MIB directory.
+   *
+   * It claims the open token and drops the draft, which it used not to do:
+   * restoring a bundled MIB left the broken draft on disk, so the next open
+   * recovered it and handed the user back the very file they had just
+   * restored away from.
+   */
   function openSource(source) {
+    openToken++;
+    clearTimeout(draftTimer);
     set({ ...EMPTY, source, buffer: source.content, diagnostics: source.diagnostics || [] });
+    discardDraft(source?.name);
   }
 
   function setBuffer(buffer) {
@@ -146,6 +173,29 @@ function createMibEditorStore() {
   }
 
   /**
+   * Write the pending draft NOW, for the file it belongs to.
+   *
+   * Leaving a file used to CANCEL its timer, so anything typed in the last
+   * 1200 ms existed only in a buffer that was about to be replaced — not in
+   * the store, not in a draft, not on disk. Flushing costs one bridge call on
+   * a file switch and is the difference between "recovered" and "gone".
+   */
+  async function flushDraft() {
+    if (!draftTimer) return;
+    clearTimeout(draftTimer);
+    draftTimer = null;
+    const s = get({ subscribe });
+    if (!s.source) return;
+    try {
+      if (isDirty(s)) {
+        await MibEditorSaveDraft(s.source.name, s.buffer);
+      }
+    } catch (e) {
+      // Same reason as the scheduled write: never block a file switch.
+    }
+  }
+
+  /**
    * Forget the stored buffer for a file.
    *
    * Abandoning changes has to reach the DISK, not just the screen. Without
@@ -206,7 +256,7 @@ function createMibEditorStore() {
     set({ ...EMPTY });
   }
 
-  return { subscribe, open, openSource, setBuffer, refresh, markSaved, revert, close, dirty, discardDraft };
+  return { subscribe, open, openSource, setBuffer, refresh, markSaved, revert, close, dirty, discardDraft, flushDraft };
 }
 
 export const mibEditorStore = createMibEditorStore();

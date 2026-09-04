@@ -16,9 +16,20 @@ let pending = [];
 let drafts = {};
 
 globalThis.__stub = {
-  MibEditorRead: async (name) => ({
-    name, content: 'A DEFINITIONS ::= BEGIN\nEND\n', sha256: 'h', diagnostics: [],
-  }),
+  // Reading a MIB is a bridge round trip dominated by the parse — measured
+  // at 54 ms for IP-MIB and 8 ms for a small one — so two clicks can land
+  // out of order. readDelay lets a test choose that order.
+  readDelay: {},
+  MibEditorRead: async function (name) {
+    const wait = this.readDelay[name] || 0;
+    if (wait) await new Promise((r) => setTimeout(r, wait));
+    return {
+      name,
+      content: name + ' DEFINITIONS ::= BEGIN\nEND\n',
+      sha256: 'h-' + name,
+      diagnostics: [],
+    };
+  },
   MibEditorReadDraft: async (name) => drafts[name] || '',
   MibEditorSaveDraft: async (name, content) => { drafts[name] = content; },
   MibEditorDiscardDraft: async (name) => { delete drafts[name]; },
@@ -139,7 +150,7 @@ mibEditorStore.revert();
 await tick();
 check('reverting removes the draft at once', drafts['C-MIB'] === undefined);
 check('reverting restores the saved content',
-  get(mibEditorStore).buffer === 'A DEFINITIONS ::= BEGIN\nEND\n');
+  get(mibEditorStore).buffer === get(mibEditorStore).source.content);
 
 // A pending draft write belongs to the file it was scheduled for. Reading the
 // current file instead wrote one file's buffer under another file's name.
@@ -150,5 +161,106 @@ await mibEditorStore.open('E-MIB');    // switch before the debounce fires
 await new Promise((r) => setTimeout(r, 1400));
 check('a pending draft is not written under the newly opened file',
   drafts['E-MIB'] === undefined, JSON.stringify(drafts));
+
+
+// --- a slow open must not land on top of a faster one ---
+//
+// open() had no supersede guard, although refresh() twenty lines below has an
+// elaborate one. Click a 185 KB MIB, then a small one 5 ms later: the small
+// one opened, the user typed into it, and the big one's answer arrived later
+// and replaced the buffer. The typing was then in no store, no draft and no
+// file.
+{
+  drafts = {};
+  globalThis.__stub.readDelay = { 'BIG-MIB': 60 };
+
+  const slow = mibEditorStore.open('BIG-MIB');
+  await new Promise((r) => setTimeout(r, 5));
+  await mibEditorStore.open('SMALL-MIB');
+
+  mibEditorStore.setBuffer('SMALL-MIB typed by hand');
+  const typed = get(mibEditorStore).buffer;
+
+  await slow;
+  await new Promise((r) => setTimeout(r, 20));
+
+  const now = get(mibEditorStore);
+  check('the slower open does not replace the file being edited',
+    now.source.name === 'SMALL-MIB', now.source.name);
+  check('what was typed survives the late answer',
+    now.buffer === typed, JSON.stringify(now.buffer.slice(0, 40)));
+
+  globalThis.__stub.readDelay = {};
+}
+
+// --- leaving a file FLUSHES its draft rather than cancelling it ---
+{
+  drafts = {};
+  await mibEditorStore.open('F-MIB');
+  mibEditorStore.setBuffer('F-MIB important unsaved work');
+
+  await mibEditorStore.open('G-MIB');   // well inside the 1200 ms debounce
+  await new Promise((r) => setTimeout(r, 30));
+
+  check('the work typed just before a switch is kept as a draft',
+    (drafts['F-MIB'] || '').includes('important unsaved work'), JSON.stringify(drafts));
+  check('and the new file is the one on screen',
+    get(mibEditorStore).source.name === 'G-MIB');
+}
+
+// --- restoring a bundled MIB must drop its draft ---
+//
+// openSource neither cleared the timer nor discarded the draft, so the next
+// open handed the broken text straight back: the escape hatch out of a broken
+// MIB returned the broken MIB.
+{
+  drafts = { 'H-MIB': 'H-MIB BROKEN LEFTOVER' };
+  await mibEditorStore.open('H-MIB');
+  check('the broken draft is recovered first',
+    get(mibEditorStore).buffer.includes('BROKEN LEFTOVER'));
+
+  mibEditorStore.openSource({
+    name: 'H-MIB', content: 'H-MIB restored', sha256: 'h', diagnostics: [],
+  });
+  await new Promise((r) => setTimeout(r, 30));
+  check('restoring discards the draft', !drafts['H-MIB'], JSON.stringify(drafts));
+
+  const again = await mibEditorStore.open('H-MIB');
+  check('and the next open does not hand the broken text back',
+    !again.recovered && !get(mibEditorStore).buffer.includes('BROKEN LEFTOVER'),
+    get(mibEditorStore).buffer.slice(0, 40));
+}
+
+// --- a save that overlaps typing must not claim the typed text is on disk ---
+{
+  drafts = {};
+  await mibEditorStore.open('I-MIB');
+  const written = 'I-MIB version sent to disk';
+  mibEditorStore.setBuffer(written);
+  mibEditorStore.setBuffer(written + ' plus typed during the save');
+
+  // As the debounced writer would have left it, so the test can see whether
+  // markSaved takes it away.
+  drafts['I-MIB'] = get(mibEditorStore).buffer;
+
+  await mibEditorStore.markSaved('h2', [], written);
+  await new Promise((r) => setTimeout(r, 30));
+
+  const st = get(mibEditorStore);
+  check('the file on disk is what was actually written',
+    st.source.content === written, JSON.stringify(st.source.content));
+  check('the editor still shows unsaved changes', mibEditorStore.dirty());
+  check('the draft holding the extra text is NOT discarded',
+    (drafts['I-MIB'] || '').includes('typed during the save'), JSON.stringify(drafts));
+
+  // And when nothing diverged, the draft IS cleaned up — otherwise every save
+  // would leave one behind and every reopen would offer a phantom recovery.
+  mibEditorStore.setBuffer(written);
+  drafts['I-MIB'] = written;
+  await mibEditorStore.markSaved('h3', [], written);
+  await new Promise((r) => setTimeout(r, 30));
+  check('a save with nothing typed after it does discard the draft',
+    drafts['I-MIB'] === undefined, JSON.stringify(drafts));
+}
 
 process.exit(failures ? 1 : 0);
