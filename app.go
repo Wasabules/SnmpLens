@@ -795,7 +795,14 @@ func (a *App) routeEvent(e events.Event) {
 	if err != nil || len(routes) == 0 {
 		return
 	}
-	sinkIDs := notify.Select(routes, e, time.Now())
+	// Evaluated at the EVENT's own time, in the local zone.
+	//
+	// Routing then depends only on the event, which is what lets it be replayed
+	// after a crash and reach the same answer. The zone conversion is not
+	// cosmetic: every producer writes Ts in UTC while quiet hours are wall-clock
+	// times an operator typed, so comparing them directly rotates every window by
+	// the machine's UTC offset.
+	sinkIDs := notify.SelectAt(routes, e, time.Local)
 
 	// A dead letter must never go back to the sink that produced it.
 	//

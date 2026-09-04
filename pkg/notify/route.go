@@ -223,6 +223,44 @@ func oidHasPrefix(oid, prefix string) bool {
 	return oid == prefix || strings.HasPrefix(oid, prefix+".")
 }
 
+// RoutingTime is the moment a rule is evaluated against.
+//
+// The event's own timestamp, not the clock: routing then depends only on the
+// event, which is what lets it be replayed after a crash and reach the same
+// answer. Evaluating against "now" would make a delivery's fate depend on how
+// long the router happened to take.
+//
+// Converted to `zone`, because every producer writes Ts in UTC while quiet
+// hours are wall-clock times an operator typed into a form. Comparing the two
+// directly rotates every window by the machine's UTC offset — alerts firing
+// inside the quiet window, and dropped during the working day.
+//
+// A timestamp that does not parse falls back to NOW, never to the zero time.
+// The zero time is 00:00, which is inside every window that wraps midnight, and
+// those are exactly the windows people configure: it would silence the alert
+// permanently and invisibly.
+func RoutingTime(e events.Event, zone *time.Location) time.Time {
+	if zone == nil {
+		zone = time.Local
+	}
+	at, err := time.Parse(time.RFC3339, e.Ts)
+	if err != nil || at.IsZero() {
+		return time.Now().In(zone)
+	}
+	return at.In(zone)
+}
+
+// MatchesAt reports whether the event satisfies the rule, evaluated at the
+// event's own time in the given zone.
+func (m RouteMatch) MatchesAt(e events.Event, zone *time.Location) bool {
+	return m.Matches(e, RoutingTime(e, zone))
+}
+
+// SelectAt is Select, evaluated at each event's own time. See RoutingTime.
+func SelectAt(routes []Route, e events.Event, zone *time.Location) []string {
+	return Select(routes, e, RoutingTime(e, zone))
+}
+
 // Matches reports whether the event satisfies the rule at time now.
 func (m RouteMatch) Matches(e events.Event, now time.Time) bool {
 	if !matchesAny(m.Categories, e.Category) {
