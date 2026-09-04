@@ -95,8 +95,8 @@ type analysis struct {
 	// rawSource is kept because the AST does not retain the text, and the
 	// unused-import check has to look at what the file actually mentions.
 	rawSource string
-	// catIndex is the catalogue by name, built lazily and once.
-	catIndex map[string]string
+	// catDefined is every name the loaded tree knows, built lazily and once.
+	catDefined map[string]bool
 }
 
 func (a *analysis) add(pos lexerPos, severity, code, message, symbol string) {
@@ -238,12 +238,13 @@ func (a *analysis) useType(name string, line, column int, node *parser.Node) {
 	a.add(at(line, column), SevError, CodeUnknownType, msg, symbol)
 }
 
+// inCatalogue answers "does the loaded tree know this name", which is not the
+// same as "can it be imported" — see Catalogue.defined.
 func (a *analysis) inCatalogue(name string) bool {
-	if a.catIndex == nil {
-		a.catIndex = a.cat.index()
+	if a.catDefined == nil {
+		a.catDefined = a.cat.defined()
 	}
-	_, ok := a.catIndex[name]
-	return ok
+	return a.catDefined[name]
 }
 
 // isBuiltinSyntax covers the spellings the grammar accepts directly.

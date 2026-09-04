@@ -617,6 +617,11 @@
     const { word, start, end } = wordAt(src, offset);
     if (word.length < 2 || offset !== end) { completion = null; return; }
 
+    // Not inside a DESCRIPTION or a comment. A symbol name there is prose, and
+    // offering a completion made Enter — pressed to start a new line — insert
+    // one instead, because the popup captures Enter whenever it is open.
+    if (inProse(src, start)) { completion = null; return; }
+
     const items = catalogue.symbols
       .filter((sy) => sy.name.toLowerCase().startsWith(word.toLowerCase()) && sy.name !== word)
       .slice(0, 12);
@@ -631,6 +636,29 @@
       y: pos.y - scrollTop + LINE_HEIGHT + 8,
       items, index: 0, range: [start, end],
     };
+  }
+
+  /**
+   * Whether an offset is inside a string or a comment.
+   *
+   * The string half comes from the same scanner the highlighter uses, so the
+   * two cannot disagree about where a DESCRIPTION ends. The comment half is
+   * per-line: `--` starts one and a second `--` ends it, which is the SMI
+   * rule the tokeniser follows too.
+   */
+  function inProse(text, offset) {
+    if (stringStateAt(text, offset)) return true;
+
+    const lineStart = text.lastIndexOf('\n', Math.max(0, offset - 1)) + 1;
+    const before = text.slice(lineStart, offset);
+    let open = false;
+    for (let i = 0; i + 1 < before.length; i++) {
+      if (before[i] === '-' && before[i + 1] === '-') {
+        open = !open;
+        i++;
+      }
+    }
+    return open;
   }
 
   function acceptCompletion() {

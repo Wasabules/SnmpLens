@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sleepinggenius2/gosmi"
 )
 
 // The case that motivated the whole pass. Measured beforehand: gosmi loads this
@@ -159,16 +161,22 @@ func TestAnalyseIsQuietOnTheBundledCorpus(t *testing.T) {
 		t.Skip("no corpus")
 	}
 
-	// Build a catalogue naming every bundled module, so cross-module imports
-	// resolve the way they do at runtime.
-	cat := Catalogue{}
-	for _, e := range entries {
-		if !e.IsDir() {
-			cat.Modules = append(cat.Modules, e.Name())
-		}
+	// The REAL catalogue, from the loaded tree.
+	//
+	// This used to build one from file names alone, which meant four checks
+	// could not run and were exempted — and it only looked at errors, so the
+	// 50 false unused-import diagnostics this corpus produced (info severity,
+	// twelve of the fourteen files) went unseen for as long as they existed.
+	// A false-positive guard that exempts the checks most likely to produce
+	// one is not a guard.
+	gosmi.Exit()
+	gosmi.Init()
+	gosmi.SetPath("../../mibs")
+	if _, err := NewService("../../mibs").LoadAll(); err != nil {
+		t.Skipf("could not load the corpus: %v", err)
 	}
-	// Every symbol any bundled MIB exports would be in the real catalogue; the
-	// corpus check therefore only asserts on the checks that do not need it.
+	cat := Symbols()
+
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
@@ -178,17 +186,16 @@ func TestAnalyseIsQuietOnTheBundledCorpus(t *testing.T) {
 			continue
 		}
 		content, _ := NormaliseSource(raw)
+
 		for _, d := range Analyse(content, cat) {
-			if d.Severity != SevError {
+			// Style advice is opinion and may fire on anything; everything
+			// else is a claim about the file, and these files are correct.
+			switch d.Code {
+			case CodeNoDescription, CodeLongLine, CodeTabs:
 				continue
 			}
-			// Missing-module and unknown-symbol checks need a full catalogue,
-			// which this test deliberately does not build.
-			if d.Code == CodeUnknownModule || d.Code == CodeUnknownType ||
-				d.Code == CodeUnknownParent || d.Code == CodeIndexUndefined {
-				continue
-			}
-			t.Errorf("%s: FALSE POSITIVE %d:%d [%s] %s", e.Name(), d.Line, d.Column, d.Code, d.Message)
+			t.Errorf("%s: FALSE POSITIVE %d:%d [%s/%s] %s",
+				e.Name(), d.Line, d.Column, d.Severity, d.Code, d.Message)
 		}
 	}
 }

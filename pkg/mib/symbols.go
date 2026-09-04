@@ -142,6 +142,21 @@ type ImportFix struct {
 // Built once per analysis instead of scanned linearly per identifier: a few
 // thousand symbols against a few thousand identifiers is millions of string
 // comparisons for an answer a map gives in one.
+// defined is every name the loaded tree knows, importable or not.
+//
+// Two different questions, and conflating them broke both in turn. "Does this
+// name EXIST?" must include the ASN.1 roots — `org OBJECT IDENTIFIER ::=
+// { iso 3 }` is how the bundled SNMPv2-SMI begins. "Where do I IMPORT it
+// from?" must NOT, because gosmi files them under a pseudo-module and writing
+// `FROM <well-known>` does not parse.
+func (c Catalogue) defined() map[string]bool {
+	out := make(map[string]bool, len(c.Symbols))
+	for _, s := range c.Symbols {
+		out[s.Name] = true
+	}
+	return out
+}
+
 func (c Catalogue) index() map[string]string {
 	origin := make(map[string]string, len(c.Symbols))
 	for _, s := range c.Symbols {

@@ -281,3 +281,22 @@ function createMibEditorStore() {
 }
 
 export const mibEditorStore = createMibEditorStore();
+
+// Write the pending draft when the window goes away.
+//
+// The draft is written 1200 ms after you stop typing, so closing the window
+// inside that window lost the last thing typed — the one moment a draft exists
+// to cover. Registered on the STORE and not the panel: the panel is destroyed
+// on every tab switch while the buffer deliberately survives here.
+//
+// Best-effort by nature. beforeunload cannot await, so the bridge call is
+// started and the browser may or may not let it finish; pagehide is the more
+// reliable of the two in a WebView and both are cheap. This narrows the window
+// rather than closing it, which is why the debounce stays short.
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  const flush = () => {
+    if (mibEditorStore.dirty()) mibEditorStore.flushDraft();
+  };
+  window.addEventListener('beforeunload', flush);
+  window.addEventListener('pagehide', flush);
+}
