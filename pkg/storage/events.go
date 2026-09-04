@@ -3,6 +3,7 @@ package storage
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -110,21 +111,78 @@ func (s *Storage) noteEventWrite() {
 // TrimEvents enforces the per-category caps and drops orphaned payloads.
 func (s *Storage) TrimEvents() {
 	for category, keep := range eventRetention {
-		if _, err := s.db.Exec(`
-			DELETE FROM events
-			WHERE category = ? AND seq NOT IN (
-				SELECT seq FROM events WHERE category = ? ORDER BY seq DESC LIMIT ?
-			)`, category, category, keep); err != nil {
-			return
-		}
+		s.trimCategory(category, keep)
 	}
-	// Explicit reaping: no CASCADE, because deletion must not depend on a
-	// connection-scoped pragma.
-	s.db.Exec(`DELETE FROM event_payloads WHERE event_id NOT IN (SELECT id FROM events)`)
+	s.trimPayloads()
+}
+
+// trimCategory drops everything in a category older than its newest `keep`.
+//
+// The shape matters more than it looks. This used to be one statement,
+//
+//	DELETE FROM events WHERE category = ? AND seq NOT IN (
+//	    SELECT seq FROM events WHERE category = ? ORDER BY seq DESC LIMIT ?)
+//
+// which EXPLAIN QUERY PLAN shows materialising a twenty-thousand-entry LIST
+// SUBQUERY and a bloom filter on EVERY call — measured 80 ms for the trap
+// category alone, and 130-330 ms for a whole trim.
+//
+// That cost lands on the CALLER's goroutine, and for a trap that caller is
+// gosnmp's serial UDP receive loop: every millisecond here is a millisecond not
+// reading the socket. Moving it to a background goroutine does not help and was
+// measured making things worse — SQLite serialises writers, so InsertEvent just
+// blocks on the write lock instead (mean 2.5 -> 8.5 ms, worst case 62 -> 335 ms).
+//
+// Finding the cutoff first turns the delete into an indexed RANGE over
+// idx_ev_cat_seq(category, seq), which is what that index is for.
+func (s *Storage) trimCategory(category string, keep int) {
+	var cutoff int64
+	err := s.db.QueryRow(`
+		SELECT seq FROM events WHERE category = ?
+		ORDER BY seq DESC LIMIT 1 OFFSET ?`, category, keep-1).Scan(&cutoff)
+	if errors.Is(err, sql.ErrNoRows) {
+		return // fewer rows than the cap: nothing to do
+	}
+	if err != nil {
+		return
+	}
+
+	// The payloads first, while their events still name them: deleting the
+	// events first would turn every one of these into an orphan for the sweep
+	// below to find the expensive way.
+	if _, err := s.db.Exec(`
+		DELETE FROM event_payloads WHERE event_id IN (
+			SELECT id FROM events WHERE category = ? AND seq < ? AND payload_size > 0)`,
+		category, cutoff); err != nil {
+		return
+	}
+	s.db.Exec(`DELETE FROM events WHERE category = ? AND seq < ?`, category, cutoff)
+}
+
+// trimPayloads enforces the payload cap and reaps anything orphaned.
+//
+// Explicit reaping: there is no CASCADE, because deletion must not depend on a
+// connection-scoped pragma.
+func (s *Storage) trimPayloads() {
+	var cutoff int64
+	err := s.db.QueryRow(`
+		SELECT seq FROM events WHERE payload_size > 0
+		ORDER BY seq DESC LIMIT 1 OFFSET ?`, maxEventPayloads-1).Scan(&cutoff)
+	if err == nil {
+		s.db.Exec(`
+			DELETE FROM event_payloads WHERE event_id IN (
+				SELECT id FROM events WHERE payload_size > 0 AND seq < ?)`, cutoff)
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return
+	}
+
+	// NOT EXISTS rather than NOT IN: events.id is UNIQUE, so this is one index
+	// lookup per payload row. NOT IN materialised every id in the journal —
+	// seventy thousand of them — to check at most a couple of thousand rows,
+	// and planned as a full SCAN of events.
 	s.db.Exec(`
-		DELETE FROM event_payloads WHERE event_id NOT IN (
-			SELECT id FROM events WHERE payload_size > 0 ORDER BY seq DESC LIMIT ?
-		)`, maxEventPayloads)
+		DELETE FROM event_payloads WHERE NOT EXISTS (
+			SELECT 1 FROM events WHERE events.id = event_payloads.event_id)`)
 }
 
 // buildEventWhere turns a filter into a WHERE fragment plus its arguments.

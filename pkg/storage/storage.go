@@ -225,6 +225,10 @@ func Init(dbPath string) (*Storage, error) {
 	CREATE INDEX IF NOT EXISTS idx_ev_cat_seq ON events(category, seq);
 	CREATE INDEX IF NOT EXISTS idx_ev_ts      ON events(ts);
 	CREATE INDEX IF NOT EXISTS idx_ev_unacked ON events(category) WHERE acked = 0;
+	-- Payload retention walks back from the newest event that HAS one. Without
+	-- this, a journal of sixty thousand payload-less traps is scanned end to
+	-- end on every trim to discover there is nothing to cap.
+	CREATE INDEX IF NOT EXISTS idx_ev_payload ON events(seq) WHERE payload_size > 0;
 
 	-- Bulk detail kept out of the spine so listing the journal never reads a
 	-- 1500-varbind trap. No FOREIGN KEY: reaping is explicit, because we refuse
