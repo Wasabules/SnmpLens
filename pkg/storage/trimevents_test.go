@@ -2,6 +2,8 @@ package storage
 
 import (
 	"fmt"
+	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -197,5 +199,42 @@ func TestTrimEventsAtCapIsNotPathological(t *testing.T) {
 	if elapsed > 50*time.Millisecond {
 		t.Errorf("a trim froze the caller for %v; on the trap listener's goroutine "+
 			"that is %v of datagrams not being read", elapsed, elapsed)
+	}
+}
+
+// Close is called by App.shutdown and by whatever else holds the database, so a
+// second call is normal. It used to close a channel unconditionally and panic
+// with "close of closed channel" — taking the process down at the one moment
+// there is nothing left to report it.
+func TestCloseIsIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	st, err := Init(filepath.Join(dir, "monitoring.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := st.Close(); err != nil {
+		t.Fatalf("first close: %v", err)
+	}
+	// Any of these would have panicked.
+	st.Close()
+	st.Close()
+}
+
+// And Close must not leave the flush goroutine writing into a closed database.
+func TestCloseJoinsTheFlushGoroutine(t *testing.T) {
+	dir := t.TempDir()
+	st, err := Init(filepath.Join(dir, "monitoring.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	before := runtime.NumGoroutine()
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// The goroutine returns before Close does, so the count cannot have grown.
+	if after := runtime.NumGoroutine(); after > before {
+		t.Errorf("goroutines went from %d to %d across Close", before, after)
 	}
 }

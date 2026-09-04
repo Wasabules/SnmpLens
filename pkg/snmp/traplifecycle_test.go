@@ -1,0 +1,109 @@
+package snmp
+
+import (
+	"context"
+	"sync"
+	"testing"
+	"time"
+
+	"SnmpLens/pkg/events"
+)
+
+// The trap listener's lifecycle.
+//
+// `Client.trapListener` is written by StartTrapListener on the caller's
+// goroutine, written to nil by the listener goroutine when Listen returns, and
+// read by StopTrapListener. Nothing guarded it, so the three race — reproducibly
+// under -race, and visibly even without: a Start immediately following a Stop
+// could be refused because the previous listener had not cleared itself yet, or
+// could clobber a listener that was still running.
+//
+// This matters more now than it did: shutdown has to stop the listener, so the
+// stop path is about to be exercised at exactly the moment everything else is
+// being torn down.
+
+func TestStartAndStopDoNotRace(t *testing.T) {
+	c := NewClient(context.TODO())
+	c.SetRecorder(events.Nop{})
+
+	port := freePort(t)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 15; j++ {
+				_ = c.StartTrapListener(port, V3Params{})
+				c.StopTrapListener()
+			}
+		}()
+	}
+
+	done := make(chan struct{})
+	go func() { wg.Wait(); close(done) }()
+
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("start/stop deadlocked")
+	}
+
+	// Leave nothing bound behind.
+	c.StopTrapListener()
+}
+
+// Stopping a listener that was never started is a normal thing for shutdown to
+// do, and must not panic or block.
+func TestStoppingAListenerThatIsNotRunning(t *testing.T) {
+	c := NewClient(context.TODO())
+	c.StopTrapListener()
+	c.StopTrapListener()
+}
+
+// Starting twice must be refused rather than losing the first listener, which
+// would leave a socket bound with nothing able to close it.
+func TestStartingTwiceIsRefused(t *testing.T) {
+	c := NewClient(context.TODO())
+	c.SetRecorder(events.Nop{})
+	port := freePort(t)
+
+	if err := c.StartTrapListener(port, V3Params{}); err != nil {
+		t.Fatalf("the first start failed: %v", err)
+	}
+	defer c.StopTrapListener()
+
+	// Give it a moment to bind, so this is the interesting case rather than a
+	// race against the goroutine that has not run yet.
+	time.Sleep(150 * time.Millisecond)
+
+	if err := c.StartTrapListener(port, V3Params{}); err == nil {
+		t.Error("a second listener was started over the first; the first socket " +
+			"is now bound with nothing holding a reference to close it")
+	}
+}
+
+// And after a clean stop, starting again must work — otherwise changing the
+// trap port would need a restart.
+func TestStartStopStart(t *testing.T) {
+	c := NewClient(context.TODO())
+	c.SetRecorder(events.Nop{})
+	port := freePort(t)
+
+	if err := c.StartTrapListener(port, V3Params{}); err != nil {
+		t.Fatalf("first start: %v", err)
+	}
+	time.Sleep(150 * time.Millisecond)
+	c.StopTrapListener()
+
+	// Wait for the listener goroutine to clear the field.
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if err := c.StartTrapListener(port, V3Params{}); err == nil {
+			c.StopTrapListener()
+			return
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	t.Error("the listener could not be restarted after a stop")
+}

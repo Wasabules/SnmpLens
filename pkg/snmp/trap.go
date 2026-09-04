@@ -28,6 +28,9 @@ type TrapVariable struct {
 const DefaultTrapPort = 162
 
 func (c *Client) StartTrapListener(port int, v3 V3Params) error {
+	c.trapMu.Lock()
+	defer c.trapMu.Unlock()
+
 	if c.trapListener != nil {
 		return fmt.Errorf("trap listener is already running")
 	}
@@ -64,9 +67,9 @@ func (c *Client) StartTrapListener(port int, v3 V3Params) error {
 		params.Version = gosnmp.Version2c
 	}
 
-	c.trapListener = gosnmp.NewTrapListener()
-	c.trapListener.OnNewTrap = c.handleTrap
-	c.trapListener.Params = params
+	listener := gosnmp.NewTrapListener()
+	listener.OnNewTrap = c.handleTrap
+	listener.Params = params
 	// Through the scrubbed ring buffer, and only when debug is on.
 	//
 	// This used to be log.New(os.Stdout, ...) unconditionally: not the ring
@@ -76,7 +79,7 @@ func (c *Client) StartTrapListener(port int, v3 V3Params) error {
 	// community is not ours to disclose, and stdout in a packaged app goes
 	// somewhere nobody chose.
 	if c.debugEnabled {
-		c.trapListener.Params.Logger = gosnmp.NewLogger(log.New(&ringLogWriter{client: c}, "", 0))
+		listener.Params.Logger = gosnmp.NewLogger(log.New(&ringLogWriter{client: c}, "", 0))
 	}
 
 	// Enlarge the socket buffer as soon as it is bound.
@@ -89,7 +92,8 @@ func (c *Client) StartTrapListener(port int, v3 V3Params) error {
 	// Listening() closes once the socket is bound, which is the earliest moment
 	// there is a socket to configure. In its own goroutine so a listener that
 	// never binds cannot hold up the caller.
-	listener := c.trapListener
+	c.trapListener = listener
+
 	go func() {
 		select {
 		case <-listener.Listening():
@@ -101,10 +105,18 @@ func (c *Client) StartTrapListener(port int, v3 V3Params) error {
 
 	go func() {
 		defer func() {
-			c.trapListener = nil
+			// Clear it only if it is still OURS: a Stop followed by a Start can
+			// have installed a new listener before this goroutine unwinds, and
+			// setting nil unconditionally would strand that one with nothing
+			// able to close it.
+			c.trapMu.Lock()
+			if c.trapListener == listener {
+				c.trapListener = nil
+			}
+			c.trapMu.Unlock()
 		}()
 		log.Printf("Starting trap listener on port %d", port)
-		err := c.trapListener.Listen(netaddr.ListenAddress(port))
+		err := listener.Listen(netaddr.ListenAddress(port))
 		if err != nil && !strings.Contains(err.Error(), "closed") {
 			log.Printf("Error in trap listener: %v", err)
 			runtime.EventsEmit(c.ctx, "trapError", fmt.Sprintf("Error in listener: %v", err))
@@ -115,12 +127,47 @@ func (c *Client) StartTrapListener(port int, v3 V3Params) error {
 
 // StopTrapListener stops the active trap listener.
 func (c *Client) StopTrapListener() {
-	if c.trapListener == nil {
+	c.trapMu.Lock()
+	listener := c.trapListener
+	c.trapMu.Unlock()
+
+	if listener == nil {
 		log.Println("Trap listener is not running, cannot stop.")
 		return
 	}
+	// Wait for the socket to exist before closing it.
+	//
+	// gosnmp's Close returns EARLY and does nothing when `conn` is still nil —
+	// and it has already set `finish`, so it will never do anything on a second
+	// call either. A stop landing in the window between StartTrapListener
+	// returning and the socket being bound therefore reported success and left
+	// a listener running with nothing able to stop it. Measured: still running
+	// 2.1 s after Close returned in 73 ms.
+	//
+	// Listening() closes once the socket is bound. A bind that FAILS never
+	// closes it, hence the bound wait: there is nothing to stop in that case
+	// anyway.
+	select {
+	case <-listener.Listening():
+	case <-time.After(stopBindGrace):
+	}
+
+	// Close OUTSIDE the lock: it waits for the listen goroutine to unwind, and
+	// that goroutine takes the same lock to clear the field.
 	log.Println("Stopping trap listener...")
-	c.trapListener.Close()
+	listener.Close()
+}
+
+// stopBindGrace is how long a stop waits for the socket to exist before giving
+// up on closing it. Binding is a local syscall; anything slower than this has
+// failed.
+const stopBindGrace = 2 * time.Second
+
+// TrapListenerRunning reports whether a listener is currently bound.
+func (c *Client) TrapListenerRunning() bool {
+	c.trapMu.Lock()
+	defer c.trapMu.Unlock()
+	return c.trapListener != nil
 }
 
 func (c *Client) handleTrap(packet *gosnmp.SnmpPacket, addr *net.UDPAddr) {

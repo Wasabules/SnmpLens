@@ -66,7 +66,15 @@ type DebugEntry struct {
 
 // Client handles SNMP operations.
 type Client struct {
-	ctx          context.Context
+	ctx context.Context
+
+	// trapMu guards trapListener, which is written by StartTrapListener on the
+	// caller's goroutine, set to nil by the listener goroutine when Listen
+	// returns, and read by StopTrapListener. Nothing guarded the three and they
+	// raced reproducibly under -race — and visibly without it, since a Start
+	// following a Stop could be refused by a listener that had not cleared
+	// itself yet, or clobber one that was still running.
+	trapMu       sync.Mutex
 	trapListener *gosnmp.TrapListener
 	debugEnabled bool
 	debugLog     []DebugEntry

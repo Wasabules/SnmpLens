@@ -1,9 +1,13 @@
 package main
 
 import (
+	"SnmpLens/pkg/snmp"
+	"context"
 	"errors"
+	"net"
 	"strings"
 	"testing"
+	"time"
 
 	"SnmpLens/pkg/events"
 	"SnmpLens/pkg/notify"
@@ -189,4 +193,58 @@ func TestTheDeadLetterGuardStillReadsOlderEvents(t *testing.T) {
 	if got := deadLetterSink(old); got != "sink-uuid-legacy" {
 		t.Errorf("deadLetterSink on an older event = %q", got)
 	}
+}
+
+// Shutdown must stop the trap listener, and stop it FIRST.
+//
+// It was not stopping it at all: a datagram arriving during teardown ran
+// handleTrap on gosnmp's goroutine, which journals and routes through storage
+// that shutdown is in the middle of closing. Stopping every producer before any
+// consumer is the only ordering in which the rest of shutdown's reasoning holds.
+func TestShutdownStopsTheTrapListener(t *testing.T) {
+	a := newTestApp(t)
+	a.snmpClient = snmp.NewClient(context.TODO())
+	a.snmpClient.SetRecorder(events.RecorderFunc(a.recordEvent))
+
+	port := freeUDPPort(t)
+	if err := a.snmpClient.StartTrapListener(port, snmp.V3Params{}); err != nil {
+		t.Fatalf("could not start a listener: %v", err)
+	}
+	// Let it bind, so this tests the running case.
+	deadline := time.Now().Add(3 * time.Second)
+	for !a.snmpClient.TrapListenerRunning() && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !a.snmpClient.TrapListenerRunning() {
+		t.Fatal("the listener never started")
+	}
+
+	a.shutdown(context.Background())
+
+	// Close is asynchronous; the field clears when the listen goroutine unwinds.
+	deadline = time.Now().Add(5 * time.Second)
+	for a.snmpClient.TrapListenerRunning() && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if a.snmpClient.TrapListenerRunning() {
+		t.Error("the trap listener is still running after shutdown; it keeps " +
+			"journalling into storage that shutdown has closed")
+	}
+}
+
+// And shutdown with no listener, no scheduler and no dispatcher must not panic:
+// that is what a failed startup looks like on the way out.
+func TestShutdownWithNothingRunning(t *testing.T) {
+	a := newTestApp(t)
+	a.shutdown(context.Background())
+}
+
+func freeUDPPort(t *testing.T) int {
+	t.Helper()
+	c, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Skipf("no UDP socket: %v", err)
+	}
+	defer c.Close()
+	return c.LocalAddr().(*net.UDPAddr).Port
 }

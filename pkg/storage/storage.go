@@ -21,6 +21,8 @@ type Storage struct {
 	mu           sync.Mutex
 	batch        []DataPoint
 	batchTicker  *time.Ticker
+	closeOnce    sync.Once
+	flushDone    sync.WaitGroup
 	done         chan struct{}
 	historySaves int // counter to trim query_history only periodically
 	eventWrites  int // counter to trim the event journal only periodically
@@ -310,8 +312,10 @@ func Init(dbPath string) (*Storage, error) {
 		done:        make(chan struct{}),
 	}
 
-	// Background batch flush goroutine
+	// Background batch flush goroutine. Close waits for it.
+	s.flushDone.Add(1)
 	go func() {
+		defer s.flushDone.Done()
 		for {
 			select {
 			case <-s.batchTicker.C:
@@ -327,11 +331,25 @@ func Init(dbPath string) (*Storage, error) {
 }
 
 // Close flushes pending data and closes the database.
+//
+// Idempotent, and it JOINS the flush goroutine. It used to close a channel
+// unconditionally, so a second call panicked with "close of closed channel" —
+// and a second call is normal: App.shutdown closes the database, and so does
+// anything else holding it. A panic in Close takes the process down at the one
+// moment there is nothing left to report it.
+//
+// The join matters for the same reason the dispatcher's does: without it the
+// flush goroutine could still be mid-write when db.Close runs underneath it.
 func (s *Storage) Close() error {
-	s.batchTicker.Stop()
-	close(s.done)
-	s.flushBatch() // final flush
-	return s.db.Close()
+	var err error
+	s.closeOnce.Do(func() {
+		s.batchTicker.Stop()
+		close(s.done)
+		s.flushDone.Wait() // the ticker goroutine has returned
+		s.flushBatch()     // final flush, now that nothing else is writing
+		err = s.db.Close()
+	})
+	return err
 }
 
 // CreateSession inserts a new monitoring session and returns its UUID.

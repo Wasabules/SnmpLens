@@ -535,7 +535,18 @@ func (a *App) OpenURL(url string) {
 
 // shutdown is called when the app is closing.
 func (a *App) shutdown(ctx context.Context) {
-	// Stop the poll clock first: its goroutines write samples through storage,
+	// The trap listener goes FIRST, and it was not being stopped at all.
+	//
+	// It is the one producer fed from outside: a datagram arriving during
+	// teardown runs handleTrap on gosnmp's goroutine, which journals and routes
+	// through storage that the lines below are about to close. Stopping every
+	// producer before any consumer is the only ordering in which the rest of
+	// this function's reasoning holds.
+	if a.snmpClient != nil {
+		a.snmpClient.StopTrapListener()
+	}
+
+	// Then the poll clock: its goroutines write samples through storage,
 	// so letting them run into a closed database would log failures for work
 	// that was actually fine.
 	if a.scheduler != nil {
