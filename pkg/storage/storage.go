@@ -283,6 +283,26 @@ func Init(dbPath string) (*Storage, error) {
 
 	CREATE INDEX IF NOT EXISTS idx_ob_due ON notify_outbox(state, next_try_at);
 
+	-- How far routing has got through the event journal.
+	--
+	-- One row, enforced by the CHECK. It is written in the SAME transaction as
+	-- the outbox rows it accounts for, so it can never name events whose
+	-- deliveries were not written — which is the whole guarantee that lets
+	-- routing happen off the producer's goroutine.
+	CREATE TABLE IF NOT EXISTS notify_watermark (
+		id                 INTEGER PRIMARY KEY CHECK (id = 1),
+		routed_through_seq INTEGER NOT NULL
+	);
+
+	-- Seeded to the newest event that EXISTS, never to zero, and seeded here
+	-- rather than by the router's first flush. Lazily created, a crash before
+	-- that first flush leaves the row absent, and the "absent means MAX(seq)"
+	-- rule then skips exactly the events it was meant to protect. Seeding at
+	-- MAX(seq) on an existing database also means upgrading does not re-route
+	-- two weeks of history.
+	INSERT OR IGNORE INTO notify_watermark (id, routed_through_seq)
+		SELECT 1, COALESCE(MAX(seq), 0) FROM events;
+
 	CREATE TABLE IF NOT EXISTS event_episodes (
 		dedup_key  TEXT PRIMARY KEY,
 		kind       TEXT NOT NULL,
