@@ -145,6 +145,14 @@ type ImportFix struct {
 func (c Catalogue) index() map[string]string {
 	origin := make(map[string]string, len(c.Symbols))
 	for _, s := range c.Symbols {
+		// gosmi exposes the ASN.1 roots — iso, ccitt, joint-iso-ccitt — under a
+		// pseudo-module called "<well-known>". They are not importable: every
+		// MIB rooted at { iso 3 6 1 … } was told it was missing an import of
+		// `iso`, and the fix wrote "FROM <well-known>", which does not parse.
+		// The bundled SNMPv2-SMI is one of them.
+		if s.Module == "" || strings.ContainsAny(s.Module, "<>") {
+			continue
+		}
 		if _, exists := origin[s.Name]; !exists {
 			origin[s.Name] = s.Module
 		}
@@ -189,8 +197,15 @@ func scanIdentifiers(content string) map[string][2]int {
 					j++
 				}
 				word := line[i:j]
-				if _, seen := found[word]; !seen {
-					found[word] = [2]int{lineNo + 1, i + 1}
+				// `ip(126)` in an INTEGER enumeration is a NAMED NUMBER, not a
+				// reference to anything. Both `ip` and `udp` appear that way in
+				// the bundled IANAifType-MIB, resolved in the catalogue to
+				// IP-MIB and UDP-MIB, and pressing Fix rewrote a correct file's
+				// IMPORTS to include them. The same shape covers BITS.
+				if !namedNumberAt(line, j) {
+					if _, seen := found[word]; !seen {
+						found[word] = [2]int{lineNo + 1, i + 1}
+					}
 				}
 				i = j
 			default:
@@ -199,6 +214,34 @@ func scanIdentifiers(content string) map[string][2]int {
 		}
 	}
 	return found
+}
+
+// namedNumberAt reports whether what follows an identifier is "(<digits>)",
+// which makes it an enumeration label rather than a reference.
+func namedNumberAt(line string, at int) bool {
+	skipSpace := func(i int) int {
+		for i < len(line) && (line[i] == ' ' || line[i] == '	') {
+			i++
+		}
+		return i
+	}
+
+	i := skipSpace(at)
+	if i >= len(line) || line[i] != '(' {
+		return false
+	}
+	// Inside the parentheses too: real MIBs write `tcp   ( 9 )`.
+	i = skipSpace(i + 1)
+	if i < len(line) && (line[i] == '-' || line[i] == '+') {
+		i++
+	}
+	digits := 0
+	for i < len(line) && line[i] >= '0' && line[i] <= '9' {
+		i++
+		digits++
+	}
+	i = skipSpace(i)
+	return digits > 0 && i < len(line) && line[i] == ')'
 }
 
 func isIdentStart(c byte) bool {
@@ -310,30 +353,47 @@ func insertImports(lines, modules []string, byModule map[string][]string) []stri
 			"        FROM "+m)
 	}
 
-	importsAt, semicolonAt, beginAt := -1, -1, -1
+	// By CONTENT, not by line shape. Matching `trimmed == "IMPORTS"` missed a
+	// single-line clause, and `HasSuffix(trimmed, ";")` missed one ending in a
+	// trailing comment — the two commonest shapes there are. Both then fell to
+	// the BEGIN branch and inserted a SECOND IMPORTS clause, and the file
+	// stopped parsing with `unexpected "IMPORTS"`. Comments are stripped for
+	// the same reason: a header comment containing the word BEGIN put the new
+	// clause outside the module.
+	importsAt, semicolonAt, semicolonCol, beginAt := -1, -1, -1, -1
 	for i, l := range lines {
-		trimmed := strings.TrimSpace(l)
-		if importsAt < 0 && trimmed == "IMPORTS" {
-			importsAt = i
-		}
-		if beginAt < 0 && strings.Contains(l, "BEGIN") {
+		code := stripComment(l)
+		if beginAt < 0 && containsWord(code, "BEGIN") {
 			beginAt = i
 		}
-		if importsAt >= 0 && i >= importsAt && strings.HasSuffix(trimmed, ";") {
-			semicolonAt = i
-			break
+		if importsAt < 0 && containsWord(code, "IMPORTS") {
+			importsAt = i
+		}
+		if importsAt >= 0 && i >= importsAt {
+			if at := strings.IndexByte(code, ';'); at >= 0 {
+				semicolonAt, semicolonCol = i, at
+				break
+			}
 		}
 	}
 
 	if importsAt >= 0 && semicolonAt >= 0 {
-		// Append before the terminating semicolon, which moves to its own
-		// clause so the existing last line keeps its shape.
-		last := lines[semicolonAt]
-		lines[semicolonAt] = strings.TrimSuffix(strings.TrimRight(last, " \t"), ";")
+		// Split at the semicolon rather than assuming it ends the line: on a
+		// single-line clause everything before it is the existing imports and
+		// everything after it is the rest of the file.
+		line := lines[semicolonAt]
+		head := strings.TrimRight(line[:semicolonCol], " 	")
+		tail := line[semicolonCol+1:]
 
-		out := append([]string{}, lines[:semicolonAt+1]...)
+		out := append([]string{}, lines[:semicolonAt]...)
+		if head != "" {
+			out = append(out, head)
+		}
 		out = append(out, clauses...)
 		out[len(out)-1] += ";"
+		if strings.TrimSpace(tail) != "" {
+			out = append(out, tail)
+		}
 		return append(out, lines[semicolonAt+1:]...)
 	}
 
@@ -346,4 +406,22 @@ func insertImports(lines, modules []string, byModule map[string][]string) []stri
 	}
 
 	return lines
+}
+
+// containsWord reports whether s contains word as a whole identifier.
+func containsWord(s, word string) bool {
+	for i := 0; ; {
+		at := strings.Index(s[i:], word)
+		if at < 0 {
+			return false
+		}
+		at += i
+		before := at == 0 || !isIdentPart(s[at-1])
+		afterAt := at + len(word)
+		after := afterAt >= len(s) || !isIdentPart(s[afterAt])
+		if before && after {
+			return true
+		}
+		i = at + 1
+	}
 }
