@@ -162,6 +162,12 @@ func TestTrimEventsAtCapIsNotPathological(t *testing.T) {
 	if testing.Short() {
 		t.Skip("seeds tens of thousands of rows")
 	}
+	if raceEnabled {
+		// The detector instruments every memory access; the same trim measured
+		// 20 ms without it and 73 seconds with it. The behavioural tests above
+		// still run under -race, which is where they matter.
+		t.Skip("elapsed time is meaningless under -race")
+	}
 	st := newTestStorage(t)
 
 	for _, c := range []string{
