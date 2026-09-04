@@ -867,6 +867,7 @@
     "secretCleared": "Credencial eliminada.",
     "clearSecret": "Eliminar la credencial guardada",
     "secretHint": "Almacenada fuera de la base de datos, protegida por: {backend}",
+    "urlSecretHint": "Slack, Teams y Discord se autentican solo mediante la URL. Escriba {{secret}} en ella y esa parte se guardará junto a la credencial en lugar de en la base de datos.",
     "tlsNote": "Syslog sobre TLS (RFC 5425), en el puerto 6514 salvo que la dirección indique otro. Los mensajes se delimitan por recuento de octetos, como espera el colector.",
     "caCert": "Certificado de CA (PEM)",
     "caCertHint": "Déjalo vacío para usar el almacén de confianza del sistema. Pega un certificado para confiar en una CA interna.",

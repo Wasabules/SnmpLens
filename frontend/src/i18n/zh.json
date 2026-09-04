@@ -867,6 +867,7 @@
     "secretCleared": "凭据已删除。",
     "clearSecret": "删除已保存的凭据",
     "secretHint": "存储在数据库之外，保护方式：{backend}",
+    "urlSecretHint": "Slack、Teams 和 Discord 仅凭 URL 进行身份验证。在其中写入 {{secret}}，该部分将与凭据一同保存，而不写入数据库。",
     "tlsNote": "Syslog over TLS（RFC 5425），除非地址另行指定，否则使用 6514 端口。消息按八位字节计数分帧，符合收集器的预期。",
     "caCert": "CA 证书（PEM）",
     "caCertHint": "留空则使用系统信任库。粘贴证书以信任内部 CA。",

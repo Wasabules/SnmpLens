@@ -16,8 +16,8 @@ import (
 	"SnmpLens/pkg/events"
 )
 
-// SecretPlaceholder can be used in a custom header value to inject the sink's
-// stored credential.
+// SecretPlaceholder can be used in a custom header value, or in the URL, to
+// inject the sink's stored credential.
 //
 // Custom headers are stored with the configuration, in the clear, because they
 // are ordinarily routing metadata rather than secrets. A receiver that
@@ -25,6 +25,13 @@ import (
 // common one — would otherwise force the operator to type a credential into a
 // field that gets written to monitoring.db. Writing {{secret}} there keeps it
 // in pkg/secrets with everything else.
+//
+// The URL matters for the same reason and more sharply: Slack, Teams and
+// Discord — the exact receivers PayloadMode "template" was built for —
+// authenticate by the URL alone, so for those receivers there is no bearer
+// token to store and the address itself IS the credential. Without this it went
+// into the notify_sinks config blob in the clear, and a copied monitoring.db
+// handed over a working post-anything-to-that-channel capability.
 const SecretPlaceholder = "{{secret}}"
 
 // WebhookConfig describes an HTTP destination.
@@ -96,9 +103,27 @@ func isLoopback(host string) bool {
 	return false
 }
 
+// resolvedURL is the address to actually request, with {{secret}} expanded.
+//
+// Substituted BEFORE parsing, or the braces are percent-encoded and the
+// placeholder is requested literally — measured, a URL ending in
+// "/services/{{secret}}" reached the receiver as "/services/%7B%7Bsecret%7D%7D"
+// — and validate would then be checking an address that is not the one sent.
+//
+// The credential goes in verbatim, not percent-escaped: a Slack token is
+// "T000/B000/xxxx" and escaping its slashes would address a path that does not
+// exist.
+func (w WebhookSink) resolvedURL() string {
+	raw := strings.TrimSpace(w.Config.URL)
+	if w.Config.Token == "" {
+		return raw
+	}
+	return strings.ReplaceAll(raw, SecretPlaceholder, w.Config.Token)
+}
+
 // validate checks the destination before anything is sent.
 func (w WebhookSink) validate() (*url.URL, error) {
-	raw := strings.TrimSpace(w.Config.URL)
+	raw := w.resolvedURL()
 	if raw == "" {
 		return nil, fmt.Errorf("webhook URL is empty")
 	}
@@ -199,7 +224,7 @@ func (w WebhookSink) Send(e events.Event, subject, body string) error {
 		timeout = 10 * time.Second
 	}
 
-	req, err := http.NewRequest(method, strings.TrimSpace(w.Config.URL), bytes.NewReader(payload))
+	req, err := http.NewRequest(method, w.resolvedURL(), bytes.NewReader(payload))
 	if err != nil {
 		return err
 	}

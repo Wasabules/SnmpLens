@@ -867,6 +867,7 @@
     "secretCleared": "Credential removed.",
     "clearSecret": "Remove the stored credential",
     "secretHint": "Stored outside the database, protected by: {backend}",
+    "urlSecretHint": "Slack, Teams and Discord authenticate by the URL alone. Write {{secret}} in it and that part is kept with the credential instead of in the database.",
     "tlsNote": "Syslog over TLS (RFC 5425), on port 6514 unless the address names another. Messages are framed by octet count, as the collector expects.",
     "caCert": "CA certificate (PEM)",
     "caCertHint": "Leave empty to use the system trust store. Paste a certificate to trust an internal CA.",

@@ -867,6 +867,7 @@
     "secretCleared": "Identifiant supprimé.",
     "clearSecret": "Supprimer l'identifiant enregistré",
     "secretHint": "Stocké hors de la base, protégé par : {backend}",
+    "urlSecretHint": "Slack, Teams et Discord s'authentifient par la seule URL. Écrivez {{secret}} dedans et cette partie sera conservée avec l'identifiant plutôt que dans la base.",
     "tlsNote": "Syslog sur TLS (RFC 5425), sur le port 6514 sauf si l'adresse en précise un autre. Les messages sont délimités par comptage d'octets, comme le collecteur l'attend.",
     "caCert": "Certificat de CA (PEM)",
     "caCertHint": "Laisser vide pour utiliser le magasin de confiance du système. Coller un certificat pour faire confiance à une CA interne.",

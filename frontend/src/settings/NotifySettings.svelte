@@ -369,6 +369,7 @@
         <h4 class="grp-head">{$_('notify.grpEndpoint')}</h4>
         <label class="fld"><span>URL</span>
           <input type="text" bind:value={editingSink.webhook.url} placeholder="https://hooks.example.com/snmplens" />
+          <span class="sub">{$_('notify.urlSecretHint')}</span>
         </label>
         <div class="fld-row">
           <label class="fld"><span>{$_('notify.method')}</span>
