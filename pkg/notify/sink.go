@@ -2,7 +2,6 @@ package notify
 
 import (
 	"encoding/base64"
-	"errors"
 	"os"
 	"strings"
 
@@ -113,8 +112,27 @@ func scrubSecret(err error, secret string) error {
 	if cleaned == msg {
 		return err
 	}
-	return errors.New(cleaned)
+	return &scrubbedError{msg: cleaned, err: err}
 }
+
+// scrubbedError shows the cleaned text and keeps the original in the chain.
+//
+// Returning a bare errors.New would be simpler and would lose the reply code:
+// `Permanent` classifies by the *textproto.Error or *HTTPStatusError underneath,
+// so a 535 whose message happened to echo the password would fall through to
+// the text heuristics, be read as transient, and be retried six times against
+// an account that is one attempt from being locked.
+//
+// The wrapped error still holds the secret in its own fields. Nothing may print
+// it: read the CODE from what errors.As returns, never the message. Error()
+// here is the only text that reaches notify_outbox.last_error.
+type scrubbedError struct {
+	msg string
+	err error
+}
+
+func (e *scrubbedError) Error() string { return e.msg }
+func (e *scrubbedError) Unwrap() error { return e.err }
 
 // secretForms is every spelling of a credential that can appear in an error.
 //

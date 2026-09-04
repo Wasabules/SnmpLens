@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"log"
 	"mime"
 	"net"
 	"net/smtp"
@@ -192,10 +193,33 @@ func (m EmailSink) Send(e events.Event, subject, body string) (err error) {
 	if err := client.Mail(cfg.From); err != nil {
 		return fmt.Errorf("MAIL FROM: %w", err)
 	}
+	// A refused recipient loses that recipient, not the alert.
+	//
+	// This used to return on the first refusal, so a `To:` list of the on-call
+	// team plus one colleague who has left delivered to NOBODY — and 550 is
+	// permanent, so it was dead-lettered without a single retry. The one dead
+	// mailbox that a mail admin will get round to is exactly the kind of thing
+	// that is still there at 03:00.
+	var accepted int
+	var refused error
 	for _, to := range cfg.To {
-		if err := client.Rcpt(strings.TrimSpace(to)); err != nil {
-			return fmt.Errorf("RCPT TO %s: %w", to, err)
+		to = strings.TrimSpace(to)
+		if err := client.Rcpt(to); err != nil {
+			if refused == nil {
+				refused = fmt.Errorf("RCPT TO %s: %w", to, err)
+			}
+			log.Printf("notify: %s refused %s: %v", cfg.Host, to, err)
+			continue
 		}
+		accepted++
+	}
+	if accepted == 0 {
+		// Nobody is left to deliver to. Reporting success would hide a mail
+		// path that is entirely dead.
+		if refused != nil {
+			return refused
+		}
+		return fmt.Errorf("no recipients")
 	}
 
 	w, err := client.Data()

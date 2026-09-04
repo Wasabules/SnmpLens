@@ -236,10 +236,29 @@ func (w WebhookSink) Send(e events.Event, subject, body string) error {
 			resp.Status, resp.Header.Get("Location")))
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return w.scrub(fmt.Errorf("webhook returned %s: %s", resp.Status, strings.TrimSpace(string(snippet))))
+		return w.scrub(&HTTPStatusError{
+			Code: resp.StatusCode,
+			Msg: fmt.Sprintf("webhook returned %s: %s", resp.Status,
+				strings.TrimSpace(string(snippet))),
+		})
 	}
 	return nil
 }
+
+// HTTPStatusError carries the status a receiver actually returned.
+//
+// Whether a delivery is retried used to be decided by searching the error TEXT,
+// and that text ends with a snippet of the receiver's response body — which the
+// receiver writes. A 503 from a load balancer whose error page says "invalid
+// upstream" was classified permanent and the alert was thrown away on the first
+// attempt; a proxy quoting "returned 401 from origin" did the same. The code is
+// the only part of the answer we can trust to mean what it says.
+type HTTPStatusError struct {
+	Code int
+	Msg  string
+}
+
+func (e *HTTPStatusError) Error() string { return e.Msg }
 
 // scrub removes the sink's credential from an error before it is returned.
 //

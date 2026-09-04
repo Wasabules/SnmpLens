@@ -2,6 +2,8 @@ package notify
 
 import (
 	"errors"
+	"fmt"
+	"net/textproto"
 	"sync"
 	"testing"
 	"time"
@@ -101,7 +103,12 @@ func TestDrainRetriesTransientFailure(t *testing.T) {
 // gives up immediately.
 func TestDrainDeadLettersPermanentFailure(t *testing.T) {
 	q := &fakeQueue{pending: []Queued{queued(3, 0)}}
-	sink := &fakeSink{err: errors.New("smtp auth: 535 authentication failed")}
+	// A real SMTP failure carries the reply code: net/smtp returns a
+	// *textproto.Error from every command, and that is what the classification
+	// reads. A synthetic string would only test the text heuristic that the
+	// receiver used to control.
+	sink := &fakeSink{err: fmt.Errorf("smtp auth: %w",
+		&textproto.Error{Code: 535, Msg: "5.7.8 authentication failed"})}
 	d := NewDispatcher(q, func(string) (Sink, bool) { return sink, true }, time.Hour)
 
 	d.Drain()
@@ -176,14 +183,22 @@ func TestPermanentClassification(t *testing.T) {
 	if Permanent(nil) {
 		t.Error("nil is not a permanent failure")
 	}
-	if !Permanent(errors.New("webhook returned 401 Unauthorized")) {
+	if !Permanent(&HTTPStatusError{Code: 401, Msg: "webhook returned 401 Unauthorized"}) {
 		t.Error("401 should not be retried")
 	}
-	if Permanent(errors.New("webhook returned 503 Service Unavailable")) {
+	if Permanent(&HTTPStatusError{Code: 503, Msg: "webhook returned 503 Service Unavailable"}) {
 		t.Error("503 is transient and must be retried")
 	}
 	if !Permanent(errors.New("webhook URL is empty")) {
 		t.Error("a misconfiguration cannot fix itself by retrying")
+	}
+
+	// An error carrying no code at all is RETRIED. That is the safe direction:
+	// six attempts against a doomed delivery cost half an hour of backoff,
+	// while discarding one loses the incident. Anything we can be sure about
+	// arrives with a reply code.
+	if Permanent(errors.New("something went wrong on the way out")) {
+		t.Error("an unrecognised error was thrown away rather than retried")
 	}
 }
 

@@ -45,8 +45,14 @@ type smtpServer struct {
 	offerSTARTTLS bool
 	// implicit runs TLS from the first byte, as port 465 does.
 	implicit bool
-	tlsCfg   *tls.Config
-	ln       net.Listener
+	// rejectRcpt maps a recipient address to the reply it gets instead of
+	// "250 ok" — a mailbox that no longer exists, a relay refusing to accept
+	// for that domain. Empty means every recipient is accepted.
+	rejectRcpt map[string]string
+	// authReply overrides the reply to AUTH. Empty means "235 authenticated".
+	authReply string
+	tlsCfg    *tls.Config
+	ln        net.Listener
 }
 
 func newSMTPServer(t *testing.T, certPEM, keyPEM []byte, implicit, offerSTARTTLS bool) *smtpServer {
@@ -185,6 +191,10 @@ func (s *smtpServer) handle(conn net.Conn) {
 					sess.Username, sess.Password = parts[1], parts[2]
 				}
 			}
+			if s.authReply != "" {
+				say(s.authReply)
+				break
+			}
 			say("235 authenticated")
 
 		case strings.HasPrefix(upper, "AUTH LOGIN"):
@@ -209,7 +219,12 @@ func (s *smtpServer) handle(conn net.Conn) {
 			say("250 ok")
 
 		case strings.HasPrefix(upper, "RCPT TO"):
-			sess.Rcpt = append(sess.Rcpt, extractAddress(line))
+			addr := extractAddress(line)
+			if reply, refused := s.rejectRcpt[addr]; refused {
+				say(reply)
+				break
+			}
+			sess.Rcpt = append(sess.Rcpt, addr)
 			say("250 ok")
 
 		case strings.HasPrefix(upper, "DATA"):

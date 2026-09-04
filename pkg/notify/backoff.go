@@ -3,6 +3,8 @@ package notify
 import (
 	"errors"
 	"net"
+	"net/http"
+	"net/textproto"
 	"strings"
 	"time"
 )
@@ -40,19 +42,41 @@ func Permanent(err error) bool {
 	if errors.As(err, &netErr) {
 		return false
 	}
+	// A reply code the peer actually SENT, in preference to anything it wrote.
+	// The error text carries whatever the peer said — an SMTP greeting, an
+	// HTTP error page — and matching words in it gave the receiver a vote on
+	// whether its own outage was worth retrying. "454 4.7.0 Temporary
+	// authentication failure" contains "authentication"; a 503 from a load
+	// balancer routinely contains "invalid".
+	var smtpErr *textproto.Error
+	if errors.As(err, &smtpErr) {
+		// RFC 5321 4.2.1: 4yz is transient and the client should try again;
+		// 5yz is permanent. Retrying bad credentials six times just locks the
+		// account, and giving up on an overloaded relay loses the incident.
+		return smtpErr.Code >= 500
+	}
+
+	var httpErr *HTTPStatusError
+	if errors.As(err, &httpErr) {
+		switch httpErr.Code {
+		case http.StatusRequestTimeout, http.StatusTooEarly, http.StatusTooManyRequests:
+			// The receiver asked to be tried again, in those words.
+			return false
+		}
+		// A 4xx means this request will never be accepted; a 5xx is the
+		// receiver's problem and is usually over by the next attempt.
+		return httpErr.Code >= 400 && httpErr.Code < 500
+	}
+
+	// Everything left is ours: a configuration that cannot produce a request at
+	// all. Retrying an empty host six times helps nobody.
 	msg := strings.ToLower(err.Error())
 	switch {
-	case strings.Contains(msg, "authentication"), strings.Contains(msg, "auth "),
-		strings.Contains(msg, "535"), // SMTP: bad credentials
-		strings.Contains(msg, "550"), // SMTP: mailbox unavailable
-		strings.Contains(msg, "553"), // SMTP: bad address
-		strings.Contains(msg, "invalid"),
-		strings.Contains(msg, "is empty"),
+	case strings.Contains(msg, "is empty"),
 		strings.Contains(msg, "incomplete"),
 		strings.Contains(msg, "unknown smtp auth"),
-		strings.Contains(msg, "returned 400"), strings.Contains(msg, "returned 401"),
-		strings.Contains(msg, "returned 403"), strings.Contains(msg, "returned 404"),
-		strings.Contains(msg, "returned 422"):
+		strings.Contains(msg, "not a valid"),
+		strings.Contains(msg, "redirects are not followed"):
 		return true
 	}
 	return false
