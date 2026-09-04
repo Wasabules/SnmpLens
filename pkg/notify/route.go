@@ -137,6 +137,29 @@ func atoi(s string) (int, bool) {
 	return n, true
 }
 
+// oidHasPrefix reports whether oid sits at or under prefix, comparing
+// SUB-IDENTIFIERS rather than characters.
+//
+// `strings.HasPrefix` reads a dotted-decimal OID as text, and the two disagree
+// exactly where it matters: 1.3.6.1.2.1.2 is `interfaces` and 1.3.6.1.2.1.25 is
+// `host` — a different subtree that merely starts with the same characters. A
+// route meant for interface traps also fired for every host, printer and
+// disk-storage event on the network, which is worse than not firing: the rule
+// looks like it works.
+//
+// The leading dot is not part of the identifier. gosnmp hands back every
+// varbind name with one (measured: ".1.3.6.1.6.3.1.1.4.1.0"), while the UI
+// placeholder and everything a user types has none, so a trap rule matched
+// nothing at all until both ends were trimmed.
+func oidHasPrefix(oid, prefix string) bool {
+	oid = strings.TrimLeft(oid, ".")
+	prefix = strings.TrimLeft(prefix, ".")
+	if oid == "" || prefix == "" {
+		return prefix == ""
+	}
+	return oid == prefix || strings.HasPrefix(oid, prefix+".")
+}
+
 // Matches reports whether the event satisfies the rule at time now.
 func (m RouteMatch) Matches(e events.Event, now time.Time) bool {
 	if !matchesAny(m.Categories, e.Category) {
@@ -159,7 +182,7 @@ func (m RouteMatch) Matches(e events.Event, now time.Time) bool {
 	if !matchesSource(m.Sources, e.Source) {
 		return false
 	}
-	if m.OIDPrefix != "" && !strings.HasPrefix(e.OID, m.OIDPrefix) {
+	if m.OIDPrefix != "" && !oidHasPrefix(e.OID, m.OIDPrefix) {
 		return false
 	}
 	if m.Contains != "" && !strings.Contains(strings.ToLower(e.Summary), strings.ToLower(m.Contains)) {

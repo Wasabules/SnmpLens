@@ -149,6 +149,31 @@ func (c *Client) handleTrap(packet *gosnmp.SnmpPacket, addr *net.UDPAddr) {
 	runtime.EventsEmit(c.ctx, "newTrap", trapData)
 }
 
+// snmpTrapOIDInstance is snmpTrapOID.0, the second varbind RFC 3416 requires in
+// every v2c/v3 notification.
+const snmpTrapOIDInstance = "1.3.6.1.6.3.1.1.4.1.0"
+
+// trapOIDFrom picks the trap OID out of a notification's varbinds.
+//
+// This used to look for the TEXT "snmpTrapOID" in each varbind name, and gosnmp
+// does no MIB translation — a varbind name is always numeric. Measured:
+// Name=".1.3.6.1.6.3.1.1.4.1.0" contains snmpTrapOID = false. So EVERY v2c and
+// v3 trap was journalled with an empty OID: an OID-prefix rule could not match
+// one, {{trapOid}} rendered nothing, and every trap from a host shared a single
+// dedup key regardless of what it reported.
+//
+// The name form is still accepted, because handleTrap synthesises exactly one
+// varbind called "snmpTrapOID.0" for v1, which has no such varbind on the wire.
+func trapOIDFrom(vars []Result) string {
+	for _, v := range vars {
+		name := strings.TrimLeft(v.Oid, ".")
+		if name == snmpTrapOIDInstance || strings.HasPrefix(v.Oid, "snmpTrapOID") {
+			return fmt.Sprintf("%v", v.Value)
+		}
+	}
+	return ""
+}
+
 // recordTrap writes a received trap to the event journal. The full varbind list
 // goes to the payload side so listing the journal never reads it.
 func (c *Client) recordTrap(source, ts, pduType string, packet *gosnmp.SnmpPacket, vars []Result) {
@@ -157,14 +182,9 @@ func (c *Client) recordTrap(source, ts, pduType string, packet *gosnmp.SnmpPacke
 		kind = events.KindTrapInform
 	}
 
-	// A trap's identity for deduplication is its source plus its trap OID.
-	trapOID := ""
-	for _, v := range vars {
-		if strings.Contains(v.Oid, "snmpTrapOID") {
-			trapOID = fmt.Sprintf("%v", v.Value)
-			break
-		}
-	}
+	// A trap's identity — for deduplication, for an OID-prefix route rule and
+	// for {{trapOid}} in a message template — is its source plus its trap OID.
+	trapOID := trapOIDFrom(vars)
 
 	payload, err := json.Marshal(vars)
 	if err != nil {
