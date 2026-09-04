@@ -89,6 +89,26 @@ func tlsConfigFor(cfg SyslogConfig, clientKeyPEM string) (*tls.Config, error) {
 	return out, nil
 }
 
+// ValidateTLSMaterial checks a syslog sink's certificates and key without
+// dialling anything.
+//
+// NotifySaveSink gates the message template and the webhook payload precisely
+// so a broken sink is not discovered at 03:00 — and never checked any of this.
+// Measured, all four surface only at send: a client certificate whose key does
+// not match gives "tls: private key does not match public key"; a stored secret
+// that is not PEM gives "failed to find any PEM data in key input"; a cleared
+// certificate with the key still in pkg/secrets gives "a client private key was
+// configured but its certificate is missing"; a malformed CA bundle gives "the
+// CA certificate is not valid PEM". Permanent() is false for every one, so each
+// routed event retried six times and dead-lettered.
+func ValidateTLSMaterial(cfg SyslogConfig, clientKeyPEM string) error {
+	if !strings.EqualFold(strings.TrimSpace(cfg.Protocol), "tls") {
+		return nil
+	}
+	_, err := tlsConfigFor(cfg, clientKeyPEM)
+	return err
+}
+
 // withDefaultPort appends the RFC5425 port when the address carries none, so
 // "collector.example.com" reaches 6514 rather than failing to parse.
 func withDefaultPort(address, port string) string {

@@ -1091,6 +1091,24 @@ func (a *App) NotifySaveSink(cfg notify.SinkConfig) (notify.SinkConfig, error) {
 	if err := notify.ValidatePayloadTemplate(cfg); err != nil {
 		return notify.SinkConfig{}, err
 	}
+	// The same reasoning, for syslog over TLS: a certificate whose key does not
+	// match, a secret that is not PEM, a certificate cleared while its key stays
+	// in the store. All four surface only at send, none is classified permanent,
+	// so every routed event retried six times and dead-lettered — starting at
+	// the first incident after the save.
+	//
+	// The key comes from the store when the form did not carry one, because an
+	// edit that changes the address must be checked against the key already
+	// held rather than against nothing.
+	if cfg.Kind == notify.SinkSyslog {
+		key := cfg.Secret
+		if key == "" && cfg.ID != "" {
+			key = a.sinkSecret(cfg.ID)
+		}
+		if err := notify.ValidateTLSMaterial(cfg.Syslog, key); err != nil {
+			return notify.SinkConfig{}, err
+		}
+	}
 	if a.storage == nil {
 		return cfg, fmt.Errorf("storage not initialized")
 	}
@@ -1344,6 +1362,13 @@ func (a *App) NotifyListRoutes() ([]notify.Route, error) {
 func (a *App) NotifySaveRoute(r notify.Route) (notify.Route, error) {
 	if a.storage == nil {
 		return r, fmt.Errorf("storage not initialized")
+	}
+	// A source pattern that cannot match anything is a mistake, and every
+	// failure path in matching ends at "no match" with no error — so a rule
+	// meant to cover the whole estate delivered nothing and neither the save
+	// nor the rule list said a word. "10.0.0/8" is the typo that does it.
+	if errs := notify.ValidateSourcePatterns(r.Match.Sources); len(errs) > 0 {
+		return r, fmt.Errorf("%s", errs[0])
 	}
 	return a.storage.SaveRoute(r)
 }

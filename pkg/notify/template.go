@@ -792,6 +792,24 @@ func SampleEvent(kind string) events.Event {
 		base.Summary = "10.0.0.1 stopped answering in session WAN Paris"
 		base.DedupKey = "reach|9f2c|10.0.0.1"
 		base.Params = map[string]any{"source": "10.0.0.1", "session": "WAN Paris"}
+	case events.CategorySystem:
+		// A first-class routable category with no sample: the default branch
+		// returned a THRESHOLD event, so ValidatePayloadTemplate never checked a
+		// template against the shape system events actually have, and the
+		// preview showed the operator a threshold alert when they asked for a
+		// system one. A real dead letter leaves 8 of the 22 variables empty —
+		// appVersion, corrId, dedupKey, oid, sessionId, sessionName, source,
+		// value — and a template using any of them saves cleanly, then renders
+		// invalid JSON the first time a delivery fails.
+		base.Category, base.Kind = events.CategorySystem, events.KindSystemSinkDeadLetter
+		base.Severity, base.State, base.Value = "major", events.StateOneshot, nil
+		base.Source, base.SessionName, base.SessionID, base.CorrID = "", "", "", ""
+		base.DedupKey = ""
+		base.Summary = "Delivery to NOC webhook given up: webhook returned 503 Service Unavailable"
+		base.Params = map[string]any{
+			"sink": "NOC webhook", "attempts": 6,
+			"error": "webhook returned 503 Service Unavailable",
+		}
 	default:
 		base.Category, base.Kind = events.CategoryThreshold, events.KindThresholdOpened
 		base.OID = "1.3.6.1.2.1.2.2.1.10.1"

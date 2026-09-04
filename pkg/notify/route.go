@@ -12,6 +12,9 @@
 package notify
 
 import (
+	"errors"
+	"fmt"
+	"net"
 	"net/netip"
 	"path"
 	"strings"
@@ -74,10 +77,18 @@ func matchesSource(patterns []string, source string) bool {
 	if len(patterns) == 0 {
 		return true
 	}
-	addr, addrErr := netip.ParseAddr(source)
+	addr, addrErr := sourceAddr(source)
 	for _, p := range patterns {
 		if prefix, err := netip.ParsePrefix(p); err == nil {
-			if addrErr == nil && prefix.Contains(addr) {
+			if addrErr != nil {
+				continue
+			}
+			// A zero-length prefix is how an operator writes "every device".
+			// netip's Contains refuses ACROSS FAMILIES, so 0.0.0.0/0 lost every
+			// IPv6 trap and ::/0 lost every IPv4 one — the two patterns that
+			// look most like "everything" were the two that quietly halved the
+			// estate.
+			if prefix.Bits() == 0 || prefix.Contains(addr) {
 				return true
 			}
 			continue
@@ -90,6 +101,58 @@ func matchesSource(patterns []string, source string) bool {
 		}
 	}
 	return false
+}
+
+// sourceAddr parses an event source as an address, tolerating a port.
+//
+// Traps arrive as a bare address, but a monitoring session's target is whatever
+// the operator typed, and "10.0.0.5:161" — or "[2001:db8::1]:161" — is a normal
+// thing to type. Without this, such a source never matched any CIDR at all.
+func sourceAddr(source string) (netip.Addr, error) {
+	if addr, err := netip.ParseAddr(source); err == nil {
+		return addr.Unmap(), nil
+	}
+	if host, _, err := net.SplitHostPort(source); err == nil {
+		if addr, err := netip.ParseAddr(host); err == nil {
+			return addr.Unmap(), nil
+		}
+	}
+	return netip.Addr{}, errNotAnAddress
+}
+
+var errNotAnAddress = errors.New("not an address")
+
+// ValidateSourcePatterns reports the patterns that cannot match anything.
+//
+// Every failure path in matchesSource ends at "no match" with no error, so a
+// rule meant to cover the whole estate silently delivered nothing and neither
+// the save nor the rule list said a word. Measured: "10.0.0/8" — a plausible
+// typo — against "10.4.5.6" is false; so are "10.0.0.0/33" and "sw-[a".
+//
+// A pattern is judged by what it LOOKS like, because that is what the operator
+// meant: anything with a slash is read as a CIDR and must parse as one, and
+// anything with glob metacharacters must be a valid glob. Everything else is a
+// literal hostname or address, which cannot be wrong.
+func ValidateSourcePatterns(patterns []string) []string {
+	var errs []string
+	for _, p := range patterns {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if strings.Contains(p, "/") {
+			if _, err := netip.ParsePrefix(p); err != nil {
+				errs = append(errs, fmt.Sprintf("%q is not a valid address range: %v", p, err))
+			}
+			continue
+		}
+		if strings.ContainsAny(p, "*?[") {
+			if _, err := path.Match(p, "probe"); err != nil {
+				errs = append(errs, fmt.Sprintf("%q is not a valid pattern: %v", p, err))
+			}
+		}
+	}
+	return errs
 }
 
 // inWindow reports whether t falls inside w, which may wrap past midnight.

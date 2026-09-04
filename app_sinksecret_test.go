@@ -216,3 +216,79 @@ func TestListingWithNoDatabaseIsAnError(t *testing.T) {
 		t.Error("NotifyListDeliveries answered an empty list and no error")
 	}
 }
+
+// A syslog TLS sink that can never deliver must be refused at save time.
+//
+// NotifySaveSink gates the message template and the webhook payload precisely
+// so a broken sink is not discovered at 03:00, and checked none of the TLS
+// material. Measured, all four surface only at send and none is classified
+// permanent, so every routed event retried six times and dead-lettered.
+func TestASyslogSinkWithUnusableTLSMaterialIsRefused(t *testing.T) {
+	cases := []struct {
+		name   string
+		cfg    notify.SyslogConfig
+		secret string
+	}{
+		{
+			name: "a CA bundle that is not PEM",
+			cfg: notify.SyslogConfig{
+				Address: "collector.example.com:6514", Protocol: "tls",
+				CACert: "this is not a certificate",
+			},
+		},
+		{
+			name: "a client key with no certificate",
+			cfg: notify.SyslogConfig{
+				Address: "collector.example.com:6514", Protocol: "tls",
+			},
+			secret: "-----BEGIN PRIVATE KEY-----\nnot really\n-----END PRIVATE KEY-----\n",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			a := newTestApp(t)
+			_, err := a.NotifySaveSink(notify.SinkConfig{
+				Name: "collector", Kind: notify.SinkSyslog, Enabled: true,
+				Syslog: c.cfg, Secret: c.secret,
+			})
+			if err == nil {
+				t.Error("saved a destination that can never deliver; every routed " +
+					"event will retry six times and dead-letter")
+			}
+		})
+	}
+}
+
+// A syslog sink with no TLS at all, and one over plain TCP, must still save.
+func TestAPlainSyslogSinkStillSaves(t *testing.T) {
+	a := newTestApp(t)
+	for _, proto := range []string{"udp", "tcp"} {
+		if _, err := a.NotifySaveSink(notify.SinkConfig{
+			Name: "collector " + proto, Kind: notify.SinkSyslog, Enabled: true,
+			Syslog: notify.SyslogConfig{Address: "127.0.0.1:514", Protocol: proto},
+		}); err != nil {
+			t.Errorf("a %s syslog sink was refused: %v", proto, err)
+		}
+	}
+}
+
+// A rule whose source pattern matches nothing must be refused, not saved to
+// deliver silence.
+func TestARouteWithAMalformedSourcePatternIsRefused(t *testing.T) {
+	a := newTestApp(t)
+
+	if _, err := a.NotifySaveRoute(notify.Route{
+		Name: "the whole estate", Enabled: true,
+		Match: notify.RouteMatch{Sources: []string{"10.0.0/8"}},
+	}); err == nil {
+		t.Error("a rule whose source pattern matches nothing was accepted")
+	}
+
+	if _, err := a.NotifySaveRoute(notify.Route{
+		Name: "the whole estate", Enabled: true,
+		Match: notify.RouteMatch{Sources: []string{"10.0.0.0/8", "sw-*"}},
+	}); err != nil {
+		t.Errorf("a correct rule was refused: %v", err)
+	}
+}

@@ -347,7 +347,15 @@ func ValidatePayloadTemplate(cfg SinkConfig) error {
 	}
 	// An empty template is fine here: RenderJSONTemplate falls back to
 	// DefaultJSONPayload, so the mode always produces valid JSON.
-	for _, kind := range []string{events.CategoryThreshold, events.CategoryTrap, events.CategoryReachability} {
+	// System events are routable like any other, and they are the ones with the
+	// most fields EMPTY: a dead letter carries no source, no session and no
+	// value. A template naming those saved cleanly and then produced invalid
+	// JSON the first time a delivery failed — which is exactly when the
+	// operator needs it to work.
+	for _, kind := range []string{
+		events.CategoryThreshold, events.CategoryTrap,
+		events.CategoryReachability, events.CategorySystem,
+	} {
 		_, body := RenderJSONTemplate(SampleEvent(kind), cfg.Name, cfg.Template)
 		if !json.Valid([]byte(strings.TrimSpace(body))) {
 			return fmt.Errorf("the payload is not valid JSON once a %s event is rendered into it", kind)
