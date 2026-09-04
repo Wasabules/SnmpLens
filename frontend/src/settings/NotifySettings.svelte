@@ -359,6 +359,9 @@
               placeholder={editingSink.hasSecret ? $_('notify.secretOnFile') : '-----BEGIN PRIVATE KEY-----'}></textarea>
             <span class="sub">{$_('notify.secretHint', { values: { backend } })}</span>
           </label>
+          {#if editingSink.hasSecret}
+            <button type="button" class="btn-mode" on:click={() => clearSecret(editingSink.id)}>{$_('notify.clearSecret')}</button>
+          {/if}
         {:else}
           <p class="note">{$_('notify.udpNote')}</p>
         {/if}
@@ -379,6 +382,9 @@
             <input type="password" bind:value={editingSink.secret}
               placeholder={editingSink.hasSecret ? $_('notify.secretOnFile') : ''} />
           </label>
+          {#if editingSink.hasSecret}
+            <button type="button" class="btn-mode" on:click={() => clearSecret(editingSink.id)}>{$_('notify.clearSecret')}</button>
+          {/if}
         </div>
         <span class="sub">{$_('notify.secretHint', { values: { backend } })}</span>
         <h4 class="grp-head">{$_('notify.grpPayload')}</h4>
@@ -466,6 +472,9 @@
             <input type="password" bind:value={editingSink.secret}
               placeholder={editingSink.hasSecret ? $_('notify.secretOnFile') : ''} />
           </label>
+          {#if editingSink.hasSecret}
+            <button type="button" class="btn-mode" on:click={() => clearSecret(editingSink.id)}>{$_('notify.clearSecret')}</button>
+          {/if}
         </div>
         <h4 class="grp-head">{$_('notify.grpEnvelope')}</h4>
         <label class="fld"><span>{$_('notify.from')}</span>
@@ -476,9 +485,6 @@
             on:input={(e) => (editingSink.email.toRaw = e.target.value)} placeholder="noc@example.com, oncall@example.com" />
         </label>
         <p class="note">{$_('notify.secretHint', { values: { backend } })}</p>
-        {#if editingSink.hasSecret}
-          <button class="btn-mode" on:click={() => clearSecret(editingSink.id)}>{$_('notify.clearSecret')}</button>
-        {/if}
 
         <h4 class="grp-head">{$_('notify.grpTrust')}</h4>
         {#if editingSink.email.encryption !== 'none'}

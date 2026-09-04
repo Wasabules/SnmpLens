@@ -1093,7 +1093,16 @@ func (a *App) NotifySaveSink(cfg notify.SinkConfig) (notify.SinkConfig, error) {
 
 	// An empty field means "leave the stored credential alone", not "clear it":
 	// the UI never receives the current value, so it cannot echo it back.
-	if incoming != "" && a.secrets != nil {
+	if incoming != "" {
+		// A credential with nowhere to go is a FAILURE, not a no-op. The guard
+		// used to be `incoming != "" && a.secrets != nil`, so with no protector
+		// — a locked keychain, a config directory that cannot be written — the
+		// typed token was silently dropped and the save reported success. The
+		// operator sees the destination saved, believes the token is held, and
+		// finds out at 03:00 when the webhook posts unauthenticated.
+		if a.secrets == nil {
+			return saved, fmt.Errorf("saved the destination, but its credential could not be stored: %s", a.SecretsBackend())
+		}
 		if err := a.secrets.Set(secrets.SinkRef(saved.ID), incoming); err != nil {
 			return saved, fmt.Errorf("saved the destination but could not store its credential: %w", err)
 		}
@@ -1111,10 +1120,26 @@ func (a *App) NotifyClearSinkSecret(sinkID string) error {
 	return a.secrets.Delete(secrets.SinkRef(sinkID))
 }
 
-// NotifyDeleteSink removes a destination.
+// NotifyDeleteSink removes a destination AND the credential it named.
+//
+// Deleting the row alone left the bearer token or SMTP password in DPAPI, the
+// Keychain or the file store forever — a credential the operator believes they
+// deleted, outliving the thing that named it, under a key nothing in the app
+// will ever look up again.
+//
+// The credential goes first, because that is the part that cannot be retried
+// once the row is gone: if the store refuses — a locked keychain — the
+// destination stays and the operator can try again after unlocking. With no
+// store at all there is nothing that could have been written, so the deletion
+// proceeds.
 func (a *App) NotifyDeleteSink(id string) error {
 	if a.storage == nil {
 		return fmt.Errorf("storage not initialized")
+	}
+	if a.secrets != nil {
+		if err := a.secrets.Delete(secrets.SinkRef(id)); err != nil {
+			return fmt.Errorf("the destination was kept: its stored credential could not be removed: %w", err)
+		}
 	}
 	return a.storage.DeleteSink(id)
 }
