@@ -40,6 +40,21 @@ function createMibEditorStore() {
   // written; open() never did.
   let openToken = 0;
 
+  /**
+   * The name a source's draft is filed under.
+   *
+   * An externally opened MIB is keyed by its full path rather than its bare
+   * name: `/downloads/IF-MIB` and `mibs/IF-MIB` are different files, and both
+   * filed a draft called "IF-MIB" — so one silently recovered the other's
+   * unsaved work. The separators are flattened because the name becomes a file
+   * name in mib-drafts/.
+   */
+  function draftKey(source) {
+    if (!source) return '';
+    if (!source.external) return source.name;
+    return 'ext_' + String(source.path || source.name).replace(/[^A-Za-z0-9._-]+/g, '_');
+  }
+
   function isDirty(state) {
     return state.source !== null && state.buffer !== state.source.content;
   }
@@ -92,7 +107,7 @@ function createMibEditorStore() {
     openToken++;
     clearTimeout(draftTimer);
     set({ ...EMPTY, source, buffer: source.content, diagnostics: source.diagnostics || [] });
-    discardDraft(source?.name);
+    discardDraft(draftKey(source));
   }
 
   function setBuffer(buffer) {
@@ -152,18 +167,18 @@ function createMibEditorStore() {
     clearTimeout(draftTimer);
     const s = get({ subscribe });
     if (!s.source) return;
-    const name = s.source.name;
+    const key = draftKey(s.source);
 
     draftTimer = setTimeout(async () => {
       const now = get({ subscribe });
       // Still the same file? If not, that file's draft was already settled
       // when it was closed.
-      if (!now.source || now.source.name !== name) return;
+      if (!now.source || draftKey(now.source) !== key) return;
       try {
         if (isDirty(now)) {
-          await MibEditorSaveDraft(name, now.buffer);
+          await MibEditorSaveDraft(key, now.buffer);
         } else {
-          await MibEditorDiscardDraft(name);
+          await MibEditorDiscardDraft(key);
         }
       } catch (e) {
         // A draft is a safety net, not a feature; failing to write one must
@@ -188,7 +203,13 @@ function createMibEditorStore() {
     if (!s.source) return;
     try {
       if (isDirty(s)) {
-        await MibEditorSaveDraft(s.source.name, s.buffer);
+        await MibEditorSaveDraft(draftKey(s.source), s.buffer);
+      } else {
+        // Clean: DISCARD, do not merely skip. Typing, then undoing back to
+        // the file, then switching within the debounce left an OLDER draft on
+        // disk, so the next open recovered text the user had deliberately
+        // undone. The scheduled writer discards for the same reason.
+        await MibEditorDiscardDraft(draftKey(s.source));
       }
     } catch (e) {
       // Same reason as the scheduled write: never block a file switch.
@@ -235,7 +256,7 @@ function createMibEditorStore() {
     // the only copy of the difference.
     if (s.source && content === s.buffer) {
       try {
-        await MibEditorDiscardDraft(s.source.name);
+        await MibEditorDiscardDraft(draftKey(s.source));
       } catch (e) {
         /* nothing recoverable to do */
       }
@@ -245,9 +266,9 @@ function createMibEditorStore() {
   // Reverting is a decision, so the draft goes NOW rather than in a second and
   // a bit — long enough to leave the file and have it survive.
   function revert() {
-    const name = get({ subscribe }).source?.name;
+    const key = draftKey(get({ subscribe }).source);
     update((s) => (s.source ? { ...s, buffer: s.source.content, diagnostics: s.source.diagnostics || [] } : s));
-    discardDraft(name);
+    discardDraft(key);
   }
 
   function close() {

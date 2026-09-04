@@ -263,4 +263,60 @@ check('a pending draft is not written under the newly opened file',
     drafts['I-MIB'] === undefined, JSON.stringify(drafts));
 }
 
+
+// --- undoing back to the file must not leave an older draft behind ---
+//
+// Type (a draft is written), undo everything so the buffer IS the file, then
+// switch inside the debounce. The flush skipped the write because nothing was
+// dirty — and left the EARLIER draft on disk, so the next open recovered text
+// the user had deliberately undone.
+{
+  drafts = {};
+  await mibEditorStore.open('J-MIB');
+  const original = get(mibEditorStore).source.content;
+
+  mibEditorStore.setBuffer(original + 'typed then undone');
+  await new Promise((r) => setTimeout(r, 1300));   // let the debounce write it
+  check('the draft was written while dirty', !!drafts['J-MIB'], JSON.stringify(drafts));
+
+  mibEditorStore.setBuffer(original);              // undo back to the file
+  await mibEditorStore.open('K-MIB');              // switch inside the debounce
+  await new Promise((r) => setTimeout(r, 30));
+
+  check('the stale draft is discarded when the buffer is back to the file',
+    !drafts['J-MIB'], JSON.stringify(drafts));
+
+  const again = await mibEditorStore.open('J-MIB');
+  check('and reopening does not resurrect the undone text',
+    !again.recovered && get(mibEditorStore).buffer === original,
+    get(mibEditorStore).buffer.slice(0, 40));
+}
+
+// --- an external file does not share a draft with a MIB of the same name ---
+//
+// Both were filed under the bare name, so /downloads/L-MIB and mibs/L-MIB
+// wrote the same draft and one recovered the other's unsaved work.
+{
+  drafts = {};
+  await mibEditorStore.open('L-MIB');
+  const inside = get(mibEditorStore).source.content;
+  mibEditorStore.setBuffer(inside + 'work on the one in mibs/');
+  await new Promise((r) => setTimeout(r, 1300));
+  const insideKey = Object.keys(drafts)[0];
+  check('the file in the MIB directory is keyed by its name',
+    insideKey === 'L-MIB', JSON.stringify(drafts));
+
+  mibEditorStore.openSource({
+    name: 'L-MIB', path: 'C:/downloads/L-MIB', external: true,
+    content: 'L-MIB from outside', sha256: 'h', diagnostics: [],
+  });
+  mibEditorStore.setBuffer('L-MIB from outside, edited');
+  await new Promise((r) => setTimeout(r, 1300));
+
+  const keys = Object.keys(drafts);
+  check('the external file gets a key of its own', keys.length === 2, JSON.stringify(keys));
+  check('and it is not the bare name', keys.filter((k) => k === 'L-MIB').length === 1,
+    JSON.stringify(keys));
+}
+
 process.exit(failures ? 1 : 0);

@@ -643,7 +643,16 @@
 
   function insertSnippet(snippet) {
     showSnippets = false;
-    insertAtCaret(snippet.text.replace(/\$\{name\}/g, 'myObject'));
+    // ${Name} is the capitalised form: an SMI TYPE reference must start with
+    // an upper-case letter, so the table snippet's SEQUENCE type cannot reuse
+    // the object prefix verbatim.
+    const name = 'myObject';
+    const Name = name.charAt(0).toUpperCase() + name.slice(1);
+    insertAtCaret(
+      snippet.text
+        .replace(/\$\{Name\}/g, Name)
+        .replace(/\$\{name\}/g, name),
+    );
   }
 
   // The mirror only stays under the text if it scrolls with it.

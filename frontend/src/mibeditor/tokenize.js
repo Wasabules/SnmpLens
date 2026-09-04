@@ -243,8 +243,16 @@ export const SNIPPETS = [
   },
   {
     key: 'table',
+    // A table that LOADS.
+    //
+    // This used to emit the table and its row and nothing else: no SEQUENCE
+    // type, so `SYNTAX <name>Entry` referred to nothing; no columns; and an
+    // INDEX naming an object that did not exist. Inserting it produced a MIB
+    // that cannot resolve, which is the opposite of what a snippet is for.
+    // The row's SYNTAX also has to be the CAPITALISED type name — SMI type
+    // references start with an upper-case letter.
     text: `${'${name}'}Table OBJECT-TYPE
-    SYNTAX      SEQUENCE OF ${'${name}'}Entry
+    SYNTAX      SEQUENCE OF ${'${Name}'}Entry
     MAX-ACCESS  not-accessible
     STATUS      current
     DESCRIPTION
@@ -252,13 +260,34 @@ export const SNIPPETS = [
     ::= { parent 1 }
 
 ${'${name}'}Entry OBJECT-TYPE
-    SYNTAX      ${'${name}'}Entry
+    SYNTAX      ${'${Name}'}Entry
     MAX-ACCESS  not-accessible
     STATUS      current
     DESCRIPTION
         "One row."
     INDEX   { ${'${name}'}Index }
     ::= { ${'${name}'}Table 1 }
+
+${'${Name}'}Entry ::= SEQUENCE {
+    ${'${name}'}Index    Integer32,
+    ${'${name}'}Descr    DisplayString
+}
+
+${'${name}'}Index OBJECT-TYPE
+    SYNTAX      Integer32 (1..2147483647)
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Identifies a row."
+    ::= { ${'${name}'}Entry 1 }
+
+${'${name}'}Descr OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "What this row is."
+    ::= { ${'${name}'}Entry 2 }
 `,
   },
   {

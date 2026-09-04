@@ -1,0 +1,37 @@
+demoTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF DemoEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "What this table lists."
+    ::= { parent 1 }
+
+demoEntry OBJECT-TYPE
+    SYNTAX      DemoEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "One row."
+    INDEX   { demoIndex }
+    ::= { demoTable 1 }
+
+DemoEntry ::= SEQUENCE {
+    demoIndex    Integer32,
+    demoDescr    DisplayString
+}
+
+demoIndex OBJECT-TYPE
+    SYNTAX      Integer32 (1..2147483647)
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Identifies a row."
+    ::= { demoEntry 1 }
+
+demoDescr OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "What this row is."
+    ::= { demoEntry 2 }
