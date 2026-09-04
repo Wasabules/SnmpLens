@@ -79,6 +79,26 @@ func (c *Client) StartTrapListener(port int, v3 V3Params) error {
 		c.trapListener.Params.Logger = gosnmp.NewLogger(log.New(&ringLogWriter{client: c}, "", 0))
 	}
 
+	// Enlarge the socket buffer as soon as it is bound.
+	//
+	// This is what decides whether a trap storm is recorded. Measured with a
+	// burst of 2000 datagrams: 417 journalled with the system default, 2000
+	// with 8 MiB. The loss is silent — the kernel drops the datagram before Go
+	// sees it, so there is no error, no journal entry and nothing to count.
+	//
+	// Listening() closes once the socket is bound, which is the earliest moment
+	// there is a socket to configure. In its own goroutine so a listener that
+	// never binds cannot hold up the caller.
+	listener := c.trapListener
+	go func() {
+		select {
+		case <-listener.Listening():
+			raiseTrapReadBuffer(listener, TrapReadBuffer)
+		case <-time.After(5 * time.Second):
+			log.Printf("trap listener: did not bind within 5s; leaving the default read buffer")
+		}
+	}()
+
 	go func() {
 		defer func() {
 			c.trapListener = nil
