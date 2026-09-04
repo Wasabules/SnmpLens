@@ -3,6 +3,7 @@ package storage
 import (
 	"database/sql"
 	"encoding/json"
+	"log"
 	"time"
 
 	"SnmpLens/pkg/events"
@@ -262,7 +263,34 @@ func scanDeliveries(rows *sql.Rows) ([]Delivery, error) {
 // MarkSent closes a delivery successfully. Part of notify.Queue.
 func (s *Storage) MarkSent(id int64) error {
 	_, err := s.db.Exec(`UPDATE notify_outbox SET state = 'sent', last_error = NULL, attempts = attempts + 1 WHERE id = ?`, id)
+	s.noteOutboxWrite()
 	return err
+}
+
+// noteOutboxWrite trims delivered rows every so often.
+//
+// TrimOutbox existed, was documented as the retention policy, and had NO CALLER
+// anywhere in the app — the event journal has a trimmer, the outbox had none.
+// Measured: 30 threshold breaches through the real chain left 30 'sent' rows,
+// each holding the complete event JSON plus the rendered subject and body,
+// still there after every delivery succeeded.
+//
+// That is unbounded growth and a retention surface at once: the outbox holds
+// the alert bodies of a REDACTING sink and a non-redacting one alike, in the
+// clear, in a file the app has no other reason to keep growing.
+//
+// The cadence mirrors the event trimmer for the same reason: a DELETE on every
+// delivery is work the delivery path does not need to do.
+func (s *Storage) noteOutboxWrite() {
+	s.mu.Lock()
+	s.outboxWrites++
+	shouldTrim := s.outboxWrites%64 == 0
+	s.mu.Unlock()
+	if shouldTrim {
+		if err := s.TrimOutbox(OutboxRetention); err != nil {
+			log.Printf("storage: trimming the delivery outbox failed: %v", err)
+		}
+	}
 }
 
 // MarkFailed records a failure and schedules the next attempt, or gives up. A
@@ -295,6 +323,15 @@ func (s *Storage) RetryDelivery(id int64) error {
 		WHERE id = ?`, time.Now().UTC().Format(time.RFC3339), id)
 	return err
 }
+
+// OutboxRetention is how long a DELIVERED row is kept.
+//
+// Long enough to answer "did the alert go out on Tuesday night?", short enough
+// that the rendered bodies of every alert ever sent do not accumulate in
+// monitoring.db forever. Pending and dead rows are not covered: a pending row
+// is an alert still owed, and a dead letter is the only record that one was
+// lost.
+const OutboxRetention = 14 * 24 * time.Hour
 
 // TrimOutbox drops delivered rows older than the retention window. Dead letters
 // are deliberately excluded: they are kept until the operator deals with them.

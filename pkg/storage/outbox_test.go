@@ -393,3 +393,78 @@ func TestDeleteSinkAndDeleteRouteRemoveTheirRows(t *testing.T) {
 		t.Errorf("deleting an absent rule failed: %v", err)
 	}
 }
+
+// TrimOutbox existed, was documented as the retention policy, and had NO CALLER
+// anywhere in the app: the event journal has a trimmer, the outbox had none.
+// Measured before this — 30 breaches through the real chain left 30 'sent' rows,
+// each holding the full event JSON plus the rendered subject and body, still
+// there after every delivery succeeded.
+func TestDeliveredRowsAreTrimmedWithoutBeingAskedTo(t *testing.T) {
+	st := newTestStorage(t)
+
+	// Older than the retention window, so a trim that runs will take them.
+	old := time.Now().Add(-OutboxRetention - 24*time.Hour).UTC().Format(time.RFC3339)
+
+	for i := 0; i < 200; i++ {
+		q := queueOne(t, st, fmt.Sprintf("evt-bulk-%d", i), "mail")
+		if err := st.MarkSent(q.ID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := st.db.Exec(`UPDATE notify_outbox SET created_at = ? WHERE id = ?`, old, q.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	rows, err := st.ListDeliveries("sent", 500)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) >= 200 {
+		t.Errorf("%d delivered rows are still there after 200 sends; nothing is "+
+			"trimming the outbox and monitoring.db grows without bound", len(rows))
+	}
+}
+
+// And the trimming must never reach a delivery that is still owed, or one whose
+// failure is the only record that an alert was lost.
+func TestAutomaticTrimmingSparesPendingAndDeadRows(t *testing.T) {
+	st := newTestStorage(t)
+	old := time.Now().Add(-OutboxRetention - 24*time.Hour).UTC().Format(time.RFC3339)
+
+	pending := queueOne(t, st, "evt-still-owed", "mail")
+	deadRow := queueOne(t, st, "evt-lost", "mail")
+	if err := st.MarkFailed(deadRow.ID, "relay gone", time.Now(), true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.db.Exec(`UPDATE notify_outbox SET created_at = ?`, old); err != nil {
+		t.Fatal(err)
+	}
+
+	// Enough sends to trigger the periodic trim several times over.
+	for i := 0; i < 200; i++ {
+		q := queueOne(t, st, fmt.Sprintf("evt-noise-%d", i), "hook")
+		if err := st.MarkSent(q.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	all, err := st.ListDeliveries("", 500)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sawPending, sawDead bool
+	for _, d := range all {
+		if d.ID == pending.ID {
+			sawPending = true
+		}
+		if d.ID == deadRow.ID {
+			sawDead = true
+		}
+	}
+	if !sawPending {
+		t.Error("a pending delivery was trimmed: the alert is simply gone")
+	}
+	if !sawDead {
+		t.Error("a dead letter was trimmed: the only record that an alert was lost")
+	}
+}

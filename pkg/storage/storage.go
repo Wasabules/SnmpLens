@@ -24,6 +24,7 @@ type Storage struct {
 	done         chan struct{}
 	historySaves int // counter to trim query_history only periodically
 	eventWrites  int // counter to trim the event journal only periodically
+	outboxWrites int // same, for the delivery outbox
 }
 
 type Session struct {

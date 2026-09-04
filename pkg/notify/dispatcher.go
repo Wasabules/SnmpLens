@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -149,40 +150,86 @@ func (d *Dispatcher) Drain() {
 		return
 	}
 
+	// One goroutine per DESTINATION, deliveries within a destination serial.
+	//
+	// The batch used to be sent one at a time on a single goroutine, so the
+	// worst case behind one unreachable SMTP relay was 20 x the 20-second
+	// default timeout — around seven minutes of blocked outbox, during which a
+	// critical trap routed to a perfectly healthy webhook waits. The Wake()
+	// that trap triggered is dropped by TryLock, so it then waits for the
+	// 15-second ticker on top. Measured: with one sink taking 1.5s, a healthy
+	// sink's delivery went out 1.5s late.
+	//
+	// Serial WITHIN a destination on purpose: twenty parallel SMTP
+	// conversations with one relay is how a sender gets rate-limited or
+	// blocked, and the deliveries to one destination are the ones with a
+	// reason to be ordered.
+	bySink := map[string][]Queued{}
+	order := make([]string, 0, len(batch))
 	for _, q := range batch {
-		// Shutdown has begun: finish nothing new. A batch is up to 20
-		// deliveries and an email sink waits 20 seconds by default, so
-		// plowing on would hold the close for minutes. The rows stay
-		// `pending` and are picked up on the next launch, which is what a
-		// durable outbox is for.
-		select {
-		case <-d.done:
-			return
-		default:
+		if _, seen := bySink[q.SinkID]; !seen {
+			order = append(order, q.SinkID)
 		}
-
-		sink, ok := d.Resolve(q.SinkID)
-		if !ok {
-			// The sink was deleted or disabled after the event was queued.
-			// Dead-letter it rather than retrying forever against nothing.
-			d.fail(q, errSinkMissing{q.SinkID}, true)
-			continue
-		}
-
-		sendErr := sink.Send(q.Event, q.Subject, q.Body)
-		if sendErr == nil {
-			if err := d.Queue.MarkSent(q.ID); err != nil {
-				log.Printf("notify: could not mark delivery %d sent: %v", q.ID, err)
-			}
-			if d.OnResult != nil {
-				d.OnResult(q, nil, false)
-			}
-			continue
-		}
-
-		dead := Permanent(sendErr) || q.Attempts+1 >= MaxAttempts
-		d.fail(q, sendErr, dead)
+		bySink[q.SinkID] = append(bySink[q.SinkID], q)
 	}
+
+	var wg sync.WaitGroup
+	for _, sinkID := range order {
+		wg.Add(1)
+		go func(queue []Queued) {
+			defer wg.Done()
+			for _, q := range queue {
+				// Shutdown has begun: start nothing new. The rows stay
+				// `pending` and the next launch picks them up, which is what a
+				// durable outbox is for.
+				select {
+				case <-d.done:
+					return
+				default:
+				}
+				d.deliver(q)
+			}
+		}(bySink[sinkID])
+	}
+	wg.Wait()
+}
+
+// deliver sends one queued delivery and records what happened.
+//
+// The recover is not decoration. This runs on a background goroutine, where an
+// unrecovered panic ends the PROCESS — taking the poll clock, the trap listener
+// and the window with it, because one destination's formatting or TLS handling
+// hit a nil. A bug in a sink must cost that delivery and nothing more.
+func (d *Dispatcher) deliver(q Queued) {
+	sink, ok := d.Resolve(q.SinkID)
+	if !ok {
+		// The sink was deleted or disabled after the event was queued.
+		// Dead-letter it rather than retrying forever against nothing.
+		d.fail(q, errSinkMissing{q.SinkID}, true)
+		return
+	}
+
+	sendErr := func() (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("the destination panicked: %v", r)
+			}
+		}()
+		return sink.Send(q.Event, q.Subject, q.Body)
+	}()
+
+	if sendErr == nil {
+		if err := d.Queue.MarkSent(q.ID); err != nil {
+			log.Printf("notify: could not mark delivery %d sent: %v", q.ID, err)
+		}
+		if d.OnResult != nil {
+			d.OnResult(q, nil, false)
+		}
+		return
+	}
+
+	dead := Permanent(sendErr) || q.Attempts+1 >= MaxAttempts
+	d.fail(q, sendErr, dead)
 }
 
 func (d *Dispatcher) fail(q Queued, sendErr error, dead bool) {

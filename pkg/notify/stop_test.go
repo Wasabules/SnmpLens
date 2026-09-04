@@ -196,6 +196,11 @@ func TestDrainStopsStartingSendsAfterStop(t *testing.T) {
 type scriptedQueue struct {
 	batch  []Queued
 	served atomic.Bool
+
+	// The drain writes these from several goroutines at once.
+	mu     sync.Mutex
+	sent   []int64
+	failed []recordedFailure
 }
 
 func (q *scriptedQueue) DueDeliveries(int) ([]Queued, error) {
@@ -204,8 +209,20 @@ func (q *scriptedQueue) DueDeliveries(int) ([]Queued, error) {
 	}
 	return q.batch, nil
 }
-func (q *scriptedQueue) MarkSent(int64) error                            { return nil }
-func (q *scriptedQueue) MarkFailed(int64, string, time.Time, bool) error { return nil }
+
+func (q *scriptedQueue) MarkSent(id int64) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.sent = append(q.sent, id)
+	return nil
+}
+
+func (q *scriptedQueue) MarkFailed(id int64, msg string, _ time.Time, dead bool) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.failed = append(q.failed, recordedFailure{id: id, msg: msg, dead: dead})
+	return nil
+}
 
 type sinkFunc func(events.Event, string, string) error
 
