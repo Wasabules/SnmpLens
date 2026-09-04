@@ -281,10 +281,17 @@ func (s *Storage) MarkFailed(id int64, errMsg string, nextTry time.Time, dead bo
 	return err
 }
 
-// RetryDelivery puts a dead letter back in the queue.
+// RetryDelivery puts a dead letter back in the queue with a clean slate.
+//
+// attempts is reset, and that is the whole point. A dead letter has spent all
+// MaxAttempts, and Drain gives up when attempts+1 >= MaxAttempts — so leaving
+// the count alone gave the retried delivery exactly ONE attempt with no backoff
+// and no second try. Asking to retry something after fixing the relay means the
+// normal policy applies to it again, not that it gets one more roll.
 func (s *Storage) RetryDelivery(id int64) error {
 	_, err := s.db.Exec(`
-		UPDATE notify_outbox SET state = 'pending', next_try_at = ?, last_error = NULL
+		UPDATE notify_outbox
+		SET state = 'pending', next_try_at = ?, last_error = NULL, attempts = 0
 		WHERE id = ?`, time.Now().UTC().Format(time.RFC3339), id)
 	return err
 }
