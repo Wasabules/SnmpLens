@@ -41,6 +41,7 @@ type App struct {
 	snmpClient       *snmp.Client
 	storage          *storage.Storage
 	evaluator        *monitor.Evaluator
+	router           *eventRouter
 	dispatcher       *notify.Dispatcher
 	secrets          secrets.Store
 	// settingsKeyCache holds the renderer's sealing key. Every secrets.Get is
@@ -109,11 +110,22 @@ func (a *App) startup(ctx context.Context) {
 		log.Printf("WARNING: Failed to initialize monitoring storage: %v", err)
 	} else {
 		a.storage = store
+		a.initEvaluator()
+		a.initDispatcher()
+
+		// The router BEFORE the recorder is wired: recordEvent hands events to
+		// it, and a producer must never find it absent and silently fall back.
+		a.router = newEventRouter(a)
+		a.router.start()
+
+		// Anything journalled but not routed before the last shutdown — a crash,
+		// a kill, a flush that could not be written. Done before any producer
+		// starts, so replay and live routing cannot interleave on the watermark.
+		a.replayUnrouted()
+
 		// Traps are journalled by the SNMP client itself, in its listener
 		// goroutine, before anything is emitted to the webview.
 		a.snmpClient.SetRecorder(events.RecorderFunc(a.recordEvent))
-		a.initEvaluator()
-		a.initDispatcher()
 	}
 
 	// The secret store, INDEPENDENT of the database.
@@ -546,6 +558,13 @@ func (a *App) shutdown(ctx context.Context) {
 		a.snmpClient.StopTrapListener()
 	}
 
+	// Then the router: every producer is stopped, so what it has queued is all
+	// there will ever be. Anything it cannot write stays above the watermark
+	// and is replayed on the next launch.
+	if a.router != nil {
+		a.router.stop()
+	}
+
 	// Then the poll clock: its goroutines write samples through storage,
 	// so letting them run into a closed database would log failures for work
 	// that was actually fine.
@@ -725,10 +744,23 @@ func (a *App) recordEvent(e events.Event, payload string) error {
 		return err
 	}
 
-	// Route in the same breath as the insert. Queuing is what makes delivery
-	// durable; actually sending happens on the dispatcher goroutine, so a slow
-	// SMTP relay can never stall a trap listener.
-	a.routeEvent(saved)
+	// Hand the event to the router rather than routing it here.
+	//
+	// For a trap, "here" is gosnmp's UDP receive loop — strictly serial, so
+	// every millisecond costs datagrams. Routing was measured at 1.30 ms per
+	// event against 0.97 ms for the insert itself, essentially all of it a
+	// second write transaction.
+	//
+	// The INSERT above stays synchronous: gosnmp acknowledges an INFORM after
+	// this handler returns, and acknowledging a confirmed notification before it
+	// is durably journalled would be a lie.
+	//
+	// A full queue falls back to routing INLINE — never dropping. That is
+	// exactly what this did before the router existed, so the worst case is the
+	// behaviour we already had.
+	if a.router == nil || !a.router.accept(saved) {
+		a.routeEvent(saved)
+	}
 
 	if a.ctx != nil {
 		runtime.EventsEmit(a.ctx, "event:new", saved)
@@ -788,12 +820,15 @@ func (a *App) deadLetterEvent(q notify.Queued, err error) events.Event {
 	}
 }
 
-// routeEvent matches an event against the rules and queues one delivery per
-// selected sink.
-func (a *App) routeEvent(e events.Event) {
+// routedGroupsFor decides where an event goes and renders it for each
+// destination, WITHOUT writing anything.
+//
+// Separated from the write so the same decision can be made on the producer's
+// goroutine or on the router's, and replayed at startup, from one piece of code.
+func (a *App) routedGroupsFor(e events.Event) []storage.RoutedGroup {
 	routes, err := a.storage.ListRoutes()
 	if err != nil || len(routes) == 0 {
-		return
+		return nil
 	}
 	// Evaluated at the EVENT's own time, in the local zone.
 	//
@@ -825,14 +860,14 @@ func (a *App) routeEvent(e events.Event) {
 	}
 
 	if len(sinkIDs) == 0 {
-		return
+		return nil
 	}
 
 	// Redaction is decided per sink, so group by the rendering it needs rather
 	// than rendering once for everyone.
 	sinks, err := a.storage.ListSinks()
 	if err != nil {
-		return
+		return nil
 	}
 	configBySink := map[string]notify.SinkConfig{}
 	for _, s := range sinks {
@@ -887,12 +922,27 @@ func (a *App) routeEvent(e events.Event) {
 		g.sinkIDs = append(g.sinkIDs, id)
 	}
 
+	out := make([]storage.RoutedGroup, 0, len(groups))
 	for _, g := range groups {
-		if err := a.storage.EnqueueDeliveries(g.event, g.sinkIDs, g.subject, g.body); err != nil {
+		out = append(out, storage.RoutedGroup{
+			Event: g.event, SinkIDs: g.sinkIDs, Subject: g.subject, Body: g.body,
+		})
+	}
+	return out
+}
+
+// routeEvent routes an event and queues its deliveries immediately.
+//
+// The inline path: used when the router's queue is full, and by tests. It is
+// what the whole application did before routing moved to a background worker,
+// so falling back to it can never be worse than not having one.
+func (a *App) routeEvent(e events.Event) {
+	groups := a.routedGroupsFor(e)
+	for _, g := range groups {
+		if err := a.storage.EnqueueDeliveries(g.Event, g.SinkIDs, g.Subject, g.Body); err != nil {
 			log.Printf("notify: could not queue deliveries: %v", err)
 		}
 	}
-
 	if a.dispatcher != nil {
 		a.dispatcher.Wake()
 	}
