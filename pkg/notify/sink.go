@@ -1,7 +1,10 @@
 package notify
 
 import (
+	"encoding/base64"
+	"errors"
 	"os"
+	"strings"
 
 	"SnmpLens/pkg/events"
 )
@@ -84,4 +87,67 @@ func Build(cfg SinkConfig, secret string) (Sink, bool) {
 	default:
 		return nil, false
 	}
+}
+
+// scrubSecret removes a credential from an error before it leaves a sink.
+//
+// The error is stored in notify_outbox.last_error and surfaced in the event
+// journal, so it OUTLIVES the request — and a receiver decides what its own
+// error text says. A debug endpoint that echoes the request headers, or an
+// SMTP server that quotes the AUTH line back, writes the credential into
+// monitoring.db where it stays.
+//
+// Shared rather than per-sink: the webhook had one and the email sink had
+// none, which is the shape a rule takes when each sink is asked to remember
+// it separately.
+func scrubSecret(err error, secret string) error {
+	if err == nil || secret == "" {
+		return err
+	}
+	msg := err.Error()
+	cleaned := msg
+
+	for _, form := range secretForms(secret) {
+		cleaned = strings.ReplaceAll(cleaned, form, "[redacted]")
+	}
+	if cleaned == msg {
+		return err
+	}
+	return errors.New(cleaned)
+}
+
+// secretForms is every spelling of a credential that can appear in an error.
+//
+// The literal is not enough. SMTP sends the password base64-encoded inside an
+// AUTH line, and a server that quotes the line back in its refusal — which is
+// entirely its choice — puts the credential in notify_outbox.last_error in a
+// form a plain search walks straight past. Measured against a server doing
+// exactly that: "535 rejected credentials: AUTH PLAIN
+// AHVzZXIAaHVudGVyMi10aGUtc210cC1wYXNzd29yZA==", which decodes to the
+// password.
+func secretForms(secret string) []string {
+	forms := []string{secret}
+
+	// AUTH LOGIN sends the password on its own; AUTH PLAIN sends
+	// \x00user\x00password, so the password's own encoding appears at an offset
+	// and its middle survives base64's three-byte grouping. Cover the three
+	// alignments rather than guess which one a server echoes.
+	forms = append(forms, base64.StdEncoding.EncodeToString([]byte(secret)))
+	for _, pad := range []string{"\x00", "\x00\x00"} {
+		encoded := base64.StdEncoding.EncodeToString([]byte(pad + secret))
+		// Drop the leading characters that encode the padding, keeping the
+		// part that is stable wherever the secret sits.
+		if len(encoded) > 4 {
+			forms = append(forms, encoded[4:len(encoded)-4])
+		}
+	}
+
+	out := forms[:0]
+	for _, f := range forms {
+		// A very short form would match ordinary text.
+		if len(f) >= 6 {
+			out = append(out, f)
+		}
+	}
+	return out
 }

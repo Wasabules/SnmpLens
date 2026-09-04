@@ -107,7 +107,15 @@ type EmailSink struct {
 }
 
 // Send delivers one message.
-func (m EmailSink) Send(e events.Event, subject, body string) error {
+//
+// Every error leaves through scrubSecret: the password is in the AUTH
+// exchange, an SMTP server chooses its own error text, and whatever it says
+// is stored in notify_outbox.last_error where it outlives the request. The
+// webhook sink has scrubbed for that reason since it was written; this one
+// did not, which is the same exposure with none of the protection.
+func (m EmailSink) Send(e events.Event, subject, body string) (err error) {
+	defer func() { err = scrubSecret(err, m.Config.Password) }()
+
 	cfg := m.Config
 	if cfg.Host == "" || cfg.From == "" || len(cfg.To) == 0 {
 		return fmt.Errorf("email sink is incomplete (host, from and at least one recipient are required)")

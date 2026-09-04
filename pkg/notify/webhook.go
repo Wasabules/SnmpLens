@@ -229,9 +229,11 @@ func (w WebhookSink) Send(e events.Event, subject, body string) error {
 	snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 
 	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
-		return fmt.Errorf(
+		// Scrubbed like every other branch. The Location header is chosen by
+		// the receiver, and this was the one path that returned it raw.
+		return w.scrub(fmt.Errorf(
 			"webhook returned a redirect (%s) to %q; redirects are not followed because they would drop the request body — point the sink at the final URL",
-			resp.Status, resp.Header.Get("Location"))
+			resp.Status, resp.Header.Get("Location")))
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return w.scrub(fmt.Errorf("webhook returned %s: %s", resp.Status, strings.TrimSpace(string(snippet))))
@@ -247,19 +249,7 @@ func (w WebhookSink) Send(e events.Event, subject, body string) error {
 // otherwise write the bearer token into monitoring.db in the clear, undoing
 // the point of keeping it in pkg/secrets at all.
 func (w WebhookSink) scrub(err error) error {
-	if err == nil {
-		return nil
-	}
-	secret := w.Config.Token
-	if secret == "" {
-		return err
-	}
-	msg := err.Error()
-	cleaned := strings.ReplaceAll(msg, secret, "[redacted]")
-	if cleaned == msg {
-		return err
-	}
-	return fmt.Errorf("%s", cleaned)
+	return scrubSecret(err, w.Config.Token)
 }
 
 // PayloadTemplate is the mode where the template writes the whole body.
