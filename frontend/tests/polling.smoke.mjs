@@ -44,6 +44,7 @@ export const MonitorLoadSessions = (...a) => s.MonitorLoadSessions(...a);
 export const MonitorLoadSessionData = (...a) => s.MonitorLoadSessionData(...a);
 export const MonitorDeleteSession = (...a) => s.MonitorDeleteSession(...a);
 export const EventsOn = (...a) => s.EventsOn(...a);
+export const ListMibFiles = async () => [];
 export const SettingsKeyStatus = (...a) => s.SettingsKeyStatus(...a);
 export const SettingsSeal = (...a) => s.SettingsSeal(...a);
 export const SettingsOpen = (...a) => s.SettingsOpen(...a);

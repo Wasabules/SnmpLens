@@ -254,7 +254,22 @@ func (a *App) backupMib(name string, content []byte) (string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	path := filepath.Join(dir, fmt.Sprintf("%s.%d.bak", filepath.Base(name), time.Now().Unix()))
+	// Nanoseconds, and a collision loop.
+	//
+	// A second-resolution stamp made two saves inside one wall-clock second
+	// write the same backup name, and the second silently destroyed the first
+	// — the copy of the version the user actually wanted back.
+	base := filepath.Join(dir, filepath.Base(name))
+	path := fmt.Sprintf("%s.%d.bak", base, time.Now().UnixNano())
+	for i := 1; ; i++ {
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			break
+		}
+		path = fmt.Sprintf("%s.%d-%d.bak", base, time.Now().UnixNano(), i)
+		if i > 100 {
+			return "", fmt.Errorf("could not find a free backup name in %s", dir)
+		}
+	}
 	if err := os.WriteFile(path, content, 0o644); err != nil {
 		return "", err
 	}

@@ -106,6 +106,11 @@
   $: missingImports = $mibEditorStore.missingImports;
   $: checking = $mibEditorStore.checking;
   $: dirty = source !== null && buffer !== source.content;
+  // An externally opened MIB is savable even untouched: saving it COPIES it
+  // into the MIB directory, which is the documented way to import one. Gating
+  // the button on `dirty` meant you had to edit a file to be allowed to import
+  // it, so the path was dead.
+  $: savable = source !== null && (dirty || source.external);
   $: matchingSymbols = symbolFilter.length < 2
     ? []
     : catalogue.symbols
@@ -699,7 +704,10 @@
     }
     if ((e.ctrlKey || e.metaKey) && e.key === 's') {
       e.preventDefault();
-      save();
+      // Guarded like the button. Two saves of one file race on a fixed staging
+      // path in mib-temp/, and the second reports a raw OS error the user can
+      // do nothing with.
+      if (!saving && savable) save();
       return;
     }
     // A textarea would otherwise move focus out of the editor on Tab.
@@ -817,7 +825,7 @@
           <button class="btn btn-small" on:click={restoreBundled}>{$_('mibEditor.restore')}</button>
         {/if}
         <button class="btn btn-small" on:click={revert} disabled={!dirty}>{$_('mibEditor.revert')}</button>
-        <button class="btn btn-small" on:click={() => save()} disabled={saving || !dirty}>
+        <button class="btn btn-small" on:click={() => save()} disabled={saving || !savable}>
           <Icon name={saving ? 'loader-circle' : 'download'} size={13} class={saving ? 'icon-spin' : ''} />
           {$_('common.save')}
         </button>

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -382,5 +383,62 @@ func TestReadAcceptsValidUtf8(t *testing.T) {
 	}
 	if src.Content != body {
 		t.Errorf("content changed:\n want %q\n got  %q", body, src.Content)
+	}
+}
+
+// Two saves inside one wall-clock second must not share a backup name.
+//
+// The stamp was seconds, so the second save destroyed the first backup — the
+// copy of the version the user would actually want back.
+func TestBackupsInTheSameSecondDoNotCollide(t *testing.T) {
+	a, dir := newMibApp(t)
+	if err := os.WriteFile(filepath.Join(dir, "B-MIB"), []byte("v0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var paths []string
+	content := "v0\n"
+	for i := 1; i <= 5; i++ {
+		src, err := a.MibEditorRead("B-MIB")
+		if err != nil {
+			t.Fatal(err)
+		}
+		next := fmt.Sprintf("v%d\n", i)
+		res, err := a.MibEditorSave("B-MIB", next, src.Sha256, false)
+		if err != nil || !res.Saved {
+			t.Fatalf("save %d: %v %+v", i, err, res)
+		}
+		if res.BackupPath != "" {
+			paths = append(paths, res.BackupPath)
+		}
+		content = next
+	}
+	_ = content
+
+	if len(paths) < 2 {
+		t.Skipf("only %d backups were taken; this file is not bundled", len(paths))
+	}
+	seen := map[string]string{}
+	for i, p := range paths {
+		if prev, dup := seen[p]; dup {
+			t.Errorf("backup %d reuses the name of %s: %s", i, prev, p)
+		}
+		seen[p] = fmt.Sprint(i)
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("backup %d does not exist: %v", i, err)
+		}
+	}
+
+	// And each one holds a DIFFERENT version, which is the point.
+	bodies := map[string]bool{}
+	for _, p := range paths {
+		raw, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		bodies[string(raw)] = true
+	}
+	if len(bodies) != len(paths) {
+		t.Errorf("%d backups hold only %d distinct versions", len(paths), len(bodies))
 	}
 }

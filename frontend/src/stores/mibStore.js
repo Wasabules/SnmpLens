@@ -1,5 +1,5 @@
 import { writable, get } from 'svelte/store';
-import { LoadAllMibs, LoadEnabledMibs, LoadMibsWithDiagnostics, GetPersistentMibDirectory } from '../../wailsjs/go/main/App';
+import { LoadAllMibs, LoadEnabledMibs, LoadMibsWithDiagnostics, GetPersistentMibDirectory, ListMibFiles } from '../../wailsjs/go/main/App';
 import { notificationStore } from './notifications';
 import { mibPathsStore } from './mibPathsStore';
 
@@ -29,14 +29,23 @@ function createMibStore() {
     const defaultPath = await GetPersistentMibDirectory();
     const enabledFiles = [];
 
-    // Get enabled MIBs from default path
-    if (pathsState.detectedMibs[defaultPath]) {
-      pathsState.detectedMibs[defaultPath].forEach(mib => {
-        if (pathsState.enabledMibs[defaultPath]?.[mib] !== false) {
-          enabledFiles.push(mib);
-        }
-      });
+    // The DIRECTORY is what is there, not a list detected at start-up.
+    //
+    // Reading the cached list meant a MIB the editor had just written — the
+    // documented way to import an external one — was never in it, so the
+    // reload skipped the new file entirely and still reported success. The
+    // store is consulted only for what has been switched OFF.
+    let onDisk = pathsState.detectedMibs[defaultPath] || [];
+    try {
+      onDisk = (await ListMibFiles(defaultPath)) || onDisk;
+    } catch (e) {
+      // Fall back to the cached list rather than loading nothing.
     }
+    onDisk.forEach(mib => {
+      if (pathsState.enabledMibs[defaultPath]?.[mib] !== false) {
+        enabledFiles.push(mib);
+      }
+    });
 
     // Get enabled MIBs from custom paths
     pathsState.customPaths.forEach(customPath => {
