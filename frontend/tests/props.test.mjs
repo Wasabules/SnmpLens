@@ -119,6 +119,43 @@ for (const [component, props] of required) {
 }
 check('every required prop is passed at every call site', missing.length === 0, missing.join(' | '));
 
+// An event handler that calls a browser global instead of a component
+// function.
+//
+// `on:click={() => history('undo')}` compiles, renders, and throws
+// "history is not a function" the moment it is clicked — `history` is
+// window.history, the History object, which is not callable. The undo and redo
+// toolbar buttons shipped that way and never worked once; nothing in the
+// build, the tests or the console-free happy path saw it.
+const CALLABLE_GLOBALS = [
+  // Globals that exist on window and are NOT functions, so calling one is
+  // always a bug. Shadowing any of them with a local is the usual cause.
+  'history', 'location', 'navigator', 'screen', 'performance', 'crypto',
+  'localStorage', 'sessionStorage', 'document', 'status', 'origin', 'name',
+];
+
+const shadowed = [];
+for (const [file, source] of sources) {
+  const code = scriptOf(source);
+  const markup = source.slice(code ? source.indexOf(code) + code.length : 0);
+
+  for (const g of CALLABLE_GLOBALS) {
+    // A call to the bare name, in the markup, where no local of that name
+    // exists in the script.
+    const called = new RegExp(String.raw`[^.\w]${g}\s*\(`).test(markup);
+    if (!called) continue;
+    const declared = new RegExp(
+      String.raw`(function\s+${g}|(?:const|let|var)\s+${g})`
+    ).test(code);
+    if (!declared) {
+      shadowed.push(`${basename(file)}: on-markup call to \`${g}(…)\`, which is the browser global and not a function`);
+    }
+  }
+}
+
+check('no handler calls a browser global as a function',
+  shadowed.length === 0, shadowed.join(' | '));
+
 // Prove the detector works, or a passing run means nothing.
 const child = `<script>export let sink; export let redact = false;</script>`;
 check('the detector sees a required prop', requiredProps(scriptOf(child)).join() === 'sink');

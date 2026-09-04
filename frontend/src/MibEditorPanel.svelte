@@ -3,6 +3,7 @@
   import { _ } from 'svelte-i18n';
   import { get } from 'svelte/store';
   import Icon from './Icon.svelte';
+  import { renderWindow } from './mibeditor/render';
   import { notificationStore } from './stores/notifications';
   import { highlight, SNIPPETS, stringStateAt } from './mibeditor/tokenize.js';
   import { charWidth, positionOf, lineColumnAt, wordAt, offsetAt } from './mibeditor/metrics.js';
@@ -147,18 +148,6 @@
   );
   $: highlighted = renderWindow(buffer, lines, firstVisible, lastVisible);
 
-  function renderWindow(text, allLines, first, last) {
-    if (!text) return '';
-    let offset = 0;
-    for (let i = 0; i < first; i++) offset += allLines[i].length + 1;
-    const windowText = allLines.slice(first, last).join('\n');
-    // Blank lines stand in for what is not rendered, so the mirror keeps the
-    // same height as the textarea and scroll sync still works.
-    return '\n'.repeat(first)
-      + highlight(windowText, stringStateAt(text, offset))
-      + '\n'.repeat(Math.max(0, allLines.length - last));
-  }
-
   $: shown = files.filter((f) => !filter || f.name.toLowerCase().includes(filter.toLowerCase()));
   $: errorCount = diagnostics.filter((d) => d.severity === 'error').length;
   $: warnCount = diagnostics.filter((d) => d.severity === 'warning').length;
@@ -176,6 +165,11 @@
   onDestroy(() => window.removeEventListener('resize', measureViewport));
 
   onMount(async () => {
+    // The buffer survives a tab switch in the store, deliberately — but the
+    // component does not, and it was re-initialising the history against an
+    // EMPTY document. The first keystroke then recorded ''-to-whole-file as
+    // one entry, and one Ctrl+Z emptied the file.
+    resetHistory();
     if (mirror) cw = charWidth(mirror);
     measureViewport();
     window.addEventListener('resize', measureViewport);
@@ -289,7 +283,11 @@
     if (!source) return;
     saving = true;
     try {
-      const res = await MibEditorSave(source.name, buffer, source.sha256, force);
+      // The text as it is NOW, kept for markSaved. The user can type during
+      // the round trip, and marking the current buffer as "on disk" told them
+      // unsaved work was saved — and discarded the draft that held it.
+      const written = buffer;
+      const res = await MibEditorSave(source.name, written, source.sha256, force);
       if (res.conflict) {
         const overwrite = window.confirm(get(_)('mibEditor.conflictConfirm'));
         saving = false;
@@ -300,7 +298,7 @@
         notificationStore.add(get(_)('mibEditor.saveFailed'), 'error');
         return;
       }
-      await mibEditorStore.markSaved(res.sha256, res.diagnostics || []);
+      await mibEditorStore.markSaved(res.sha256, res.diagnostics || [], written);
       notificationStore.add(
         get(_)(res.backupPath ? 'mibEditor.savedWithBackup' : 'mibEditor.saved',
           { values: { name: source.name } }), 'success');
@@ -362,6 +360,11 @@
     if (!window.confirm(get(_)('mibEditor.restoreConfirm', { values: { name: source.name } }))) return;
     try {
       mibEditorStore.openSource(await MibEditorRestoreBundled(source.name));
+      // The document was replaced wholesale, so the history describing the old
+      // one is meaningless: one Ctrl+Z would have discarded the restore, or
+      // built a document that never existed by replaying an edit against
+      // different text.
+      resetHistory();
       await refreshList();
       await reload();
       notificationStore.add(get(_)('mibEditor.restored', { values: { name: source.name } }), 'success');
@@ -374,6 +377,9 @@
     if (!source || !dirty) return;
     if (!window.confirm(get(_)('mibEditor.revertConfirm'))) return;
     mibEditorStore.revert();
+    // Same reason as restoreBundled: the buffer is now the file, and an undo
+    // of edits made before it would resurrect what was just discarded.
+    resetHistory();
   }
 
   // The one place the editor goes from "here is the problem" to "here is the
@@ -706,11 +712,11 @@
         <span class="spacer"></span>
 
         <div class="history">
-          <button class="btn-copy-small" on:click={() => history('undo')} disabled={!canUndo}
+          <button class="btn-copy-small" on:click={undoEdit} disabled={!canUndo}
             title="{$_('mibEditor.undo')} ({UNDO_KEYS})" aria-label={$_('mibEditor.undo')}>
             <Icon name="undo-2" size={14} />
           </button>
-          <button class="btn-copy-small" on:click={() => history('redo')} disabled={!canRedo}
+          <button class="btn-copy-small" on:click={redoEdit} disabled={!canRedo}
             title="{$_('mibEditor.redo')} ({REDO_KEYS})" aria-label={$_('mibEditor.redo')}>
             <Icon name="redo-2" size={14} />
           </button>

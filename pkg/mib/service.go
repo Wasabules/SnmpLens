@@ -215,7 +215,18 @@ func (s *Service) LoadWithDiagnostics(fileNames []string) MibLoadResponse {
 	// is the same for all of them.
 	ctx := newDiagContext(s)
 
+	// Cycles first, because gosmi cannot survive one: it recurses until the
+	// stack ends, and it does so holding this lock, so the whole application
+	// stops. Refusing the files in the loop keeps everything else loadable.
+	cycles := s.findImportCycles(fileNames)
+
 	for _, fileName := range fileNames {
+		if cycle, inCycle := cycles[fileName]; inCycle {
+			log.Printf("Diagnostic: refusing '%s': import cycle %s", fileName, cycle)
+			diagnostics = append(diagnostics, cycleDiagnostic(fileName, cycle))
+			continue
+		}
+
 		// Around the load, because this is the only moment gosmi's real error
 		// exists: smi.LoadModule prints it and returns an empty string. The
 		// diagnosis afterwards is READ-only and cannot recover it by retrying

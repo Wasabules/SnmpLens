@@ -163,15 +163,27 @@ function createMibEditorStore() {
     }
   }
 
-  /** Called after a successful save: the file on disk is now the buffer. */
-  async function markSaved(sha256, diagnostics) {
+  /**
+   * Called after a successful save: the file on disk is now `written`.
+   *
+   * `written` is the text that was actually sent, not the buffer as it stands
+   * now. A save of a 185 KB MIB is a bridge round trip, and anything typed
+   * during it used to be folded into "this is what is on disk" — so the editor
+   * showed no unsaved changes, discarded the draft holding that text, and it
+   * existed only in memory until the window closed.
+   */
+  async function markSaved(sha256, diagnostics, written) {
     const s = get({ subscribe });
+    const content = typeof written === 'string' ? written : s.buffer;
     update((st) => ({
       ...st,
-      source: { ...st.source, content: st.buffer, sha256, external: false },
+      source: { ...st.source, content, sha256, external: false },
       diagnostics: diagnostics || st.diagnostics,
     }));
-    if (s.source) {
+    // The draft goes only if there is nothing left it protects. If the user
+    // typed during the save, the buffer is ahead of the file and the draft is
+    // the only copy of the difference.
+    if (s.source && content === s.buffer) {
       try {
         await MibEditorDiscardDraft(s.source.name);
       } catch (e) {
