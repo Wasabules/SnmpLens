@@ -1011,15 +1011,37 @@ func (a *App) initDispatcher() {
 			Severity: events.SevMajor.String(),
 			TitleKey: "events.kind." + events.KindSystemSinkDeadLetter,
 			Params: map[string]any{
-				"sink":     q.SinkID,
+				// The NAME, because "{sink}" is what the operator reads. A raw
+				// UUID names nothing they have ever seen, in the one message
+				// telling them an alert never arrived.
+				"sink":     a.sinkName(q.SinkID),
+				"sinkId":   q.SinkID,
 				"attempts": q.Attempts + 1,
 				"error":    err.Error(),
 			},
-			Summary: "Delivery to " + q.SinkID + " given up: " + err.Error(),
+			Summary: "Delivery to " + a.sinkName(q.SinkID) + " given up: " + err.Error(),
 		}, "")
 	}
 	d.Start()
 	a.dispatcher = d
+}
+
+// sinkName resolves a destination's id to what the operator called it, falling
+// back to the id when it has been deleted — which is itself informative.
+func (a *App) sinkName(sinkID string) string {
+	if a.storage == nil {
+		return sinkID
+	}
+	sinks, err := a.storage.ListSinks()
+	if err != nil {
+		return sinkID
+	}
+	for _, s := range sinks {
+		if s.ID == sinkID && strings.TrimSpace(s.Name) != "" {
+			return s.Name
+		}
+	}
+	return sinkID
 }
 
 // sinkSecret returns a sink's credential from secure storage. Secrets are kept

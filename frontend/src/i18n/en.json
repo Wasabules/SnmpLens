@@ -941,7 +941,19 @@
     "previewPayload": "Payload preview",
     "jsonValid": "valid JSON · {bytes} bytes",
     "jsonInvalid": "not valid JSON",
-    "useDefaultPayload": "Start from the default payload"
+    "useDefaultPayload": "Start from the default payload",
+    "deliveriesTitle": "Delivery log",
+    "deliveriesHint": "What was sent, what is waiting, and what was given up on. A given-up delivery is the only record that an alert never arrived.",
+    "noDeliveries": "Nothing has been delivered yet.",
+    "deliveryStateAll": "All",
+    "deliveryStatePending": "Waiting",
+    "deliveryStateSent": "Sent",
+    "deliveryStateDead": "Given up",
+    "deliveryAttempts": "{count} attempts",
+    "deliveryRetry": "Try again",
+    "deliveryRetried": "Queued for another attempt",
+    "deliveryRefresh": "Refresh",
+    "deadLetterCount": "{count} given up"
   },
   "tray": {
     "show": "Open SnmpLens",

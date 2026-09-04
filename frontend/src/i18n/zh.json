@@ -941,7 +941,19 @@
     "previewPayload": "负载预览",
     "jsonValid": "JSON 有效 · {bytes} 字节",
     "jsonInvalid": "JSON 无效",
-    "useDefaultPayload": "从默认负载开始"
+    "useDefaultPayload": "从默认负载开始",
+    "deliveriesTitle": "投递日志",
+    "deliveriesHint": "已发送、等待中以及已放弃的投递。已放弃的投递是告警从未送达的唯一记录。",
+    "noDeliveries": "尚未投递任何内容。",
+    "deliveryStateAll": "全部",
+    "deliveryStatePending": "等待中",
+    "deliveryStateSent": "已发送",
+    "deliveryStateDead": "已放弃",
+    "deliveryAttempts": "{count} 次尝试",
+    "deliveryRetry": "重试",
+    "deliveryRetried": "已重新排队等待再次尝试",
+    "deliveryRefresh": "刷新",
+    "deadLetterCount": "{count} 项已放弃"
   },
   "tray": {
     "show": "打开 SnmpLens",

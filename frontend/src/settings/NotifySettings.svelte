@@ -5,6 +5,7 @@
   import Icon from '../Icon.svelte';
   import TemplateEditor from './TemplateEditor.svelte';
   import { notificationStore } from '../stores/notifications';
+  import { formatTimestamp } from '../utils/formatting';
   import {
     NotifyListSinks,
     NotifySaveSink,
@@ -14,6 +15,8 @@
     NotifySaveRoute,
     NotifyDeleteRoute,
     NotifyClearSinkSecret,
+    NotifyListDeliveries,
+    NotifyRetryDelivery,
     SecretsBackend,
   } from '../../wailsjs/go/main/App';
 
@@ -22,6 +25,8 @@
 
   let sinks = [];
   let routes = [];
+  let deliveries = [];
+  let deliveryFilter = '';
   let editingSink = null;
   let editingRoute = null;
   let testing = null;
@@ -31,6 +36,7 @@
     try {
       sinks = (await NotifyListSinks()) || [];
       routes = (await NotifyListRoutes()) || [];
+      deliveries = (await NotifyListDeliveries(deliveryFilter, 100)) || [];
     } catch (e) {
       notificationStore.add(String(e), 'error');
     }
@@ -102,6 +108,49 @@
       notificationStore.add(String(e), 'error');
     }
   }
+
+  // The delivery log.
+  //
+  // A dead letter is the only record that a notification never arrived, and
+  // until now the app had no screen that listed one and no button that retried
+  // it: NotifyListDeliveries and NotifyRetryDelivery existed with no caller
+  // anywhere in the renderer. Every failure the outbox is built to survive
+  // ended in silence.
+  async function loadDeliveries(state) {
+    deliveryFilter = state;
+    try {
+      deliveries = (await NotifyListDeliveries(state, 100)) || [];
+    } catch (e) {
+      notificationStore.add(String(e), 'error');
+    }
+  }
+
+  async function retryDelivery(id) {
+    try {
+      await NotifyRetryDelivery(id);
+      notificationStore.add(get(_)('notify.deliveryRetried'), 'success');
+      await loadDeliveries(deliveryFilter);
+    } catch (e) {
+      notificationStore.add(String(e), 'error');
+    }
+  }
+
+  // One list, used by the filter buttons AND by each row's label. Building the
+  // key by concatenation would print the raw key for any state the backend
+  // adds later, in the panel whose job is to be legible when things go wrong.
+  const DELIVERY_STATES = [
+    ['', 'deliveryStateAll'],
+    ['pending', 'deliveryStatePending'],
+    ['sent', 'deliveryStateSent'],
+    ['dead', 'deliveryStateDead'],
+  ];
+
+  function stateLabel(state) {
+    const found = DELIVERY_STATES.find(([value]) => value === state);
+    return found ? $_('notify.' + found[1]) : state;
+  }
+
+  $: deadLetters = deliveries.filter((d) => d.state === 'dead').length;
 
   async function clearSecret(id) {
     if (!id) return;
@@ -297,6 +346,53 @@
             <button class="btn-copy-small" on:click={() => removeRoute(r.id)} title={$_('common.delete')}>
               <Icon name="trash-2" size={13} />
             </button>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </section>
+
+  <!-- ================= DELIVERY LOG ================= -->
+  <section>
+    <div class="sec-head">
+      <h4>
+        {$_('notify.deliveriesTitle')}
+        {#if deadLetters > 0}
+          <span class="chip-flag bad">{$_('notify.deadLetterCount', { values: { count: deadLetters } })}</span>
+        {/if}
+      </h4>
+      <button class="btn btn-small" on:click={() => loadDeliveries(deliveryFilter)}>
+        {$_('notify.deliveryRefresh')}
+      </button>
+    </div>
+    <p class="hint">{$_('notify.deliveriesHint')}</p>
+
+    <div class="filter-row">
+      {#each DELIVERY_STATES as [value, key]}
+        <button class="btn-mode" class:active={deliveryFilter === value}
+          on:click={() => loadDeliveries(value)}>{$_('notify.' + key)}</button>
+      {/each}
+    </div>
+
+    {#if deliveries.length === 0}
+      <p class="empty-state">{$_('notify.noDeliveries')}</p>
+    {:else}
+      <ul class="list delivery-list">
+        {#each deliveries as d (d.id)}
+          <li class="delivery" class:dead={d.state === 'dead'}>
+            <span class="d-state d-{d.state}">{stateLabel(d.state)}</span>
+            <span class="d-when">{formatTimestamp(d.createdAt)}</span>
+            <span class="d-sink">{sinkName(d.sinkId)}</span>
+            <span class="d-subject" title={d.subject}>{d.subject}</span>
+            <span class="d-attempts">{$_('notify.deliveryAttempts', { values: { count: d.attempts } })}</span>
+            {#if d.state === 'dead'}
+              <button class="btn-mode" on:click={() => retryDelivery(d.id)}>{$_('notify.deliveryRetry')}</button>
+            {:else}
+              <span></span>
+            {/if}
+            {#if d.lastError}
+              <p class="d-error" title={d.lastError}>{d.lastError}</p>
+            {/if}
           </li>
         {/each}
       </ul>
@@ -1006,6 +1102,73 @@
     align-self: stretch;
     margin: 0 var(--space-sm);
     background-color: var(--border-color);
+  }
+
+  /* --- delivery log --- */
+
+  .chip-flag.bad {
+    color: var(--error-color);
+    border-color: var(--error-color);
+  }
+
+  .filter-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .filter-row .btn-mode.active {
+    border-color: var(--accent-color);
+    color: var(--accent-color);
+  }
+
+  /* One row per delivery: state, when, where, what, how many tries, retry.
+     The error wraps onto its own line so a long relay message never widens
+     the panel. */
+  .delivery-list li.delivery {
+    display: grid;
+    grid-template-columns: 78px 150px 140px 1fr 90px auto;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .d-state {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+  }
+
+  .d-dead {
+    color: var(--error-color);
+  }
+
+  .d-pending {
+    color: var(--warning-color);
+  }
+
+  .d-when,
+  .d-attempts {
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+
+  .d-sink {
+    font-weight: 500;
+  }
+
+  .d-subject,
+  .d-error {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .d-error {
+    grid-column: 1 / -1;
+    margin: 2px 0 0;
+    font-size: 12px;
+    color: var(--error-color);
   }
 
   .editor-actions {

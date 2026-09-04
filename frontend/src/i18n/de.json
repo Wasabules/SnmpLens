@@ -941,7 +941,19 @@
     "previewPayload": "Vorschau der Nutzlast",
     "jsonValid": "gültiges JSON · {bytes} Bytes",
     "jsonInvalid": "kein gültiges JSON",
-    "useDefaultPayload": "Mit der Standardnutzlast beginnen"
+    "useDefaultPayload": "Mit der Standardnutzlast beginnen",
+    "deliveriesTitle": "Zustellprotokoll",
+    "deliveriesHint": "Was gesendet wurde, was wartet und was aufgegeben wurde. Eine aufgegebene Zustellung ist der einzige Nachweis, dass eine Meldung nie ankam.",
+    "noDeliveries": "Bisher wurde nichts zugestellt.",
+    "deliveryStateAll": "Alle",
+    "deliveryStatePending": "Wartend",
+    "deliveryStateSent": "Gesendet",
+    "deliveryStateDead": "Aufgegeben",
+    "deliveryAttempts": "{count} Versuche",
+    "deliveryRetry": "Erneut versuchen",
+    "deliveryRetried": "Für einen weiteren Versuch eingereiht",
+    "deliveryRefresh": "Aktualisieren",
+    "deadLetterCount": "{count} aufgegeben"
   },
   "tray": {
     "show": "SnmpLens öffnen",

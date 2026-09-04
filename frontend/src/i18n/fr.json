@@ -941,7 +941,19 @@
     "previewPayload": "Aperçu de la charge utile",
     "jsonValid": "JSON valide · {bytes} octets",
     "jsonInvalid": "JSON invalide",
-    "useDefaultPayload": "Partir de la charge utile par défaut"
+    "useDefaultPayload": "Partir de la charge utile par défaut",
+    "deliveriesTitle": "Journal des envois",
+    "deliveriesHint": "Ce qui est parti, ce qui attend, et ce qui a été abandonné. Un envoi abandonné est la seule trace qu'une alerte n'est jamais arrivée.",
+    "noDeliveries": "Aucun envoi pour l'instant.",
+    "deliveryStateAll": "Tous",
+    "deliveryStatePending": "En attente",
+    "deliveryStateSent": "Envoyés",
+    "deliveryStateDead": "Abandonnés",
+    "deliveryAttempts": "{count} tentatives",
+    "deliveryRetry": "Réessayer",
+    "deliveryRetried": "Remis en file pour une nouvelle tentative",
+    "deliveryRefresh": "Actualiser",
+    "deadLetterCount": "{count} abandonnés"
   },
   "tray": {
     "show": "Ouvrir SnmpLens",
