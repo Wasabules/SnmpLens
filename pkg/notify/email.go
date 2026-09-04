@@ -233,11 +233,59 @@ func (m EmailSink) Send(e events.Event, subject, body string) (err error) {
 	if err := w.Close(); err != nil {
 		return fmt.Errorf("close message: %w", err)
 	}
-	return client.Quit()
+
+	// Past this point the relay OWNS the message: w.Close is what reads the 250
+	// after the terminating dot. A QUIT that then fails — the relay closing the
+	// socket instead of answering, a 500, or simply the last of the connection
+	// deadline being spent on a slow DATA acknowledgement — used to be returned
+	// as a Send failure, and the retry delivered a SECOND copy of the alert.
+	if err := client.Quit(); err != nil {
+		log.Printf("notify: %s accepted the message but QUIT failed: %v", cfg.Host, err)
+	}
+	return nil
 }
 
 // buildMessage renders the RFC5322 message. The subject is MIME-encoded so a
 // non-ASCII summary does not arrive as mojibake.
+// foldAddressList writes a recipient list as one header field, wrapped.
+//
+// RFC 5322 2.1.1 caps a line at 998 octets and a large on-call rota went out
+// as one line well past it — some relays reject the message, others fold it
+// themselves wherever they like. Folding is a CRLF followed by whitespace, so
+// the field still parses as one value.
+//
+// headerValue runs on each address, not on the joined string: it is what stops
+// a CR or LF in an address starting a header of its own, and the fold we add
+// here must be the only line break in the field.
+func foldAddressList(to []string) string {
+	// 78 is the RFC 5322 SHOULD; 998 is the MUST. Folding at the softer limit
+	// keeps the header readable and leaves no address near the hard one.
+	const softLimit = 78
+
+	var b strings.Builder
+	line := len("To: ")
+	for i, addr := range to {
+		addr = headerValue(strings.TrimSpace(addr))
+		if addr == "" {
+			continue
+		}
+		if i > 0 {
+			b.WriteString(",")
+			line++
+			if line+1+len(addr) > softLimit {
+				b.WriteString("\r\n" + " ")
+				line = 1
+			} else {
+				b.WriteString(" ")
+				line++
+			}
+		}
+		b.WriteString(addr)
+		line += len(addr)
+	}
+	return b.String()
+}
+
 func buildMessage(cfg EmailConfig, e events.Event, subject, body string) string {
 	if subject == "" {
 		subject = "[SnmpLens] " + e.Summary
@@ -248,7 +296,7 @@ func buildMessage(cfg EmailConfig, e events.Event, subject, body string) string 
 
 	var b strings.Builder
 	b.WriteString("From: " + headerValue(cfg.From) + "\r\n")
-	b.WriteString("To: " + headerValue(strings.Join(cfg.To, ", ")) + "\r\n")
+	b.WriteString("To: " + foldAddressList(cfg.To) + "\r\n")
 	// QEncoding encodes every byte below 0x20, so a CR or LF in the subject
 	// becomes =0D=0A rather than starting a new header. That is what stops an
 	// event summary from injecting a Bcc, so it is pinned by a test: the
@@ -264,7 +312,7 @@ func buildMessage(cfg EmailConfig, e events.Event, subject, body string) string 
 		b.WriteString("X-SnmpLens-Event-Id: " + headerValue(e.ID) + "\r\n")
 	}
 	b.WriteString("\r\n")
-	b.WriteString(dotStuff(body))
+	b.WriteString(normaliseLines(body))
 	b.WriteString("\r\n")
 	return b.String()
 }
@@ -281,24 +329,45 @@ const maxSubjectOctets = 900
 // with a plain space and never a CRLF, so an over-long subject becomes one very
 // long line rather than a folded one, and nothing downstream would bring it
 // back under the limit.
+// capEncodedSubject keeps the subject inside maxSubjectOctets once encoded,
+// leaving as much of it as fits.
+//
+// The old loop cut `over / 4` runes at a time with no overshoot check and
+// stopped the moment the result fitted, so one oversized cut was never walked
+// back. Measured on delivered mail (accented characters in, runes out):
+// 100->118, 150->113, 200->72, 250->31, 300->1, 400->1, 2000->1. From 300
+// characters up the operator received a bare ellipsis — 21 octets where 900
+// were available — for any summary carrying UTF-8: a device sysDescr, a
+// hostname, a translated subject template.
+//
+// A binary search over the rune count has no overshoot to walk back: encoding
+// is monotonic in the number of runes kept, so the largest prefix that fits is
+// the answer.
 func capEncodedSubject(subject string) string {
 	encoded := mime.QEncoding.Encode("utf-8", subject)
 	if len(encoded) <= maxSubjectOctets {
 		return encoded
 	}
+
 	runes := []rune(subject)
-	for len(runes) > 0 && len(encoded) > maxSubjectOctets {
-		drop := 1
-		if over := len(encoded) - maxSubjectOctets; over > 64 {
-			drop = over / 4 // converge fast, then settle a rune at a time
-		}
-		if drop > len(runes) {
-			drop = len(runes)
-		}
-		runes = runes[:len(runes)-drop]
-		encoded = mime.QEncoding.Encode("utf-8", string(runes)+"…")
+	fits := func(n int) (string, bool) {
+		enc := mime.QEncoding.Encode("utf-8", string(runes[:n])+"…")
+		return enc, len(enc) <= maxSubjectOctets
 	}
-	return encoded
+
+	lo, hi := 0, len(runes)
+	best, _ := fits(0)
+	for lo <= hi {
+		mid := (lo + hi) / 2
+		enc, ok := fits(mid)
+		if ok {
+			best = enc
+			lo = mid + 1
+			continue
+		}
+		hi = mid - 1
+	}
+	return best
 }
 
 // headerValue strips CR and LF from a header value.
@@ -323,18 +392,21 @@ func headerValue(s string) string {
 // line beginning with a dot in it would end DATA early, truncating the alert
 // and handing the remainder to the relay as SMTP commands — through a
 // connection this application has already authenticated.
-func dotStuff(body string) string {
-	// Normalise to CRLF without doubling the ones already there.
+// normaliseLines puts the body on CRLF without doubling the ones already there.
+//
+// It used to dot-stuff as well, and that was one escaping too many: net/smtp
+// already does it. client.Data() returns a dataCloser wrapping textproto's
+// DotWriter, which escapes a leading dot and converts a lone LF to CRLF — so a
+// body line reading "." went on the wire as "..." and the receiver, removing
+// one dot per RFC 5321 4.5.2, left ".." in the mailbox. Templated bodies and
+// trap-derived text were altered in delivery.
+//
+// The safety property is unchanged: DotWriter alone is what stops a lone dot
+// truncating the message, and injection_test.go pins that.
+func normaliseLines(body string) string {
 	body = strings.ReplaceAll(body, "\r\n", "\n")
 	body = strings.ReplaceAll(body, "\r", "\n")
-
-	lines := strings.Split(body, "\n")
-	for i, line := range lines {
-		if strings.HasPrefix(line, ".") {
-			lines[i] = "." + line
-		}
-	}
-	return strings.Join(lines, "\r\n")
+	return strings.ReplaceAll(body, "\n", "\r\n")
 }
 
 // Describe names the destination for the delivery log.

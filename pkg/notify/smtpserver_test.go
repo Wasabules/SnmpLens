@@ -33,7 +33,21 @@ type smtpSession struct {
 	AuthOverPlaintext bool
 	From              string
 	Rcpt              []string
-	Data              string
+	// Data is the raw wire form, still dot-stuffed.
+	Data string
+	// Delivered is what a mailbox actually holds: RFC 5321 4.5.2 says the
+	// receiver removes the leading dot from any line that begins with one.
+	// Asserting on Data alone cannot see a body that was stuffed twice.
+	Delivered string
+}
+
+// unstuff is the receiver half of RFC 5321 4.5.2.
+func unstuff(raw string) string {
+	lines := strings.Split(raw, "\r\n")
+	for i, l := range lines {
+		lines[i] = strings.TrimPrefix(l, ".")
+	}
+	return strings.Join(lines, "\r\n")
 }
 
 type smtpServer struct {
@@ -51,6 +65,9 @@ type smtpServer struct {
 	rejectRcpt map[string]string
 	// authReply overrides the reply to AUTH. Empty means "235 authenticated".
 	authReply string
+	// quitReply overrides the reply to QUIT; "drop" closes the socket without
+	// answering. The message has already been accepted by then.
+	quitReply string
 	tlsCfg    *tls.Config
 	ln        net.Listener
 }
@@ -241,10 +258,19 @@ func (s *smtpServer) handle(conn net.Conn) {
 				b.WriteString(dl)
 			}
 			sess.Data = b.String()
+			sess.Delivered = unstuff(b.String())
 			say("250 queued")
 
 		case strings.HasPrefix(upper, "QUIT"):
-			say("221 bye")
+			switch s.quitReply {
+			case "":
+				say("221 bye")
+			case "drop":
+				s.finish(sess)
+				return
+			default:
+				say(s.quitReply)
+			}
 			s.finish(sess)
 			return
 

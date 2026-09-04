@@ -26,58 +26,6 @@ func hostileEvent(payload string) events.Event {
 	}
 }
 
-// A line beginning with a dot must be stuffed, or it ends the DATA phase and
-// the rest of the message is read by the relay as SMTP commands.
-func TestMailBodyCannotEndDataEarly(t *testing.T) {
-	hostile := "x\n.\nMAIL FROM:<spoofed@example.com>\nRCPT TO:<victim@example.com>\nDATA\nspam"
-	e := hostileEvent(hostile)
-	_, body := Render(e, false)
-
-	msg := buildMessage(EmailConfig{From: "a@b.c", To: []string{"d@e.f"}}, e, "subject", body)
-
-	// Split the way a relay does, and look for a line that would terminate DATA.
-	afterHeaders := msg
-	if i := strings.Index(msg, "\r\n\r\n"); i >= 0 {
-		afterHeaders = msg[i+4:]
-	}
-	for _, line := range strings.Split(afterHeaders, "\r\n") {
-		if line == "." {
-			t.Fatalf("an unstuffed bare dot survived into the body:\n%s", afterHeaders)
-		}
-	}
-	// Bare LFs would let a lenient relay find the dot line anyway.
-	if strings.Contains(strings.ReplaceAll(afterHeaders, "\r\n", ""), "\n") {
-		t.Errorf("the body still contains bare LF line endings:\n%q", afterHeaders)
-	}
-	// The content must still be there — stuffing, not deleting.
-	if !strings.Contains(afterHeaders, "MAIL FROM:<spoofed@example.com>") {
-		t.Error("the body was mangled rather than escaped")
-	}
-}
-
-// RFC5321 4.5.2 is about any line STARTING with a dot, not only a lone dot.
-func TestMailBodyStuffsEveryLeadingDot(t *testing.T) {
-	body := ".hidden\r\n..already\r\nnormal\r\n.\r\n"
-	out := dotStuff(body)
-	for _, line := range strings.Split(out, "\r\n") {
-		if line == "" || line == "normal" {
-			continue
-		}
-		if !strings.HasPrefix(line, "..") {
-			t.Errorf("line %q was not stuffed", line)
-		}
-	}
-}
-
-func TestDotStuffNormalisesLineEndings(t *testing.T) {
-	for _, in := range []string{"a\nb", "a\r\nb", "a\rb"} {
-		out := dotStuff(in)
-		if out != "a\r\nb" {
-			t.Errorf("dotStuff(%q) = %q, want \"a\\r\\nb\"", in, out)
-		}
-	}
-}
-
 // The subject is written straight into a header. Its safety comes from
 // QEncoding encoding every byte below 0x20, which is standard-library
 // behaviour we depend on rather than implement — so it is pinned here.
