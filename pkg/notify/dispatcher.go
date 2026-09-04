@@ -31,6 +31,12 @@ type Queue interface {
 // exists or is disabled.
 type SinkResolver func(sinkID string) (Sink, bool)
 
+// StopGrace is how long Stop waits for a delivery already on the wire.
+//
+// Long enough for a syslog write or a webhook POST to a receiver that is
+// answering, short enough that closing the window never feels stuck.
+const StopGrace = 5 * time.Second
+
 // Dispatcher drains the outbox on a ticker and on demand.
 type Dispatcher struct {
 	Queue    Queue
@@ -42,6 +48,9 @@ type Dispatcher struct {
 	done     chan struct{}
 	stopOnce sync.Once
 	running  sync.Mutex
+	// loop is held by the drain goroutine for its whole life, so Stop can wait
+	// for it rather than merely asking it to finish.
+	loop sync.WaitGroup
 }
 
 // NewDispatcher returns a dispatcher that polls every interval.
@@ -61,7 +70,9 @@ func NewDispatcher(q Queue, resolve SinkResolver, interval time.Duration) *Dispa
 
 // Start runs the drain loop until Stop.
 func (d *Dispatcher) Start() {
+	d.loop.Add(1)
 	go func() {
+		defer d.loop.Done()
 		ticker := time.NewTicker(d.interval)
 		defer ticker.Stop()
 		for {
@@ -77,9 +88,36 @@ func (d *Dispatcher) Start() {
 	}()
 }
 
-// Stop ends the drain loop. Safe to call more than once.
+// Stop ends the drain loop and WAITS for a delivery already in flight.
+//
+// It used to close a channel and return, so the loop finished the pass it was
+// in on its own goroutine with nobody waiting. On shutdown that means a send
+// still running when the process exits: OnBeforeClose returns, Wails tears the
+// app down, and an SMTP conversation or an HTTP POST is cut mid-way. The
+// delivery is left `pending` with an attempt spent — neither sent nor reported
+// as failed.
+//
+// The wait is BOUNDED. Drain stops starting new deliveries as soon as `done` is
+// closed, so what is left to wait for is a single send — but that send is at the
+// mercy of a relay that may be timing out, and an app that will not close is
+// worse than an interrupted POST. After the grace period the delivery is
+// abandoned in place: the row stays `pending` and the next launch picks it up.
+//
+// Safe to call more than once, and safe on a dispatcher that was never started.
 func (d *Dispatcher) Stop() {
 	d.stopOnce.Do(func() { close(d.done) })
+
+	finished := make(chan struct{})
+	go func() {
+		d.loop.Wait()
+		close(finished)
+	}()
+
+	select {
+	case <-finished:
+	case <-time.After(StopGrace):
+		log.Printf("notify: a delivery was still in flight after %s; leaving it pending", StopGrace)
+	}
 }
 
 // Wake asks for an immediate drain without blocking the caller.
@@ -112,6 +150,17 @@ func (d *Dispatcher) Drain() {
 	}
 
 	for _, q := range batch {
+		// Shutdown has begun: finish nothing new. A batch is up to 20
+		// deliveries and an email sink waits 20 seconds by default, so
+		// plowing on would hold the close for minutes. The rows stay
+		// `pending` and are picked up on the next launch, which is what a
+		// durable outbox is for.
+		select {
+		case <-d.done:
+			return
+		default:
+		}
+
 		sink, ok := d.Resolve(q.SinkID)
 		if !ok {
 			// The sink was deleted or disabled after the event was queued.
