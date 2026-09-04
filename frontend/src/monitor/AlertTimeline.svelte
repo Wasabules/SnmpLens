@@ -3,7 +3,7 @@
   import { _ } from 'svelte-i18n';
   import Icon from '../Icon.svelte';
   import { formatTimestamp } from '../utils/formatting';
-  import { anonMode, anonymizeIp } from '../utils/anonymize';
+  import { anonMode, anonymizeIp, anonymizeText } from '../utils/anonymize';
   import { targetLabels } from '../stores/targetLabels';
   import { mibStore } from '../stores/mibStore';
   import { oidName, oidTooltip } from '../utils/oidDisplay';
@@ -72,9 +72,22 @@
     return $targetLabels[source] || source;
   }
 
+  // The stored params carry the unmasked address and every title key
+  // interpolates them, so the target column read `Device-1` while the sentence
+  // beside it read the real address. Same defect as EventsPanel.
+  function anonParams(params) {
+    if (!$anonMode || !params) return params || {};
+    const out = {};
+    for (const [k, v] of Object.entries(params)) {
+      out[k] = typeof v === 'string' ? anonymizeText(v) : v;
+    }
+    return out;
+  }
+
   function title(ev) {
-    const translated = $_(ev.titleKey, { values: ev.params || {}, default: '' });
-    return translated && translated !== ev.titleKey ? translated : ev.summary;
+    const translated = $_(ev.titleKey, { values: anonParams(ev.params), default: '' });
+    if (translated && translated !== ev.titleKey) return translated;
+    return $anonMode ? anonymizeText(ev.summary) : ev.summary;
   }
 </script>
 
@@ -95,7 +108,7 @@
       {#each incidents.slice(0, MAX_LISTED) as ev (ev.id)}
         <li class:resolved={ev.state === 'resolved'}>
           <span class="when">{formatTimestamp(ev.ts)}</span>
-          <span class="who" title={ev.source || ''}>{displayTarget(ev.source)}</span>
+          <span class="who" title={displayTarget(ev.source)}>{displayTarget(ev.source)}</span>
           {#if ev.oid}
             <span class="what-oid" title={oidTooltip(ev.oid, $mibStore.tree)}>{oidName(ev.oid, $mibStore.tree)}</span>
           {:else}

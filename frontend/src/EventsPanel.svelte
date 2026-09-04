@@ -10,7 +10,7 @@
   import { targetLabels } from './stores/targetLabels';
   import { oidName, oidTooltip } from './utils/oidDisplay';
   import { formatTimestamp } from './utils/formatting';
-  import { anonMode, anonymizeIp } from './utils/anonymize';
+  import { anonMode, anonymizeIp, anonymizeText } from './utils/anonymize';
   import { downloadFile } from './utils/csv';
   import { EventsPayload } from '../wailsjs/go/main/App';
 
@@ -72,10 +72,33 @@
   // The stored title key + params are rendered here, so an event recorded a
   // year ago still reads correctly in a locale added since. `summary` is the
   // English fallback written at insert time.
+  // Anonymous Mode has to reach the params, not only the source column.
+  //
+  // The stored params carry the unmasked value — `{"target": "10.0.0.1"}` — and
+  // every title key interpolates them: "{oid} on {target} is {kind} {bound}",
+  // "{pduType} from {source} (...)", "{target} stopped responding". So the
+  // column read `Device-1` while the summary beside it read the real address,
+  // twice over, in a mode whose entire purpose is that it does not.
+  function anonParams(params) {
+    if (!$anonMode || !params) return params || {};
+    const out = {};
+    for (const [k, v] of Object.entries(params)) {
+      out[k] = typeof v === 'string' ? anonymizeText(v) : v;
+    }
+    return out;
+  }
+
   function renderTitle(ev) {
     const key = ev.titleKey;
-    const translated = $_(key, { values: ev.params || {}, default: '' });
-    return translated && translated !== key ? translated : ev.summary;
+    const translated = $_(key, { values: anonParams(ev.params), default: '' });
+    if (translated && translated !== key) return translated;
+    return $anonMode ? anonymizeText(ev.summary) : ev.summary;
+  }
+
+  // The tooltip is text too, and it was the raw value in both places.
+  function tooltipText(text) {
+    if (!text) return '';
+    return $anonMode ? anonymizeText(text) : text;
   }
 
   async function showPayload(ev) {
@@ -190,13 +213,13 @@
           <span class="sev-dot" title={$_('events.severity.' + ev.severity)}></span>
           <span class="ts">{formatTimestamp(ev.ts)}</span>
           <span class="cat">{$_('events.category.' + ev.category)}</span>
-          <span class="src" title={ev.source || ''}>{displaySource(ev.source)}</span>
+          <span class="src" title={displaySource(ev.source)}>{displaySource(ev.source)}</span>
           {#if ev.oid}
             <span class="oid" title={oidTooltip(ev.oid, $mibStore.tree)}>{oidName(ev.oid, $mibStore.tree)}</span>
           {:else}
             <span></span>
           {/if}
-          <span class="summary" title={ev.summary}>{renderTitle(ev)}</span>
+          <span class="summary" title={tooltipText(ev.summary)}>{renderTitle(ev)}</span>
           {#if ev.payloadSize > 0}
             <button class="btn-copy-small" on:click={() => showPayload(ev)} title={$_('events.viewPayload')}>
               <Icon name="clipboard-list" size={13} />
