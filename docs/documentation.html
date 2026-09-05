@@ -98,7 +98,7 @@ try {
      "name": "A MIB will not load",
      "acceptedAnswer": {
       "@type": "Answer",
-      "text": "Use the diagnostics — see above. The commonest causes, in order: the file is an HTML error page rather than a MIB, it imports a module you do not have, or its filename does not match the module name inside it."
+      "text": "Open the MIB list and use Diagnose, which reports the stage that failed — read, content, parse, imports, build or semantic — with the line and column. See Why a MIB did not load. The commonest causes, in order: the file is an HTML error page rather than a MIB, it imports a module you do not have, or its filename does not match the module name inside it."
      }
     },
     {
@@ -1048,9 +1048,11 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
 
       <h3>A MIB will not load</h3>
       <p>
-        Use the diagnostics — see <a href="#mib-failed">above</a>. The commonest causes, in
-        order: the file is an HTML error page rather than a MIB, it imports a module you do
-        not have, or its filename does not match the module name inside it.
+        Open the MIB list and use <strong>Diagnose</strong>, which reports the stage that
+        failed — read, content, parse, imports, build or semantic — with the line and column.
+        See <a href="#mib-failed">Why a MIB did not load</a>. The commonest causes, in order:
+        the file is an HTML error page rather than a MIB, it imports a module you do not have,
+        or its filename does not match the module name inside it.
       </p>
 
       <h3>An OID shows the wrong name</h3>

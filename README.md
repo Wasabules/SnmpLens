@@ -11,6 +11,16 @@
 </p>
 
 <p align="center">
+  <a href="https://wasabules.github.io/SnmpLens/"><strong>Website</strong></a>
+  &nbsp;·&nbsp;
+  <a href="https://wasabules.github.io/SnmpLens/demo.html"><strong>Try it in your browser</strong></a>
+  &nbsp;·&nbsp;
+  <a href="https://wasabules.github.io/SnmpLens/documentation.html">Documentation</a>
+  &nbsp;·&nbsp;
+  <a href="https://wasabules.github.io/SnmpLens/download.html">Download</a>
+</p>
+
+<p align="center">
   <a href="https://github.com/Wasabules/SnmpLens/actions/workflows/ci.yml"><img src="https://github.com/Wasabules/SnmpLens/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="https://github.com/Wasabules/SnmpLens/releases"><img src="https://img.shields.io/github/v/release/Wasabules/SnmpLens?include_prereleases" alt="Release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" /></a>
@@ -23,42 +33,42 @@
 ## Screenshots
 
 <p align="center">
-  <img src="screenshots/operations-dark.png" alt="SNMP Operations - Dark Theme" width="90%" />
+  <img src="docs/assets/img/operations-dark-1200.webp" alt="SNMP Operations - Dark Theme" width="90%" />
   <br /><em>SNMP Operations with Smart Table View</em>
 </p>
 
 <p align="center">
-  <img src="screenshots/mib-browser.png" alt="MIB Browser" width="90%" />
+  <img src="docs/assets/img/mib-browser-dark-1200.webp" alt="MIB Browser" width="90%" />
   <br /><em>Hierarchical MIB Tree Browser with search and favorites</em>
 </p>
 
 <p align="center">
-  <img src="screenshots/monitor-charts.png" alt="Real-time Monitoring" width="90%" />
+  <img src="docs/assets/img/monitor-charts-dark-1200.webp" alt="Real-time Monitoring" width="90%" />
   <br /><em>Real-time OID Monitoring with Chart.js graphs</em>
 </p>
 
 <p align="center">
-  <img src="screenshots/trap-listener.png" alt="Trap Listener" width="90%" />
+  <img src="docs/assets/img/trap-listener-dark-1200.webp" alt="Trap Listener" width="90%" />
   <br /><em>SNMP Trap Listener with filtering and export</em>
 </p>
 
 <p align="center">
-  <img src="screenshots/network-discovery.png" alt="Network Discovery" width="90%" />
+  <img src="docs/assets/img/network-discovery-dark-1200.webp" alt="Network Discovery" width="90%" />
   <br /><em>CIDR Network Discovery, Ping and Traceroute</em>
 </p>
 
 <p align="center">
-  <img src="screenshots/history-diff.png" alt="History and Diff" width="90%" />
+  <img src="docs/assets/img/history-diff-dark-1200.webp" alt="History and Diff" width="90%" />
   <br /><em>Query History with side-by-side diff comparison</em>
 </p>
 
 <p align="center">
-  <img src="screenshots/anonymous-mode.png" alt="Anonymous Mode" width="90%" />
+  <img src="docs/assets/img/anonymous-mode-dark-1200.webp" alt="Anonymous Mode" width="90%" />
   <br /><em>Anonymous Mode — sensitive data hidden for safe screenshots</em>
 </p>
 
 <p align="center">
-  <img src="screenshots/operations-light.png" alt="Light Theme" width="90%" />
+  <img src="docs/assets/img/operations-light-1200.webp" alt="Light Theme" width="90%" />
   <br /><em>Light Theme</em>
 </p>
 
