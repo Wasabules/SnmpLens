@@ -8,6 +8,19 @@
 
 import { series, CPU_SESSION } from './series.js';
 
+/**
+ * The generated fixture table, handed over by App.js at module init.
+ *
+ * A computed answer sometimes needs to AMEND a fixture rather than replace it:
+ * the history list wants a second walk added to diff against and its other four
+ * entries left exactly as they are. Importing App.js here would be a cycle, and
+ * copying the entries would leave two versions of them to keep in step.
+ */
+let FIXTURES = {};
+export function setFixtures(table) {
+  FIXTURES = table || {};
+}
+
 let cpu = null;
 
 export const dynamic = {
@@ -103,7 +116,7 @@ const INTERFACES = [
   { descr: 'Vlan240 - guest wireless', type: 53, mtu: 1500, speed: 1000000000, mac: '00:1B:21:3C:4D:81', admin: 1, oper: 1 },
 ];
 
-function ifTableWalk() {
+function ifTableWalk(after = 0) {
   const vars = [];
   const add = (col, index, type, value) =>
     vars.push({ oid: `${IF_BASE}.${col}.${index}`, type, value });
@@ -117,18 +130,32 @@ function ifTableWalk() {
     add(5, n, 'Gauge32', iface.speed);
     if (iface.mac) add(6, n, 'OctetString', iface.mac);
     add(7, n, 'Integer', iface.admin);
-    add(8, n, 'Integer', iface.oper);
-    add(9, n, 'TimeTicks', 106238300 - i * 41207);
+
+    // `after` is minutes elapsed since the first walk. The later walk moves
+    // exactly what a later walk would: the access port on floor 2 south was
+    // down and has come back up, its counters start moving with it, and the
+    // rest of the table is byte-for-byte identical. That last part is what
+    // makes the diff READABLE — a picture in which every row changed says
+    // nothing about what the feature is for, and this one reports 36 modified
+    // against 119 identical.
+    const recovered = after > 0 && iface.descr.indexOf('floor 2 south') > 0;
+    const up = iface.oper === 1 || recovered;
+    const secs = after * 60;
+
+    // The row the whole picture is about: 2 (down) becoming 1 (up). It is
+    // column 8, so the diff lists it FIRST, above the counters it caused.
+    add(8, n, 'Integer', up ? 1 : iface.oper);
+    add(9, n, 'TimeTicks', recovered ? 41207 : 106238300 + secs * 100 - i * 41207);
     // The counters, which are what anyone actually walks ifTable for.
-    add(10, n, 'Counter32', iface.oper === 1 ? 418923400 + i * 9137711 : 0);
-    add(16, n, 'Counter32', iface.oper === 1 ? 391004822 + i * 8412093 : 0);
-    add(14, n, 'Counter32', iface.oper === 1 ? i * 3 : 0);
-    add(20, n, 'Counter32', iface.oper === 1 ? i : 0);
+    add(10, n, 'Counter32', up ? 418923400 + i * 9137711 + secs * 121400 : 0);
+    add(16, n, 'Counter32', up ? 391004822 + i * 8412093 + secs * 98750 : 0);
+    add(14, n, 'Counter32', up ? i * 3 : 0);
+    add(20, n, 'Counter32', up ? i : 0);
   });
 
   return [{
     target: '10.20.0.1',
-    responseTimeMs: 412,
+    responseTimeMs: after ? 388 : 412,
     result: { oid: '1.3.6.1.2.1.2.2', type: 'WalkResponse', value: vars },
   }];
 }
@@ -137,6 +164,41 @@ let walk = null;
 dynamic.SnmpWalk = () => {
   if (!walk) walk = ifTableWalk();
   return walk;
+};
+
+/**
+ * The history list, with a second walk to diff the first against.
+ *
+ * The fixture carried one WALK, and `isDiffEligible` accepts only WALK and
+ * GETBULK — so Diff Mode could select exactly one entry and Compare never
+ * appeared. `DiffModal` reads `entry.results` straight off each entry, which the
+ * fixture's walk did not have either.
+ *
+ * The pair is forty minutes apart on the same OID and the same target, because
+ * that is the question the feature answers: what changed on this device since I
+ * last looked.
+ */
+dynamic.LoadHistory = () => {
+  const base = FIXTURES.LoadHistory || [];
+  const first = base.find((e) => e.operation === 'WALK');
+  if (!first) return undefined;
+
+  const withResults = (entry, minutes, id, when) => ({
+    ...entry,
+    id,
+    timestamp: when,
+    targets: ['10.20.0.1'],
+    duration: minutes ? 388 : 412,
+    results: ifTableWalk(minutes),
+    totalResults: 155,
+  });
+
+  const t0 = new Date(first.timestamp).getTime();
+  return [
+    withResults(first, 40, `${first.id}-b`, new Date(t0 + 40 * 60000).toISOString()),
+    withResults(first, 0, first.id, first.timestamp),
+    ...base.filter((e) => e !== first),
+  ];
 };
 
 /**
@@ -214,3 +276,47 @@ dynamic.SnmpDiscover = () =>
     responseTime,
     reachable: true,
   }));
+
+/**
+ * OID → name, for the varbind tables.
+ *
+ * `Trap.svelte` calls `GetOidDetails` once per varbind and puts the answer in
+ * the Name column. Every binding used to be generated with an empty parameter
+ * list, so all six calls got the same fixture back and the trap screenshot read
+ * `linkDown` six times beside six plainly different OIDs — the one thing a
+ * picture of an SNMP tool must not get wrong, because its whole claim is that it
+ * resolves OIDs through your MIBs.
+ *
+ * Only the OIDs the fixtures actually contain are listed. An unknown OID falls
+ * back to the static fixture, which is what the trap-OID varbind wants anyway.
+ */
+const OID_NAMES = {
+  '1.3.6.1.2.1.1.3.0': ['sysUpTime', 'The time since the network management portion of the system was last re-initialized.'],
+  '1.3.6.1.6.3.1.1.4.1.0': ['snmpTrapOID', 'The authoritative identification of the notification currently being sent.'],
+  '1.3.6.1.2.1.2.2.1.1.3': ['ifIndex', 'A unique value, greater than zero, for each interface.'],
+  '1.3.6.1.2.1.2.2.1.2.3': ['ifDescr', 'A textual string containing information about the interface.'],
+  '1.3.6.1.2.1.2.2.1.7.3': ['ifAdminStatus', 'The desired state of the interface.'],
+  '1.3.6.1.2.1.2.2.1.8.3': ['ifOperStatus', 'The current operational state of the interface.'],
+  '1.3.6.1.4.1.318.2.3.3.0': ['upsAdvStateSummary', 'A summary of the UPS state, as a display string.'],
+  '1.3.6.1.4.1.318.1.1.1.2.2.1.0': ['upsAdvBatteryCapacity', 'The remaining battery capacity, as a percentage of full capacity.'],
+  '1.3.6.1.4.1.318.1.1.1.2.2.3.0': ['upsAdvBatteryRunTimeRemaining', 'The UPS battery run time remaining before battery exhaustion.'],
+  '1.3.6.1.2.1.1.1.0': ['sysDescr', 'A textual description of the entity.'],
+  '1.3.6.1.2.1.1.5.0': ['sysName', 'An administratively-assigned name for this managed node.'],
+
+  // The NOTIFICATION OIDs — the values of the snmpTrapOID varbind, resolved a
+  // second time to fill the Message column. Without these all five rows read
+  // "linkDown", including the one from a UPS, which is a picture of an SNMP
+  // tool failing at the one thing it claims to do.
+  '1.3.6.1.6.3.1.1.5.1': ['coldStart', 'The agent is reinitialising and its configuration may have altered.'],
+  '1.3.6.1.6.3.1.1.5.3': ['linkDown', 'A communication link is about to enter the down state.'],
+  '1.3.6.1.6.3.1.1.5.4': ['linkUp', 'A communication link has come up.'],
+  '1.3.6.1.4.1.318.0.5': ['upsOnBattery', 'The UPS is operating on battery: utility power has failed.'],
+  '1.3.6.1.4.1.9': ['ciscoEnterprise', 'An enterprise-specific notification from a Cisco agent.'],
+};
+
+dynamic.GetOidDetails = (oid) => {
+  const key = String(oid || '').replace(/^\./, '');
+  const hit = OID_NAMES[key];
+  if (!hit) return undefined; // no opinion: answer() falls through to the fixture
+  return { name: hit[0], description: hit[1] };
+};

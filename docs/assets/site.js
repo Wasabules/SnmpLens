@@ -1,0 +1,120 @@
+/* ==========================================================================
+   SnmpLens — project site behaviour
+   --------------------------------------------------------------------------
+   Two things only: the theme toggle, and a copy button on the code blocks.
+   Everything else on this site is HTML and CSS, and should stay that way.
+
+   Deferred, so it never blocks the first paint. The one piece that CANNOT wait
+   is choosing the theme — a deferred script would paint the wrong one first and
+   then correct it — so that lives inline in each page's <head>, above the
+   stylesheet link. This file only takes over once there is a reader to serve.
+   ========================================================================== */
+
+(function () {
+  'use strict';
+
+  /* --- theme ------------------------------------------------------------ */
+
+  var STORE = 'snmplens-theme';
+  var MODES = ['auto', 'light', 'dark'];
+
+  var ICON = {
+    // A monitor: "whatever this machine says".
+    auto: '<path d="M1.75 2h12.5A1.75 1.75 0 0 1 16 3.75v7.5A1.75 1.75 0 0 1 14.25 13H9.5v1h2.25a.75.75 0 0 1 0 1.5h-6a.75.75 0 0 1 0-1.5H8v-1H3.25A1.75 1.75 0 0 1 1.5 11.25v-7.5A1.75 1.75 0 0 1 3.25 2Zm0 1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h11a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"/>',
+    light: '<path d="M8 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6Zm0-1.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM8 0a.75.75 0 0 1 .75.75v1a.75.75 0 0 1-1.5 0v-1A.75.75 0 0 1 8 0Zm0 13a.75.75 0 0 1 .75.75v1a.75.75 0 0 1-1.5 0v-1A.75.75 0 0 1 8 13ZM0 8a.75.75 0 0 1 .75-.75h1a.75.75 0 0 1 0 1.5h-1A.75.75 0 0 1 0 8Zm13 0a.75.75 0 0 1 .75-.75h1a.75.75 0 0 1 0 1.5h-1A.75.75 0 0 1 13 8ZM2.34 2.34a.75.75 0 0 1 1.06 0l.7.7a.75.75 0 0 1-1.06 1.07l-.7-.71a.75.75 0 0 1 0-1.06Zm9.56 9.56a.75.75 0 0 1 1.06 0l.7.7a.75.75 0 1 1-1.06 1.06l-.7-.7a.75.75 0 0 1 0-1.06Zm1.76-9.56a.75.75 0 0 1 0 1.06l-.7.71a.75.75 0 1 1-1.06-1.07l.7-.7a.75.75 0 0 1 1.06 0ZM4.1 11.9a.75.75 0 0 1 0 1.06l-.7.7a.75.75 0 0 1-1.06-1.06l.7-.7a.75.75 0 0 1 1.06 0Z"/>',
+    dark: '<path d="M9.598 1.591a.749.749 0 0 1 .785-.175 7.001 7.001 0 1 1-8.967 8.967.75.75 0 0 1 .961-.96 5.5 5.5 0 0 0 7.046-7.046.75.75 0 0 1 .175-.786Zm1.616 1.945a7 7 0 0 1-7.678 7.678 5.499 5.499 0 1 0 7.678-7.678Z"/>',
+  };
+
+  var LABEL = { auto: 'Follow system theme', light: 'Light theme', dark: 'Dark theme' };
+
+  function stored() {
+    try {
+      var v = localStorage.getItem(STORE);
+      return MODES.indexOf(v) >= 0 ? v : 'auto';
+    } catch (e) {
+      // A private window can throw on read. Following the system is the right
+      // answer there anyway.
+      return 'auto';
+    }
+  }
+
+  function apply(mode) {
+    if (mode === 'auto') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', mode);
+  }
+
+  function buildToggle() {
+    var host = document.querySelector('[data-theme-toggle]');
+    if (!host) return;
+
+    var current = stored();
+    host.className = 'theme-toggle';
+    host.setAttribute('role', 'group');
+    host.setAttribute('aria-label', 'Theme');
+    host.hidden = false;
+    host.innerHTML = '';
+
+    var buttons = MODES.map(function (mode) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.title = LABEL[mode];
+      b.setAttribute('aria-label', LABEL[mode]);
+      b.setAttribute('aria-pressed', String(mode === current));
+      b.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true">' + ICON[mode] + '</svg>';
+      b.addEventListener('click', function () {
+        current = mode;
+        apply(mode);
+        try {
+          if (mode === 'auto') localStorage.removeItem(STORE);
+          else localStorage.setItem(STORE, mode);
+        } catch (e) { /* the choice still holds for this page */ }
+        buttons.forEach(function (other, i) {
+          other.setAttribute('aria-pressed', String(MODES[i] === mode));
+        });
+      });
+      host.appendChild(b);
+      return b;
+    });
+  }
+
+  /* --- copy buttons ----------------------------------------------------- */
+
+  // Every <pre> on this site is a command someone is meant to run, and the
+  // longest of them is a build invocation nobody should be retyping.
+  function addCopyButtons() {
+    if (!navigator.clipboard) return;
+
+    document.querySelectorAll('pre').forEach(function (pre) {
+      if (pre.closest('.no-copy')) return;
+
+      var wrap = document.createElement('div');
+      wrap.className = 'copy-wrap';
+      pre.parentNode.insertBefore(wrap, pre);
+      wrap.appendChild(pre);
+
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'copy-btn';
+      btn.textContent = 'Copy';
+      btn.setAttribute('aria-label', 'Copy this to the clipboard');
+
+      btn.addEventListener('click', function () {
+        navigator.clipboard.writeText(pre.innerText.replace(/\n+$/, '')).then(function () {
+          btn.textContent = 'Copied';
+          btn.classList.add('is-done');
+          setTimeout(function () {
+            btn.textContent = 'Copy';
+            btn.classList.remove('is-done');
+          }, 1600);
+        }, function () {
+          btn.textContent = 'Press ⌘/Ctrl+C';
+        });
+      });
+
+      wrap.appendChild(btn);
+    });
+  }
+
+  buildToggle();
+  addCopyButtons();
+})();

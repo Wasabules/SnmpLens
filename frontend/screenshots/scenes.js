@@ -1,15 +1,22 @@
 /**
- * The scene catalogue: one entry per screenshot the site needs.
+ * The scene catalogue: one entry per screenshot the site needs, in BOTH themes.
  *
- * A scene is a URL, not a script. `?scene=monitor` seeds localStorage before the
- * bundle evaluates, picks the tab, and may override any bridge fixture — so a
- * capture is a plain page load with nothing to click and nothing to time.
+ * A scene is a URL, not a script. `?scene=monitor-charts-dark` seeds
+ * localStorage before the bundle evaluates, picks the tab, and may override any
+ * bridge fixture — so a capture is a plain page load with nothing to click and
+ * nothing to time.
  *
  * That matters more than it sounds. Driving a UI by clicking is how screenshot
  * automation becomes flaky: a selector moves, a transition is half-finished, and
  * the image is wrong in a way nobody notices until it is on the front page.
  * Here the only thing that can vary between two runs of the same scene is the
  * clock, and the fixtures pin that too.
+ *
+ * Every entry is declared ONCE and emitted twice, dark and light. The site shows
+ * whichever matches the reader's own theme, so a missing counterpart is not a
+ * missing picture — it is a picture of the wrong application on half the screens
+ * that load the page. Declaring the pair by hand is how one of the two silently
+ * drifts from the other.
  */
 
 /** The seven tabs, as App.svelte names them. */
@@ -22,6 +29,9 @@ export const TABS = {
   events: 'events',
   mibeditor: 'mibeditor',
 };
+
+/** The two themes every scene is captured in. */
+export const THEMES = ['dark', 'light'];
 
 /**
  * Seeds every scene starts from: a configured, used installation.
@@ -56,6 +66,7 @@ function scene(base, name, { tab, theme = 'dark', width = 1600, height = 1000, s
     name,
     width,
     height,
+    theme,
     describe,
     seeds: {
       ...base,
@@ -69,82 +80,93 @@ function scene(base, name, { tab, theme = 'dark', width = 1600, height = 1000, s
   };
 }
 
-export function buildScenes(seeds) {
-  const base = baseSeeds(seeds);
-  return [
-  scene(base, 'operations-dark', {
+/**
+ * The catalogue, theme-independent. `base` is the file stem; the emitted scene
+ * names — and therefore the file names — are `<base>-dark` and `<base>-light`.
+ */
+const CATALOGUE = [
+  {
+    base: 'operations',
     tab: TABS.operations,
-    theme: 'dark',
     // A walk's results are the component's own state, so they cannot be seeded
     // — the walk has to be run. This is the one place the harness presses
     // buttons, and it presses them by their label.
     act: ['WALK', 'Execute WALK', 'Table'],
     describe: 'A walk of ifTable rendered as a real table, split by INDEX.',
-  }),
-
-  scene(base, 'operations-light', {
+  },
+  {
+    base: 'mib-browser',
     tab: TABS.operations,
-    theme: 'light',
-    act: ['WALK', 'Execute WALK', 'Table'],
-    describe: 'The same, in the light theme.',
-  }),
-
-  scene(base, 'mib-browser', {
-    tab: TABS.operations,
-    theme: 'dark',
+    // The picture had nothing selected, so the detail panel its caption promised
+    // was not in it. The node is addressed by OID rather than by name because
+    // "ifOperStatus" is ALSO the label of a favourite in the panel above, which
+    // is what a text search finds first.
+    //
+    // Deliberately not filtering first, though that was the obvious move:
+    // measured, typing into the search box replaces the tree with COMPACTED
+    // ancestor paths — three rows reading "mgmt .mib-2 .interfaces .ifTable
+    // .ifEntry" — and the leaf, which is the thing being selected, is no longer
+    // in the document at all.
+    act: ['sel:[data-oid="1.3.6.1.2.1.2.2.1.8"] .node-label'],
     describe: 'The MIB tree, searched, with a node selected and its detail shown.',
-  }),
-
-  scene(base, 'monitor-charts', {
+  },
+  {
+    base: 'monitor-charts',
     tab: TABS.monitor,
-    theme: 'dark',
     // Tall enough for the response-time chart below the main one; at 1100 it
     // was sliced through its legend, which reads as a broken layout.
     height: 1320,
     describe: 'Polling sessions charted over several hours, with a threshold crossed.',
-  }),
-
-  scene(base, 'trap-listener', {
+  },
+  {
+    base: 'trap-listener',
     tab: TABS.traps,
-    theme: 'dark',
+    // "with their varbinds, the listener running" was true of neither: every
+    // row was collapsed behind its chevron and the header said the listener was
+    // stopped, next to a Start Listening button nobody had pressed.
+    act: ['Start Listening', 'sel:.trap-summary|0'],
     describe: 'Received traps with their varbinds, the listener running.',
-  }),
-
-  scene(base, 'events-journal', {
+  },
+  {
+    base: 'events-journal',
     tab: TABS.events,
-    theme: 'dark',
     describe: 'The journal: traps, thresholds, a reachability loss, a system event.',
-  }),
-
-  scene(base, 'history-diff', {
+  },
+  {
+    base: 'history-diff',
     tab: TABS.history,
-    theme: 'dark',
+    // Nothing was ever diffed here — the scene had no steps at all, so the
+    // picture was the plain history list with Diff Mode un-pressed, under a
+    // caption about a comparison. Diff mode wants two entries chosen, A then B,
+    // before it will offer Compare.
+    // The OLDER walk is chosen first: diff mode labels them A then B in the
+    // order they are picked, and A being the later of the two reads backwards.
+    act: ['Diff Mode', 'sel:.entry-header|1', 'sel:.entry-header|0', 'Compare'],
+    // The modal is taller than the list behind it.
+    height: 1150,
     describe: 'Two walks of the same device, diffed side by side.',
-  }),
-
-  scene(base, 'network-discovery', {
+  },
+  {
+    base: 'network-discovery',
     tab: TABS.discovery,
-    theme: 'dark',
     height: 1150,
     // The sweep has to be RUN: its results are the component's own state, so
     // without this the picture is of an empty form saying "no scan results".
     act: ['Scan'],
     describe: 'A CIDR sweep that found a real estate, with each device named.',
-  }),
-
-  scene(base, 'mib-editor', {
+  },
+  {
+    base: 'mib-editor',
     tab: TABS.mibeditor,
-    theme: 'dark',
     height: 1100,
     // Without this the editor shows its empty state — "pick a MIB on the left"
     // — which is a picture of the file list, not of the editor.
     act: ['ACME-POE-MIB'],
     describe: 'A MIB open, highlighted, with the analysis pointing at the line.',
-  }),
-
-  scene(base, 'target-manager', {
+  },
+  {
+    base: 'target-manager',
     tab: TABS.operations,
-    theme: 'dark',
     // Framed to the dialog. At 1100 the lower half was empty backdrop, which
     // makes a documentation image about a dialog mostly about nothing.
     height: 940,
@@ -181,11 +203,10 @@ export function buildScenes(seeds) {
     },
     act: ['Target'],
     describe: 'Managing targets: groups, per-device overrides, reachability.',
-  }),
-
-  scene(base, 'settings-snmp', {
+  },
+  {
+    base: 'settings-snmp',
     tab: TABS.operations,
-    theme: 'dark',
     height: 1100,
     // A named v3 user, with the passphrases BLANK — which is not an oversight.
     // The interface never receives a stored credential back from the backend,
@@ -196,22 +217,32 @@ export function buildScenes(seeds) {
     },
     act: ['key:,', 'SNMP'],
     describe: 'SNMP defaults and the v3 credentials, with the store named.',
-  }),
-
-  scene(base, 'settings-notifications', {
+  },
+  {
+    base: 'settings-notifications',
     tab: TABS.operations,
-    theme: 'dark',
     height: 1250,
     act: ['key:,', 'Notifications'],
     describe: 'Destinations, routing rules, and the delivery log.',
-  }),
-
-  scene(base, 'anonymous-mode', {
+  },
+  {
+    base: 'anonymous-mode',
     tab: TABS.operations,
-    theme: 'dark',
-    settings: { anonymousMode: true },
-    act: ['WALK', 'Execute WALK'],
+    // NOT `settings: { anonymousMode: true }`, which is what this used to say —
+    // and it silently produced an UNMASKED screenshot. settingsStore.js forces
+    // the flag to false on load, deliberately, so that closing the application
+    // can never leave someone's install in a masked state. Seeding it is
+    // therefore impossible by design, and the only way in is the application's
+    // own Ctrl+Shift+A — pressed after the walk, so there is something on
+    // screen for it to mask.
+    act: ['WALK', 'Execute WALK', 'key:shift+A'],
     describe: 'The same screen with every address replaced by a stable alias.',
-  }),
-  ];
+  },
+];
+
+export function buildScenes(seeds) {
+  const base = baseSeeds(seeds);
+  return CATALOGUE.flatMap((entry) =>
+    THEMES.map((theme) => scene(base, `${entry.base}-${theme}`, { ...entry, theme })),
+  );
 }

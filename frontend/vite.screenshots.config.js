@@ -122,23 +122,67 @@ function injectScene() {
     return false;
   }
 
-  function runSteps(steps, done) {
+  function runSteps(steps, done, pace) {
     var i = 0;
+    var gap = pace || 450;
     (function next() {
       if (i >= steps.length) { setTimeout(done, 700); return; }
       var step = steps[i++];
-      // "key:," presses Ctrl+comma. Some things have no button at all — the
-      // settings dialog is opened by a shortcut and nothing else.
+      // "key:," presses Ctrl+comma; "key:shift+A" adds Shift. Some things have
+      // no button at all — the settings dialog is opened by a shortcut and
+      // nothing else, and Anonymous Mode CANNOT be seeded: settingsStore.js
+      // forces it off on load, deliberately, so the only way in is its own
+      // Ctrl+Shift+A.
       if (step.indexOf('key:') === 0) {
+        var combo = step.slice(4);
+        var shift = combo.indexOf('shift+') === 0;
         window.dispatchEvent(new KeyboardEvent('keydown', {
-          key: step.slice(4), ctrlKey: true, bubbles: true,
+          key: shift ? combo.slice(6) : combo,
+          ctrlKey: true, shiftKey: shift, bubbles: true,
         }));
+
+      // "sel:.entry-header|1" clicks the second element matching a selector.
+      // Rows do not have labels worth searching for — a history entry's text is
+      // its OID and its duration, and a trap's is a timestamp that moves every
+      // run — so repeated things are addressed by position instead.
+      } else if (step.indexOf('sel:') === 0) {
+        var bar = step.lastIndexOf('|');
+        var css = bar > 3 ? step.slice(4, bar) : step.slice(4);
+        var at = bar > 3 ? parseInt(step.slice(bar + 1), 10) : 0;
+        var els = document.querySelectorAll(css);
+        if (els[at]) els[at].click();
+
+      // "type:.search-bar input|ifOperStatus" fills a field.
+      //
+      // Assigning .value alone would show the text and change nothing: Svelte's
+      // bind:value is an "input" listener, so without the event the component's
+      // own variable never updates and the tree never filters.
+      } else if (step.indexOf('type:') === 0) {
+        var cut = step.indexOf('|');
+        var field = document.querySelector(step.slice(5, cut));
+        if (field) {
+          field.focus();
+          field.value = step.slice(cut + 1);
+          field.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+
       } else {
         clickText(step);
       }
-      setTimeout(next, 450);
+      setTimeout(next, gap);
     })();
   }
+
+  // "?record=1" holds the scene at its opening frame instead of playing it.
+  // (No backticks in here: this whole block is itself a template literal, and
+  // one would end it.)
+  //
+  // A still wants the END state and gets there as fast as it can; a clip wants
+  // the TRANSITION, and cannot start until the camera is rolling. So in record
+  // mode the steps are parked behind __SNMPLENS_PLAY__, which tools/record.mjs
+  // calls once the screencast is live, at a pace a person can follow rather
+  // than the pace a screenshot wants.
+  var recording = new URLSearchParams(location.search).get('record') === '1';
 
   window.addEventListener('load', function () {
     // Let the application mount and its first bindings resolve, then choose the
@@ -146,6 +190,16 @@ function injectScene() {
     setTimeout(function () {
       pickTab();
       setTimeout(function () {
+        if (recording) {
+          // Parked, and SAYING so: the recorder waits on this flag rather than
+          // on a fixed delay, so a slow machine records the same clip as a fast
+          // one instead of one that starts halfway through.
+          window.__SNMPLENS_ARMED__ = true;
+          window.__SNMPLENS_PLAY__ = function (pace) {
+            runSteps(s.act || [], function () { window.__SNMPLENS_READY__ = true; }, pace);
+          };
+          return;
+        }
         runSteps(s.act || [], function () { window.__SNMPLENS_READY__ = true; });
       }, 800);
     }, 700);

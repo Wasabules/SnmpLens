@@ -45,8 +45,24 @@
   --radius: 6px;
 }
 
+/* The dark palette, and the two ways to arrive at it.
+ *
+ * It is written out twice, which is deliberate and not an oversight. A reader
+ * gets dark either because their SYSTEM says so and they have not overridden it
+ * — the media query — or because they picked it here, which stamps
+ * data-theme="dark" on <html>. Those are two different selectors and one of them
+ * lives inside a media query, so no selector list can carry both.
+ *
+ * The `:not([data-theme="light"])` is what makes the override work in the
+ * awkward direction: choosing LIGHT on a machine set to dark.
+ *
+ * light-dark() would collapse the two into one block. It is deliberately not
+ * used: on a browser that does not know the function the whole declaration is
+ * invalid at computed-value time, so the page does not fall back to light — it
+ * falls back to no colour at all. Sixteen duplicated lines are the cheaper
+ * failure. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --paper:      #1e1e1e;
     --paper-2:    #262626;
     --paper-3:    #2e2e2e;
@@ -63,6 +79,30 @@
     --bad:        #f85149;
   }
 }
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper:      #1e1e1e;
+  --paper-2:    #262626;
+  --paper-3:    #2e2e2e;
+  --ink:        #e6edf3;
+  --ink-2:      #c2ccd6;
+  --ink-3:      #8b949e;
+  --line:       #3a3a3a;
+  --line-soft:  #2e2e2e;
+  --accent:     #58a6ff;
+  --accent-ink: #0b1a2b;
+  --accent-wash:rgba(88, 166, 255, 0.10);
+  --good:       #3fb950;
+  --warn:       #d29922;
+  --bad:        #f85149;
+}
+
+/* Said explicitly, so form controls and scrollbars follow the CHOICE too. With
+ * only `color-scheme: light dark` on :root they would keep tracking the
+ * operating system while everything painted by these tokens tracked the
+ * toggle — a light page with dark select menus. */
+:root[data-theme="light"] { color-scheme: light; }
 
 /* --- reset -------------------------------------------------------------- */
 
@@ -324,7 +364,77 @@ kbd {
   margin: 0;
 }
 
-.shot img { width: 100%; }
+.shot img { width: 100%; display: block; }
+
+/* Theme-paired screenshots.
+ *
+ * Every capture exists twice, dark and light, and the page shows the one that
+ * matches the palette around it — a dark screenshot on a light page is the only
+ * thing on it that is not the reader's own theme, and it reads as a stock photo.
+ *
+ * Two <img> toggled by CSS, NOT <picture> with
+ * `media="(prefers-color-scheme: dark)"`. A source's media query is evaluated
+ * against the system, once, and never re-evaluated for an attribute on <html> —
+ * so with <picture> the toggle in the header would repaint the whole page and
+ * leave the screenshots showing the other theme.
+ *
+ * The hidden one is `loading="lazy"` in the markup, and a lazy image with no
+ * rendering box is not fetched — so this costs one image, not two. */
+.shot-light { display: block; }
+.shot-dark  { display: none; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .shot-light { display: none; }
+  :root:not([data-theme="light"]) .shot-dark  { display: block; }
+}
+
+:root[data-theme="dark"] .shot-light { display: none; }
+:root[data-theme="dark"] .shot-dark  { display: block; }
+:root[data-theme="light"] .shot-light { display: block; }
+:root[data-theme="light"] .shot-dark  { display: none; }
+
+/* --- theme toggle ------------------------------------------------------- */
+
+/* Three states, not two: a reader who has never chosen anything should keep
+ * following their system, and there is no way to return to that from a
+ * two-position switch. The same hairline vocabulary as the rest of the header,
+ * so it reads as part of the furniture rather than as a widget. */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper-2);
+}
+
+.theme-toggle button {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: color .12s ease, background-color .12s ease;
+}
+
+.theme-toggle button:hover { color: var(--ink); }
+.theme-toggle button svg { width: 14px; height: 14px; fill: currentColor; }
+
+.theme-toggle button[aria-pressed="true"] {
+  background: var(--paper);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+}
+
+/* Until the script has run, no button is pressed and the control would flash
+ * three identical states. It is revealed by the script instead. */
+.theme-toggle[hidden] { display: none; }
 
 .shot figcaption {
   border-top: 1px solid var(--line);
@@ -668,3 +778,44 @@ tbody tr:last-child td { border-bottom: 0; }
 }
 
 .skip-link:focus { left: 0; }
+
+/* --- copy buttons on code blocks ---------------------------------------- */
+
+/* Every <pre> here is a command meant to be run. The button is inserted by
+ * site.js and positioned against a wrapper it also inserts — putting it inside
+ * the <pre> would make it part of what gets copied, and putting it in the
+ * <pre>'s existing parent would anchor it to the section rather than the block.
+ *
+ * It only appears on hover or focus, because eight of these down a page is a
+ * column of buttons competing with the text they belong to. Focus is not a
+ * nicety: without it the button is reachable by keyboard and invisible. */
+.copy-wrap {
+  position: relative;
+}
+
+.copy-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  padding: 0.2rem 0.5rem;
+  font: 500 0.72rem/1.5 var(--font-body);
+  color: var(--ink-3);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .12s ease, color .12s ease, border-color .12s ease;
+}
+
+.copy-wrap:hover .copy-btn,
+.copy-btn:focus-visible { opacity: 1; }
+
+.copy-btn:hover { color: var(--ink); border-color: var(--ink-3); }
+.copy-btn.is-done { color: var(--good); border-color: var(--good); opacity: 1; }
+
+/* A pointer is not the only way in. On a touch screen there is no hover, so the
+ * button would never appear at all. */
+@media (hover: none) {
+  .copy-btn { opacity: 1; }
+}

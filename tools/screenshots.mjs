@@ -139,9 +139,37 @@ if (!chrome) {
 mkdirSync(outDir, { recursive: true });
 const profile = mkdtempSync(join(tmpdir(), 'snmplens-shot-'));
 
+/**
+ * Kill a process AND its children.
+ *
+ * `child.kill()` signals the chrome.exe we spawned; Chrome's renderer, GPU and
+ * utility processes are its children and survive it, which is how a run that
+ * looked finished left fourteen of them behind.
+ */
+function killTree(child) {
+  if (process.platform === 'win32') {
+    try {
+      spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+      return;
+    } catch { /* fall through to the signal */ }
+  }
+  try {
+    child.kill('SIGKILL');
+  } catch { /* already gone */ }
+}
+
 function capture(scene) {
   const out = join(outDir, `${scene.name}.png`);
   const url = `http://127.0.0.1:${port}/index.html?scene=${encodeURIComponent(scene.name)}`;
+
+  // Remove the previous capture FIRST. What is waited on below is the file
+  // appearing at a stable size, and last run's file is already there at a
+  // perfectly stable size — so without this, a re-run of a scene that has been
+  // captured before finishes on its first poll and kills Chrome before it has
+  // written anything. It reported success, every time, and changed nothing.
+  try {
+    rmSync(out, { force: true });
+  } catch { /* if it cannot be removed, the size check below still guards */ }
 
   return new Promise((resolve) => {
     const child = spawn(chrome, [
@@ -166,7 +194,40 @@ function capture(scene) {
       url,
     ], { stdio: 'ignore' });
 
-    child.on('exit', () => {
+    // Headless Chrome writes the screenshot and then, often enough to matter,
+    // does not exit — measured on this machine, roughly one run in three left a
+    // process tree alive with the PNG already on disk, and waiting on `exit`
+    // alone hung the whole capture there for as long as anyone let it.
+    //
+    // So the file is what is waited on, not the process: it is the thing we
+    // actually want, and it exists whether Chrome chooses to leave or not. The
+    // size has to be stable across two polls because a half-written PNG exists
+    // too, and reading its header would report nonsense dimensions.
+    let settled = false;
+    let lastSize = -1;
+    const deadline = Date.now() + 90000;
+
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearInterval(poll);
+      killTree(child);
+      done();
+    };
+
+    const poll = setInterval(() => {
+      if (settled) return;
+      if (existsSync(out)) {
+        const size = statSync(out).size;
+        if (size > 0 && size === lastSize) { finish(); return; }
+        lastSize = size;
+      }
+      if (Date.now() > deadline) finish();
+    }, 250);
+
+    child.on('exit', finish);
+
+    function done() {
       if (!existsSync(out)) {
         console.log(`  ${scene.name}: FAILED — no file was written`);
         resolve(false);
@@ -184,7 +245,7 @@ function capture(scene) {
         (ok ? '' : `  <- expected ${expected} wide; --force-device-scale-factor did not apply`),
       );
       resolve(true);
-    });
+    }
   });
 }
 
@@ -201,6 +262,31 @@ try {
 } catch { /* a locked profile directory is not worth failing over */ }
 
 console.log(`\n${scenes.length - failures} captured, ${failures} failed.`);
+
+/* --- derive what the site actually serves -------------------------------- */
+
+// The PNGs are 3200 px wide and around half a megabyte each; the site displays
+// them at about 900. Deriving the WebP here rather than in a separate command is
+// deliberate — a capture that leaves the derived files stale puts an old picture
+// on the page while the new one sits beside it, unused and looking correct.
+if (!failures) {
+  console.log('\nDeriving the responsive WebP the pages reference…');
+  const { derive, socialCard } = await import(new URL('./webp.mjs', import.meta.url).href);
+  const d = derive(outDir, filter);
+  // Only on a full run: the card is cut from operations-dark, and re-cutting it
+  // while capturing an unrelated scene would silently pin it to an older one.
+  if (!filter && socialCard(outDir)) console.log('  og-card.png (1200x630) for og:image');
+  if (d.failed) {
+    console.log(`\n${d.failed} WebP failed — is ffmpeg on PATH?`);
+    failures += d.failed;
+  } else {
+    console.log(
+      `\n${d.written} written — ${Math.round(d.bytes / 1024)} KB of WebP`
+      + ` against ${Math.round((d.bytes + d.saved) / 1024)} KB of PNG.`,
+    );
+  }
+}
+
 if (!failures) {
   console.log('\nThe site references these by name from docs/assets/img/; nothing else');
   console.log('needs updating. Look at them before committing — this checks that a file');

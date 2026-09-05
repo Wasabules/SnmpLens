@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#1e1e1e" media="(prefers-color-scheme: dark)" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Not found — SnmpLens</title>
 <meta name="robots" content="noindex" />
@@ -9,6 +11,18 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap" rel="stylesheet" />
+<script>
+/* Stamp the chosen theme on <html> BEFORE the stylesheet is parsed.
+   Synchronous and inline on purpose: anything deferred paints one theme and
+   then corrects it, which is the flash this exists to prevent. Absent or
+   unreadable storage means "follow the system", which is the default the
+   stylesheet already implements — so this does nothing at all for most
+   readers, and that is the correct amount. */
+try {
+  var t = localStorage.getItem('snmplens-theme');
+  if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+} catch (e) {}
+</script>
 <link rel="stylesheet" href="/SnmpLens/assets/site.css" />
 </head>
 <body>
@@ -19,6 +33,7 @@
     <nav class="nav" aria-label="Main">
       <a href="/SnmpLens/documentation.html">Documentation</a>
       <a href="/SnmpLens/download.html">Download</a>
+      <div data-theme-toggle hidden></div>
     </nav>
   </div>
 </header>
@@ -45,5 +60,6 @@
   </div>
 </footer>
 
+<script src="/SnmpLens/assets/site.js" defer></script>
 </body>
 </html>

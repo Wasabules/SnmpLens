@@ -1,0 +1,10 @@
+# The 3200 px captures are INTERMEDIATES. The pages serve the derived WebP, and
+# `node tools/screenshots.mjs` remakes both from the application in one command,
+# so committing 12 MB of PNG to derive 4.5 MB of WebP from puts the same picture
+# in the repository twice and makes every regeneration a large diff.
+#
+# The two exceptions are files nothing derives: the logo, and the social card,
+# which is fetched by crawlers and chat clients that do not all take WebP.
+*.png
+!SnmpLens.png
+!og-card.png
