@@ -76,7 +76,7 @@
         {#if selectedNode.parent}
           <div class="detail-row">
             <span class="detail-label">{$_('nodeDetails.parent')}</span>
-            <span class="detail-value">{selectedNode.parent.name}</span>
+            <span class="detail-value">{selectedNode.parent}</span>
           </div>
         {/if}
 

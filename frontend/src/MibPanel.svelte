@@ -106,13 +106,21 @@
     return items;
   }
 
-  onMount(async () => {
-    persistentMibDir = await GetPersistentMibDirectory();
-    // MIB loading is now handled in App.svelte after paths initialization
-    
-    // Add keyboard event listener
+  // NOT async. Svelte calls back whatever the callback RETURNS, and an async
+  // function returns a Promise — never a function — so the cleanup below was
+  // dropped and the keydown listener stayed on `document`. This panel is
+  // unmounted on every tab switch, so they accumulated: after ten switches,
+  // ten handlers, each answering the same arrow key.
+  //
+  // The directory is fetched without awaiting it here. Nothing in the first
+  // paint needs it, and making the callback async to shorten that line is
+  // exactly the trade that lost the cleanup.
+  onMount(() => {
+    GetPersistentMibDirectory()
+      .then((dir) => { persistentMibDir = dir; })
+      .catch((e) => console.warn('Could not read the persistent MIB directory:', e));
+
     document.addEventListener('keydown', handleKeyboardNavigation);
-    
     return () => {
       document.removeEventListener('keydown', handleKeyboardNavigation);
     };
