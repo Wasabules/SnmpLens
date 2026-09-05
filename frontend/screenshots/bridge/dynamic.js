@@ -514,3 +514,93 @@ dynamic.NotifyPreviewTemplate = (cfg) => {
       return undefined;
   }
 };
+
+/* ------------------------------------------------------------------------- *
+ * Getters that GATE a screen
+ *
+ * Thirty-one of the ninety-three bindings have no fixture and fall through to a
+ * shape default, which for most is harmless: they are actions, and nothing reads
+ * what a delete returns. A handful are different — a panel renders "Loading…"
+ * until they answer, and a null answer is a screen that never arrives. The
+ * Service tab did exactly that.
+ *
+ * These are the ones a person can reach in the demo. Written here rather than in
+ * the specification because they describe THIS machine, and the demo runs on
+ * someone else's.
+ * ------------------------------------------------------------------------- */
+
+dynamic.ServiceGetStatus = () => ({
+  config: {
+    runInBackground: false,
+    startHidden: false,
+    autoStartTrapListener: true,
+    trapPort: 162,
+    autoResumeMonitors: true,
+    auditFailedSets: false,
+  },
+  // A tray icon is what makes background mode real, and the screen explains
+  // itself differently when the desktop refused one. True is the ordinary case.
+  trayAvailable: true,
+  trapListenerRunning: false,
+  // Not navigator.platform: the demo shows what the DESKTOP build reports, and
+  // the settings text branches on it.
+  platform: 'windows',
+});
+
+dynamic.AutostartGet = () => ({
+  supported: true,
+  enabled: false,
+  // Escaped: unescaped, JavaScript drops every backslash it does not recognise
+  // and the registry path renders as HKCUSoftwareMicrosoftWindowsCurrentVersionRun
+  // — which is the one line on this screen whose whole purpose is to let someone
+  // go and check what the application did to their machine.
+  location: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run',
+  command: '"C:\\Program Files\\SnmpLens\\SnmpLens.exe" --hidden',
+});
+
+dynamic.GetAppVersion = () => '1.4.1';
+
+/**
+ * A connection test, answered per target.
+ *
+ * Someone will press this in the demo — it is the most obvious button on a
+ * target — and a null answer renders as a failure with no message, which reads
+ * as a broken application rather than as a demo.
+ */
+dynamic.TestConnection = (req) => {
+  const target = (req && (req.target || (req.targets || [])[0])) || '10.20.0.1';
+  return {
+    target,
+    responseTimeMs: 18 + (String(target).length % 7) * 3,
+    result: {
+      oid: '1.3.6.1.2.1.1.1.0',
+      type: 'OctetString',
+      value: 'Cisco IOS Software, C9300 Software (CAT9K_IOSXE), Version 17.12.03',
+    },
+  };
+};
+
+/**
+ * Saves ECHO what they were given.
+ *
+ * The panels replace their list entry with whatever comes back, so returning
+ * null empties the row that was just edited — the change appears to have deleted
+ * the thing. Echoing is also what the real backend does: it returns the stored
+ * record, including any id it assigned.
+ */
+const echoWithId = (prefix) => (value) => {
+  if (!value || typeof value !== 'object') return value;
+  return value.id ? value : { ...value, id: `${prefix}-${Math.abs(hashOf(JSON.stringify(value)))}` };
+};
+
+// A stable id from the content, so saving the same thing twice does not produce
+// two rows — and no Math.random, for the same reason the rest of this harness
+// avoids it.
+function hashOf(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return h;
+}
+
+dynamic.NotifySaveSink = echoWithId('sink');
+dynamic.NotifySaveRoute = echoWithId('route');

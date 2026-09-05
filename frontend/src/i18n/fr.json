@@ -968,7 +968,10 @@
     "previewSyslog": "La ligne qui sera envoyée",
     "previewEmail": "Le message qui sera envoyé",
     "previewContentType": "L’en-tête Content-Type que portera cette requête",
-    "previewSyslogNoSubject": "Syslog ne porte pas de sujet ; seul le corps est envoyé."
+    "previewSyslogNoSubject": "Syslog ne porte pas de sujet ; seul le corps est envoyé.",
+    "xmlValid": "XML bien formé · {bytes} octets",
+    "xmlInvalid": "XML mal formé",
+    "previewBytes": "{bytes} octets"
   },
   "tray": {
     "show": "Ouvrir SnmpLens",

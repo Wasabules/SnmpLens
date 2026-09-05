@@ -968,7 +968,10 @@
     "previewSyslog": "将要发送的日志行",
     "previewEmail": "将要发送的邮件",
     "previewContentType": "本次请求将携带的 Content-Type 头",
-    "previewSyslogNoSubject": "Syslog 不携带主题；只发送正文。"
+    "previewSyslogNoSubject": "Syslog 不携带主题；只发送正文。",
+    "xmlValid": "格式良好的 XML · {bytes} 字节",
+    "xmlInvalid": "XML 格式不正确",
+    "previewBytes": "{bytes} 字节"
   },
   "tray": {
     "show": "打开 SnmpLens",

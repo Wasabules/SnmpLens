@@ -968,7 +968,10 @@
     "previewSyslog": "The line that will be sent",
     "previewEmail": "The message that will be sent",
     "previewContentType": "The Content-Type header this request will carry",
-    "previewSyslogNoSubject": "Syslog carries no subject; only the body is sent."
+    "previewSyslogNoSubject": "Syslog carries no subject; only the body is sent.",
+    "xmlValid": "well-formed XML · {bytes} bytes",
+    "xmlInvalid": "not well-formed XML",
+    "previewBytes": "{bytes} bytes"
   },
   "tray": {
     "show": "Open SnmpLens",

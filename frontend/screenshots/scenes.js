@@ -238,6 +238,13 @@ const CATALOGUE = [
     describe: 'SNMP defaults and the v3 credentials, with the store named.',
   },
   {
+    base: 'settings-service',
+    tab: TABS.operations,
+    height: 1000,
+    act: ['key:,', 'Service'],
+    describe: 'Background mode, the trap listener at startup, and the login entry.',
+  },
+  {
     base: 'settings-notifications',
     tab: TABS.operations,
     height: 1250,

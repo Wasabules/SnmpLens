@@ -968,7 +968,10 @@
     "previewSyslog": "Die Zeile, die gesendet wird",
     "previewEmail": "Die Nachricht, die gesendet wird",
     "previewContentType": "Der Content-Type-Header dieser Anfrage",
-    "previewSyslogNoSubject": "Syslog kennt keinen Betreff; nur der Rumpf wird gesendet."
+    "previewSyslogNoSubject": "Syslog kennt keinen Betreff; nur der Rumpf wird gesendet.",
+    "xmlValid": "wohlgeformtes XML · {bytes} Bytes",
+    "xmlInvalid": "kein wohlgeformtes XML",
+    "previewBytes": "{bytes} Bytes"
   },
   "tray": {
     "show": "SnmpLens öffnen",

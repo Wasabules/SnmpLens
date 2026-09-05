@@ -89,6 +89,16 @@
   $: wire = preview?.format || 'text';
   $: asPayload = wire !== 'text';
 
+  // Whether this format HAS a notion of being well-formed.
+  //
+  // JSON and XML are parsed before the request goes out; a syslog line, a mail
+  // message, plain text and a form body are not, because there is nothing there
+  // to be malformed. Keying the badge off "not plain text" instead — which is
+  // what this did — announced "valid JSON · 277 bytes" over a syslog line.
+  $: checksShape = wire === 'json' || wire === 'xml';
+  $: validLabel = wire === 'xml' ? 'notify.xmlValid' : 'notify.jsonValid';
+  $: invalidLabel = wire === 'xml' ? 'notify.xmlInvalid' : 'notify.jsonInvalid';
+
   // The rendered subject, when the transport actually carries one separately.
   // An email's subject is inside the headers below, and a syslog line has no
   // subject at all — showing one there would suggest it is sent.
@@ -203,12 +213,17 @@
       {#if preview?.contentType}
         <code class="pv-ctype" title={$_('notify.previewContentType')}>{preview.contentType}</code>
       {/if}
-      {#if asPayload && preview}
+      {#if preview && checksShape}
         {#if preview.jsonError}
-          <span class="pv-bad" title={preview.jsonError}>{$_('notify.jsonInvalid')}</span>
+          <span class="pv-bad" title={preview.jsonError}>{$_(invalidLabel)}</span>
         {:else}
-          <span class="pv-ok">{$_('notify.jsonValid', { values: { bytes: preview.bytes } })}</span>
+          <span class="pv-ok">{$_(validLabel, { values: { bytes: preview.bytes } })}</span>
         {/if}
+      {:else if preview && asPayload}
+        <!-- No shape to be wrong: the size is still worth knowing, because a
+             syslog line over the collector's limit is silently truncated and a
+             mail body is not. -->
+        <span class="pv-size">{$_('notify.previewBytes', { values: { bytes: preview.bytes } })}</span>
       {/if}
       <select bind:value={previewKind}>
         <option value="threshold">{$_('events.category.threshold')}</option>
@@ -424,6 +439,11 @@
     border: 1px solid var(--border-color);
     border-radius: 4px;
     padding: 1px 5px;
+  }
+
+  .pv-size {
+    font-size: 0.72em;
+    color: var(--text-muted);
   }
 
   .pv-note {
