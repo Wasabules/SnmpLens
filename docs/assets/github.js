@@ -220,6 +220,56 @@
   // never as HTML: this is remote content and the page has no business
   // executing it. Only the few shapes that matter for legibility are turned
   // into elements, by hand.
+  /**
+   * The inline span of a release note: **bold**, `code`, and [text](url).
+   *
+   * Built as DOM NODES, never as innerHTML. A release note is Markdown written
+   * by a person and fetched over the network, so the only safe way to give it
+   * any structure at all is to make the elements and set textContent on each —
+   * a regex that produces an HTML string is a regex that will one day produce
+   * someone else's script tag.
+   *
+   * The alternative — leaving the asterisks alone, which is what this did —
+   * puts literal `**SNMPv3 AuthNoPriv**` on the changelog page, which is worse
+   * than either.
+   */
+  function inline(text, into) {
+    // One pass, alternating between plain text and the three things recognised.
+    // The link case takes only http(s), so a note cannot introduce a javascript:
+    // URL by writing one in Markdown.
+    // Order matters: ** is tried before *, or every bold marker is read as an
+    // empty italic. Underscores are deliberately NOT italics — `snmp_test_agent`
+    // and `--user-data-dir` turn up in these notes far more often than emphasis
+    // written that way does.
+    var re = /(\*\*|__)(.+?)\1|`([^`]+)`|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|\*(\S(?:[^*]*\S)?)\*/g;
+    var at = 0;
+    var m;
+
+    while ((m = re.exec(text)) !== null) {
+      if (m.index > at) into.appendChild(document.createTextNode(text.slice(at, m.index)));
+
+      var el;
+      if (m[2] !== undefined) {
+        el = document.createElement('strong');
+        el.textContent = m[2];
+      } else if (m[3] !== undefined) {
+        el = document.createElement('code');
+        el.textContent = m[3];
+      } else if (m[4] !== undefined) {
+        el = document.createElement('a');
+        el.href = m[5];
+        el.textContent = m[4];
+      } else {
+        el = document.createElement('em');
+        el.textContent = m[6];
+      }
+      into.appendChild(el);
+      at = m.index + m[0].length;
+    }
+
+    if (at < text.length) into.appendChild(document.createTextNode(text.slice(at)));
+  }
+
   function renderNotes(md, into) {
     var lines = String(md || '').split(/\r?\n/);
     var list = null;
@@ -228,11 +278,19 @@
       var line = raw.trim();
       if (!line) { list = null; return; }
 
+      // A Markdown rule. Rendering it as the three hyphens it is written with
+      // was the other thing leaking onto the page.
+      if (/^(-{3,}|\*{3,}|_{3,})$/.test(line)) {
+        list = null;
+        into.appendChild(document.createElement('hr'));
+        return;
+      }
+
       var heading = line.match(/^#{1,4}\s+(.*)$/);
       if (heading) {
         list = null;
         var h = document.createElement('h4');
-        h.textContent = heading[1];
+        inline(heading[1], h);
         into.appendChild(h);
         return;
       }
@@ -241,14 +299,14 @@
       if (bullet) {
         if (!list) { list = document.createElement('ul'); into.appendChild(list); }
         var li = document.createElement('li');
-        li.textContent = bullet[1].replace(/`/g, '');
+        inline(bullet[1], li);
         list.appendChild(li);
         return;
       }
 
       list = null;
       var p = document.createElement('p');
-      p.textContent = line;
+      inline(line, p);
       into.appendChild(p);
     });
   }

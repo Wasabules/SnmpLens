@@ -5,17 +5,28 @@
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
 <meta name="theme-color" content="#1e1e1e" media="(prefers-color-scheme: dark)" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>SnmpLens — desktop SNMP browser, MIB editor and alert router</title>
-<meta name="description" content="A cross-platform desktop SNMP MIB browser, MIB editor and alerting tool. Walk devices over v1, v2c and v3, read conceptual tables as tables, and route alerts to syslog, a webhook or email. One native binary. MIT licensed." />
+<title>SnmpLens — free SNMP MIB browser for Windows, macOS and Linux</title>
+<meta name="description" content="SnmpLens is a free, open-source SNMP MIB browser for Windows, macOS and Linux. Walk devices over v1, v2c and v3, receive traps, chart OIDs and route alerts." />
 <link rel="canonical" href="https://wasabules.github.io/SnmpLens/" />
-<link rel="icon" href="assets/img/SnmpLens.png" />
+<link rel="icon" type="image/png" sizes="48x48" href="assets/img/favicon-48.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="assets/img/favicon-192.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="assets/img/apple-touch-icon.png" />
 
 <meta property="og:type" content="website" />
-<meta property="og:title" content="SnmpLens — desktop SNMP browser, MIB editor and alert router" />
-<meta property="og:description" content="Walk devices over v1, v2c and v3, read conceptual tables as tables, edit MIBs with real diagnostics, and route alerts to syslog, a webhook or email. One native binary for Windows, macOS and Linux." />
+<meta property="og:site_name" content="SnmpLens" />
+<meta property="og:locale" content="en" />
+<meta property="og:title" content="SnmpLens — free SNMP MIB browser for Windows, macOS and Linux" />
+<meta property="og:description" content="SnmpLens is a free, open-source SNMP MIB browser for Windows, macOS and Linux. Walk devices over v1, v2c and v3, receive traps, chart OIDs and route alerts." />
 <meta property="og:url" content="https://wasabules.github.io/SnmpLens/" />
-<meta property="og:image" content="https://wasabules.github.io/SnmpLens/assets/img/operations-dark.png" />
+<meta property="og:image" content="https://wasabules.github.io/SnmpLens/assets/img/og-card.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="The SnmpLens Operations tab: a MIB tree on the left, a walk of ifTable rendered as a sortable table on the right." />
 <meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="SnmpLens — free SNMP MIB browser for Windows, macOS and Linux" />
+<meta name="twitter:description" content="SnmpLens is a free, open-source SNMP MIB browser for Windows, macOS and Linux. Walk devices over v1, v2c and v3, receive traps, chart OIDs and route alerts." />
+<meta name="twitter:image" content="https://wasabules.github.io/SnmpLens/assets/img/og-card.png" />
+<link rel="sitemap" type="application/xml" href="https://wasabules.github.io/SnmpLens/sitemap.xml" />
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -33,6 +44,121 @@ try {
 } catch (e) {}
 </script>
 <link rel="stylesheet" href="assets/site.css" />
+
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@graph": [
+  {
+   "@type": "SoftwareApplication",
+   "@id": "https://wasabules.github.io/SnmpLens/#app",
+   "name": "SnmpLens",
+   "alternateName": "SnmpLens SNMP MIB browser",
+   "description": "A free, open-source SNMP MIB browser, trap receiver and OID monitor for Windows, macOS and Linux. Walk devices over SNMP v1, v2c and v3, read conceptual tables as tables, edit MIBs with real diagnostics, and route alerts to syslog, a webhook or email.",
+   "url": "https://wasabules.github.io/SnmpLens/",
+   "applicationCategory": "NetworkingApplication",
+   "applicationSubCategory": "SNMP MIB browser",
+   "operatingSystem": "Windows 10, Windows 11, macOS, Linux",
+   "softwareVersion": "1.4.1",
+   "downloadUrl": "https://github.com/Wasabules/SnmpLens/releases/latest",
+   "installUrl": "https://wasabules.github.io/SnmpLens/download.html",
+   "releaseNotes": "https://wasabules.github.io/SnmpLens/changelog.html",
+   "softwareHelp": {
+    "@type": "CreativeWork",
+    "url": "https://wasabules.github.io/SnmpLens/documentation.html"
+   },
+   "softwareRequirements": "No runtime to install. On Linux, GTK 3 and WebKit2GTK.",
+   "license": "https://spdx.org/licenses/MIT.html",
+   "isAccessibleForFree": true,
+   "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD",
+    "availability": "https://schema.org/InStock"
+   },
+   "author": {
+    "@type": "Person",
+    "name": "Geoffrey Lecoq"
+   },
+   "maintainer": {
+    "@type": "Person",
+    "name": "Geoffrey Lecoq"
+   },
+   "codeRepository": "https://github.com/Wasabules/SnmpLens",
+   "programmingLanguage": [
+    "Go",
+    "Svelte"
+   ],
+   "featureList": [
+    "SNMP GET, SET, GETNEXT, GETBULK and WALK across many targets at once",
+    "Hierarchical MIB tree browser with search over name, OID, description and syntax",
+    "Conceptual tables pivoted by column and split by INDEX per RFC 2578 7.7",
+    "Row creation and deletion on tables that define a RowStatus column",
+    "MIB editor with syntax highlighting, live validation and a semantic analysis pass",
+    "Diagnostics that name the stage, line and column when a MIB will not load",
+    "SNMP trap and inform receiver for v1, v2c and v3 on any port",
+    "Scheduled OID polling charted as values, deltas, per-second rates or latency",
+    "Alert routing to syslog (UDP, TCP, TLS per RFC 5425), webhook or email",
+    "CIDR network discovery with pure-Go ping and traceroute, no elevated privileges",
+    "Anonymous Mode that masks addresses and credentials for safe screen-sharing"
+   ],
+   "image": "https://wasabules.github.io/SnmpLens/assets/img/og-card.png",
+   "screenshot": [
+    {
+     "@type": "ImageObject",
+     "contentUrl": "https://wasabules.github.io/SnmpLens/assets/img/operations-dark-2000.webp",
+     "caption": "The SnmpLens Operations tab: a walk of ifTable pivoted into columns and split by INDEX",
+     "width": 2000,
+     "height": 1250
+    },
+    {
+     "@type": "ImageObject",
+     "contentUrl": "https://wasabules.github.io/SnmpLens/assets/img/mib-browser-dark-2000.webp",
+     "caption": "The SnmpLens MIB tree browser, with a node selected and its definition shown",
+     "width": 2000,
+     "height": 1250
+    },
+    {
+     "@type": "ImageObject",
+     "contentUrl": "https://wasabules.github.io/SnmpLens/assets/img/monitor-charts-dark-2000.webp",
+     "caption": "SnmpLens polling sessions charted as values, deltas, rates or latency",
+     "width": 2000,
+     "height": 1650
+    },
+    {
+     "@type": "ImageObject",
+     "contentUrl": "https://wasabules.github.io/SnmpLens/assets/img/trap-listener-dark-2000.webp",
+     "caption": "The SnmpLens trap listener, with each notification resolved through the loaded MIBs",
+     "width": 2000,
+     "height": 1250
+    },
+    {
+     "@type": "ImageObject",
+     "contentUrl": "https://wasabules.github.io/SnmpLens/assets/img/mib-editor-dark-2000.webp",
+     "caption": "The SnmpLens MIB editor, with diagnostics that name the line and column",
+     "width": 2000,
+     "height": 1375
+    }
+   ]
+  },
+  {
+   "@type": "WebSite",
+   "@id": "https://wasabules.github.io/SnmpLens/#website",
+   "url": "https://wasabules.github.io/SnmpLens/",
+   "name": "SnmpLens",
+   "inLanguage": "en",
+   "publisher": {
+    "@type": "Person",
+    "name": "Geoffrey Lecoq"
+   },
+   "about": {
+    "@id": "https://wasabules.github.io/SnmpLens/#app"
+   }
+  }
+ ]
+}
+</script>
+
 </head>
 <body>
 
@@ -125,12 +251,12 @@ try {
       <img class="shot-light" src="assets/img/operations-light-1200.webp"
            srcset="assets/img/operations-light-1200.webp 1200w, assets/img/operations-light-2000.webp 2000w"
            sizes="(max-width: 1180px) 100vw, 1140px"
-           alt="The Operations tab: a MIB tree on the left, a walk result rendered as a sortable table on the right." width="1600" height="1000"
+           alt="The SnmpLens Operations tab: a MIB tree on the left, a walk result rendered as a sortable table on the right." width="1600" height="1000"
            loading="lazy" decoding="async" />
       <img class="shot-dark" src="assets/img/operations-dark-1200.webp"
            srcset="assets/img/operations-dark-1200.webp 1200w, assets/img/operations-dark-2000.webp 2000w"
            sizes="(max-width: 1180px) 100vw, 1140px"
-           alt="The Operations tab: a MIB tree on the left, a walk result rendered as a sortable table on the right." width="1600" height="1000"
+           alt="The SnmpLens Operations tab: a MIB tree on the left, a walk result rendered as a sortable table on the right." width="1600" height="1000"
            loading="lazy" decoding="async" />
       <figcaption>A walk of <code>ifTable</code>, pivoted into columns and split by INDEX.</figcaption>
     </figure>
@@ -180,6 +306,7 @@ try {
             one opaque sub-OID. Rows can be created and deleted where the MIB defines a
             <code>RowStatus</code>.
           </p>
+          <p class="feature-more"><a href="documentation.html#operations">Read about SNMP operations &rarr;</a></p>
         </div>
         <div class="feature">
           <h3>Traps <kbd>Ctrl 2</kbd></h3>
@@ -188,6 +315,7 @@ try {
             MIBs. Send traps to test a receiver, or acknowledged INFORMs — refused on v1
             rather than quietly downgraded, because RFC 1157 has no such PDU.
           </p>
+          <p class="feature-more"><a href="documentation.html#traps">Read about traps and informs &rarr;</a></p>
         </div>
         <div class="feature">
           <h3>History <kbd>Ctrl 3</kbd></h3>
@@ -196,6 +324,7 @@ try {
             and see what changed on a device between Tuesday and now. Frequent queries can be
             saved and re-run.
           </p>
+          <p class="feature-more"><a href="documentation.html#operations">Read about comparing two walks &rarr;</a></p>
         </div>
         <div class="feature">
           <h3>Monitor <kbd>Ctrl 4</kbd></h3>
@@ -205,6 +334,7 @@ try {
             elapsed. The clock lives in the Go backend, so closing the window does not stop
             the session.
           </p>
+          <p class="feature-more"><a href="documentation.html#monitoring">Read about monitoring and thresholds &rarr;</a></p>
         </div>
         <div class="feature">
           <h3>Discovery <kbd>Ctrl 5</kbd></h3>
@@ -213,6 +343,7 @@ try {
             Both are pure Go and need no elevated privileges. IPv6 throughout, including
             link-local addresses with a zone.
           </p>
+          <p class="feature-more"><a href="documentation.html#discovery">Read about discovery and network tools &rarr;</a></p>
         </div>
         <div class="feature">
           <h3>Events <kbd>Ctrl 6</kbd></h3>
@@ -221,6 +352,7 @@ try {
             and resolved, devices that stopped answering, deliveries that failed. Filterable,
             exportable, and the source for every alert that gets routed.
           </p>
+          <p class="feature-more"><a href="documentation.html#events">Read about the event journal &rarr;</a></p>
         </div>
         <div class="feature">
           <h3>MIB editor <kbd>Ctrl 7</kbd></h3>
@@ -230,6 +362,7 @@ try {
             duplicate OIDs, undefined INDEX objects. Standard MIBs are backed up before they
             are overwritten and can be restored.
           </p>
+          <p class="feature-more"><a href="documentation.html#mib-editor">Read about the MIB editor &rarr;</a></p>
         </div>
         <div class="feature">
           <h3>Alert routing</h3>
@@ -239,6 +372,7 @@ try {
             goes through a durable outbox with retries, so an alert survives a relay being
             down and a window being closed.
           </p>
+          <p class="feature-more"><a href="documentation.html#routes">Read about alert routing &rarr;</a></p>
         </div>
         <div class="feature">
           <h3>Privacy</h3>
@@ -248,6 +382,7 @@ try {
             non-persistent: it is always off at startup, so it can never hide something you
             needed to see.
           </p>
+          <p class="feature-more"><a href="documentation.html#privacy">Read about Anonymous Mode &rarr;</a></p>
         </div>
       </div>
     </div>
@@ -371,12 +506,12 @@ try {
           <img class="shot-light" src="assets/img/mib-browser-light-1200.webp"
                srcset="assets/img/mib-browser-light-1200.webp 1200w, assets/img/mib-browser-light-2000.webp 2000w"
                sizes="(max-width: 820px) 100vw, (max-width: 1180px) 50vw, 560px"
-               alt="The MIB tree browser with a search field and a node detail panel." width="1600" height="1000"
+               alt="The SnmpLens MIB tree browser with a search field and a node detail panel." width="1600" height="1000"
                loading="lazy" decoding="async" />
           <img class="shot-dark" src="assets/img/mib-browser-dark-1200.webp"
                srcset="assets/img/mib-browser-dark-1200.webp 1200w, assets/img/mib-browser-dark-2000.webp 2000w"
                sizes="(max-width: 820px) 100vw, (max-width: 1180px) 50vw, 560px"
-               alt="The MIB tree browser with a search field and a node detail panel." width="1600" height="1000"
+               alt="The SnmpLens MIB tree browser with a search field and a node detail panel." width="1600" height="1000"
                loading="lazy" decoding="async" />
           <figcaption>The MIB tree, searchable across name, OID, description and syntax.</figcaption>
         </figure>
@@ -397,12 +532,12 @@ try {
           <img class="shot-light" src="assets/img/trap-listener-light-1200.webp"
                srcset="assets/img/trap-listener-light-1200.webp 1200w, assets/img/trap-listener-light-2000.webp 2000w"
                sizes="(max-width: 820px) 100vw, (max-width: 1180px) 50vw, 560px"
-               alt="A list of received SNMP traps with their varbinds." width="1600" height="1000"
+               alt="A SnmpLens list of received SNMP traps with their varbinds." width="1600" height="1000"
                loading="lazy" decoding="async" />
           <img class="shot-dark" src="assets/img/trap-listener-dark-1200.webp"
                srcset="assets/img/trap-listener-dark-1200.webp 1200w, assets/img/trap-listener-dark-2000.webp 2000w"
                sizes="(max-width: 820px) 100vw, (max-width: 1180px) 50vw, 560px"
-               alt="A list of received SNMP traps with their varbinds." width="1600" height="1000"
+               alt="A SnmpLens list of received SNMP traps with their varbinds." width="1600" height="1000"
                loading="lazy" decoding="async" />
           <figcaption>Received traps, with the trap OID resolved through your MIBs.</figcaption>
         </figure>
@@ -410,12 +545,12 @@ try {
           <img class="shot-light" src="assets/img/network-discovery-light-1200.webp"
                srcset="assets/img/network-discovery-light-1200.webp 1200w, assets/img/network-discovery-light-2000.webp 2000w"
                sizes="(max-width: 820px) 100vw, (max-width: 1180px) 50vw, 560px"
-               alt="A CIDR scan listing devices that answered, with ping and traceroute." width="1600" height="1150"
+               alt="A SnmpLens CIDR scan listing devices that answered, with ping and traceroute." width="1600" height="1150"
                loading="lazy" decoding="async" />
           <img class="shot-dark" src="assets/img/network-discovery-dark-1200.webp"
                srcset="assets/img/network-discovery-dark-1200.webp 1200w, assets/img/network-discovery-dark-2000.webp 2000w"
                sizes="(max-width: 820px) 100vw, (max-width: 1180px) 50vw, 560px"
-               alt="A CIDR scan listing devices that answered, with ping and traceroute." width="1600" height="1150"
+               alt="A SnmpLens CIDR scan listing devices that answered, with ping and traceroute." width="1600" height="1150"
                loading="lazy" decoding="async" />
           <figcaption>A CIDR sweep, then ping and traceroute without elevated privileges.</figcaption>
         </figure>
@@ -436,12 +571,12 @@ try {
           <img class="shot-light" src="assets/img/anonymous-mode-light-1200.webp"
                srcset="assets/img/anonymous-mode-light-1200.webp 1200w, assets/img/anonymous-mode-light-2000.webp 2000w"
                sizes="(max-width: 820px) 100vw, (max-width: 1180px) 50vw, 560px"
-               alt="The same screen with addresses and credentials replaced by stable aliases." width="1600" height="1000"
+               alt="The SnmpLens same screen with addresses and credentials replaced by stable aliases." width="1600" height="1000"
                loading="lazy" decoding="async" />
           <img class="shot-dark" src="assets/img/anonymous-mode-dark-1200.webp"
                srcset="assets/img/anonymous-mode-dark-1200.webp 1200w, assets/img/anonymous-mode-dark-2000.webp 2000w"
                sizes="(max-width: 820px) 100vw, (max-width: 1180px) 50vw, 560px"
-               alt="The same screen with addresses and credentials replaced by stable aliases." width="1600" height="1000"
+               alt="The SnmpLens same screen with addresses and credentials replaced by stable aliases." width="1600" height="1000"
                loading="lazy" decoding="async" />
           <figcaption>Anonymous Mode: every address becomes a stable alias.</figcaption>
         </figure>
@@ -449,12 +584,12 @@ try {
           <img class="shot-light" src="assets/img/events-journal-light-1200.webp"
                srcset="assets/img/events-journal-light-1200.webp 1200w, assets/img/events-journal-light-2000.webp 2000w"
                sizes="(max-width: 820px) 100vw, (max-width: 1180px) 50vw, 560px"
-               alt="The event journal listing traps, thresholds opened and resolved, reachability changes and a delivery that was given up on." width="1600" height="1000"
+               alt="The SnmpLens event journal listing traps, thresholds opened and resolved, reachability changes and a delivery that was given up on." width="1600" height="1000"
                loading="lazy" decoding="async" />
           <img class="shot-dark" src="assets/img/events-journal-dark-1200.webp"
                srcset="assets/img/events-journal-dark-1200.webp 1200w, assets/img/events-journal-dark-2000.webp 2000w"
                sizes="(max-width: 820px) 100vw, (max-width: 1180px) 50vw, 560px"
-               alt="The event journal listing traps, thresholds opened and resolved, reachability changes and a delivery that was given up on." width="1600" height="1000"
+               alt="The SnmpLens event journal listing traps, thresholds opened and resolved, reachability changes and a delivery that was given up on." width="1600" height="1000"
                loading="lazy" decoding="async" />
           <figcaption>One journal for everything — including the alerts that never arrived.</figcaption>
         </figure>
@@ -462,12 +597,12 @@ try {
           <img class="shot-light" src="assets/img/mib-editor-light-1200.webp"
                srcset="assets/img/mib-editor-light-1200.webp 1200w, assets/img/mib-editor-light-2000.webp 2000w"
                sizes="(max-width: 820px) 100vw, (max-width: 1180px) 50vw, 560px"
-               alt="The MIB editor with a file open, syntax highlighted, and a diagnostic on a line." width="1600" height="1100"
+               alt="The SnmpLens MIB editor with a file open, syntax highlighted, and a diagnostic on a line." width="1600" height="1100"
                loading="lazy" decoding="async" />
           <img class="shot-dark" src="assets/img/mib-editor-dark-1200.webp"
                srcset="assets/img/mib-editor-dark-1200.webp 1200w, assets/img/mib-editor-dark-2000.webp 2000w"
                sizes="(max-width: 820px) 100vw, (max-width: 1180px) 50vw, 560px"
-               alt="The MIB editor with a file open, syntax highlighted, and a diagnostic on a line." width="1600" height="1100"
+               alt="The SnmpLens MIB editor with a file open, syntax highlighted, and a diagnostic on a line." width="1600" height="1100"
                loading="lazy" decoding="async" />
           <figcaption>The MIB editor, with the analysis that loading alone does not do.</figcaption>
         </figure>

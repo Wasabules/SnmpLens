@@ -819,3 +819,21 @@ tbody tr:last-child td { border-bottom: 0; }
 @media (hover: none) {
   .copy-btn { opacity: 1; }
 }
+
+/* A card that describes a workspace in five lines and then dead-ends is a page
+ * the reader leaves. Quiet by default, because nine of these in a grid would
+ * otherwise be nine competing calls to action. */
+.feature-more {
+  margin: 0.9rem 0 0;
+  font-size: 0.82rem;
+}
+
+.feature-more a {
+  color: var(--ink-3);
+  text-decoration: none;
+}
+
+.feature-more a:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}

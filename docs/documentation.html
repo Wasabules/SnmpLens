@@ -5,10 +5,28 @@
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
 <meta name="theme-color" content="#1e1e1e" media="(prefers-color-scheme: dark)" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Documentation — SnmpLens</title>
-<meta name="description" content="How to use SnmpLens: SNMP operations, MIB management and diagnostics, the MIB editor, conceptual tables, traps and informs, monitoring, alert routing, and configuration." />
+<title>SnmpLens documentation — SNMP walks, MIBs, traps and alerting</title>
+<meta name="description" content="How to use SnmpLens: run SNMP GET, WALK and GETBULK, load and fix MIBs, read conceptual tables, receive traps, poll OIDs and route alerts to syslog or email." />
 <link rel="canonical" href="https://wasabules.github.io/SnmpLens/documentation.html" />
-<link rel="icon" href="assets/img/SnmpLens.png" />
+<link rel="icon" type="image/png" sizes="48x48" href="assets/img/favicon-48.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="assets/img/favicon-192.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="assets/img/apple-touch-icon.png" />
+
+<meta property="og:type" content="article" />
+<meta property="og:site_name" content="SnmpLens" />
+<meta property="og:locale" content="en" />
+<meta property="og:title" content="SnmpLens documentation — SNMP walks, MIBs, traps and alerting" />
+<meta property="og:description" content="How to use SnmpLens: run SNMP GET, WALK and GETBULK, load and fix MIBs, read conceptual tables, receive traps, poll OIDs and route alerts to syslog or email." />
+<meta property="og:url" content="https://wasabules.github.io/SnmpLens/documentation.html" />
+<meta property="og:image" content="https://wasabules.github.io/SnmpLens/assets/img/og-card-docs.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="The SnmpLens MIB editor with a vendor MIB open, syntax highlighted and its diagnostics listed." />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="SnmpLens documentation — SNMP walks, MIBs, traps and alerting" />
+<meta name="twitter:description" content="How to use SnmpLens: run SNMP GET, WALK and GETBULK, load and fix MIBs, read conceptual tables, receive traps, poll OIDs and route alerts to syslog or email." />
+<meta name="twitter:image" content="https://wasabules.github.io/SnmpLens/assets/img/og-card-docs.png" />
+<link rel="sitemap" type="application/xml" href="https://wasabules.github.io/SnmpLens/sitemap.xml" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap" rel="stylesheet" />
@@ -25,6 +43,94 @@ try {
 } catch (e) {}
 </script>
 <link rel="stylesheet" href="assets/site.css" />
+
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@graph": [
+  {
+   "@type": "TechArticle",
+   "@id": "https://wasabules.github.io/SnmpLens/documentation.html#article",
+   "headline": "SnmpLens documentation",
+   "description": "How to use SnmpLens: SNMP operations, MIB diagnostics, the MIB editor, conceptual tables, traps, monitoring and alert routing.",
+   "url": "https://wasabules.github.io/SnmpLens/documentation.html",
+   "inLanguage": "en",
+   "author": {
+    "@type": "Person",
+    "name": "Geoffrey Lecoq"
+   },
+   "about": {
+    "@id": "https://wasabules.github.io/SnmpLens/#app"
+   },
+   "image": "https://wasabules.github.io/SnmpLens/assets/img/og-card-docs.png",
+   "proficiencyLevel": "Beginner"
+  },
+  {
+   "@type": "BreadcrumbList",
+   "itemListElement": [
+    {
+     "@type": "ListItem",
+     "position": 1,
+     "name": "SnmpLens",
+     "item": "https://wasabules.github.io/SnmpLens/"
+    },
+    {
+     "@type": "ListItem",
+     "position": 2,
+     "name": "Documentation",
+     "item": "https://wasabules.github.io/SnmpLens/documentation.html"
+    }
+   ]
+  },
+  {
+   "@type": "FAQPage",
+   "mainEntity": [
+    {
+     "@type": "Question",
+     "name": "A device does not answer",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "Check the version first — a v2c request to a v1-only agent is simply ignored, with no error to report. Then the community or v3 credentials, then the port, then whether anything between you and the device filters UDP 161. Test connection on the target distinguishes these faster than a walk does."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "A MIB will not load",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "Use the diagnostics — see above. The commonest causes, in order: the file is an HTML error page rather than a MIB, it imports a module you do not have, or its filename does not match the module name inside it."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "An OID shows the wrong name",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "A lookup for an unknown OID returns the nearest ancestor rather than failing, so a badly-resolved OID looks like a shallow one. If a name looks wrong, the MIB defining it is probably not loaded."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "An alert never arrived",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "Look at the delivery log in Settings. Every attempt is there with the relay's own error, and a dead letter is kept precisely so this question has an answer. If nothing was ever queued, the rule did not match — check its source pattern and OID prefix, and that the destination is switched on."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "Traps are not being received",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "Ports below 1024 need privileges the application deliberately does not ask for; use 1162 and redirect if you need 162. Check the listener is started, and that your firewall allows inbound UDP on that port."
+     }
+    }
+   ]
+  }
+ ]
+}
+</script>
+
 </head>
 <body>
 
@@ -263,12 +369,12 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
         <img class="shot-light" src="assets/img/settings-snmp-light-1200.webp"
              srcset="assets/img/settings-snmp-light-1200.webp 1200w, assets/img/settings-snmp-light-2000.webp 2000w"
              sizes="(max-width: 1180px) 100vw, 1140px"
-             alt="The SNMP settings tab: version, community, timeouts, and the v3 authentication and privacy protocols." width="1600" height="1100"
+             alt="The SnmpLens SNMP settings tab: version, community, timeouts, and the v3 authentication and privacy protocols." width="1600" height="1100"
              loading="lazy" decoding="async" />
         <img class="shot-dark" src="assets/img/settings-snmp-dark-1200.webp"
              srcset="assets/img/settings-snmp-dark-1200.webp 1200w, assets/img/settings-snmp-dark-2000.webp 2000w"
              sizes="(max-width: 1180px) 100vw, 1140px"
-             alt="The SNMP settings tab: version, community, timeouts, and the v3 authentication and privacy protocols." width="1600" height="1100"
+             alt="The SnmpLens SNMP settings tab: version, community, timeouts, and the v3 authentication and privacy protocols." width="1600" height="1100"
              loading="lazy" decoding="async" />
         <figcaption>The defaults every target inherits until it overrides them.</figcaption>
       </figure>
@@ -290,12 +396,12 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
         <img class="shot-light" src="assets/img/target-manager-light-1200.webp"
              srcset="assets/img/target-manager-light-1200.webp 1200w, assets/img/target-manager-light-2000.webp 2000w"
              sizes="(max-width: 1180px) 100vw, 1140px"
-             alt="The targets dialog: eight devices across four groups, three of them carrying a per-device override." width="1600" height="940"
+             alt="The SnmpLens targets dialog: eight devices across four groups, three of them carrying a per-device override." width="1600" height="940"
              loading="lazy" decoding="async" />
         <img class="shot-dark" src="assets/img/target-manager-dark-1200.webp"
              srcset="assets/img/target-manager-dark-1200.webp 1200w, assets/img/target-manager-dark-2000.webp 2000w"
              sizes="(max-width: 1180px) 100vw, 1140px"
-             alt="The targets dialog: eight devices across four groups, three of them carrying a per-device override." width="1600" height="940"
+             alt="The SnmpLens targets dialog: eight devices across four groups, three of them carrying a per-device override." width="1600" height="940"
              loading="lazy" decoding="async" />
         <figcaption>Groups down the top, and the marker beside an address means that device
           overrides the defaults — here two routers on v3 and a UPS still on v1.</figcaption>
@@ -444,12 +550,12 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
         <img class="shot-light" src="assets/img/mib-editor-light-1200.webp"
              srcset="assets/img/mib-editor-light-1200.webp 1200w, assets/img/mib-editor-light-2000.webp 2000w"
              sizes="(max-width: 1180px) 100vw, 1140px"
-             alt="The MIB editor with a vendor MIB open, syntax highlighted, two errors underlined, and a list of five diagnostics with their line and column." width="1600" height="1100"
+             alt="The SnmpLens MIB editor with a vendor MIB open, syntax highlighted, two errors underlined, and a list of five diagnostics with their line and column." width="1600" height="1100"
              loading="lazy" decoding="async" />
         <img class="shot-dark" src="assets/img/mib-editor-dark-1200.webp"
              srcset="assets/img/mib-editor-dark-1200.webp 1200w, assets/img/mib-editor-dark-2000.webp 2000w"
              sizes="(max-width: 1180px) 100vw, 1140px"
-             alt="The MIB editor with a vendor MIB open, syntax highlighted, two errors underlined, and a list of five diagnostics with their line and column." width="1600" height="1100"
+             alt="The SnmpLens MIB editor with a vendor MIB open, syntax highlighted, two errors underlined, and a list of five diagnostics with their line and column." width="1600" height="1100"
              loading="lazy" decoding="async" />
         <figcaption>An unsaved draft recovered from a previous session, with the analysis
           pointing at an unknown type and a duplicated OID — neither of which loading the

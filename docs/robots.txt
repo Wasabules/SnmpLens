@@ -1,0 +1,16 @@
+# https://wasabules.github.io/SnmpLens/
+#
+# On a GitHub Pages PROJECT site this file is served but not obeyed: a crawler
+# reads robots.txt from the ORIGIN, which is wasabules.github.io/robots.txt, and
+# that belongs to the user site rather than to this repository. It is here so
+# that the rules travel with the site if it ever moves to its own domain, and so
+# that the Sitemap line is discoverable by anything that does look.
+#
+# Discovery does not depend on it either way: every page carries
+# <link rel="sitemap">, and the sitemap should be submitted to Search Console
+# directly, which is the only method that works from a subpath.
+
+User-agent: *
+Allow: /
+
+Sitemap: https://wasabules.github.io/SnmpLens/sitemap.xml
