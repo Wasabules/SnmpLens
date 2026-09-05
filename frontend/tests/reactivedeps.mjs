@@ -82,6 +82,87 @@ function renderedExpressions(markup) {
   return out;
 }
 
+// Iterator methods that call their callback with more than the element, and how
+// many arguments they actually pass. `sort` is the odd one: two elements.
+const ITERATORS = {
+  map: 3, filter: 3, forEach: 3, find: 3, findIndex: 3, findLast: 3,
+  some: 3, every: 3, flatMap: 3, sort: 2,
+};
+
+/**
+ * Functions handed point-free to an iterator that will over-supply them.
+ *
+ * `list.map(sinkName)` reads as "the name of each", and is not: map calls back
+ * with (element, index, array), so a two-parameter function receives the INDEX
+ * as its second argument. `['1','2','3'].map(parseInt)` is the canonical
+ * version; ours was `(r.sinkIds || []).map(sinkName)` after `sinkName` grew a
+ * second parameter, which put a number where a Sink[] was expected and threw
+ * `all.find is not a function` — the routing rules list stopped rendering, and
+ * the site's screenshot published the empty state.
+ *
+ * Nothing else here could see it. The reactivity check is satisfied, correctly:
+ * the function takes what it needs. The compiler is satisfied. It is an arity
+ * mismatch, and a type checker is the other tool that would catch it.
+ *
+ * @param {string} source a .svelte file
+ * @returns {Array<{fn: string, iterator: string, arity: number}>}
+ */
+export function overSuppliedCallbacks(source) {
+  const parts = split(source);
+  if (!parts) return [];
+  const { ast, markup } = parts;
+
+  const arity = new Map();
+  for (const raw of ast.body) {
+    const n = raw.type === 'ExportNamedDeclaration' && raw.declaration ? raw.declaration : raw;
+    if (n.type === 'FunctionDeclaration' && n.id) arity.set(n.id.name, n.params.length);
+    if (n.type === 'VariableDeclaration') {
+      for (const d of n.declarations) {
+        if (d.id.type !== 'Identifier' || !d.init) continue;
+        if (d.init.type === 'ArrowFunctionExpression' || d.init.type === 'FunctionExpression') {
+          arity.set(d.id.name, d.init.params.length);
+        }
+      }
+    }
+  }
+
+  const found = [];
+  // The whole file, not only rendered expressions: the trap is the same in a
+  // handler, it just fails later.
+  const text = markup + ast_source(source);
+  for (const [method, supplied] of Object.entries(ITERATORS)) {
+    const re = new RegExp('\\.' + method + '\\(\\s*([A-Za-z_$][A-Za-z0-9_$]*)\\s*\\)', 'g');
+    for (const m of text.matchAll(re)) {
+      const name = m[1];
+      const n = arity.get(name);
+      if (n !== undefined && n > 1 && n <= supplied) {
+        found.push({ fn: name, iterator: method, arity: n });
+      }
+    }
+  }
+  return found;
+}
+
+/** The raw <script> text, for the scan above. */
+function ast_source(source) {
+  const m = source.match(/<script[^>]*>([\s\S]*?)<\/script(?:\s[^>]*)?>/i);
+  return m ? m[1] : '';
+}
+
+/** Shared parse: the script AST and the markup after it. */
+function split(source) {
+  const m = source.match(/<script[^>]*>([\s\S]*?)<\/script(?:\s[^>]*)?>/i);
+  if (!m) return null;
+  try {
+    return {
+      ast: parse(m[1], { ecmaVersion: 'latest', sourceType: 'module' }),
+      markup: source.slice(m.index + m[0].length),
+    };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * @param {string} source a .svelte file
  * @returns {Array<{fn: string, reads: string[]}>}
@@ -143,7 +224,21 @@ export function unnamedStateReads(source) {
   const found = [];
 
   for (const [name, fn] of fns) {
-    if (!rendered.some((e) => e.includes(name + '('))) continue;
+    // The name, not `name(`. A function handed to `.map()` by reference —
+    // `{list.map(sinkName)}` — is called from the markup exactly as much as one
+    // written with parentheses, and it was invisible to the version that looked
+    // for the call. That is not hypothetical: this check was added to stop a
+    // rendered expression depending on state it does not name, and the very
+    // change that satisfied it at one call site left the point-free one behind,
+    // where `.map` then passed the ARRAY INDEX as the argument that had just
+    // been added. The routing rules list stopped rendering.
+    // An expression that is EXACTLY the name hands the function somewhere —
+    // `onNodeClick={handleNodeClick}`, the Svelte 5 spelling of an event
+    // handler — and is exempt for the same reason `on:click` is. Inside a
+    // larger expression the function's RESULT is what gets rendered, and that
+    // is the case this test is about.
+    const used = new RegExp('(^|[^A-Za-z0-9_$.])' + name + '($|[^A-Za-z0-9_$])');
+    if (!rendered.some((e) => e.trim() !== name && used.test(e))) continue;
 
     const scoped = new Set();
     for (const p of fn.params) boundBy(p, scoped);
