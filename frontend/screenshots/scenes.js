@@ -125,7 +125,11 @@ export function buildScenes(seeds) {
   scene(base, 'network-discovery', {
     tab: TABS.discovery,
     theme: 'dark',
-    describe: 'A CIDR sweep, then ping and traceroute.',
+    height: 1150,
+    // The sweep has to be RUN: its results are the component's own state, so
+    // without this the picture is of an empty form saying "no scan results".
+    act: ['Scan'],
+    describe: 'A CIDR sweep that found a real estate, with each device named.',
   }),
 
   scene(base, 'mib-editor', {

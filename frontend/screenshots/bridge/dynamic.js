@@ -165,7 +165,9 @@ dynamic.MibEditorReadDraft = () => ACME_POE_MIB;
 
 dynamic.MibEditorRead = () => ({
   name: 'ACME-POE-MIB',
-  path: 'C:\Users\ops\AppData\Roaming\SnmpLens\mibs\ACME-POE-MIB',
+  // Escaped: unescaped, JavaScript drops each backslash it does not recognise
+  // and the path renders as "C:Usersops...".
+  path: 'C:\\Users\\ops\\AppData\\Roaming\\SnmpLens\\mibs\\ACME-POE-MIB',
   content: ON_DISK,
   eol: 'lf',
   bundled: false,
@@ -173,3 +175,42 @@ dynamic.MibEditorRead = () => ({
   sha256: 'cfbca6d794927294d050e9b093af1dc70fd065f671855aceece1f0e5797c3562',
   diagnostics: [],
 });
+
+/**
+ * A CIDR sweep that found something.
+ *
+ * Two things were wrong with the specification's set. The scan is never RUN —
+ * the results are the component's own state, like a walk's — and the devices
+ * were on 10.20.x.x while the form's default range is 192.168.1.0/24, so the
+ * picture would have shown a scan of one subnet returning addresses from
+ * another. A reader who knows SNMP is exactly the reader who would notice.
+ *
+ * The estate is the kind a small site actually has: routers and switches from
+ * different vendors, the wireless, and the three things people forget are on
+ * the network until they answer an SNMP sweep — the printer, the UPS and the
+ * NAS. The sysDescr strings are the real shapes those devices return, because
+ * a screenshot of a discovery tool is partly a screenshot of sysDescr.
+ */
+const DISCOVERED = [
+  ['192.168.1.1', 'edge-rtr-01', 'Cisco IOS Software, ISR4331 Software (X86_64_LINUX_IOSD-UNIVERSALK9-M), Version 17.09.04a, RELEASE SOFTWARE (fc3)', 1099992310, 4],
+  ['192.168.1.2', 'core-sw-01', 'Cisco IOS Software, C9300 Software (CAT9K_IOSXE), Version 17.12.03, RELEASE SOFTWARE (fc2)', 1043118800, 3],
+  ['192.168.1.3', 'core-sw-02', 'Cisco IOS Software, C9300 Software (CAT9K_IOSXE), Version 17.12.03, RELEASE SOFTWARE (fc2)', 1043092140, 3],
+  ['192.168.1.10', 'dist-sw-2f', 'Aruba JL255A 2930F-24G-4SFP+ Switch, revision WC.16.11.0013, ROM WC.16.01.0006', 884419770, 6],
+  ['192.168.1.11', 'dist-sw-3f', 'Aruba JL255A 2930F-24G-4SFP+ Switch, revision WC.16.11.0013, ROM WC.16.01.0006', 884401200, 7],
+  ['192.168.1.20', 'wifi-ctrl', 'MikroTik RouterOS 7.15.3 (stable) CRS328-24P-4S+', 612334880, 5],
+  ['192.168.1.21', 'ap-floor2-n', 'Ubiquiti UniFi U6-Pro, firmware 6.6.77.15402', 388120450, 11],
+  ['192.168.1.22', 'ap-floor3-n', 'Ubiquiti UniFi U6-Pro, firmware 6.6.77.15402', 388102190, 12],
+  ['192.168.1.40', 'prn-acct-01', 'HP LaserJet MFP M528dn, Firmware 2409074_000587, Serial CNBRQ1234X', 219044100, 24],
+  ['192.168.1.50', 'ups-server-room', 'APC Smart-UPS SRT 5000 RM, Network Management Card AOS v7.1.2', 447882300, 9],
+  ['192.168.1.60', 'nas-backup-01', 'Linux nas-backup-01 4.4.302+ #72806 SMP x86_64 DiskStation DS1821+', 302118940, 8],
+  ['192.168.1.80', 'esxi-host-02', 'VMware ESXi 8.0.2 build-23305546 VMware, Inc. x86_64', 154099220, 14],
+  ['192.168.1.90', 'mon-collector', 'Linux mon-collector 6.8.0-45-generic #45-Ubuntu SMP x86_64', 88220110, 2],
+];
+
+dynamic.SnmpDiscover = () =>
+  DISCOVERED.map(([ip, sysName, sysDescr, sysUpTime, responseTime]) => ({
+    ip, sysName, sysDescr,
+    sysUpTime: String(sysUpTime),
+    responseTime,
+    reachable: true,
+  }));
