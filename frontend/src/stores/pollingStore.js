@@ -25,6 +25,36 @@ const MAX_DATA_POINTS = 5000;
 // it on every tick would bury the UI under identical toasts.
 const warnedNonNumeric = new Set();
 
+/**
+ * One sample, in the shape the rest of the interface expects.
+ *
+ * ONE function because there are two ways in — live samples pushed by the Go
+ * scheduler, and stored ones read back on startup — and they had drifted. The
+ * live path wrote `value: p.value ?? null`; the restored path wrote `p.value`
+ * bare, and Go's `omitempty` leaves that `undefined`. Consumers test for null:
+ * `MetricTiles.svelte:106` decides the failing indicator with
+ * `lastPoint.value === null`, `MonitorChart.svelte:243` counts a failed sample
+ * the same way. So after any restart a restored session stopped showing which
+ * of its points had failed — silently, and only for sessions that had been
+ * reloaded, which is why it survived.
+ *
+ * `delta`, `rate` and `responseTimeMs` had drifted the same way. Two places
+ * building the same shape is the defect; the fix is that there is one.
+ */
+export function normalisePoint(p) {
+  return {
+    target: p.target,
+    timestamp: p.timestamp,
+    value: p.value ?? null,
+    delta: p.delta ?? null,
+    rate: p.rate ?? null,
+    responseTimeMs: p.responseTimeMs || 0,
+    error: p.error || null,
+    snmpType: p.snmpType || '',
+    oid: p.oid || '',
+  };
+}
+
 // The poll clock lives in Go.
 //
 // It used to be a setInterval here, which meant monitoring only ran while the
@@ -44,17 +74,7 @@ function createPollingStore() {
     update((sessions) => sessions.map((s) => {
       if (s.id !== sessionId) return s;
 
-      const incoming = points.map((p) => ({
-        target: p.target,
-        timestamp: p.timestamp,
-        value: p.value ?? null,
-        delta: p.delta ?? null,
-        rate: p.rate ?? null,
-        responseTimeMs: p.responseTimeMs || 0,
-        error: p.error || null,
-        snmpType: p.snmpType || '',
-        oid: p.oid || '',
-      }));
+      const incoming = points.map(normalisePoint);
 
       warnAboutUngraphableValues(sessionId, incoming);
 
@@ -209,17 +229,7 @@ function createPollingStore() {
         let results = [];
         try {
           const points = await MonitorLoadSessionData(s.id, MAX_DATA_POINTS * (s.targets?.length || 1));
-          results = (points || []).map((p) => ({
-            target: p.target,
-            timestamp: p.timestamp,
-            value: p.value,
-            delta: p.delta,
-            rate: p.rate,
-            responseTimeMs: p.responseTimeMs,
-            error: p.error || null,
-            snmpType: p.snmpType || '',
-            oid: p.oid || '',
-          }));
+          results = (points || []).map(normalisePoint);
         } catch (e) {
           console.warn('Failed to load session data:', e);
         }

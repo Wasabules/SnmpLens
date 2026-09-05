@@ -22,6 +22,17 @@ type Node struct {
 	Syntax      string           `json:"syntax"`
 	Access      string           `json:"access"`
 	EnumValues  map[string]int64 `json:"enumValues,omitempty"`
+
+	// Status, Units and Parent are what NodeDetails.svelte renders under
+	// "Status", "Units" and "Parent". It had been rendering them since it was
+	// written and this struct never carried them, so the three rows were
+	// guarded by `{#if}` and never appeared — dead markup nobody could see was
+	// dead. Status is the one that matters: SMI marks an object `deprecated`
+	// or `obsolete`, and a MIB browser that does not say so lets you build
+	// monitoring on something the vendor has withdrawn.
+	Status string `json:"status,omitempty"`
+	Units  string `json:"units,omitempty"`
+	Parent string `json:"parent,omitempty"`
 }
 
 // Service handles MIB loading and parsing.
@@ -126,8 +137,14 @@ func (s *Service) buildTree(loadedModuleNames []string) ([]*Node, error) {
 					MibType:     node.Kind.String(),
 					Access:      node.Access.String(),
 				}
+				// "Unknown" is gosmi's zero value, not a status a MIB declares.
+				// Sending it would put the word in the panel for every node.
+				if st := node.Status.String(); st != "" && st != "Unknown" {
+					newNode.Status = st
+				}
 				if node.Type != nil {
 					newNode.Syntax = node.Type.Name
+					newNode.Units = node.Type.Units
 					if node.Type.Enum != nil && len(node.Type.Enum.Values) > 0 {
 						newNode.EnumValues = make(map[string]int64)
 						for _, val := range node.Type.Enum.Values {
@@ -149,6 +166,9 @@ func (s *Service) buildTree(loadedModuleNames []string) ([]*Node, error) {
 			parentOidStr := oidStr[:lastDot]
 			if parentNode, ok := nodeMap[parentOidStr]; ok {
 				parentNode.Children = append(parentNode.Children, mibNode)
+				// The NAME, not the node: the tree is nested, so a pointer back
+				// up would be a cycle and json.Marshal would not return.
+				mibNode.Parent = parentNode.Name
 				isChild[oidStr] = true
 			}
 		}

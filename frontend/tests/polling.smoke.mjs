@@ -6,7 +6,7 @@
 // charts read. A ReferenceError in this file's path once silently disabled all
 // monitoring, which is exactly the class of bug this catches.
 import * as esbuild from 'esbuild';
-import { writeFileSync, mkdtempSync } from 'node:fs';
+import { writeFileSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -82,7 +82,7 @@ if (!globalThis.navigator) {
   Object.defineProperty(globalThis, 'navigator', { value: { language: 'en' }, configurable: true });
 }
 
-const { pollingStore } = await import(pathToFileURL(out).href);
+const { pollingStore, normalisePoint } = await import(pathToFileURL(out).href);
 const { get } = await import('svelte/store');
 
 let failures = 0;
@@ -153,5 +153,41 @@ await pollingStore.stopPolling(id);
 s = get(pollingStore).find((x) => x.id === id);
 check('stopping reaches Go', calls.stopped.includes(id));
 check('the session reads as stopped', !!s && s.running === false);
+
+// A RESTORED sample has to arrive in the same shape as a live one.
+//
+// Go's `omitempty` drops a zero value, so a stored point whose read failed comes
+// back with no `value` key at all. The live path normalised that to null and the
+// restore path did not, and consumers decide "this sample failed" with
+// `=== null` — MetricTiles.svelte:106 for the failing indicator,
+// MonitorChart.svelte:243 for the failed count. So after a restart a restored
+// session stopped showing which of its points had failed, silently, and only
+// for sessions that had been reloaded, which is why it survived.
+//
+// Tested as the pure function plus a source check that both paths call it,
+// because there being ONE shape is the fix — patching the restore path would
+// have left the next field free to drift.
+{
+  // What Go sends for a failed read: no value, no delta, no rate, no timing.
+  const failed = normalisePoint({
+    target: '10.0.0.1', timestamp: '2026-01-01T00:00:00Z', oid: '1.3.6.1', error: 'timeout',
+  });
+  check('a point with no value reads as null, not undefined', failed.value === null,
+    JSON.stringify(failed.value));
+  check('and so do delta and rate', failed.delta === null && failed.rate === null,
+    JSON.stringify([failed.delta, failed.rate]));
+  check('and a missing responseTimeMs is 0', failed.responseTimeMs === 0,
+    JSON.stringify(failed.responseTimeMs));
+
+  // A real reading is left alone, including a legitimate zero.
+  const ok = normalisePoint({ target: 't', timestamp: 'x', oid: 'o', value: 0, delta: 0, rate: 0 });
+  check('a zero reading stays zero rather than becoming null',
+    ok.value === 0 && ok.delta === 0 && ok.rate === 0,
+    JSON.stringify([ok.value, ok.delta, ok.rate]));
+
+  const source = readFileSync(new URL('../src/stores/pollingStore.js', import.meta.url), 'utf8');
+  const uses = (source.match(/map\(normalisePoint\)/g) || []).length;
+  check('both the live and the restored path go through it', uses === 2, String(uses));
+}
 
 process.exit(failures ? 1 : 0);

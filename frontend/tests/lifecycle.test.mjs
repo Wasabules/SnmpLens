@@ -108,6 +108,48 @@ for (const file of files) {
 check('every lifecycle call is at the top level of its component',
   offenders.length === 0, offenders.join(' | '));
 
+// An `onMount` whose callback is async and returns a cleanup.
+//
+// Svelte calls back whatever the callback RETURNS. An async function returns a
+// Promise, never a function, so the cleanup is dropped — silently, with the
+// listener it was meant to remove still attached. It is the same failure the
+// check above exists for, reached a different way: MibPanel registered a keydown
+// listener and returned its remover from an async onMount, so every tab switch
+// left another one behind.
+//
+// Its own brace matcher rather than depthAt above: that one counts parentheses
+// as well, which answers a different question and made this silently find
+// nothing.
+function asyncOnMountReturningCleanup(code) {
+  const hits = [];
+  for (const m of code.matchAll(/onMount[ 	]*\([ 	]*async\b/g)) {
+    const brace = code.indexOf('{', m.index);
+    if (brace < 0) continue;
+    let d = 0;
+    let end = -1;
+    for (let i = brace; i < code.length; i++) {
+      if (code[i] === '{') d++;
+      else if (code[i] === '}') { d--; if (d === 0) { end = i; break; } }
+    }
+    if (end < 0) continue;
+    const body = code.slice(brace + 1, end);
+    // A `return` that hands something back. A bare `return;` is an early exit.
+    const ret = body.match(/(^|[;{}\n])[ \t]*return[ \t]+[^;\n]/);
+    if (ret) hits.push(code.slice(0, m.index).split(String.fromCharCode(10)).length);
+  }
+  return hits;
+}
+
+const asyncCleanups = [];
+for (const file of svelteFiles(root)) {
+  for (const line of asyncOnMountReturningCleanup(scriptOf(readFileSync(file, 'utf8')))) {
+    asyncCleanups.push(file.split(/[\\/]/).pop() + ': async onMount returns at script line ' + line);
+  }
+}
+
+check('no async onMount returns a cleanup Svelte will never call',
+  asyncCleanups.length === 0, asyncCleanups.join(' | '));
+
 // Prove the detector works, or a passing run means nothing.
 const trap = `
   import { onMount, onDestroy } from 'svelte';
@@ -121,5 +163,35 @@ const good = trap.indexOf('onDestroy(() => cleanup())');
 const bad = trap.indexOf('onDestroy(() => leak())');
 check('the detector accepts a top-level registration', trapDepth[good] === 0);
 check('the detector rejects one nested in onMount', trapDepth[bad] > 0, String(trapDepth[bad]));
+
+// And the second detector, on the shape that shipped.
+{
+  const returned = 'onMount(async () => {' +
+    ' await load();' +
+    ' document.addEventListener("keydown", h);' +
+    ' return () => document.removeEventListener("keydown", h);' +
+    '});';
+  check('the detector sees an async onMount handing back a cleanup',
+    asyncOnMountReturningCleanup(returned).length === 1);
+
+  const fixed = 'onMount(() => {' +
+    ' load();' +
+    ' document.addEventListener("keydown", h);' +
+    ' return () => document.removeEventListener("keydown", h);' +
+    '});';
+  check('and says nothing once the callback is synchronous',
+    asyncOnMountReturningCleanup(fixed).length === 0);
+
+  // An async onMount is fine on its own — most of them are. Only one that
+  // hands something back is broken.
+  const noReturn = 'onMount(async () => { await load(); });';
+  check('and nothing about an async onMount that returns nothing',
+    asyncOnMountReturningCleanup(noReturn).length === 0);
+
+  // A bare early exit is not a cleanup.
+  const early = 'onMount(async () => { if (!x) return; await load(); });';
+  check('and nothing about a bare early return',
+    asyncOnMountReturningCleanup(early).length === 0);
+}
 
 process.exit(failures ? 1 : 0);
