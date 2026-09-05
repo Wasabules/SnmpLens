@@ -314,10 +314,16 @@ func decodeOne(node gosmi.SmiNode, subs []uint32, implied bool) (IndexValue, int
 		}
 		octets := make([]byte, n)
 		for i := 0; i < n; i++ {
-			if subs[start+i] > 255 {
-				return IndexValue{}, 0, fmt.Errorf("sub-identifier %d is not an octet", subs[start+i])
+			// Through a local, so the bound and the narrowing sit on the same
+			// value. Written as two reads of subs[start+i] this is the same
+			// code, but neither a reader nor CodeQL can see that the thing
+			// checked is the thing converted — it reported it as an unbounded
+			// uint32 to uint8.
+			sub := subs[start+i]
+			if sub > math.MaxUint8 {
+				return IndexValue{}, 0, fmt.Errorf("sub-identifier %d is not an octet", sub)
 			}
-			octets[i] = byte(subs[start+i])
+			octets[i] = byte(sub)
 		}
 		return IndexValue{Display: renderOctets(node.Type, octets)}, start + n, nil
 	}
@@ -341,12 +347,18 @@ func lengthOf(subs []uint32, implied bool, fixed int) (n, start int, err error) 
 		return len(subs), 0, nil
 	default:
 		// From the wire, so bounded before it becomes an int: on a 32-bit
-		// build a sub-identifier above 2^31 makes int(subs[0]) negative, and
+		// build a sub-identifier above 2^31 makes int(length) negative, and
 		// make([]byte, n) below panics on data an agent chose.
-		if uint64(subs[0]) > uint64(len(subs)-1) {
-			return 0, 0, fmt.Errorf("length %d exceeds the %d sub-identifiers left", subs[0], len(subs)-1)
+		//
+		// Bounded against math.MaxInt as well as against what is left. The
+		// second is the tighter of the two and is what the error says, but only
+		// the first is a bound on the CONVERSION, and a check that happens to
+		// be tighter is not the same as a check that is about the right thing.
+		length := subs[0]
+		if uint64(length) > math.MaxInt || int(length) > len(subs)-1 {
+			return 0, 0, fmt.Errorf("length %d exceeds the %d sub-identifiers left", length, len(subs)-1)
 		}
-		return int(subs[0]), 1, nil
+		return int(length), 1, nil
 	}
 }
 
