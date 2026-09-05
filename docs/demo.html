@@ -52,7 +52,7 @@ try {
 <header class="site-header">
   <div class="wrap">
     <a class="brand" href="./">
-      <img src="assets/img/SnmpLens.png" alt="" width="26" height="26" />
+      <img src="assets/img/favicon-48.png" alt="" width="26" height="26" />
       SnmpLens
     </a>
     <nav class="nav" aria-label="Main">
@@ -74,11 +74,19 @@ try {
 
   <div class="demo-strip">
    <section class="wrap demo-strip-inner">
-    <p>
-      <strong>This is the real interface</strong> — the same Svelte application the desktop
-      build ships, with the SNMP backend replaced by fixtures. Every device in it is
-      fictional and nothing leaves your browser.
-    </p>
+    <div>
+      <!-- The h1 lives INSIDE the strip rather than above it. The frame below is
+           sized `calc(100vh - 190px)`, that 190 being the header plus this strip;
+           a full-scale heading above would both push the iframe below the fold on
+           a page that exists for the iframe and leave the calc short by its own
+           height. -->
+      <h1>SnmpLens, running in your browser</h1>
+      <p>
+        The same Svelte application the desktop build ships, with the SNMP backend
+        replaced by fixtures. Every device in it is fictional and nothing leaves your
+        browser.
+      </p>
+    </div>
     <a class="btn btn-primary" href="download.html">Download the real thing</a>
    </section>
   </div>
@@ -129,7 +137,7 @@ try {
     <div class="footer-grid">
       <div>
         <a class="brand" href="./" style="margin-bottom:0.6rem">
-          <img src="assets/img/SnmpLens.png" alt="" width="26" height="26" />
+          <img src="assets/img/favicon-48.png" alt="" width="26" height="26" />
           SnmpLens
         </a>
         <p class="muted small" style="max-width:34ch">

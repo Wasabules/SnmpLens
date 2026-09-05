@@ -142,10 +142,54 @@ export function socialCard(imgDir) {
   return r.status === 0 ? out : null;
 }
 
+/**
+ * The icon set, from the one piece of artwork.
+ *
+ * These were generated once by hand and then existed only as files, which is the
+ * thing this harness is written to avoid: an asset nobody can regenerate is an
+ * asset that quietly goes wrong. They are also the reason a `*.png` ignore rule
+ * silently dropped four of the site's own files.
+ *
+ * The source is 508x517 — nearly square, which is not square. Google's guidance
+ * rejects a non-square favicon outright, so each is padded to a square before it
+ * is scaled, rather than stretched.
+ */
+export function icons(imgDir) {
+  const src = join(imgDir, 'SnmpLens.png');
+  if (!existsSync(src)) return [];
+
+  // Transparent padding for the browser icons; the tab draws its own background.
+  const square = 'pad=520:520:(ow-iw)/2:(oh-ih)/2:color=0x00000000,format=rgba';
+  const made = [];
+
+  for (const size of [48, 192]) {
+    const out = join(imgDir, `favicon-${size}.png`);
+    if (ffmpeg(['-y', '-i', src, '-vf', `${square},scale=${size}:${size}:flags=lanczos`, out]).status === 0) {
+      made.push(out);
+    }
+  }
+
+  // The touch icon gets a SOLID ground: iOS composites transparency onto black,
+  // which turns a blue mark into a blue mark nobody can see.
+  const touch = join(imgDir, 'apple-touch-icon.png');
+  if (ffmpeg([
+    '-y', '-i', src,
+    '-vf', 'pad=560:560:(ow-iw)/2:(oh-ih)/2:color=white,scale=180:180:flags=lanczos',
+    '-pix_fmt', 'rgb24', touch,
+  ]).status === 0) {
+    made.push(touch);
+  }
+
+  return made;
+}
+
 // Only when run directly, so screenshots.mjs can import `derive` instead of
 // spawning another Node.
-if (import.meta.url === `file://${process.argv[1].replace(/\\/g, '/')}`
-    || process.argv[1].endsWith('webp.mjs')) {
+//
+// argv[1] is UNDEFINED under `node -e` and `node --input-type=module -e`, which
+// is how this module gets exercised in isolation — so reading it unguarded threw
+// before any exported function could be called.
+if ((process.argv[1] || '').endsWith('webp.mjs')) {
   const check = ffmpeg(['-version']);
   if (check.status !== 0) {
     console.error('ffmpeg is not on PATH; nothing was derived.');
@@ -154,6 +198,7 @@ if (import.meta.url === `file://${process.argv[1].replace(/\\/g, '/')}`
   console.log(`Deriving WebP from ${imgDir}`);
   const r = derive(imgDir, filter);
   if (socialCard(imgDir)) console.log('  og-card.png                1200x630');
+  for (const f of icons(imgDir)) console.log('  ' + f.split(/[\/]/).pop());
   console.log(
     `\n${r.written} written, ${r.skipped} skipped (source too small), ${r.failed} failed`
     + ` — ${Math.round(r.bytes / 1024)} KB of WebP against ${Math.round((r.bytes + r.saved) / 1024)} KB of PNG.`,

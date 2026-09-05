@@ -695,6 +695,13 @@ tbody tr:last-child td { border-bottom: 0; }
   border-radius: 3px;
   animation: pulse 1.4s ease-in-out infinite;
   user-select: none;
+  /* Its own width, because the text no longer supplies one. The placeholder
+   * used to be "0000" and "v0.0.0" — junk that sized the box and was SERVED, so
+   * a crawler and anyone without JavaScript read a version number that was not
+   * a version. The text is the honest fallback now, and the pulse is sized
+   * here. */
+  display: inline-block;
+  min-width: 3.5ch;
 }
 
 @keyframes pulse { 50% { opacity: 0.45; } }
@@ -1153,6 +1160,16 @@ figure.clip:focus-visible {
 }
 
 .demo-strip p { margin: 0; max-width: 72ch; font-size: 0.9rem; }
+
+/* Scoped down to the strip's own scale. The page needs an h1 — every other page
+ * has one, and the sitemap ranks this one level with the documentation — but it
+ * is a label above a frame, not a page title, and at the global clamp it would
+ * be taller than the strip it sits in. */
+.demo-strip h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.05rem;
+  line-height: 1.3;
+}
 
 /* The frame takes what is left of the viewport rather than a fixed height: the
  * application lays itself out against the space it is given, and a short frame

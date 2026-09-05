@@ -93,7 +93,16 @@
   function settle(root) {
     $$('.skeleton', root || document).forEach(function (el) {
       el.classList.remove('skeleton');
-      if (!el.textContent.trim()) el.textContent = el.dataset.fallback || '—';
+      // Keyed off the ATTRIBUTE, not the text. Every skeleton carries
+      // placeholder text — that text is what gives the pulsing box its width —
+      // so `!textContent.trim()` was false for all of them and the fallback
+      // never once applied. A rate-limited API left the placeholders on screen
+      // as though they were data.
+      //
+      // fill() removes the class, so anything already filled is not in this
+      // list and cannot be overwritten.
+      if (el.dataset.fallback !== undefined) el.textContent = el.dataset.fallback;
+      else if (!el.textContent.trim()) el.textContent = '—';
     });
   }
 

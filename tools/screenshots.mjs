@@ -271,11 +271,15 @@ console.log(`\n${scenes.length - failures} captured, ${failures} failed.`);
 // on the page while the new one sits beside it, unused and looking correct.
 if (!failures) {
   console.log('\nDeriving the responsive WebP the pages reference…');
-  const { derive, socialCard } = await import(new URL('./webp.mjs', import.meta.url).href);
+  const { derive, socialCard, icons } = await import(new URL('./webp.mjs', import.meta.url).href);
   const d = derive(outDir, filter);
   // Only on a full run: the card is cut from operations-dark, and re-cutting it
   // while capturing an unrelated scene would silently pin it to an older one.
   if (!filter && socialCard(outDir)) console.log('  og-card.png (1200x630) for og:image');
+  if (!filter) {
+    const made = icons(outDir);
+    if (made.length) console.log(`  ${made.length} icons from SnmpLens.png`);
+  }
   if (d.failed) {
     console.log(`\n${d.failed} WebP failed — is ffmpeg on PATH?`);
     failures += d.failed;

@@ -122,7 +122,7 @@ try {
      "name": "Traps are not being received",
      "acceptedAnswer": {
       "@type": "Answer",
-      "text": "Ports below 1024 need privileges the application deliberately does not ask for; use 1162 and redirect if you need 162. Check the listener is started, and that your firewall allows inbound UDP on that port."
+      "text": "The listener defaults to 162, and what stops it binding differs by platform. On Windows there is no privileged-port rule: 162 binds without elevation, so a failure means something else holds it — the built-in SNMP Trap service, if it is installed — or the port falls in a reserved range, which netsh int ipv4 show excludedportrange udp lists. On Linux and macOS, ports below 1024 do need privileges the application deliberately never asks for, so the bind fails with permission denied: either grant the binary the capability once with sudo setcap 'cap_net_bind_service=+ep' /path/to/SnmpLens on Linux, or set the port to 1162 in Settings and redirect 162 to it at your firewall. Then check the listener is started and that inbound UDP on that port is allowed."
      }
     }
    ]
@@ -138,7 +138,7 @@ try {
 
 <header class="site-header">
   <div class="wrap">
-    <a class="brand" href="./"><img src="assets/img/SnmpLens.png" alt="" width="26" height="26" />SnmpLens</a>
+    <a class="brand" href="./"><img src="assets/img/favicon-48.png" alt="" width="26" height="26" />SnmpLens</a>
     <nav class="nav" aria-label="Main">
       <a href="documentation.html" aria-current="page">Documentation</a>
       <a href="download.html">Download</a>
@@ -1072,9 +1072,17 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
 
       <h3>Traps are not being received</h3>
       <p>
-        Ports below 1024 need privileges the application deliberately does not ask for; use
-        1162 and redirect if you need 162. Check the listener is started, and that your
-        firewall allows inbound UDP on that port.
+        The listener defaults to 162, and what stops it binding differs by platform.
+        On <strong>Windows</strong> there is no privileged-port rule: 162 binds without
+        elevation, so a failure means something else holds it — the built-in SNMP Trap
+        service, if it is installed — or the port falls in a reserved range, which
+        <code>netsh int ipv4 show excludedportrange udp</code> lists. On
+        <strong>Linux and macOS</strong>, ports below 1024 do need privileges the
+        application deliberately never asks for, so the bind fails with <em>permission
+        denied</em>: either grant the binary the capability once with
+        <code>sudo setcap 'cap_net_bind_service=+ep' /path/to/SnmpLens</code> on Linux, or
+        set the port to 1162 in Settings and redirect 162 to it at your firewall. Then
+        check the listener is started and that inbound UDP on that port is allowed.
       </p>
     </section>
 
@@ -1093,7 +1101,7 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
   <div class="wrap">
     <div class="footer-grid">
       <div>
-        <a class="brand" href="./" style="margin-bottom:0.6rem"><img src="assets/img/SnmpLens.png" alt="" width="26" height="26" />SnmpLens</a>
+        <a class="brand" href="./" style="margin-bottom:0.6rem"><img src="assets/img/favicon-48.png" alt="" width="26" height="26" />SnmpLens</a>
         <p class="muted small" style="max-width:34ch">A desktop SNMP MIB browser, editor and alert router. MIT licensed, built in the open.</p>
       </div>
       <div>
