@@ -363,12 +363,20 @@ func lengthOf(subs []uint32, implied bool, fixed int) (n, start int, err error) 
 }
 
 // fixedSize returns the single exact size a type allows, or -1.
+//
+// The upper bound is on the CONVERSION, and it is not theoretical: MinValue is
+// an int64 read out of a MIB, MIBs are files the user drops in, and `int` is 32
+// bits on a 32-bit build — where a declared SIZE above 2^31 becomes negative and
+// the make([]byte, n) it eventually reaches panics. MaxInt32 rather than MaxInt
+// so the same file is refused on every platform instead of only on the small
+// one, which is the sort of difference nobody finds until someone runs the
+// 32-bit build.
 func fixedSize(t *models.Type) int {
 	if len(t.Ranges) != 1 {
 		return -1
 	}
 	r := t.Ranges[0]
-	if r.MinValue != r.MaxValue || r.MinValue < 0 {
+	if r.MinValue != r.MaxValue || r.MinValue < 0 || r.MinValue > math.MaxInt32 {
 		return -1
 	}
 	return int(r.MinValue)
