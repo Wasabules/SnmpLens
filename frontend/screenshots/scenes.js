@@ -51,7 +51,7 @@ function withSettings(base, patch) {
 }
 
 /** One scene. `tab` picks the workspace; `theme` picks dark or light. */
-function scene(base, name, { tab, theme = 'dark', width = 1600, height = 1000, settings = {}, seeds: extra = {}, bindings = {}, events = [], describe }) {
+function scene(base, name, { tab, theme = 'dark', width = 1600, height = 1000, settings = {}, seeds: extra = {}, bindings = {}, events = [], act = [], describe }) {
   return {
     name,
     width,
@@ -65,6 +65,7 @@ function scene(base, name, { tab, theme = 'dark', width = 1600, height = 1000, s
     },
     bindings,
     events,
+    act,
   };
 }
 
@@ -74,12 +75,17 @@ export function buildScenes(seeds) {
   scene(base, 'operations-dark', {
     tab: TABS.operations,
     theme: 'dark',
+    // A walk's results are the component's own state, so they cannot be seeded
+    // — the walk has to be run. This is the one place the harness presses
+    // buttons, and it presses them by their label.
+    act: ['WALK', 'Execute WALK', 'Table'],
     describe: 'A walk of ifTable rendered as a real table, split by INDEX.',
   }),
 
   scene(base, 'operations-light', {
     tab: TABS.operations,
     theme: 'light',
+    act: ['WALK', 'Execute WALK', 'Table'],
     describe: 'The same, in the light theme.',
   }),
 
@@ -133,6 +139,7 @@ export function buildScenes(seeds) {
     tab: TABS.operations,
     theme: 'dark',
     settings: { anonymousMode: true },
+    act: ['WALK', 'Execute WALK'],
     describe: 'The same screen with every address replaced by a stable alias.',
   }),
   ];

@@ -95,12 +95,44 @@ function injectScene() {
     }));
   }
 
+  // Some things cannot be seeded because they are not state anyone stores: a
+  // walk's results live in the component that ran it. Those scenes name the
+  // buttons to press, BY THEIR TEXT — a label is what a person would look for,
+  // and unlike a class name it does not change when the styling does.
+  //
+  // A step that finds nothing is skipped rather than failing: the scene then
+  // captures whatever it would have captured anyway, which is a duller picture
+  // and not a broken one.
+  function clickText(text) {
+    var nodes = document.querySelectorAll('button, .tab-btn, [role="button"]');
+    for (var i = 0; i < nodes.length; i++) {
+      var label = (nodes[i].textContent || '').trim();
+      if (label === text || label.replace(/\s+/g, ' ') === text) {
+        nodes[i].click();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function runSteps(steps, done) {
+    var i = 0;
+    (function next() {
+      if (i >= steps.length) { setTimeout(done, 700); return; }
+      var step = steps[i++];
+      clickText(step);
+      setTimeout(next, 450);
+    })();
+  }
+
   window.addEventListener('load', function () {
     // Let the application mount and its first bindings resolve, then choose the
     // workspace, then let that workspace's own loads settle.
     setTimeout(function () {
       pickTab();
-      setTimeout(function () { window.__SNMPLENS_READY__ = true; }, 900);
+      setTimeout(function () {
+        runSteps(s.act || [], function () { window.__SNMPLENS_READY__ = true; });
+      }, 800);
     }, 700);
   });
 })();
