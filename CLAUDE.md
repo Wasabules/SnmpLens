@@ -86,6 +86,7 @@ The frontend calls Go through auto-generated bindings in `frontend/wailsjs/`, wh
   debug panel shows), `operations.go` (GET/SET/GETNEXT/GETBULK/WALK), `trap.go` (listener + sender, traps and acknowledged INFORMs — v1 is refused rather than downgraded, since RFC 1157 has no InformRequest PDU), `discovery.go` (CIDR scan, capped at `MaxDiscoveryHosts` — the prefix sizes the allocation before a packet is
   sent, so `10.0.0.0/8` was 16.7M strings and an IPv6 `/64` never finished expanding), `params.go` (bridge request structs).
 - `pkg/monitor/` — the poll clock and the alerting engine. `scheduler.go` owns one goroutine per monitoring session (this is what makes background mode real — the clock used to be a `setInterval` in the renderer, so closing the window silently stopped every session and every alert with it); `breach.go` turns samples into threshold/reachability episodes; `counters.go` corrects counter wraps and derives rates from the time that actually elapsed.
+- `app_router.go` — the event router: routing runs on its own goroutine in bounded batches, with a durable watermark so a crash replays rather than loses. See **The trap path**.
 - `pkg/events/`, `pkg/notify/`, `pkg/secrets/`, `pkg/service/`, `pkg/tray/`, `pkg/autostart/` — the event journal vocabulary, notification routing (syslog over UDP/TCP/**TLS per RFC5425**, webhook, email, with a durable outbox), OS-protected credential storage, the pre-GUI preference file, the fail-soft system-tray icon, and the per-user login entry (HKCU Run key / LaunchAgent / XDG autostart — never machine-wide, so it never needs elevation).
 - `pkg/netaddr/address.go` — address handling shared by `pkg/snmp` and `pkg/network`. `NormaliseTarget` strips
   the brackets people paste around an IPv6 literal, because gosnmp adds its own via `JoinHostPort` and
@@ -292,6 +293,77 @@ readers into a world holding only `SNMPv2-SMI` and `SNMPv2-TC` — measured, 12 
 DIFFERENT NAME, not an error — and let two rebuilds interleave, each `Exit`/`Init` destroying what the other had
 loaded, so the probe reported a failure that was not real and `app_mibeditor.go` routed it to every sink as a
 "major" event. CI runs `-race` for exactly this class.
+
+## The trap path
+
+A trap arrives on gosnmp's UDP receive loop, and that loop is **strictly serial**: one goroutine,
+`ReadFromUDP` then handler then the next read, with no goroutine per datagram (verified in gosnmp
+v1.43.2 `trap.go`). Every millisecond the handler spends is a millisecond not reading the socket, and what
+does not fit the socket buffer is dropped by the KERNEL before Go sees it — no error, no journal entry,
+nothing to count. Three things follow, and each is load-bearing.
+
+**The socket read buffer is raised to 8 MiB** (`pkg/snmp/trapbuf.go`). Measured with a burst of 2000
+datagrams: 417 journalled with the system default, 2000 with 8 MiB. It is the single largest thing
+deciding whether a storm is recorded and it dwarfs anything the handler's speed buys. gosnmp keeps its
+socket in an unexported field and offers no accessor — `WithBufferSize` is the per-read message size,
+which is different — so this reaches into the struct. That is acceptable only because it is FAIL-SOFT
+(anything unexpected leaves the default) and PINNED BY A TEST, so a gosnmp upgrade that renames the field
+fails CI rather than quietly halving the next storm. The durable fix is a `WithReadBuffer` upstream.
+
+**The insert stays synchronous, the ROUTING does not.** gosnmp sends an INFORM's acknowledgement after the
+handler returns, so acknowledging a confirmed notification before it is durably journalled would be a lie.
+Routing was measured at 1.30 ms per event against 0.97 ms for the insert — essentially all of it a second
+write transaction — and now goes to `eventRouter` (`app_router.go`). Batching is not an optimisation on
+top: unbatched the router costs the same 1.0 ms per event and cannot keep up with a producer it just made
+twice as fast. At 50 events per transaction it costs 0.13 ms.
+
+**`TrimEvents` runs on the caller's goroutine too**, every 256 inserts, and at the retention caps it was
+freezing the trap loop for 130-330 ms. Moving it to a background goroutine does NOT help and was measured
+making things worse — SQLite serialises writers, so `InsertEvent` blocks on the write lock instead (mean
+2.5 → 8.5 ms, worst 62 → 335 ms). The cost had to come out of the QUERY: a `seq` cutoff and an indexed
+range delete instead of `NOT IN`, payloads deleted while their events still name them, `NOT EXISTS`
+against the unique id, and a partial index for the payload cap. 172.9 ms → 20.5 ms.
+
+Measured end to end afterwards, as LOSS at an offered rate — never as one over a mean, since offering at
+1/mean is a utilisation of 1.0 by definition: 100% journalled at 2000/s sustained, first loss at 5000/s.
+Note the shape the buffer produced: rate alone decides nothing, because a burst that fits is absorbed
+whatever rate it arrives at. What costs datagrams is sustained overload for longer than the buffer covers.
+
+### The routing watermark
+
+`notify_watermark` records how far routing has got through `events.seq`; anything above it is replayed at
+startup. Replay is harmless because the outbox is `INSERT OR IGNORE` against `UNIQUE(event_id, sink_id)`.
+Five rules, each of which is a lost alert if broken:
+
+- **The deliveries and the watermark are ONE transaction** (`EnqueueRouted`). A watermark committing
+  without them names events that are then never replayed and never delivered.
+- **It is NOT `max(seq)` of the flushed batch.** `seq` is allocated by the insert and the event reaches the
+  queue later — measured 2.4 ms, p95 7.5 ms — so two events can be handed over in the opposite order to
+  their seqs, and taking the max strands a lower one still in flight. It is the lowest seq still owed,
+  minus one, and it never retreats.
+- **It is seeded in the SCHEMA, at `MAX(seq)`**, never lazily and never at 0. Created lazily, a crash
+  before the first flush leaves the row absent and the "absent means MAX(seq)" rule then skips exactly the
+  events it was meant to protect. Seeding at `MAX(seq)` also stops an upgrade re-delivering history.
+- **One transaction is bounded** (`routeBatchSize`), not "everything queued": SQLite serialises writers, so
+  its size is how long the trap listener's insert is blocked. 10 000 rows measured 392 ms; a replay of the
+  full retention caps would be ~14 s, past the busy timeout, losing a trap while its INFORM is acked.
+- **A failure is not silence.** `routedGroupsFor` returns an ERROR when the configuration cannot be read,
+  because returning nil made that indistinguishable from "no rule matched" and the watermark then moved
+  past the event. An event that fails to route is left in flight; replay STOPS at one rather than skipping
+  it. For the same reason `flushBatch` now puts unwritten data points BACK — it is the batching precedent
+  in this repository and it dropped its buffer before the write, losing a batch per `SQLITE_BUSY`.
+
+Quiet hours are evaluated at the EVENT's timestamp, converted to the local zone. The conversion is not
+cosmetic: every producer writes `Ts` in UTC while quiet hours are wall-clock times an operator typed, so
+comparing them directly rotates every window by the machine's UTC offset. A `Ts` that does not parse falls
+back to NOW, never the zero time — 00:00 is inside every window that wraps midnight, which would silence
+the alert permanently.
+
+The trap listener is stopped FIRST in `App.shutdown`, before any consumer. `Client.trapListener` is behind
+a mutex (three goroutines wrote it), the listen goroutine clears the field only if it is still ITS
+listener, and the stop WAITS for `Listening()` before closing: gosnmp's `Close` returns early doing nothing
+while `conn` is nil, having already set `finish`, so a stop landing in the bind window reported success and
+left a listener nothing could stop — measured, still running 2.1 s after `Close` returned in 73 ms.
 
 ## Background mode
 
