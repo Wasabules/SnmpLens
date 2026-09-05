@@ -350,15 +350,23 @@ func lengthOf(subs []uint32, implied bool, fixed int) (n, start int, err error) 
 		// build a sub-identifier above 2^31 makes int(length) negative, and
 		// make([]byte, n) below panics on data an agent chose.
 		//
-		// Bounded against math.MaxInt as well as against what is left. The
-		// second is the tighter of the two and is what the error says, but only
-		// the first is a bound on the CONVERSION, and a check that happens to
-		// be tighter is not the same as a check that is about the right thing.
+		// Two checks, in this order, because they are about different things.
+		// The first bounds the CONVERSION and is the only one that does:
+		// MaxInt32 rather than MaxInt so it is a real bound on both builds
+		// instead of a comparison that is constantly false on the 64-bit one.
+		// The second bounds the VALUE against the data actually present, which
+		// is tighter in every real case — but being incidentally tighter is not
+		// the same as being about the right thing, and a conversion that
+		// happens between the two is guarded by neither.
 		length := subs[0]
-		if uint64(length) > math.MaxInt || int(length) > len(subs)-1 {
-			return 0, 0, fmt.Errorf("length %d exceeds the %d sub-identifiers left", length, len(subs)-1)
+		if length > math.MaxInt32 {
+			return 0, 0, fmt.Errorf("length %d does not fit an int", length)
 		}
-		return int(length), 1, nil
+		n := int(length)
+		if n > len(subs)-1 {
+			return 0, 0, fmt.Errorf("length %d exceeds the %d sub-identifiers left", n, len(subs)-1)
+		}
+		return n, 1, nil
 	}
 }
 
