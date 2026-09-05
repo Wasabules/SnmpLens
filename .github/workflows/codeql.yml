@@ -54,6 +54,24 @@ jobs:
           languages: ${{ matrix.language }}
           queries: security-and-quality
 
+      # main.go carries `//go:embed all:frontend/dist`, and frontend/dist is
+      # produced by `wails build` and gitignored — so a plain `go build` fails
+      # with "pattern all:frontend/dist: no matching files found" before a single
+      # query runs. That is why this job failed on every push and every pull
+      # request, and why thirteen Dependabot PRs all showed two red checks that
+      # had nothing to do with the dependency they bumped.
+      #
+      # A placeholder rather than a real frontend build: CodeQL analyses the Go
+      # code, not the bytes the binary embeds, so `npm ci && npm run build` would
+      # cost two minutes to produce something no query looks at. The
+      # javascript-typescript leg analyses the frontend SOURCE, which is what
+      # matters there.
+      - name: Placeholder for the embedded frontend
+        if: matrix.language == 'go'
+        run: |
+          mkdir -p frontend/dist
+          echo '<!-- CodeQL placeholder -->' > frontend/dist/index.html
+
       # The Go analysis needs a real build. Autobuild would not know about the
       # webkit2_41 tag, and would analyse a subset of the tree without saying so.
       - name: Build Go
