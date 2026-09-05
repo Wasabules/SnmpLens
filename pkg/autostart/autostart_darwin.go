@@ -68,14 +68,50 @@ func isEnabled() (bool, string, error) {
 	}
 	// Report the registered command rather than the whole plist, so the
 	// settings screen can show something a person can read.
-	body := string(raw)
-	start := strings.Index(body, "<string>")
-	end := strings.Index(body, "</string>")
-	cmd := ""
-	if start >= 0 && end > start {
-		cmd = body[start+len("<string>") : end]
+	return true, programArgument(string(raw)), nil
+}
+
+// programArgument pulls the first <string> of the ProgramArguments array out of
+// a LaunchAgent plist.
+//
+// It has to look for that key. Taking the document's first <string> — which is
+// what this did — returns the LABEL, because <key>Label</key> comes first in
+// every plist we write. So the settings screen offered `com.wasabules.snmplens`
+// as the command that runs at login: the one thing on that screen whose whole
+// purpose is to say WHAT starts, saying instead what the entry is called.
+//
+// Never caught because pkg/autostart's tests ran on Linux only, where this file
+// is not even compiled.
+func programArgument(plist string) string {
+	const key = "<key>ProgramArguments</key>"
+	i := strings.Index(plist, key)
+	if i < 0 {
+		return ""
 	}
-	return true, cmd, nil
+	rest := plist[i+len(key):]
+	start := strings.Index(rest, "<string>")
+	if start < 0 {
+		return ""
+	}
+	rest = rest[start+len("<string>"):]
+	end := strings.Index(rest, "</string>")
+	if end < 0 {
+		return ""
+	}
+	return unescapeXML(rest[:end])
+}
+
+// unescapeXML reverses escapeXML, so a path containing & or < comes back as it
+// was written rather than as its entity.
+func unescapeXML(s string) string {
+	r := strings.NewReplacer(
+		"&lt;", "<",
+		"&gt;", ">",
+		"&quot;", `"`,
+		"&apos;", "'",
+		"&amp;", "&",
+	)
+	return r.Replace(s)
 }
 
 func enable() error {
