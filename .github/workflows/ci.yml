@@ -132,6 +132,21 @@ jobs:
         run: npm ci
         working-directory: frontend
 
+      # The gate that keeps `npm run build` silent.
+      #
+      # The Svelte compiler emits accessibility and unused-CSS warnings and
+      # never fails on them, so a build stays green while they accumulate — 42
+      # of them had, until they were cleared. Verified rather than assumed:
+      # removing one `role="presentation"` leaves `npm run build` at exit 0 and
+      # takes this step to exit 1.
+      #
+      # `checkJs` is off in jsconfig.json, and that is what makes this usable:
+      # with it on, the same command reports 1631 diagnostics on a codebase
+      # written without annotations. See the comment there.
+      - name: Svelte check
+        run: npm run check
+        working-directory: frontend
+
       # Compiles every component, fails on a name nothing declares and on a
       # rendered expression that depends on state it does not name — the two
       # things Svelte 5 stopped reporting. Also the locale parity check.
