@@ -84,6 +84,16 @@ jobs:
         if: runner.os == 'Linux'
         run: cd frontend && npm test
 
+      # GitHub Pages serves the REPOSITORY, and there is no Pages build step, so
+      # anything docs/*.html names has to be committed or it is a 404 on the live
+      # site — while rendering perfectly on the machine that made it, because a
+      # local preview reads the disk. That shipped once: an ignore rule for the
+      # 3200 px captures swallowed two favicons, the touch icon and the
+      # documentation social card.
+      - name: Site assets are in the repository
+        if: runner.os == 'Linux'
+        run: node tools/check-assets.mjs
+
       - name: Install staticcheck
         if: runner.os == 'Linux'
         run: go install honnef.co/go/tools/cmd/staticcheck@latest

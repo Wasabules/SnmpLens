@@ -3,8 +3,23 @@
 # so committing 12 MB of PNG to derive 4.5 MB of WebP from puts the same picture
 # in the repository twice and makes every regeneration a large diff.
 #
-# The two exceptions are files nothing derives: the logo, and the social card,
-# which is fetched by crawlers and chat clients that do not all take WebP.
+# The exceptions are every PNG the SITE ITSELF SERVES. That is the criterion,
+# and getting it wrong shipped a live defect: the rule below started with two
+# exceptions, then four more PNGs were generated — the favicons, the touch icon
+# and the documentation card — and the rule swallowed all four. They existed on
+# disk, the pages referenced them, and they were 404 on the deployed site.
+#
+# GitHub Pages serves the REPOSITORY, and there is no Pages build workflow, so
+# anything the HTML names has to be committed. `node tools/check-assets.mjs`
+# enforces exactly that and runs in CI; if you add a PNG the pages reference,
+# add its negation here or that check will fail.
+#
+# (The earlier comment said the exceptions were "files nothing derives". That
+# was never true: tools/webp.mjs derives og-card.png.)
 *.png
 !SnmpLens.png
 !og-card.png
+!og-card-docs.png
+!favicon-48.png
+!favicon-192.png
+!apple-touch-icon.png
