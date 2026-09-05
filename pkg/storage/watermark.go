@@ -172,3 +172,30 @@ func (s *Storage) EventsAfter(seq int64, limit int) ([]events.Event, error) {
 	}
 	return out, rows.Err()
 }
+
+// PoolWaits reports how long callers have spent waiting for a pooled database
+// connection, cumulatively since the process started.
+//
+// This is worth surfacing because the wait is INVISIBLE otherwise. Every method
+// here uses the context-free db.Query/db.Exec/db.Begin, so a caller that cannot
+// get one of the four connections simply blocks — and `_pragma=busy_timeout`
+// does not cover it, because that governs SQLite's lock, not Go's pool.
+// Measured with all four held: InsertEvent blocked 748 ms and returned err=nil,
+// with nothing in any log.
+//
+// The answer is NOT a bigger pool. Measured under three writers and two readers:
+// four connections gave InsertEvent a 5.53 ms average with 5541 waits totalling
+// 650 ms; sixteen gave 0 waits and a 6.19 ms average — the waits vanish and the
+// path gets slightly SLOWER, because the real serialiser is SQLite's single
+// writer. Nor is it a deadline on the trap insert: failing that loses the event
+// and leaves an INFORM unacknowledged, which is worse than waiting.
+//
+// So the wait stays, and is reported instead.
+func (s *Storage) PoolWaits() (count int64, waited time.Duration) {
+	st := s.db.Stats()
+	return st.WaitCount, st.WaitDuration
+}
+
+// Begin starts a transaction. Exposed so a test can occupy pooled connections
+// and prove that waiting for one is now visible.
+func (s *Storage) Begin() (*sql.Tx, error) { return s.db.Begin() }

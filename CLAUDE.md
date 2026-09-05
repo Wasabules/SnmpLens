@@ -353,6 +353,18 @@ Five rules, each of which is a lost alert if broken:
   it. For the same reason `flushBatch` now puts unwritten data points BACK — it is the batching precedent
   in this repository and it dropped its buffer before the write, losing a batch per `SQLITE_BUSY`.
 
+**Waiting for a pooled database connection is reported, not eliminated.** `pkg/storage` uses the
+context-free `db.Query`/`db.Exec`/`db.Begin` throughout, so a caller that cannot get one of the four
+connections simply blocks — and `busy_timeout` does not cover it, because that governs SQLite's lock
+rather than Go's pool. Measured with all four held: `InsertEvent` blocked 748 ms and returned `err=nil`,
+with nothing in any log. The fix is NOT a bigger pool: measured under three writers and two readers, four
+connections gave `InsertEvent` a 5.53 ms average with 5541 waits totalling 650 ms, and sixteen gave zero
+waits and a 6.19 ms average — the waits vanish and the path gets slightly SLOWER, because the real
+serialiser is SQLite's single writer. Nor a deadline on the trap insert, which would lose the event and
+leave an INFORM unacknowledged. What was missing was a way to KNOW, so the router samples
+`db.Stats()` every 30 s and records one system event when a window spends more than three seconds
+waiting — edge-triggered, so a busy hour produces one event rather than one hundred and twenty.
+
 Quiet hours are evaluated at the EVENT's timestamp, converted to the local zone. The conversion is not
 cosmetic: every producer writes `Ts` in UTC while quiet hours are wall-clock times an operator typed, so
 comparing them directly rotates every window by the machine's UTC offset. A `Ts` that does not parse falls

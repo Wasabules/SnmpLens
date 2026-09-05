@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -51,6 +52,23 @@ const (
 	// sit behind a quiet period either.
 	routeFlushInterval = 250 * time.Millisecond
 
+	// poolWatchInterval is how often the database connection pool is sampled.
+	//
+	// Waiting for a pooled connection is INVISIBLE: pkg/storage uses the
+	// context-free db.Query/db.Exec/db.Begin, so a caller that cannot get one
+	// simply blocks, and busy_timeout does not cover it — that governs SQLite's
+	// lock, not Go's pool. Measured with all four connections held, InsertEvent
+	// blocked 748 ms and returned no error at all.
+	poolWatchInterval = 30 * time.Second
+
+	// poolWaitThreshold is how much waiting in one window is worth telling the
+	// operator about.
+	//
+	// A healthy run measures single-digit milliseconds over several seconds, so
+	// three seconds in thirty is an order of magnitude past normal and means the
+	// database is the bottleneck rather than the network.
+	poolWaitThreshold = 3 * time.Second
+
 	// routeStopGrace bounds the wait at shutdown, for the same reason
 	// notify.StopGrace does: an application that will not close is worse than a
 	// flush that finishes on the next launch, which the watermark makes safe.
@@ -74,6 +92,12 @@ type eventRouter struct {
 	// flushed": that would strand a lower-seq event still waiting.
 	//
 	// What is safe is the LOWEST seq still in flight, minus one.
+	// Pool-wait bookkeeping, touched only by the router goroutine.
+	lastPoolCount int64
+	lastPoolWait  time.Duration
+	lastPoolCheck time.Time
+	poolReported  bool
+
 	mu        sync.Mutex
 	inflight  map[int64]bool
 	highest   int64 // the highest seq ever accepted
@@ -167,6 +191,7 @@ func (r *eventRouter) start() {
 
 			case <-ticker.C:
 				r.flush(&batch)
+				r.watchPool()
 			}
 		}
 	}()
@@ -237,6 +262,65 @@ func (r *eventRouter) flush(batch *[]events.Event) {
 	if r.app.dispatcher != nil {
 		r.app.dispatcher.Wake()
 	}
+}
+
+// watchPool reports a database that has become the bottleneck.
+//
+// Edge-triggered: it says so once when the waiting crosses the threshold and
+// stays quiet until a window comes back clean, so a busy hour produces one event
+// rather than one every thirty seconds.
+//
+// It does NOT try to fix the wait. Raising the pool was measured removing the
+// waits entirely and making InsertEvent slightly SLOWER — four connections gave
+// a 5.53 ms average with 5541 waits totalling 650 ms, sixteen gave 0 waits and
+// 6.19 ms — because the real serialiser is SQLite's single writer. And a
+// deadline on the trap insert would lose the event and leave an INFORM
+// unacknowledged, which is worse than waiting. What was missing was not a fix
+// but a way to know.
+func (r *eventRouter) watchPool() {
+	if r.app.storage == nil {
+		return
+	}
+	now := time.Now()
+	if !r.lastPoolCheck.IsZero() && now.Sub(r.lastPoolCheck) < poolWatchInterval {
+		return
+	}
+
+	count, waited := r.app.storage.PoolWaits()
+	if r.lastPoolCheck.IsZero() {
+		r.lastPoolCheck, r.lastPoolCount, r.lastPoolWait = now, count, waited
+		return
+	}
+
+	window := now.Sub(r.lastPoolCheck)
+	deltaCount := count - r.lastPoolCount
+	deltaWait := waited - r.lastPoolWait
+	r.lastPoolCheck, r.lastPoolCount, r.lastPoolWait = now, count, waited
+
+	if deltaWait < poolWaitThreshold {
+		// Clean window: arm the report again.
+		r.poolReported = false
+		return
+	}
+	if r.poolReported {
+		return
+	}
+	r.poolReported = true
+
+	share := float64(deltaWait) / float64(window) * 100
+	r.app.recordEvent(events.Event{
+		Category: events.CategorySystem,
+		Kind:     events.KindSystemInfo,
+		Severity: events.SevWarning.String(),
+		TitleKey: "events.kind." + events.KindSystemInfo,
+		Params: map[string]any{
+			"detail": fmt.Sprintf("database contention: %d waits for a connection "+
+				"totalling %s over %s (%.0f%% of the time)",
+				deltaCount, deltaWait.Round(time.Millisecond), window.Round(time.Second), share),
+		},
+		Summary: fmt.Sprintf("The database is the bottleneck: %s of waiting for a "+
+			"connection in the last %s", deltaWait.Round(time.Millisecond), window.Round(time.Second)),
+	}, "")
 }
 
 // stop drains what is queued and waits, bounded.
