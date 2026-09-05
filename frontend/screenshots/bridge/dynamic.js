@@ -403,3 +403,114 @@ dynamic.OpenURL = (url) => {
   } catch { /* a blocked popup is not worth an error toast */ }
   return null;
 };
+
+/**
+ * The notification preview, shaped by the destination.
+ *
+ * The static fixture answered one Slack-shaped JSON body to all three kinds, so
+ * the demo showed a JSON payload for a syslog sink and for a mail sink — which
+ * is precisely the thing the real preview was changed to stop doing. A demo that
+ * misrepresents a feature is worse than one that omits it.
+ *
+ * This is NOT the Go renderer; it cannot be, since there is no Go here. It is a
+ * faithful shape: an RFC5424 line for syslog, an RFC5322 message for mail, the
+ * request body for a webhook — each responding to the format controls, because
+ * a control that changes nothing is the same lie one level down.
+ */
+const PREVIEW_EVENT = {
+  severity: 'MAJOR',
+  summary: 'ifInOctets reached 912.5, above 900, on 10.0.0.1',
+  source: '10.0.0.1',
+  oid: '1.3.6.1.2.1.2.2.1.10.1',
+  value: '912.5',
+  ts: '2026-09-01T09:12:44.000000Z',
+  id: '7c41f0a2-4d3e-4a91-9b60-2f8c1d5e7a03',
+  kind: 'threshold.opened',
+};
+
+function previewSyslog(cfg, ev) {
+  const c = cfg.syslog || {};
+  // <PRI> is facility*8 + severity; major is 2 (critical) in the RFC5424 scale.
+  const pri = (Number.isFinite(c.facility) ? c.facility : 16) * 8 + 2;
+  const sd = c.omitStructuredData
+    ? '-'
+    : `[snmplens@0 id="${ev.id}" category="threshold" severity="major" state="open" `
+      + `source="${ev.source}" oid="${ev.oid}"]`;
+  return `<${pri}>1 ${ev.ts} ${c.hostname || 'workstation'} ${c.appName || 'SnmpLens'} - `
+    + `${ev.kind} ${sd} ﻿${ev.summary}`;
+}
+
+function previewEmail(cfg, ev, subject, body) {
+  const c = cfg.email || {};
+  const type = String(c.format || '').toLowerCase() === 'html' ? 'text/html' : 'text/plain';
+  return [
+    `From: ${c.from || 'snmplens@example.com'}`,
+    `To: ${(c.to || ['noc@example.com']).join(', ')}`,
+    `Subject: ${subject}`,
+    'Date: Tue, 01 Sep 2026 11:12:44 +0200',
+    'MIME-Version: 1.0',
+    `Content-Type: ${type}; charset=utf-8`,
+    'Content-Transfer-Encoding: 8bit',
+    `Message-ID: <${ev.id}@snmplens>`,
+    `X-SnmpLens-Event-Id: ${ev.id}`,
+    '',
+    body,
+  ].join('\n');
+}
+
+const WEBHOOK_BODIES = {
+  json: (ev) => JSON.stringify({
+    severity: ev.severity.toLowerCase(), category: 'threshold', kind: ev.kind,
+    source: ev.source, oid: ev.oid, value: ev.value, summary: ev.summary,
+    time: ev.ts, eventId: ev.id, sender: 'SnmpLens',
+  }, null, 2),
+  text: (ev) => `[${ev.severity}] ${ev.summary}`,
+  xml: (ev) => `<alert severity="${ev.severity.toLowerCase()}">\n`
+    + `  <source>${ev.source}</source>\n  <oid>${ev.oid}</oid>\n`
+    + `  <value>${ev.value}</value>\n  <summary>${ev.summary}</summary>\n</alert>`,
+  form: (ev) => `severity=${ev.severity.toLowerCase()}`
+    + `&source=${encodeURIComponent(ev.source)}&oid=${ev.oid}`
+    + `&summary=${encodeURIComponent(ev.summary)}`,
+};
+
+const WEBHOOK_TYPES = {
+  json: 'application/json',
+  text: 'text/plain; charset=utf-8',
+  xml: 'application/xml; charset=utf-8',
+  form: 'application/x-www-form-urlencoded',
+};
+
+dynamic.NotifyPreviewTemplate = (cfg) => {
+  if (!cfg || !cfg.kind) return undefined; // no opinion: fall through to the fixture
+  const ev = PREVIEW_EVENT;
+  const subject = `[${ev.severity}] ${ev.summary}`;
+  const body = (cfg.template && cfg.template.body) || ev.summary;
+
+  switch (cfg.kind) {
+    case 'syslog':
+      return { subject, body: previewSyslog(cfg, ev), errors: [], format: 'syslog',
+               json: false, jsonValid: false, bytes: previewSyslog(cfg, ev).length };
+    case 'email': {
+      const html = String((cfg.email || {}).format || '').toLowerCase() === 'html';
+      const rendered = html
+        ? `<p style="margin:0 0 12px"><strong>${ev.severity}</strong> — ${ev.summary}</p>`
+        : body;
+      const msg = previewEmail(cfg, ev, subject, rendered);
+      return { subject, body: msg, errors: [], format: 'email',
+               json: false, jsonValid: false, bytes: msg.length };
+    }
+    case 'webhook': {
+      const templated = String((cfg.webhook || {}).payloadMode || '') === 'template';
+      const fmt = templated ? ((cfg.webhook || {}).bodyFormat || 'json') : 'json';
+      const out = templated
+        ? (WEBHOOK_BODIES[fmt] || WEBHOOK_BODIES.json)(ev)
+        : JSON.stringify({ event: { severity: 'major', source: ev.source, oid: ev.oid },
+                           subject, body, sender: 'SnmpLens' }, null, 2);
+      return { subject, body: out, errors: [], format: templated ? fmt : 'json',
+               contentType: templated ? WEBHOOK_TYPES[fmt] : 'application/json',
+               json: true, jsonValid: true, bytes: out.length };
+    }
+    default:
+      return undefined;
+  }
+};

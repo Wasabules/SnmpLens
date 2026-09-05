@@ -953,7 +953,22 @@
     "deliveryRetry": "Reintentar",
     "deliveryRetried": "Puesto en cola para otro intento",
     "deliveryRefresh": "Actualizar",
-    "deadLetterCount": "{count} abandonados"
+    "deadLetterCount": "{count} abandonados",
+    "bodyFormat": "Formato del cuerpo",
+    "bodyFormatText": "Texto plano",
+    "bodyFormatForm": "Formulario (urlencoded)",
+    "bodyFormatHint": "Elige la cabecera Content-Type, cómo se escapan los valores sustituidos y contra qué se comprueba el cuerpo antes de enviarlo. No hay YAML: entrecomillar un valor allí depende de su contenido y su sangrado, y un error sutil produce un documento que se analiza como otra cosa.",
+    "emailFormat": "Formato del cuerpo",
+    "emailFormatText": "Texto plano",
+    "emailFormatHint": "HTML envía una sola parte text/html y escapa como HTML los valores sustituidos. No hay parte de texto alternativa: habría que adivinarla a partir de su marcado.",
+    "syslogDetail": "Detalle de la línea",
+    "syslogDetailFull": "Con datos estructurados",
+    "syslogDetailPlain": "Solo el mensaje",
+    "syslogDetailHint": "Los datos estructurados llevan el id del evento, la categoría, la gravedad y el origen, que es como un colector deduplica los reintentos. Algunos colectores registran la línea entera como texto, donde son ruido delante del mensaje.",
+    "previewSyslog": "La línea que se enviará",
+    "previewEmail": "El mensaje que se enviará",
+    "previewContentType": "La cabecera Content-Type que llevará esta petición",
+    "previewSyslogNoSubject": "Syslog no lleva asunto; solo se envía el cuerpo."
   },
   "tray": {
     "show": "Abrir SnmpLens",

@@ -15,6 +15,8 @@
     buildRowVarbinds, buildDestroyVarbinds,
   } from './tableRows';
   import { MibTable, MibDecodeIndexes, MibEncodeIndex } from '../../wailsjs/go/main/App';
+  import { targetLabels } from '../stores/targetLabels';
+  import { displayTarget, targetTitle } from '../utils/targets';
 
   const dispatch = createEventDispatcher();
 
@@ -696,8 +698,8 @@
     {:else}
       {#each bulkResults as res}
         <div class="result" class:success={!res.error} class:error={res.error}>
-          <p class="result-target">
-            {$anonMode ? anonymizeIp(res.target) : res.target}
+          <p class="result-target" title={targetTitle(res.target, $anonMode)}>
+            {displayTarget(res.target, $targetLabels, $anonMode)}
             {#if res.responseTimeMs}
               <span class="response-time-badge">{res.responseTimeMs}ms</span>
             {/if}

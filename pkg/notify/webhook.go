@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"net"
@@ -53,6 +54,29 @@ type WebhookConfig struct {
 	//     written. This is how you talk to Slack, Teams or Alertmanager, which
 	//     all want their own shape rather than ours.
 	PayloadMode string `json:"payloadMode,omitempty"`
+
+	// BodyFormat is what the template mode WRITES: "json" (the default),
+	// "text", "xml" or "form". Ignored in envelope mode, which is always our
+	// JSON object.
+	//
+	// It drives four things together, and that is the whole point of it being
+	// one setting rather than a Content-Type field. The header the receiver
+	// sees; the escaping applied to substituted values; whether the rendered
+	// body is checked for well-formedness before it is posted; and the same
+	// check at save time.
+	//
+	// A bare Content-Type override was already possible through Headers, and it
+	// was the worst of both: an operator could declare application/xml while
+	// values were still escaped as JSON — so the first trap OID containing a
+	// quote produced a document that was neither — and the save-time check went
+	// on demanding valid JSON, so the sink could not be saved at all.
+	//
+	// There is deliberately no "yaml". Escaping a value for YAML is not a
+	// character substitution: whether a string needs quoting depends on its
+	// content, its indentation and its position, and a naive escape produces a
+	// document that parses as something else for one value in a thousand. A
+	// wrong payload that parses is worse than one that does not.
+	BodyFormat string `json:"bodyFormat,omitempty"`
 
 	// AllowPlaintextHTTP permits sending the credential over http://.
 	// Without it, a sink with a credential refuses a plaintext URL: a bearer
@@ -228,7 +252,10 @@ func (w WebhookSink) Send(e events.Event, subject, body string) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	// Set before the operator's own headers below, so an explicit Content-Type
+	// there still wins — but it is now the right default rather than always
+	// application/json regardless of what the body actually is.
+	req.Header.Set("Content-Type", w.Config.ContentType())
 	req.Header.Set("User-Agent", "SnmpLens")
 	// The stable event id lets the receiver deduplicate: delivery is
 	// at-least-once, never exactly-once.
@@ -299,6 +326,99 @@ func (w WebhookSink) scrub(err error) error {
 // PayloadTemplate is the mode where the template writes the whole body.
 const PayloadTemplate = "template"
 
+// Body formats for the template mode.
+const (
+	BodyJSON = "json"
+	BodyText = "text"
+	BodyXML  = "xml"
+	BodyForm = "form"
+)
+
+// BodyFormat is the configured format, normalised. Anything unrecognised is
+// JSON, which is what every sink written before this setting existed sends.
+func (c WebhookConfig) bodyFormat() string {
+	switch strings.ToLower(strings.TrimSpace(c.BodyFormat)) {
+	case BodyText:
+		return BodyText
+	case BodyXML:
+		return BodyXML
+	case BodyForm:
+		return BodyForm
+	default:
+		return BodyJSON
+	}
+}
+
+// ContentType is the header the receiver is told to expect.
+//
+// Exported because the preview shows it: the header and the body have to agree,
+// and an operator who has just switched the format needs to see that they do.
+// Envelope mode is always our JSON object whatever the format says.
+func (c WebhookConfig) ContentType() string {
+	if !strings.EqualFold(strings.TrimSpace(c.PayloadMode), PayloadTemplate) {
+		return "application/json"
+	}
+	switch c.bodyFormat() {
+	case BodyText:
+		return "text/plain; charset=utf-8"
+	case BodyXML:
+		return "application/xml; charset=utf-8"
+	case BodyForm:
+		return "application/x-www-form-urlencoded"
+	default:
+		return "application/json"
+	}
+}
+
+// escapeFor is how a substituted value is written in this format.
+func (c WebhookConfig) escapeFor() escapeFunc {
+	switch c.bodyFormat() {
+	case BodyText:
+		return noEscape
+	case BodyXML:
+		return xmlEscape
+	case BodyForm:
+		return formEscape
+	default:
+		return jsonEscape
+	}
+}
+
+// RenderWebhookTemplate renders a template with the escaping its body format
+// requires, and falls back to a default that IS that format when the template is
+// empty.
+//
+// Only JSON has a default worth having: DefaultJSONPayload. For the others an
+// empty template falls through to the built-in prose rendering, which is valid
+// text, is not well-formed XML, and is caught at save time with a message saying
+// so — rather than being papered over with an invented document nobody asked
+// for.
+func RenderWebhookTemplate(cfg WebhookConfig, e events.Event, sinkName string, tpl MessageTemplate) (subject, body string) {
+	if cfg.bodyFormat() == BodyJSON && strings.TrimSpace(tpl.Body) == "" {
+		tpl.Body = DefaultJSONPayload
+	}
+	return renderWith(e, sinkName, tpl, cfg.escapeFor())
+}
+
+// wellFormed reports whether a rendered body is acceptable in its own format.
+//
+// Text and form bodies have no shape to be wrong: any bytes are a legal
+// text/plain body, and a form body that names a field the receiver does not
+// know is the receiver's business rather than ours.
+func (c WebhookConfig) wellFormed(body string) error {
+	switch c.bodyFormat() {
+	case BodyJSON:
+		if !json.Valid([]byte(body)) {
+			return fmt.Errorf("the rendered payload is not valid JSON; check the quotes and commas in the message template")
+		}
+	case BodyXML:
+		if err := wellFormedXML(body); err != nil {
+			return fmt.Errorf("the rendered payload is not well-formed XML: %w", err)
+		}
+	}
+	return nil
+}
+
 // payload builds the request body.
 func (w WebhookSink) payload(e events.Event, subject, body string) ([]byte, error) {
 	if strings.EqualFold(strings.TrimSpace(w.Config.PayloadMode), PayloadTemplate) {
@@ -306,12 +426,12 @@ func (w WebhookSink) payload(e events.Event, subject, body string) ([]byte, erro
 		if trimmed == "" {
 			return nil, fmt.Errorf("this webhook sends its message template as the payload, but the template rendered nothing")
 		}
-		// Refuse to post something that is not JSON rather than let the
-		// receiver reject it with a message nobody will see. The template was
-		// rendered with values escaped as JSON, so a failure here is the
+		// Refuse to post something malformed rather than let the receiver
+		// reject it with a message nobody will see. The template was rendered
+		// with values escaped FOR THIS FORMAT, so a failure here is the
 		// operator's punctuation rather than the event's content.
-		if !json.Valid([]byte(trimmed)) {
-			return nil, fmt.Errorf("the rendered payload is not valid JSON; check the quotes and commas in the message template")
+		if err := w.Config.wellFormed(trimmed); err != nil {
+			return nil, err
 		}
 		return []byte(trimmed), nil
 	}
@@ -333,6 +453,68 @@ func PreviewPayload(cfg WebhookConfig, e events.Event, subject, body string) ([]
 	return WebhookSink{Config: cfg}.payload(e, subject, body)
 }
 
+// wellFormedXML requires ONE root element and nothing but whitespace outside it.
+//
+// The decoder alone is not enough, which the test caught: xml.Decoder streams,
+// so it happily reads a document with no element in it at all and reports EOF
+// without an error. Plain prose therefore passed as XML, and an empty template
+// falling back to the built-in prose rendering would have been posted under an
+// application/xml header.
+func wellFormedXML(body string) error {
+	dec := xml.NewDecoder(strings.NewReader(body))
+	depth := 0
+	roots := 0
+
+	for {
+		tok, err := dec.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		switch t := tok.(type) {
+		case xml.StartElement:
+			if depth == 0 {
+				roots++
+			}
+			depth++
+		case xml.EndElement:
+			depth--
+		case xml.CharData:
+			// Text outside the root is not part of any element. Whitespace is
+			// allowed there; anything else means the document is prose with a
+			// tag in it rather than a document.
+			if depth == 0 && strings.TrimSpace(string(t)) != "" {
+				return fmt.Errorf("text outside the root element")
+			}
+		}
+	}
+
+	switch {
+	case roots == 0:
+		return fmt.Errorf("no element found")
+	case roots > 1:
+		return fmt.Errorf("%d root elements; XML allows one", roots)
+	case depth != 0:
+		return fmt.Errorf("an element is not closed")
+	}
+	return nil
+}
+
+// PreviewBodyFormat names the format the editor is showing, for its label.
+//
+// Envelope mode is reported as JSON whatever BodyFormat says, because that is
+// what it sends: the format setting only governs the template mode, and telling
+// the operator "xml" over a body that is plainly our JSON object would be a
+// second bug of the same kind as the one this replaced.
+func PreviewBodyFormat(cfg WebhookConfig) string {
+	if !strings.EqualFold(strings.TrimSpace(cfg.PayloadMode), PayloadTemplate) {
+		return BodyJSON
+	}
+	return cfg.bodyFormat()
+}
+
 // ValidatePayloadTemplate checks a webhook whose template IS its payload.
 //
 // Rendered against a sample event, because the shape can only be wrong once
@@ -345,8 +527,9 @@ func ValidatePayloadTemplate(cfg SinkConfig) error {
 	if !strings.EqualFold(strings.TrimSpace(cfg.Webhook.PayloadMode), PayloadTemplate) {
 		return nil
 	}
-	// An empty template is fine here: RenderJSONTemplate falls back to
-	// DefaultJSONPayload, so the mode always produces valid JSON.
+	// An empty template is fine in JSON: it falls back to DefaultJSONPayload, so
+	// that mode always produces valid JSON. In XML it is not, and the check
+	// below says so.
 	// System events are routable like any other, and they are the ones with the
 	// most fields EMPTY: a dead letter carries no source, no session and no
 	// value. A template naming those saved cleanly and then produced invalid
@@ -356,9 +539,9 @@ func ValidatePayloadTemplate(cfg SinkConfig) error {
 		events.CategoryThreshold, events.CategoryTrap,
 		events.CategoryReachability, events.CategorySystem,
 	} {
-		_, body := RenderJSONTemplate(SampleEvent(kind), cfg.Name, cfg.Template)
-		if !json.Valid([]byte(strings.TrimSpace(body))) {
-			return fmt.Errorf("the payload is not valid JSON once a %s event is rendered into it", kind)
+		_, body := RenderWebhookTemplate(cfg.Webhook, SampleEvent(kind), cfg.Name, cfg.Template)
+		if err := cfg.Webhook.wellFormed(strings.TrimSpace(body)); err != nil {
+			return fmt.Errorf("%w — once a %s event is rendered into it", err, kind)
 		}
 	}
 	return nil

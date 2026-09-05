@@ -7,6 +7,8 @@
   import { formatTimestamp, formatDuration } from '../utils/formatting';
   import { anonMode, anonymizeIp } from '../utils/anonymize';
   import { copyToClipboard } from '../utils/clipboard';
+  import { targetLabels } from '../stores/targetLabels';
+  import { displayTarget, targetTitle } from '../utils/targets';
 
   export let entry;
   export let expanded = false;
@@ -137,7 +139,8 @@
         <button class="btn-copy-small" on:click={() => copyToClipboard(entry.oid, $_('common.oid'))} title={$_('common.oid')}><Icon name="copy" size={13} /></button>
       </div>
       <div class="detail-row">
-        <strong>{$_('history.targets')}:</strong> <code>{$anonMode ? entry.targets?.map((t) => anonymizeIp(t)).join(', ') : entry.targets?.join(', ')}</code>
+        <strong>{$_('history.targets')}:</strong>
+        {#each entry.targets || [] as t, i}<code title={targetTitle(t, $anonMode)}>{displayTarget(t, $targetLabels, $anonMode)}</code>{#if i < entry.targets.length - 1}<span>, </span>{/if}{/each}
       </div>
       <div class="detail-row">
         <strong>{$_('common.version')}:</strong> <span>{entry.version}</span>

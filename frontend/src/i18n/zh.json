@@ -953,7 +953,22 @@
     "deliveryRetry": "重试",
     "deliveryRetried": "已重新排队等待再次尝试",
     "deliveryRefresh": "刷新",
-    "deadLetterCount": "{count} 项已放弃"
+    "deadLetterCount": "{count} 项已放弃",
+    "bodyFormat": "正文格式",
+    "bodyFormatText": "纯文本",
+    "bodyFormatForm": "表单（urlencoded）",
+    "bodyFormatHint": "决定 Content-Type 头、替换值的转义方式，以及发送前对正文的校验方式。不提供 YAML：值是否需要加引号取决于其内容与缩进，细微的错误会产生一份被解析成别的东西的文档。",
+    "emailFormat": "正文格式",
+    "emailFormatText": "纯文本",
+    "emailFormatHint": "HTML 发送单一的 text/html 部分，并按 HTML 转义替换值。不附带纯文本备选部分：那需要从你的标记中猜测。",
+    "syslogDetail": "行的详细程度",
+    "syslogDetailFull": "包含结构化数据",
+    "syslogDetailPlain": "仅消息",
+    "syslogDetailHint": "结构化数据携带事件 id、类别、严重级别与来源，收集器据此对重试去重。有些收集器把整行当作文本记录，此时它只是消息前面的噪声。",
+    "previewSyslog": "将要发送的日志行",
+    "previewEmail": "将要发送的邮件",
+    "previewContentType": "本次请求将携带的 Content-Type 头",
+    "previewSyslogNoSubject": "Syslog 不携带主题；只发送正文。"
   },
   "tray": {
     "show": "打开 SnmpLens",

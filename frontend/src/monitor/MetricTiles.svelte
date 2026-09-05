@@ -9,6 +9,7 @@
   import { oidName, oidTooltip } from '../utils/oidDisplay';
   import { computeStats, pointsInRange, DEFAULT_STATS } from '../utils/seriesStats';
   import { classify } from '../utils/thresholdAlerts';
+  import { displayTarget } from '../utils/targets';
 
   export let session;
   export let mode = 'raw';
@@ -35,14 +36,6 @@
 
   $: hiddenSet = new Set(hidden || []);
   $: oidList = (oids && oids.length ? oids : [session?.oid]).filter(Boolean);
-
-  // Label when the target has one — an operator reads "Routeur-Paris" faster
-  // than "10.12.4.7". Anonymous Mode still wins: a label names a site just as
-  // plainly as an address does.
-  function displayTarget(address, labels, anon) {
-    if (anon) return anonymizeIp(address);
-    return labels[address] || address;
-  }
 
   function formatStat(key, value, u) {
     if (value === null || value === undefined) return '—';

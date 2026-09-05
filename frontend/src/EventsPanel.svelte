@@ -13,6 +13,7 @@
   import { anonMode, anonymizeIp, anonymizeText } from './utils/anonymize';
   import { downloadFile } from './utils/csv';
   import { EventsPayload } from '../wailsjs/go/main/App';
+  import { displayTarget as labelled } from './utils/targets';
 
   const CATEGORIES = ['trap', 'threshold', 'reachability', 'system'];
   const SEVERITIES = ['critical', 'major', 'minor', 'warning', 'info'];
@@ -65,8 +66,7 @@
 
   function displaySource(source) {
     if (!source) return '—';
-    if ($anonMode) return anonymizeIp(source);
-    return $targetLabels[source] || source;
+    return labelled(source, $targetLabels, $anonMode);
   }
 
   // The stored title key + params are rendered here, so an event recorded a

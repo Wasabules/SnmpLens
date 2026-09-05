@@ -15,6 +15,12 @@ import (
 	"SnmpLens/pkg/events"
 )
 
+// Body formats for an email sink.
+const (
+	EmailFormatText = "text"
+	EmailFormatHTML = "html"
+)
+
 // EmailConfig describes an SMTP destination.
 type EmailConfig struct {
 	Host     string `json:"host"`
@@ -29,6 +35,18 @@ type EmailConfig struct {
 	To       []string `json:"to"`
 	// Encryption: "starttls" (587, the usual), "tls" (465, implicit) or "none".
 	Encryption string `json:"encryption"`
+	// Format is "text" (the default) or "html".
+	//
+	// One part, not multipart/alternative. A text alternative would have to be
+	// DERIVED from the operator's markup, and every way of doing that guesses:
+	// strip the tags and a table becomes a run-on sentence. The body is whatever
+	// they wrote, declared as what it is.
+	//
+	// Switching this changes how substituted values are escaped, not only the
+	// header — see App.renderForSink. A summary arriving from the network with a
+	// "<" in it would otherwise end the paragraph and take the rest of the mail
+	// with it.
+	Format string `json:"format,omitempty"`
 	// AuthMethod: "plain", "login" (on-prem Exchange) or "none".
 	AuthMethod string `json:"authMethod"`
 	// CACert is a PEM bundle trusting a private CA, which is what an internal
@@ -304,7 +322,7 @@ func buildMessage(cfg EmailConfig, e events.Event, subject, body string) string 
 	b.WriteString("Subject: " + capEncodedSubject(subject) + "\r\n")
 	b.WriteString("Date: " + time.Now().Format(time.RFC1123Z) + "\r\n")
 	b.WriteString("MIME-Version: 1.0\r\n")
-	b.WriteString("Content-Type: text/plain; charset=utf-8\r\n")
+	b.WriteString("Content-Type: " + contentType(cfg) + "; charset=utf-8\r\n")
 	b.WriteString("Content-Transfer-Encoding: 8bit\r\n")
 	// A stable id so a mail client threads retries instead of showing copies.
 	if e.ID != "" {
@@ -315,6 +333,27 @@ func buildMessage(cfg EmailConfig, e events.Event, subject, body string) string 
 	b.WriteString(normaliseLines(body))
 	b.WriteString("\r\n")
 	return b.String()
+}
+
+// contentType is the MIME type the body is declared as. Anything unrecognised
+// falls back to text/plain: a mail declared text/html whose body is prose
+// renders as one unbroken paragraph, which is a worse failure than the reverse.
+func contentType(cfg EmailConfig) string {
+	if strings.EqualFold(strings.TrimSpace(cfg.Format), EmailFormatHTML) {
+		return "text/html"
+	}
+	return "text/plain"
+}
+
+// PreviewMessage renders the message exactly as Send would put it on the wire,
+// headers and all.
+//
+// Exported for the settings preview, which used to show the rendered subject and
+// body as two pieces of text — which is not what an email IS. An operator
+// configuring the From address, the recipient list and now the body format had
+// no way to see any of them until something arrived in a mailbox.
+func PreviewMessage(cfg EmailConfig, e events.Event, subject, body string) string {
+	return buildMessage(cfg, e, subject, body)
 }
 
 // maxSubjectOctets leaves headroom under the RFC5322 998-octet line limit,

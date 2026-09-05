@@ -9,6 +9,7 @@
   import { oidName, oidTooltip } from '../utils/oidDisplay';
   import { EventsQuery } from '../../wailsjs/go/main/App';
   import { EventsOn } from '../../wailsjs/runtime/runtime';
+  import { displayTarget as labelled } from '../utils/targets';
 
   export let session;
 
@@ -68,8 +69,7 @@
 
   function displayTarget(source) {
     if (!source) return '—';
-    if ($anonMode) return anonymizeIp(source);
-    return $targetLabels[source] || source;
+    return labelled(source, $targetLabels, $anonMode);
   }
 
   // The stored params carry the unmasked address and every title key

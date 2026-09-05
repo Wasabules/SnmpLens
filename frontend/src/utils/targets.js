@@ -1,3 +1,5 @@
+import { anonymizeIp } from './anonymize';
+
 /**
  * Parse the multi-line targets string from settings into an array of IPs.
  * Skips empty lines, lines starting with // (disabled), and strips # labels.
@@ -33,6 +35,36 @@ export function getTargetLabels(targetsString) {
     if (address && label) labels[address] = label;
   }
   return labels;
+}
+
+/**
+ * How a target address should READ on screen.
+ *
+ * An operator reads "core-sw-01" far faster than "10.20.0.1", and they gave that
+ * name for a reason. The address is not thrown away — every caller puts it in
+ * the element's `title`, so hovering still answers "which box is that".
+ *
+ * Anonymous Mode wins over both. A label names a site at least as plainly as an
+ * address does, so masked output stays masked; showing "core-sw-01" while
+ * hiding 10.20.0.1 would defeat the whole feature.
+ *
+ * This lived twice inside the monitoring components, which is why the labels
+ * appeared on the charts and nowhere else: a walk's results, a trap's source and
+ * a history entry's targets all showed raw addresses for configured devices that
+ * had a name.
+ *
+ * @param {string} address
+ * @param {Record<string,string>} labels  from the targetLabels store
+ * @param {boolean} anon                  from the anonMode store
+ */
+export function displayTarget(address, labels, anon) {
+  if (anon) return anonymizeIp(address);
+  return (labels && labels[address]) || address;
+}
+
+/** What belongs in the `title` beside it: the address, or its mask. */
+export function targetTitle(address, anon) {
+  return anon ? anonymizeIp(address) : address;
 }
 
 /**

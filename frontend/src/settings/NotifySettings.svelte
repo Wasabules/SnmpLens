@@ -64,13 +64,15 @@
       syslog: {
         address: '', protocol: 'udp', facility: 16, hostname: '', appName: 'SnmpLens', timeout: 5,
         caCert: '', serverName: '', insecureSkipVerify: false, clientCert: '',
+        omitStructuredData: false,
       },
       webhook: {
         url: '', method: 'POST', headers: {}, timeout: 10, payloadMode: 'envelope',
+        bodyFormat: 'json',
         allowPlaintextHttp: false, caCert: '', serverName: '', insecureSkipVerify: false,
       },
       email: {
-        host: '', port: 587, username: '', from: '', to: [],
+        host: '', port: 587, username: '', from: '', to: [], format: 'text',
         encryption: 'starttls', authMethod: 'plain', insecureSkipVerify: false, timeout: 20,
         caCert: '', serverName: '',
       },
@@ -431,6 +433,14 @@
           <label class="fld"><span>{$_('notify.facility')}</span>
             <input type="number" min="0" max="23" bind:value={editingSink.syslog.facility} />
           </label>
+          <label class="fld"><span>{$_('notify.syslogDetail')}</span>
+            <select value={editingSink.syslog.omitStructuredData ? 'plain' : 'full'}
+              on:change={(e) => (editingSink.syslog.omitStructuredData = e.target.value === 'plain')}>
+              <option value="full">{$_('notify.syslogDetailFull')}</option>
+              <option value="plain">{$_('notify.syslogDetailPlain')}</option>
+            </select>
+            <span class="sub">{$_('notify.syslogDetailHint')}</span>
+          </label>
         </div>
         {#if editingSink.syslog.protocol === 'tls'}
           <h4 class="grp-head">{$_('notify.grpServerTrust')}</h4>
@@ -505,6 +515,21 @@
               : $_('notify.payloadEnvelopeHint')}
           </span>
         </label>
+
+        <!-- Only in template mode: the envelope is always our JSON object, and
+             offering a format that changes nothing is worse than not offering
+             one. -->
+        {#if editingSink.webhook.payloadMode === 'template'}
+          <label class="fld"><span>{$_('notify.bodyFormat')}</span>
+            <select bind:value={editingSink.webhook.bodyFormat}>
+              <option value="json">JSON</option>
+              <option value="text">{$_('notify.bodyFormatText')}</option>
+              <option value="xml">XML</option>
+              <option value="form">{$_('notify.bodyFormatForm')}</option>
+            </select>
+            <span class="sub">{$_('notify.bodyFormatHint')}</span>
+          </label>
+        {/if}
 
         <h4 class="grp-head">{$_('notify.grpHeaders')}</h4>
         <label class="fld"><span>{$_('notify.headers')}</span>
@@ -589,6 +614,13 @@
         <label class="fld"><span>{$_('notify.to')}</span>
           <input type="text" value={(editingSink.email.to || []).join(', ')}
             on:input={(e) => (editingSink.email.toRaw = e.target.value)} placeholder="noc@example.com, oncall@example.com" />
+        </label>
+        <label class="fld"><span>{$_('notify.emailFormat')}</span>
+          <select bind:value={editingSink.email.format}>
+            <option value="text">{$_('notify.emailFormatText')}</option>
+            <option value="html">HTML</option>
+          </select>
+          <span class="sub">{$_('notify.emailFormatHint')}</span>
         </label>
         <p class="note">{$_('notify.secretHint', { values: { backend } })}</p>
 

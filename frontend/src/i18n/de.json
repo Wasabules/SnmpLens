@@ -953,7 +953,22 @@
     "deliveryRetry": "Erneut versuchen",
     "deliveryRetried": "Für einen weiteren Versuch eingereiht",
     "deliveryRefresh": "Aktualisieren",
-    "deadLetterCount": "{count} aufgegeben"
+    "deadLetterCount": "{count} aufgegeben",
+    "bodyFormat": "Rumpfformat",
+    "bodyFormatText": "Klartext",
+    "bodyFormatForm": "Formular (urlencoded)",
+    "bodyFormatHint": "Bestimmt den Content-Type-Header, wie eingesetzte Werte maskiert werden und wogegen der Rumpf vor dem Senden geprüft wird. Kein YAML: ob ein Wert dort in Anführungszeichen gehört, hängt von seinem Inhalt und seiner Einrückung ab, und ein feiner Fehler ergibt ein Dokument, das als etwas anderes gelesen wird.",
+    "emailFormat": "Rumpfformat",
+    "emailFormatText": "Klartext",
+    "emailFormatHint": "HTML sendet einen einzelnen text/html-Teil und maskiert eingesetzte Werte als HTML. Kein alternativer Textteil: er müsste aus Ihrem Markup erraten werden.",
+    "syslogDetail": "Detailgrad der Zeile",
+    "syslogDetailFull": "Mit strukturierten Daten",
+    "syslogDetailPlain": "Nur Meldung",
+    "syslogDetailHint": "Strukturierte Daten tragen Ereignis-ID, Kategorie, Schweregrad und Quelle — damit entdoppelt ein Kollektor Wiederholungen. Manche Kollektoren protokollieren die ganze Zeile als Text, wo sie nur Rauschen vor der Meldung sind.",
+    "previewSyslog": "Die Zeile, die gesendet wird",
+    "previewEmail": "Die Nachricht, die gesendet wird",
+    "previewContentType": "Der Content-Type-Header dieser Anfrage",
+    "previewSyslogNoSubject": "Syslog kennt keinen Betreff; nur der Rumpf wird gesendet."
   },
   "tray": {
     "show": "SnmpLens öffnen",

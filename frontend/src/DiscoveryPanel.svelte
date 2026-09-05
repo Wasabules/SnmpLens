@@ -8,6 +8,8 @@
   import { escapeCSV, downloadFile } from './utils/csv';
   import { buildDiscoverRequest } from './utils/snmpParams';
   import { anonMode, anonymizeIp, anonymizeHost, maskSysDescr, anonymizeCidr } from './utils/anonymize';
+  import { targetLabels } from './stores/targetLabels';
+  import { displayTarget, targetTitle } from './utils/targets';
 
   let activeSubTab = 'discovery'; // 'discovery' | 'ping' | 'traceroute'
 
@@ -211,7 +213,7 @@
             <tbody>
               {#each filteredResults as r}
                 <tr class:reachable={r.reachable} class:unreachable={!r.reachable}>
-                  <td class="ip-cell">{$anonMode ? anonymizeIp(r.ip) : r.ip}</td>
+                  <td class="ip-cell" title={targetTitle(r.ip, $anonMode)}>{displayTarget(r.ip, $targetLabels, $anonMode)}</td>
                   <td title={$anonMode ? anonymizeHost(r.sysName) : r.sysName}>{$anonMode ? (r.sysName ? anonymizeHost(r.sysName) : '-') : (r.sysName || '-')}</td>
                   <td class="descr-cell" title={$anonMode ? maskSysDescr(r.sysDescr) : r.sysDescr}>{$anonMode ? (r.sysDescr ? maskSysDescr(r.sysDescr) : (r.error ? r.error : '-')) : (r.sysDescr || (r.error ? r.error : '-'))}</td>
                   <td>{r.sysUpTime || '-'}</td>

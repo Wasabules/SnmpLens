@@ -2,7 +2,10 @@ package notify
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
+	"html"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -380,6 +383,42 @@ func jsonEscape(v string) string {
 	return string(encoded[1 : len(encoded)-1])
 }
 
+// htmlEscape renders a value as it would appear inside HTML text.
+//
+// Same reasoning as jsonEscape, one protocol along. An event's summary and its
+// OID come off the network unauthenticated and reach the rendered body; in an
+// HTML mail a single "<" turns the rest of the message into markup, and a
+// crafted one turns it into a link somewhere else. The template's OWN markup is
+// untouched — the operator wrote that on purpose, and escaping their tags would
+// make an HTML template impossible to write.
+func htmlEscape(v string) string {
+	return html.EscapeString(v)
+}
+
+// xmlEscape renders a value as XML character data.
+//
+// xml.EscapeText, not html.EscapeString: they differ on exactly the characters
+// that matter here. EscapeText encodes CR, LF and TAB as numeric references,
+// which keeps a multi-line summary from breaking an attribute value, and it is
+// the encoder the standard library will itself accept back.
+func xmlEscape(v string) string {
+	var b strings.Builder
+	if err := xml.EscapeText(&b, []byte(v)); err != nil {
+		return ""
+	}
+	return b.String()
+}
+
+// formEscape renders a value for application/x-www-form-urlencoded.
+func formEscape(v string) string { return url.QueryEscape(v) }
+
+// noEscape is the identity, for a body that is plain text.
+//
+// Named rather than passed as nil: renderWith treats nil as "no escaping" too,
+// but a nil there reads as an oversight, and this one is a decision — plain
+// text has no punctuation that a value can break.
+func noEscape(v string) string { return v }
+
 // renderTemplateText walks the tokens once.
 func renderTemplateText(src string, lookup func(string) (string, bool), escape escapeFunc) string {
 	var b strings.Builder
@@ -468,6 +507,40 @@ const DefaultJSONPayload = `{
   "eventId": "{{id}}",
   "sender": "SnmpLens"
 }`
+
+// DefaultHTMLPayload is what an HTML mail sends before anyone writes a template.
+//
+// The same argument as DefaultJSONPayload: the format has to be STABLE. Falling
+// back to the plain-text default would send prose with a text/html header, which
+// a mail client renders as one unbroken paragraph — every newline in it means
+// nothing, so a carefully laid-out alert arrives as a wall.
+//
+// Deliberately plain markup with inline styles and no <html> wrapper: mail
+// clients strip <head>, ignore stylesheets, and Outlook renders tables more
+// predictably than anything else. This is the shape that survives them.
+const DefaultHTMLPayload = `<div style="font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#14171a">
+  <p style="margin:0 0 12px"><strong>{{severity}}</strong> — {{summary}}</p>
+  <table cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px">
+    <tr><td style="padding:2px 12px 2px 0;color:#656d76">Device</td><td>{{source}}</td></tr>
+    <tr><td style="padding:2px 12px 2px 0;color:#656d76">OID</td><td><code>{{oid}}</code></td></tr>
+    <tr><td style="padding:2px 12px 2px 0;color:#656d76">Value</td><td>{{value}}</td></tr>
+    <tr><td style="padding:2px 12px 2px 0;color:#656d76">Time</td><td>{{ts}}</td></tr>
+  </table>
+  <p style="margin:12px 0 0;font-size:12px;color:#656d76">Sent by SnmpLens &middot; event {{id}}</p>
+</div>`
+
+// RenderHTMLTemplate is RenderTemplate with every substituted value escaped as
+// HTML text, for a mail sink whose body the operator writes as markup.
+//
+// An empty template renders DefaultHTMLPayload rather than the plain-text
+// default, for the same reason the JSON mode does: the body is declared
+// text/html, so it has to BE html whatever the operator has or has not written.
+func RenderHTMLTemplate(e events.Event, sinkName string, tpl MessageTemplate) (subject, body string) {
+	if strings.TrimSpace(tpl.Body) == "" {
+		tpl.Body = DefaultHTMLPayload
+	}
+	return renderWith(e, sinkName, tpl, htmlEscape)
+}
 
 // RenderJSONTemplate is RenderTemplate with every substituted value escaped as
 // a JSON string fragment, for a webhook whose body the operator writes as JSON.

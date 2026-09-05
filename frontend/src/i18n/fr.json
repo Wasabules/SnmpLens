@@ -953,7 +953,22 @@
     "deliveryRetry": "Réessayer",
     "deliveryRetried": "Remis en file pour une nouvelle tentative",
     "deliveryRefresh": "Actualiser",
-    "deadLetterCount": "{count} abandonnés"
+    "deadLetterCount": "{count} abandonnés",
+    "bodyFormat": "Format du corps",
+    "bodyFormatText": "Texte brut",
+    "bodyFormatForm": "Formulaire (urlencodé)",
+    "bodyFormatHint": "Choisit l’en-tête Content-Type, la façon dont les valeurs substituées sont échappées, et ce à quoi le corps est confronté avant l’envoi. Pas de YAML : savoir si une valeur doit y être mise entre guillemets dépend de son contenu et de son indentation, et une erreur subtile produit un document qui s’analyse comme autre chose.",
+    "emailFormat": "Format du corps",
+    "emailFormatText": "Texte brut",
+    "emailFormatHint": "HTML envoie une seule partie text/html et échappe les valeurs substituées en HTML. Pas de partie texte alternative : il faudrait la deviner à partir de votre balisage.",
+    "syslogDetail": "Détail de la ligne",
+    "syslogDetailFull": "Avec données structurées",
+    "syslogDetailPlain": "Message seul",
+    "syslogDetailHint": "Les données structurées portent l’identifiant, la catégorie, la sévérité et la source de l’événement, ce qui permet à un collecteur de dédupliquer les reprises. Certains collecteurs journalisent la ligne entière comme du texte, où elles ne sont que du bruit devant le message.",
+    "previewSyslog": "La ligne qui sera envoyée",
+    "previewEmail": "Le message qui sera envoyé",
+    "previewContentType": "L’en-tête Content-Type que portera cette requête",
+    "previewSyslogNoSubject": "Syslog ne porte pas de sujet ; seul le corps est envoyé."
   },
   "tray": {
     "show": "Ouvrir SnmpLens",

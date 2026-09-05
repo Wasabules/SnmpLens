@@ -953,7 +953,22 @@
     "deliveryRetry": "Try again",
     "deliveryRetried": "Queued for another attempt",
     "deliveryRefresh": "Refresh",
-    "deadLetterCount": "{count} given up"
+    "deadLetterCount": "{count} given up",
+    "bodyFormat": "Body format",
+    "bodyFormatText": "Plain text",
+    "bodyFormatForm": "Form (urlencoded)",
+    "bodyFormatHint": "Chooses the Content-Type header, how substituted values are escaped, and what the body is checked against before it is sent. There is no YAML: whether a value needs quoting there depends on its content and its indentation, and getting it subtly wrong produces a document that parses as something else.",
+    "emailFormat": "Body format",
+    "emailFormatText": "Plain text",
+    "emailFormatHint": "HTML sends one text/html part and escapes substituted values as HTML. There is no plain-text alternative part: it would have to be guessed from your markup.",
+    "syslogDetail": "Line detail",
+    "syslogDetailFull": "With structured data",
+    "syslogDetailPlain": "Message only",
+    "syslogDetailHint": "Structured data carries the event id, category, severity and source, which is how a collector deduplicates retries. Some collectors log the whole line as text, where it is noise in front of the message.",
+    "previewSyslog": "The line that will be sent",
+    "previewEmail": "The message that will be sent",
+    "previewContentType": "The Content-Type header this request will carry",
+    "previewSyslogNoSubject": "Syslog carries no subject; only the body is sent."
   },
   "tray": {
     "show": "Open SnmpLens",

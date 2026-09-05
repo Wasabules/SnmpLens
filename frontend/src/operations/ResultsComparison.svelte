@@ -5,6 +5,8 @@
   import { escapeCSV, downloadFile } from '../utils/csv';
   import { notificationStore } from '../stores/notifications';
   import { anonMode, anonymizeIp } from '../utils/anonymize';
+  import { targetLabels } from '../stores/targetLabels';
+  import { displayTarget, targetTitle } from '../utils/targets';
 
   export let bulkResults = [];
   export let oidInfoCache = {};
@@ -185,7 +187,7 @@
               </th>
               <th>Name</th>
               {#each comparisonData.targets as target}
-                <th class="target-col">{$anonMode ? anonymizeIp(target) : target}</th>
+                <th class="target-col" title={targetTitle(target, $anonMode)}>{displayTarget(target, $targetLabels, $anonMode)}</th>
               {/each}
               <th class="sortable" on:click={() => toggleCompareSort('delta')}>
                 {$_('results.delta')} {compareSortKey === 'delta' ? (compareSortAsc ? '▲' : '▼') : ''}
@@ -224,7 +226,7 @@
             <th>{$_('common.oid')}</th>
             <th>{$_('common.name')}</th>
             {#each comp.targets as target}
-              <th class="target-col">{$anonMode ? anonymizeIp(target) : target}</th>
+              <th class="target-col" title={targetTitle(target, $anonMode)}>{displayTarget(target, $targetLabels, $anonMode)}</th>
             {/each}
           </tr>
         </thead>

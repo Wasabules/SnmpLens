@@ -5,7 +5,7 @@
   import {
     NotifyTemplateVariables,
     NotifyPreviewTemplate,
-    NotifyDefaultJsonPayload,
+    NotifyDefaultBody,
   } from '../../wailsjs/go/main/App';
 
   /**
@@ -17,8 +17,23 @@
    */
   export let sink;
 
-  /** The body IS the request payload, so it has to be valid JSON. */
-  $: jsonPayload = sink.kind === 'webhook' && sink.webhook?.payloadMode === 'template';
+  /**
+   * The format the BODY is written in, or '' when the body is prose.
+   *
+   * This used to be a single boolean meaning "webhook in template mode", which
+   * was the same thing as "the body is JSON" only because JSON was the only
+   * format there was. It now names the format, because the escaping, the
+   * Content-Type and the starting default all follow it.
+   */
+  $: bodyFormat =
+    sink.kind === 'webhook' && sink.webhook?.payloadMode === 'template'
+      ? (sink.webhook.bodyFormat || 'json')
+      : sink.kind === 'email' && sink.email?.format === 'html'
+        ? 'html'
+        : '';
+
+  /** Formats that ship a usable starting point, offered as a button. */
+  $: hasDefaultBody = bodyFormat === 'json' || bodyFormat === 'html';
   // Whether this sink masks addresses, so the variable list can say which
   // values will be redacted. It was left behind as a bare `redact` when this
   // component moved from four props to the whole sink: Svelte compiled it to a
@@ -66,10 +81,27 @@
   // of them gets forgotten.
   $: sink, previewKind, refreshPreview();
 
-  // Whether the preview is showing a request body rather than a message. Read
-  // from the answer, not guessed alongside it — a webhook posts an object in
-  // both modes, so this is true wider than `jsonPayload` is.
-  $: asPayload = !!preview?.json;
+  // What the preview is showing, from the ANSWER rather than guessed alongside
+  // it. A webhook posts an object in both modes, a syslog sink sends one line
+  // whatever the template says, and a mail sink sends headers — none of which
+  // the editor can work out from the fields in front of it without repeating a
+  // decision that lives in Go.
+  $: wire = preview?.format || 'text';
+  $: asPayload = wire !== 'text';
+
+  // The rendered subject, when the transport actually carries one separately.
+  // An email's subject is inside the headers below, and a syslog line has no
+  // subject at all — showing one there would suggest it is sent.
+  $: showSubject = wire === 'text';
+
+  const WIRE_LABEL = {
+    syslog: 'notify.previewSyslog',
+    email: 'notify.previewEmail',
+    json: 'notify.previewPayload',
+    xml: 'notify.previewPayload',
+    form: 'notify.previewPayload',
+    text: 'notify.templatePreview',
+  };
 
   async function insert(name) {
     const token = '{{' + name + '}}';
@@ -94,7 +126,8 @@
   // field that will not save.
   async function useDefaultPayload() {
     try {
-      sink.template.body = await NotifyDefaultJsonPayload();
+      const body = await NotifyDefaultBody(bodyFormat);
+      if (body) sink.template.body = body;
     } catch (e) {
       /* leave the body alone */
     }
@@ -108,7 +141,7 @@
 <div class="tpl">
   <div class="tpl-head">
     <h5>{$_('notify.templateTitle')}</h5>
-    {#if jsonPayload}
+    {#if hasDefaultBody}
       <button class="btn btn-small" on:click={useDefaultPayload}>
         {$_('notify.useDefaultPayload')}
       </button>
@@ -166,12 +199,15 @@
 
   <div class="preview">
     <div class="preview-head">
-      <span>{asPayload ? $_('notify.previewPayload') : $_('notify.templatePreview')}</span>
+      <span>{$_(WIRE_LABEL[wire] || 'notify.templatePreview')}</span>
+      {#if preview?.contentType}
+        <code class="pv-ctype" title={$_('notify.previewContentType')}>{preview.contentType}</code>
+      {/if}
       {#if asPayload && preview}
-        {#if preview.jsonValid}
-          <span class="pv-ok">{$_('notify.jsonValid', { values: { bytes: preview.bytes } })}</span>
-        {:else}
+        {#if preview.jsonError}
           <span class="pv-bad" title={preview.jsonError}>{$_('notify.jsonInvalid')}</span>
+        {:else}
+          <span class="pv-ok">{$_('notify.jsonValid', { values: { bytes: preview.bytes } })}</span>
         {/if}
       {/if}
       <select bind:value={previewKind}>
@@ -182,11 +218,14 @@
     </div>
     {#if preview}
       <div class="preview-body">
-        {#if !asPayload}
+        {#if showSubject}
           <div class="pv-subject">{preview.subject}</div>
         {/if}
         <pre class="pv-text" class:pv-json={asPayload}>{preview.body}</pre>
-        {#if asPayload && !preview.jsonValid && preview.jsonError}
+        {#if wire === 'syslog' && sink.template?.subject}
+          <p class="pv-note">{$_('notify.previewSyslogNoSubject')}</p>
+        {/if}
+        {#if preview.jsonError}
           <p class="pv-error">{preview.jsonError}</p>
         {/if}
       </div>
@@ -194,7 +233,7 @@
   </div>
   </div>
 
-  {#if jsonPayload}
+  {#if bodyFormat && bodyFormat !== 'text'}
     <p class="note warn">
       <Icon name="triangle-alert" size={13} /> {$_('notify.tplJsonNote')}
     </p>
@@ -374,6 +413,23 @@
 
   .pv-bad {
     color: var(--error-color);
+  }
+
+  /* The header the receiver will be told to expect, beside the body it will get.
+     Small and monospace: it is a fact about the request, not a control. */
+  .pv-ctype {
+    font-size: 0.72em;
+    color: var(--text-muted);
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
+
+  .pv-note {
+    margin: 6px 0 0;
+    font-size: 0.72em;
+    color: var(--text-muted);
   }
 
   .pv-error {

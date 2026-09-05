@@ -5,6 +5,8 @@
   import { copyToClipboard } from './utils/clipboard';
   import { formatBySnmpType } from './utils/formatting';
   import Icon from './Icon.svelte';
+  import { targetLabels } from './stores/targetLabels';
+  import { displayTarget, targetTitle } from './utils/targets';
 
   export let trap;
 
@@ -81,7 +83,7 @@
   <div class="trap-summary" on:click={toggle} on:keydown={(e) => e.key === 'Enter' && toggle()} role="button" tabindex="0">
     <span class="chevron">{isOpen ? '▼' : '►'}</span>
     <span class="timestamp">{trap.timestamp ? new Date(trap.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString()}</span>
-    <span class="source">{$anonMode ? anonymizeIp(trap.source) : trap.source}</span>
+    <span class="source" title={targetTitle(trap.source, $anonMode)}>{displayTarget(trap.source, $targetLabels, $anonMode)}</span>
     <button class="btn-copy-small" on:click|stopPropagation={() => copyToClipboard(trap.source, 'Source')} title="Copy source"><Icon name="copy" size={13} /></button>
     <span class="version">{trap.version}</span>
     <span class="pdu-type-badge" class:inform={trap.pduType === 'Inform'}>{trap.pduType || 'Trap'}</span>

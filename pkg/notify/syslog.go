@@ -32,6 +32,15 @@ type SyslogConfig struct {
 	Hostname string `json:"hostname"` // ours; empty means ask the OS
 	AppName  string `json:"appName"`  // defaults to SnmpLens
 	Timeout  int    `json:"timeout"`  // seconds; 0 means 5
+	// OmitStructuredData drops the [snmplens@0 …] element and sends NILVALUE.
+	//
+	// Phrased as an OMISSION rather than as "include", so the zero value keeps
+	// what every existing sink already sends. Some collectors index structured
+	// data and some log the whole line as text, where it is forty characters of
+	// noise in front of the message — and a few older relays reject the element
+	// outright. Losing it costs the per-event id a collector deduplicates
+	// retries by, which is why it is off by default.
+	OmitStructuredData bool `json:"omitStructuredData,omitempty"`
 
 	// --- TLS, used when Protocol is "tls" ---
 
@@ -112,15 +121,18 @@ func FormatRFC5424(cfg SyslogConfig, e events.Event, message string) string {
 		r := strings.NewReplacer(`\`, `\\`, `"`, `\"`, `]`, `\]`)
 		return r.Replace(v)
 	}
-	sd := fmt.Sprintf(`[snmplens@0 id="%s" category="%s" severity="%s" state="%s"`,
-		esc(e.ID), esc(e.Category), esc(e.Severity), esc(e.State))
-	if e.Source != "" {
-		sd += fmt.Sprintf(` source="%s"`, esc(e.Source))
+	sd := syslogNil
+	if !cfg.OmitStructuredData {
+		sd = fmt.Sprintf(`[snmplens@0 id="%s" category="%s" severity="%s" state="%s"`,
+			esc(e.ID), esc(e.Category), esc(e.Severity), esc(e.State))
+		if e.Source != "" {
+			sd += fmt.Sprintf(` source="%s"`, esc(e.Source))
+		}
+		if e.OID != "" {
+			sd += fmt.Sprintf(` oid="%s"`, esc(e.OID))
+		}
+		sd += "]"
 	}
-	if e.OID != "" {
-		sd += fmt.Sprintf(` oid="%s"`, esc(e.OID))
-	}
-	sd += "]"
 
 	if message == "" {
 		message = e.Summary

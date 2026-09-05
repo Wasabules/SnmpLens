@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/rand"
 	"embed"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -975,12 +974,18 @@ func (a *App) renderForSink(ev events.Event, cfg notify.SinkConfig) (subject, bo
 			subject, body = notify.Render(ev, false) // ev is already redacted
 		}
 	}()
-	// A webhook whose payload IS the template needs its values escaped as JSON,
-	// or one quote in a trap's OID turns a hand-written payload into a parse
-	// error at the receiver.
-	if cfg.Kind == notify.SinkWebhook &&
-		strings.EqualFold(strings.TrimSpace(cfg.Webhook.PayloadMode), notify.PayloadTemplate) {
-		return notify.RenderJSONTemplate(ev, cfg.Name, cfg.Template)
+	// The escaping follows the format the body is DECLARED as, because the body
+	// carries values that arrived from the network unauthenticated: one quote in
+	// a trap's OID turns a hand-written JSON payload into a parse error at the
+	// receiver, and one "<" ends a paragraph in an HTML mail and takes the rest
+	// of the message with it.
+	switch {
+	case cfg.Kind == notify.SinkWebhook &&
+		strings.EqualFold(strings.TrimSpace(cfg.Webhook.PayloadMode), notify.PayloadTemplate):
+		return notify.RenderWebhookTemplate(cfg.Webhook, ev, cfg.Name, cfg.Template)
+	case cfg.Kind == notify.SinkEmail &&
+		strings.EqualFold(strings.TrimSpace(cfg.Email.Format), notify.EmailFormatHTML):
+		return notify.RenderHTMLTemplate(ev, cfg.Name, cfg.Template)
 	}
 	return notify.RenderTemplate(ev, cfg.Name, cfg.Template)
 }
@@ -1425,8 +1430,22 @@ type TemplatePreview struct {
 	JsonValid bool `json:"jsonValid"`
 	// JsonError is the parse failure, verbatim.
 	JsonError string `json:"jsonError,omitempty"`
-	// Bytes is the size of the request body as it will go on the wire.
+	// Bytes is the size of the body as it will go on the wire.
 	Bytes int `json:"bytes"`
+	// ContentType is the header a webhook will actually send. The header and the
+	// body have to agree, and an operator who has just changed the body format
+	// needs to see that they do.
+	ContentType string `json:"contentType,omitempty"`
+	// Format says WHAT the body below is, so the editor can label and highlight
+	// it: "syslog", "email", "json", "xml", "form" or "text".
+	//
+	// It exists because the preview used to show a rendered subject and body for
+	// every kind, which is only what a webhook sends. A syslog sink sends one
+	// RFC5424 line with a priority, a timestamp and structured data in front of
+	// the message, and a mail sink sends headers — including the From, the
+	// recipients and the Content-Type the operator is configuring three fields
+	// above. Neither was visible until something arrived at the far end.
+	Format string `json:"format"`
 }
 
 // NotifyPreviewTemplate renders a template against a canned event.
@@ -1443,35 +1462,65 @@ func (a *App) NotifyPreviewTemplate(cfg notify.SinkConfig, kind string) Template
 		ev = notify.RedactEvent(ev)
 	}
 
-	jsonMode := cfg.Kind == notify.SinkWebhook &&
-		strings.EqualFold(strings.TrimSpace(cfg.Webhook.PayloadMode), notify.PayloadTemplate)
+	// The SAME call the dispatcher makes. It used to be a second copy of the
+	// mode choice sitting eight hundred lines away from the first, which is how
+	// a preview comes to show something the sink would never send — and the
+	// escaping is decided here, so a divergence would be invisible until a
+	// receiver rejected a real alert.
+	out.Subject, out.Body = a.renderForSink(ev, cfg)
 
-	if jsonMode {
-		out.Subject, out.Body = notify.RenderJSONTemplate(ev, cfg.Name, cfg.Template)
-	} else {
-		out.Subject, out.Body = notify.RenderTemplate(ev, cfg.Name, cfg.Template)
-	}
-
-	// For a webhook, show the REQUEST, not the text inside it. In envelope
-	// mode the rendered text is only one field of the object the receiver
-	// gets, and the shape is exactly what is being configured.
-	if cfg.Kind == notify.SinkWebhook {
+	// Then: what does this transport actually put on the wire?
+	switch cfg.Kind {
+	case notify.SinkWebhook:
+		// The REQUEST, not the text inside it. In envelope mode the rendered
+		// text is one field of the object the receiver gets, and the shape is
+		// exactly what is being configured.
+		out.Format = notify.PreviewBodyFormat(cfg.Webhook)
+		out.ContentType = cfg.Webhook.ContentType()
+		// Json stays for the editor's monospace treatment, which suits every one
+		// of these bodies; the specific check below is what differs.
 		out.Json = true
 		payload, err := notify.PreviewPayload(cfg.Webhook, ev, out.Subject, out.Body)
 		if err != nil {
+			// The failure IS the answer here: a body that will not go on the
+			// wire is what the operator is trying to see. Show the rendered text
+			// with the reason beside it, rather than nothing.
 			out.JsonError = err.Error()
 			out.Bytes = len(out.Body)
 			return out
 		}
 		out.Body = string(payload)
 		out.Bytes = len(payload)
-		out.JsonValid = json.Valid(payload)
-		if !out.JsonValid {
-			out.JsonError = "the rendered payload is not valid JSON"
-		}
+		out.JsonValid = true
+		return out
+
+	case notify.SinkSyslog:
+		// One line, with everything in front of the message that a collector
+		// indexes on: the priority computed from facility and severity, the
+		// timestamp, the host and app names, the event kind as MSGID, and the
+		// structured data — which is the part the operator can now switch off
+		// and until now had no way to see.
+		out.Format = "syslog"
+		out.Body = notify.FormatRFC5424(cfg.Syslog, ev, out.Body)
+		// Subject is KEPT although the line does not carry one. It is still what
+		// the template rendered, the editor still marks errors against it, and a
+		// syslog sink whose subject template is broken should say so rather than
+		// looking fine because the field it is checked against was blanked.
+		out.Bytes = len(out.Body)
+		return out
+
+	case notify.SinkEmail:
+		// The whole message, headers included. The Content-Type is the point:
+		// it is what the body format setting changes, and reading it is the only
+		// way to be sure the mail will render as markup rather than as markup
+		// printed out.
+		out.Format = "email"
+		out.Body = notify.PreviewMessage(cfg.Email, ev, out.Subject, out.Body)
+		out.Bytes = len(out.Body)
 		return out
 	}
 
+	out.Format = "text"
 	out.Bytes = len(out.Body)
 	return out
 }
@@ -1530,11 +1579,19 @@ func (a *App) NotifyRetryDelivery(id int64) error {
 	return nil
 }
 
-// NotifyDefaultJsonPayload is the starting point offered when a webhook is
-// switched to sending its template as the payload.
+// NotifyDefaultBody is the starting point offered when a sink is switched to a
+// body format that has one.
 //
-// Served from Go rather than duplicated in the editor so the default the user
-// starts from is the same one the sink falls back to.
-func (a *App) NotifyDefaultJsonPayload() string {
-	return notify.DefaultJSONPayload
+// Served from Go rather than duplicated in the editor, so the text the operator
+// starts from is byte for byte the one the sink falls back to when the template
+// is empty. An unknown format returns "", and the editor offers no button.
+func (a *App) NotifyDefaultBody(format string) string {
+	switch strings.ToLower(strings.TrimSpace(format)) {
+	case "json":
+		return notify.DefaultJSONPayload
+	case "html":
+		return notify.DefaultHTMLPayload
+	default:
+		return ""
+	}
 }
