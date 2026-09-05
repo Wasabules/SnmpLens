@@ -91,9 +91,12 @@ export function unnamedStateReads(source) {
   // second search for `</script>`. Two searches for the same thing are two
   // chances to disagree, and the case blindness was a real gap even here: a
   // component written `<SCRIPT>` would have had its whole script counted as
-  // markup, so every name in it would look like a rendered reference. `\s*`
-  // before the closing bracket for the same reason: `</script >` is legal HTML.
-  const m = source.match(/<script[^>]*>([\s\S]*?)<\/script\s*>/i);
+  // markup, so every name in it would look like a rendered reference. The end
+  // tag is the real grammar rather than the literal seven characters —
+  // `</script` then optional whitespace-and-anything then `>` — which matches
+  // `</script >` and what a browser forgives, `</script foo>`, while still
+  // refusing `</scriptfoo>`.
+  const m = source.match(/<script[^>]*>([\s\S]*?)<\/script(?:\s[^>]*)?>/i);
   if (!m) return [];
   const script = m[1];
   const markup = source.slice(m.index + m[0].length);
