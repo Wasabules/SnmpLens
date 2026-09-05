@@ -46,7 +46,7 @@ func (s *Service) DownloadAndApply() error {
 		return fmt.Errorf("release %s is missing %s; cannot verify the download", p.version, checksumsAsset)
 	}
 
-	wantSum, err := s.verifiedChecksum(ctx, p.checksumURL, p.checksumSigURL, p.assetName)
+	wantSum, err := s.verifiedChecksum(ctx, p.checksumURL, p.checksumSigURL, p.assetName, p.version)
 	if err != nil {
 		return err
 	}
@@ -115,7 +115,7 @@ func (s *Service) download(ctx context.Context, url, asset string) (string, stri
 // embedded, its Ed25519 signature; it verifies authenticity and returns the
 // SHA-256 recorded for the given asset. This is the trust anchor: once the
 // manifest is authenticated, the asset is trusted by its SHA-256.
-func (s *Service) verifiedChecksum(ctx context.Context, checksumURL, sigURL, asset string) (string, error) {
+func (s *Service) verifiedChecksum(ctx context.Context, checksumURL, sigURL, asset, version string) (string, error) {
 	manifest, err := s.fetchBytes(ctx, checksumURL)
 	if err != nil {
 		return "", fmt.Errorf("fetching checksums: %w", err)
@@ -130,6 +130,12 @@ func (s *Service) verifiedChecksum(ctx context.Context, checksumURL, sigURL, ass
 			return "", fmt.Errorf("fetching signature: %w", err)
 		}
 		if err := verifyManifestSignature(manifest, sig); err != nil {
+			return "", err
+		}
+		// AFTER the signature, not before: an unsigned manifest's version line
+		// is worth nothing, and reporting "wrong release" for a forged file
+		// would say the wrong thing about what is wrong with it.
+		if err := checkManifestVersion(manifest, version); err != nil {
 			return "", err
 		}
 	}
@@ -161,7 +167,16 @@ func (s *Service) fetchBytes(ctx context.Context, url string) ([]byte, error) {
 func parseChecksum(manifest []byte, asset string) (string, error) {
 	sc := bufio.NewScanner(bytes.NewReader(manifest))
 	for sc.Scan() {
-		fields := strings.Fields(sc.Text())
+		line := strings.TrimSpace(sc.Text())
+		// The `version v1.2.3` header has two fields like every checksum entry,
+		// so without this it reaches the match below and answers "version" as
+		// the SHA-256 of an asset named after the tag. Nothing is named that, so
+		// it was harmless — but a parser that only works because no file has a
+		// particular name is one bad release-asset name from being wrong.
+		if strings.HasPrefix(line, manifestVersionPrefix) {
+			continue
+		}
+		fields := strings.Fields(line)
 		if len(fields) != 2 {
 			continue
 		}

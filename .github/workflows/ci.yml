@@ -1,34 +1,52 @@
 name: CI
 
-# The default GITHUB_TOKEN permissions are broader than a build needs. This
-# workflow only reads the repository.
-permissions:
-  contents: read
-
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
 
+# The default GITHUB_TOKEN permissions are broader than a build needs. Declared
+# explicitly so the workflow does not inherit whatever the repository settings
+# grant.
+permissions:
+  contents: read
+
+# Superseded pushes to the same pull request are pointless work. Pushes to main
+# are never cancelled: every commit on the default branch gets its own verdict.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  lint-and-build:
-    name: Lint & Build (${{ matrix.os }})
+  # The full application build AND the Go tests, on every platform we ship.
+  #
+  # The tests used to run on Linux alone, "to avoid redundant runs". They are
+  # not redundant: pkg/autostart writes an HKCU Run key on Windows, a LaunchAgent
+  # on macOS and an XDG desktop entry on Linux; pkg/secrets is DPAPI, the
+  # Keychain and a file backend; pkg/network runs traceroute6 on macOS and
+  # tracert on Windows. Each of those is three implementations behind one
+  # interface, and only one of them was ever exercised. The trap listener race
+  # fixed in facaabe reproduced on Linux and never on Windows — the converse is
+  # just as possible, and would have been just as invisible.
+  build:
+    name: Build & test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
         include:
+          - os: ubuntu-24.04
+            platform: linux/amd64
           - os: windows-latest
             platform: windows/amd64
-          - os: ubuntu-latest
-            platform: linux/amd64
           - os: macos-latest
             platform: darwin/universal
 
-    runs-on: ${{ matrix.os }}
-
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -37,52 +55,89 @@ jobs:
           go-version-file: go.mod
 
       - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '20'
-          cache: 'npm'
+          # Vite 8 requires ^20.19 || >=22.12. Pinning the major to 22 rather
+          # than 20 keeps that satisfied instead of depending on which 20.x the
+          # runner happens to resolve that day.
+          node-version: "22"
+          cache: npm
           cache-dependency-path: frontend/package-lock.json
-
-      - name: Install Wails CLI
-        # Pinned to the version in go.mod. The CLI generates the bridge
-        # bindings and drives the build, so letting it float means a future
-        # release can change the output — or drift from the library it is
-        # generating against — with nothing in this repository changing.
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config
+
+      - name: Install Wails CLI
+        # Pinned to the version in go.mod. The CLI generates the bridge bindings
+        # and drives the build, so letting it float means a future release can
+        # change the output — or drift from the library it generates against —
+        # with nothing in this repository changing. The release workflow pins
+        # the same version.
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
+
+      # Deliberately `wails build` and not a bare `go build`: the CLI
+      # regenerates the JS bindings and builds the frontend before compiling, so
+      # this is the only check covering the whole pipeline a release runs.
+      # Without it CI can be green while `wails build` is broken, and the
+      # breakage surfaces when a tag is pushed — which is to say, once it is
+      # already a failed release.
+      - name: Build
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+          TAGS=""
+          if [ "$RUNNER_OS" = "Linux" ]; then TAGS="-tags webkit2_41"; fi
+          wails build -platform ${{ matrix.platform }} $TAGS
 
-      # Wails build generates bindings + builds frontend + compiles Go
-      - name: Build (Linux)
-        if: runner.os == 'Linux'
-        run: wails build -platform ${{ matrix.platform }} -tags webkit2_41
+      - name: Vet & test
+        shell: bash
+        # -race, because pkg/mib holds a package-wide lock around a library whose
+        # "read" accessors mutate: internal.(*Object).GetSmiNode memoises on
+        # first call. Two concurrent readers raced for as long as that lock was
+        # an RWMutex, and nothing in CI could see it.
+        #
+        # -count=1 defeats the test cache. A cached PASS is a result from a
+        # previous toolchain and a previous dependency set, reported as though
+        # this run had verified it.
+        run: |
+          TAGS=""
+          if [ "$RUNNER_OS" = "Linux" ]; then TAGS="-tags webkit2_41"; fi
+          go vet $TAGS ./...
+          go test $TAGS -race -count=1 ./...
 
-      - name: Build (non-Linux)
-        if: runner.os != 'Linux'
-        run: wails build -platform ${{ matrix.platform }}
+  quality:
+    name: Quality (lint, tests, tidy)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      # Go checks (only on Linux to avoid redundant runs)
-      - name: Go vet
-        if: runner.os == 'Linux'
-        run: go vet -tags webkit2_41 ./...
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
 
-      - name: Go tests
-        if: runner.os == 'Linux'
-        # -race, because pkg/mib holds a package-wide lock around a library
-        # whose "read" accessors mutate: internal.(*Object).GetSmiNode memoises
-        # on first call. Two concurrent readers raced for as long as that lock
-        # was an RWMutex, and nothing in CI could see it.
-        run: go test -race -tags webkit2_41 ./...
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
-      # Runs the polling store against a stubbed Wails bridge. node_modules is
-      # already present: wails build installed it.
+      - name: Install Linux dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config
+
+      - name: Install frontend deps
+        run: npm ci
+        working-directory: frontend
+
+      # Compiles every component, fails on a name nothing declares and on a
+      # rendered expression that depends on state it does not name — the two
+      # things Svelte 5 stopped reporting. Also the locale parity check.
       - name: Frontend tests
-        if: runner.os == 'Linux'
-        run: cd frontend && npm test
+        run: npm test
+        working-directory: frontend
 
       # GitHub Pages serves the REPOSITORY, and there is no Pages build step, so
       # anything docs/*.html names has to be committed or it is a 404 on the live
@@ -91,19 +146,39 @@ jobs:
       # 3200 px captures swallowed two favicons, the touch icon and the
       # documentation social card.
       - name: Site assets are in the repository
-        if: runner.os == 'Linux'
         run: node tools/check-assets.mjs
 
-      - name: Install staticcheck
-        if: runner.os == 'Linux'
-        run: go install honnef.co/go/tools/cmd/staticcheck@latest
+      # main.go carries `//go:embed all:frontend/dist`, and frontend/dist is
+      # gitignored, so anything compiling the main package fails with
+      # "pattern all:frontend/dist: no matching files found" before it analyses a
+      # line. A placeholder rather than a real frontend build: no analyser here
+      # inspects the bytes the binary embeds, and the build job already compiles
+      # the real thing on all three platforms.
+      - name: Placeholder for the embedded frontend
+        run: |
+          mkdir -p frontend/dist
+          echo '<!-- CI placeholder -->' > frontend/dist/index.html
 
       - name: Staticcheck
-        if: runner.os == 'Linux'
-        run: staticcheck ./...
+        # PINNED, and with the build tag. Two separate points.
+        #
+        # Pinned because a linter that floats can fail a commit that changed
+        # nothing, when a newly added check fires. The finding may well be real,
+        # but it should arrive in its own deliberate bump rather than as a
+        # surprise on someone else's pull request. Dependabot does not track
+        # versions inside a `run:` step, so this is bumped by hand.
+        #
+        # Tagged because without -tags webkit2_41 the Wails-dependent code is
+        # not built on Linux and therefore not analysed — the check would pass
+        # by not looking.
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@v0.8.1
+          staticcheck -tags webkit2_41 ./...
 
-      - name: Check go.mod tidy
-        if: runner.os == 'Linux'
+      - name: go.mod is tidy
+        # A stale go.mod/go.sum means the dependency set CI resolves is not the
+        # one recorded in the repository, so every other check here verifies
+        # something slightly different from what a release builds.
         run: |
           go mod tidy
           git diff --exit-code go.mod go.sum
@@ -112,42 +187,76 @@ jobs:
   # advisory. govulncheck cannot do this: it reports on what is already merged.
   dependency-review:
     name: Dependency review
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: high
 
   security:
     name: Security audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          # From go.mod, so the toolchain has exactly one source of truth.
           go-version-file: go.mod
 
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Linux dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config
+
+      - name: Placeholder for the embedded frontend
+        run: |
+          mkdir -p frontend/dist
+          echo '<!-- CI placeholder -->' > frontend/dist/index.html
+
+      # THE TRIPWIRE, and it is not ceremony.
+      #
+      # govulncheck's analysis is only as complete as the packages it manages to
+      # load, and it does not fail when one of them does not build: it reports on
+      # the rest and prints a clean bill of health. This job had neither the
+      # placeholder above nor these GTK/WebKit headers, so on Linux the main
+      # package dropped out of every scan it ever ran. Reproduced locally by
+      # removing frontend/dist: `go build ./...` fails with the embed error while
+      # `govulncheck ./...` answers "No vulnerabilities found" and exits 0.
+      #
+      # This step fails loudly if the toolchain cannot compile what the next one
+      # is supposed to analyse.
+      - name: Confirm the tree builds before scanning it
+        run: go build -tags webkit2_41 ./...
+
       - name: Go vulnerability check
+        # Reports only vulnerabilities in code paths the binary actually calls,
+        # standard library included.
+        #
+        # Deliberately @latest, unlike staticcheck above: the point of this step
+        # is to know about advisories published since the last commit, and an old
+        # scanner reports an old world. A new finding here means a real new
+        # advisory, not a new opinion about existing code.
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./...
-
-      - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
+          govulncheck -tags webkit2_41 ./...
 
       # `|| true` made this decoration: it reported and never failed, so a
       # critical advisory in a shipped dependency would have gone unnoticed.
       # High and above now fails; anything genuinely unfixable belongs in an
-      # explicit exception, not in a swallowed exit code.
-      - name: npm audit
-        run: cd frontend && npm audit --omit=dev --audit-level=high
+      # explicit, documented dismissal rather than a swallowed exit code.
+      - name: npm audit (production dependencies)
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: frontend

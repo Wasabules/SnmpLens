@@ -5,8 +5,13 @@ on:
     tags:
       - 'v*'
 
+# The three build jobs run untrusted third-party code — npm packages, Go
+# modules, the Wails CLI — and only need to read the repository. Write access is
+# granted to the `release` job alone, which is what publishes the signed assets,
+# so a compromised build dependency cannot rewrite the repository or tamper with
+# an existing release.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -23,7 +28,9 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -33,9 +40,9 @@ jobs:
           go-version-file: go.mod
 
       - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '20'
+          node-version: "22"
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -169,10 +176,18 @@ jobs:
 
   release:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      # Build provenance: id-token for the OIDC token that proves the
+      # attestation came from this workflow run, attestations to record it.
+      id-token: write
+      attestations: write
 
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -188,15 +203,62 @@ jobs:
           merge-multiple: true
 
       # SHA-256 manifest consumed by the in-app updater to verify downloads.
+      #
+      # The first line BINDS the manifest to this tag, and the updater refuses
+      # one that names a different release. Without it the signature answers
+      # only "did we sign this?", which an OLD manifest also satisfies — so
+      # anyone able to serve what the app fetches could hand back a previous
+      # release's manifest and binaries and have every check pass while an
+      # older, possibly vulnerable, version is installed.
       - name: Generate checksums
-        run: cd artifacts && sha256sum SnmpLens-* > SnmpLens-checksums.txt
+        working-directory: artifacts
+        run: |
+          {
+            echo "version ${GITHUB_REF_NAME}"
+            sha256sum SnmpLens-windows-* SnmpLens-macos-* SnmpLens-linux-*
+          } > SnmpLens-checksums.txt
+          cat SnmpLens-checksums.txt
 
       # Ed25519-sign the manifest so the updater can authenticate it against the
-      # public key embedded in the app. No-op when the secret is unset.
+      # public key embedded in the app.
+      #
+      # REQUIRED, not best-effort. `updatersign` prints a notice and exits 0
+      # when the key is absent, which is right for a local build and wrong here:
+      # a key that quietly failed to reach the runner would publish an unsigned
+      # release, and the app — which has a public key embedded and therefore
+      # enforces the signature — would refuse every update from it. That is a
+      # broken release nobody notices until someone tries to update.
       - name: Sign checksums
         env:
           UPDATER_PRIVATE_KEY: ${{ secrets.UPDATER_PRIVATE_KEY }}
-        run: go run ./tools/updatersign sign artifacts/SnmpLens-checksums.txt
+        run: |
+          if [ -z "$UPDATER_PRIVATE_KEY" ]; then
+            echo "::error::UPDATER_PRIVATE_KEY is not set; releases must be signed." >&2
+            exit 1
+          fi
+          go run ./tools/updatersign sign artifacts/SnmpLens-checksums.txt
+          test -s artifacts/SnmpLens-checksums.txt.sig
+
+      # Signed, verifiable provenance for every published asset: which workflow,
+      # which commit, which runner produced these exact bytes. It answers a
+      # question the Ed25519 manifest signature does not — that signature proves
+      # the checksums were signed by the holder of the release key, not that the
+      # binaries were built from this repository by this workflow.
+      #
+      # Checkable without trusting anything in this repository:
+      #   gh attestation verify SnmpLens-windows-amd64.exe --repo Wasabules/SnmpLens
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            artifacts/SnmpLens-windows-amd64.exe
+            artifacts/SnmpLens-windows-amd64-setup.exe
+            artifacts/SnmpLens-windows-amd64-portable.zip
+            artifacts/SnmpLens-macos-universal.dmg
+            artifacts/SnmpLens-macos-universal.zip
+            artifacts/SnmpLens-linux-amd64
+            artifacts/SnmpLens-linux-amd64.deb
+            artifacts/SnmpLens-linux-amd64.tar.gz
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
