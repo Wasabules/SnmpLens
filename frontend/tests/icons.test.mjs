@@ -9,18 +9,22 @@
 //
 // This is the check a `keyof typeof icons` would give a TypeScript codebase,
 // and it costs one file instead of a migration.
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { icons } from '../src/icons.js';
 
 const root = new URL('../src/', import.meta.url).pathname.replace(/^[/]([A-Za-z]:)/, '$1');
 
+// `withFileTypes` rather than a stat per entry: readdir already knows what each
+// one is, so asking again is a second answer to a question that can change
+// between the two — which is what CodeQL's js/file-system-race is about, and
+// what tools/serve-site.mjs says at more length.
 function svelteFiles(dir) {
   const out = [];
-  for (const name of readdirSync(dir)) {
-    const path = join(dir, name);
-    if (statSync(path).isDirectory()) out.push(...svelteFiles(path));
-    else if (name.endsWith('.svelte')) out.push(path);
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...svelteFiles(path));
+    else if (entry.name.endsWith('.svelte')) out.push(path);
   }
   return out;
 }
@@ -49,10 +53,10 @@ const files = svelteFiles(root);
 // string in a helper rather than an attribute value.
 const allSources = [];
 (function collect(dir) {
-  for (const name of readdirSync(dir)) {
-    const path = join(dir, name);
-    if (statSync(path).isDirectory()) collect(path);
-    else if ((name.endsWith('.svelte') || name.endsWith('.js')) && name !== 'icons.js') {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) collect(path);
+    else if ((entry.name.endsWith('.svelte') || entry.name.endsWith('.js')) && entry.name !== 'icons.js') {
       allSources.push(readFileSync(path, 'utf8'));
     }
   }
