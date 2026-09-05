@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script>/**
+ * The browser demo's opening state.
+ *
+ * The same build as the screenshots — the real Svelte application with the Wails
+ * bridge replaced by fixtures — but a person is going to use this one, so three
+ * things differ from the screenshot director.
+ *
+ * NO localStorage.clear(). The demo is served from the same ORIGIN as the
+ * project site, so they share one storage area: clearing it would throw away the
+ * visitor's theme choice for the whole site every time they opened the demo.
+ * Keys are seeded only when absent, which also means anything they change here
+ * survives until they clear it themselves.
+ *
+ * NO forced locale. The screenshots pin English so the images are legible to
+ * everyone; a demo should come up in the reader's own language, since being
+ * translated into five is one of the things worth showing.
+ *
+ * __SNMPLENS_DEMO__ is set BEFORE the bundle evaluates. It is what makes the
+ * bridge refuse the calls that would ask the operating system for something a
+ * web page cannot have, instead of answering "ok" to a request to install a
+ * service.
+ */
+
+(function () {
+  var SEEDS = {"settings":"{\"targets\":\"10.20.0.1 # core-sw-01\\n10.20.0.2 # core-sw-02\",\"snmpVersion\":\"v2c\",\"port\":161,\"trapPort\":162,\"timeout\":5,\"retries\":1,\"community\":\"public\",\"autoGetEnabled\":true,\"autoFillSetEnabled\":false,\"skipSetConfirm\":false,\"targetOverrides\":{},\"targetGroups\":[{\"id\":\"default\",\"name\":\"Default\"},{\"id\":\"core\",\"name\":\"Core switches\"}],\"targetGroupAssignments\":{\"10.20.0.1\":\"core\",\"10.20.0.2\":\"core\"},\"traps\":{\"persist\":true,\"maxCount\":1000,\"nativeNotifications\":true},\"polling\":{\"retentionDays\":30,\"autoResume\":false},\"monitor\":{\"systemNotifications\":false,\"alertSound\":false},\"updates\":{\"autoCheck\":false},\"v3\":{\"user\":\"\",\"authProto\":\"SHA\",\"authPass\":\"\",\"privProto\":\"AES\",\"privPass\":\"\",\"secLevel\":\"AuthPriv\",\"contextName\":\"\"}}","snmplens_saved_queries":"[{\"id\":1772790120001,\"createdAt\":\"2026-02-02T08:11:00.000Z\",\"lastUsedAt\":\"2026-03-11T09:42:17.000Z\",\"name\":\"Interfaces (ifTable)\",\"operation\":\"WALK\",\"oid\":\"1.3.6.1.2.1.2.2\",\"params\":{}},{\"id\":1772790120002,\"createdAt\":\"2026-02-02T08:12:00.000Z\",\"lastUsedAt\":\"2026-03-10T17:03:00.000Z\",\"name\":\"System group\",\"operation\":\"GETBULK\",\"oid\":\"1.3.6.1.2.1.1\",\"params\":{\"maxRepetitions\":10,\"nonRepeaters\":0}},{\"id\":1772790120003,\"createdAt\":\"2026-02-05T09:00:00.000Z\",\"lastUsedAt\":\"2026-03-09T11:20:00.000Z\",\"name\":\"Uptime\",\"operation\":\"GET\",\"oid\":\"1.3.6.1.2.1.1.3.0\",\"params\":{}},{\"id\":1772790120004,\"createdAt\":\"2026-02-11T14:40:00.000Z\",\"lastUsedAt\":\"2026-03-08T08:02:00.000Z\",\"name\":\"ARP table\",\"operation\":\"WALK\",\"oid\":\"1.3.6.1.2.1.4.22\",\"params\":{}},{\"id\":1772790120005,\"createdAt\":\"2026-02-19T10:25:00.000Z\",\"lastUsedAt\":\"2026-03-06T16:44:00.000Z\",\"name\":\"TCP connections\",\"operation\":\"WALK\",\"oid\":\"1.3.6.1.2.1.6.13\",\"params\":{}},{\"id\":1772790120006,\"createdAt\":\"2026-03-01T07:15:00.000Z\",\"lastUsedAt\":\"2026-03-05T09:30:00.000Z\",\"name\":\"Shut spare port\",\"operation\":\"SET\",\"oid\":\"1.3.6.1.2.1.2.2.1.7.5\",\"params\":{\"value\":\"2\",\"type\":\"Enumeration\"}}]","snmplens_panel_width":"400","snmplens_panel_collapsed":"0","snmplens_favorites":"[{\"oid\":\"1.3.6.1.2.1.1.3\",\"name\":\"sysUpTime\",\"type\":\"Scalar\",\"path\":\"org › dod › internet › mgmt › mib-2 › system › sysUpTime\",\"addedAt\":1756900000000},{\"oid\":\"1.3.6.1.2.1.2.2.1.8\",\"name\":\"ifOperStatus\",\"type\":\"Column\",\"path\":\"org › dod › internet › mgmt › mib-2 › interfaces › ifTable › ifEntry › ifOperStatus\",\"addedAt\":1756900100000},{\"oid\":\"1.3.6.1.2.1.2.2.1.10\",\"name\":\"ifInOctets\",\"type\":\"Column\",\"path\":\"org › dod › internet › mgmt › mib-2 › interfaces › ifTable › ifEntry › ifInOctets\",\"addedAt\":1756900200000},{\"oid\":\"1.3.6.1.2.1.2.2\",\"name\":\"ifTable\",\"type\":\"Table\",\"path\":\"org › dod › internet › mgmt › mib-2 › interfaces › ifTable\",\"addedAt\":1756900300000},{\"oid\":\"1.3.6.1.2.1.1.5\",\"name\":\"sysName\",\"type\":\"Scalar\",\"path\":\"org › dod › internet › mgmt › mib-2 › system › sysName\",\"addedAt\":1756900400000}]","snmplens_paths":"{\"customPaths\":[],\"detectedMibs\":{\"C:\\\\Users\\\\Public\\\\AppData\\\\Roaming\\\\SnmpLens\\\\mibs\":[\"HOST-RESOURCES-MIB\",\"IANAifType-MIB\",\"IF-MIB\",\"INET-ADDRESS-MIB\",\"IP-MIB\",\"SNMP-FRAMEWORK-MIB\",\"SNMPv2-CONF\",\"SNMPv2-MIB\",\"SNMPv2-SMI\",\"SNMPv2-TC\",\"SNMPv2-TM\",\"SNMPv2-USEC-MIB\",\"TCP-MIB\",\"UDP-MIB\"]},\"enabledMibs\":{\"C:\\\\Users\\\\Public\\\\AppData\\\\Roaming\\\\SnmpLens\\\\mibs\":{\"HOST-RESOURCES-MIB\":true,\"IANAifType-MIB\":true,\"IF-MIB\":true,\"INET-ADDRESS-MIB\":true,\"IP-MIB\":true,\"SNMP-FRAMEWORK-MIB\":true,\"SNMPv2-CONF\":true,\"SNMPv2-MIB\":true,\"SNMPv2-SMI\":true,\"SNMPv2-TC\":true,\"SNMPv2-TM\":true,\"SNMPv2-USEC-MIB\":true,\"TCP-MIB\":true,\"UDP-MIB\":true}}}","snmpHistory":"[{\"id\":\"1756890862118-0\",\"timestamp\":\"2026-09-03T13:47:05.402Z\",\"operation\":\"WALK\",\"targets\":[\"10.20.0.11\"],\"oid\":\"1.3.6.1.2.1.2.2\",\"version\":\"v2c\",\"duration\":1840,\"totalResults\":16,\"success\":true,\"results\":[]}]","snmpMonitorView":"{\n  \"form\": {\n    \"pollName\": \"Core switches - CPU load\",\n    \"pollOids\": [\"1.3.6.1.2.1.25.3.3.1.2.1\"],\n    \"pollThresholds\": [{ \"min\": \"\", \"max\": \"80\", \"forSeconds\": 120, \"enabled\": true }],\n    \"pollInterval\": 60000,\n    \"pollVersion\": \"v2c\",\n    \"excludedTargets\": [\"192.168.30.14\"]\n  },\n  \"view\": {\n    \"viewModes\":   { \"7c1f9a24-3d5e-4b81-9f02-6ab3c1de5f40\": \"raw\", \"1a2b7f60-9c44-4e13-8a75-02fd6c9b13e7\": \"rate\" },\n    \"displayModes\":{ \"7c1f9a24-3d5e-4b81-9f02-6ab3c1de5f40\": \"graph\", \"1a2b7f60-9c44-4e13-8a75-02fd6c9b13e7\": \"graph\" },\n    \"layoutModes\": { \"1a2b7f60-9c44-4e13-8a75-02fd6c9b13e7\": \"stacked\" },\n    \"hiddenSeries\": {},\n    \"showLatency\": { \"7c1f9a24-3d5e-4b81-9f02-6ab3c1de5f40\": true },\n    \"showStats\": {},\n    \"showHistoryTable\": {},\n    \"historyFrom\": { \"7c1f9a24-3d5e-4b81-9f02-6ab3c1de5f40\": \"2026-09-04T08:00\" },\n    \"historyTo\":   { \"7c1f9a24-3d5e-4b81-9f02-6ab3c1de5f40\": \"2026-09-05T08:00\" },\n    \"autoModeApplied\": { \"7c1f9a24-3d5e-4b81-9f02-6ab3c1de5f40\": true, \"1a2b7f60-9c44-4e13-8a75-02fd6c9b13e7\": true },\n    \"chartOpts\": {\n      \"7c1f9a24-3d5e-4b81-9f02-6ab3c1de5f40\": { \"windowMs\": 0, \"yScaleType\": \"linear\", \"zeroBased\": true, \"height\": 300 },\n      \"1a2b7f60-9c44-4e13-8a75-02fd6c9b13e7\": { \"windowMs\": 3600000, \"yScaleType\": \"linear\", \"zeroBased\": false, \"height\": 280 }\n    },\n    \"statsSel\":   { \"7c1f9a24-3d5e-4b81-9f02-6ab3c1de5f40\": [\"last\", \"avg\", \"max\", \"p95\"] },\n    \"statsScope\": { \"7c1f9a24-3d5e-4b81-9f02-6ab3c1de5f40\": \"all\" },\n    \"collapsed\":  { \"b93c0d51-77ae-4c2f-a15d-3ee8f0a26c9b\": true }\n  }\n}","pollingHistory":"<<< MUST NOT EXIST — remove it >>>","_snmplens_ek":"<<< MUST NOT EXIST — remove it >>>","trapHistory":"[{\"id\":\"seed-01\",\"source\":\"10.20.4.11\",\"version\":\"2c\",\"pduType\":\"Trap\",\"timestamp\":\"2026-09-05T14:41:07Z\",\"variables\":[{\"oid\":\".1.3.6.1.2.1.1.3.0\",\"type\":\"TimeTicks\",\"value\":184203451},{\"oid\":\".1.3.6.1.6.3.1.1.4.1.0\",\"type\":\"ObjectIdentifier\",\"value\":\".1.3.6.1.6.3.1.1.5.3\"},{\"oid\":\".1.3.6.1.2.1.2.2.1.1.3\",\"type\":\"Integer\",\"value\":3},{\"oid\":\".1.3.6.1.2.1.2.2.1.2.3\",\"type\":\"OctetString\",\"value\":\"GigabitEthernet0/3\"},{\"oid\":\".1.3.6.1.2.1.2.2.1.7.3\",\"type\":\"Integer\",\"value\":1},{\"oid\":\".1.3.6.1.2.1.2.2.1.8.3\",\"type\":\"Integer\",\"value\":2}]},{\"id\":\"seed-02\",\"source\":\"10.20.4.23\",\"version\":\"2c\",\"pduType\":\"Inform\",\"timestamp\":\"2026-09-05T14:36:02Z\",\"variables\":[{\"oid\":\".1.3.6.1.2.1.1.3.0\",\"type\":\"TimeTicks\",\"value\":90214400},{\"oid\":\".1.3.6.1.6.3.1.1.4.1.0\",\"type\":\"ObjectIdentifier\",\"value\":\".1.3.6.1.4.1.318.0.5\"},{\"oid\":\".1.3.6.1.4.1.318.2.3.3.0\",\"type\":\"OctetString\",\"value\":\"UPS on battery: utility power failure\"},{\"oid\":\".1.3.6.1.4.1.318.1.1.1.2.2.1.0\",\"type\":\"Gauge32\",\"value\":87},{\"oid\":\".1.3.6.1.4.1.318.1.1.1.2.2.3.0\",\"type\":\"TimeTicks\",\"value\":174000}]},{\"id\":\"seed-03\",\"source\":\"10.20.4.9\",\"version\":\"1\",\"pduType\":\"Trap\",\"timestamp\":\"2026-09-05T14:22:19Z\",\"variables\":[{\"oid\":\"snmpTrapOID.0\",\"type\":\"SNMPv1 Trap\",\"value\":\".1.3.6.1.4.1.9\"},{\"oid\":\"genericTrap\",\"type\":\"INTEGER\",\"value\":6},{\"oid\":\"specificTrap\",\"type\":\"INTEGER\",\"value\":1},{\"oid\":\"timestamp\",\"type\":\"TimeTicks\",\"value\":8812345},{\"oid\":\"agentAddress\",\"type\":\"IPAddress\",\"value\":\"10.20.4.9\"},{\"oid\":\".1.3.6.1.4.1.9.9.43.1.1.6.1.5.128\",\"type\":\"Integer\",\"value\":3}]},{\"id\":\"seed-04\",\"source\":\"10.20.4.11\",\"version\":\"2c\",\"pduType\":\"Trap\",\"timestamp\":\"2026-09-05T14:08:44Z\",\"variables\":[{\"oid\":\".1.3.6.1.2.1.1.3.0\",\"type\":\"TimeTicks\",\"value\":184002190},{\"oid\":\".1.3.6.1.6.3.1.1.4.1.0\",\"type\":\"ObjectIdentifier\",\"value\":\".1.3.6.1.6.3.1.1.5.4\"},{\"oid\":\".1.3.6.1.2.1.2.2.1.1.3\",\"type\":\"Integer\",\"value\":3},{\"oid\":\".1.3.6.1.2.1.2.2.1.2.3\",\"type\":\"OctetString\",\"value\":\"GigabitEthernet0/3\"},{\"oid\":\".1.3.6.1.2.1.2.2.1.8.3\",\"type\":\"Integer\",\"value\":1}]},{\"id\":\"seed-05\",\"source\":\"192.168.30.5\",\"version\":\"3\",\"pduType\":\"Trap\",\"timestamp\":\"2026-09-05T13:51:12Z\",\"variables\":[{\"oid\":\".1.3.6.1.2.1.1.3.0\",\"type\":\"TimeTicks\",\"value\":412},{\"oid\":\".1.3.6.1.6.3.1.1.4.1.0\",\"type\":\"ObjectIdentifier\",\"value\":\".1.3.6.1.6.3.1.1.5.1\"},{\"oid\":\".1.3.6.1.6.3.1.1.4.3.0\",\"type\":\"ObjectIdentifier\",\"value\":\".1.3.6.1.4.1.8072.3.2.10\"}]}]","snmplens_active_tab":"operations"};
+
+  window.__SNMPLENS_DEMO__ = true;
+
+  // A scene, for the stubbed bridge to consult. No overrides and no scripted
+  // events — everything comes from the fixtures — but a FEED, so the monitoring
+  // charts are alive rather than a picture of a chart.
+  window.__SNMPLENS_SCENE__ = {
+    name: 'demo',
+    bindings: {},
+    events: [],
+    feed: { from: 'monitorSamples', everyMs: 1500 },
+    latency: {
+      // Not decoration: an answer that arrives in the same frame as the click
+      // reads as a canned response, which is exactly the impression a demo
+      // built on fixtures has to work against. These are roughly what the
+      // fixtures themselves claim in their own responseTimeMs.
+      SnmpGet: 260,
+      SnmpWalk: 900,
+      SnmpGetNext: 220,
+      SnmpGetBulk: 480,
+      SnmpSet: 340,
+      SnmpDiscover: 3600,
+      TestConnection: 700,
+      NetworkPing: 1200,
+      NetworkTraceroute: 2600,
+    },
+  };
+
+  try {
+    for (var k in SEEDS) {
+      if (localStorage.getItem(k) === null) localStorage.setItem(k, SEEDS[k]);
+    }
+
+    // Arrive in the theme the visitor chose on the site.
+    //
+    // The demo is served from the same origin, so the site's own choice is
+    // right there in storage — and coming up dark immediately after someone has
+    // set the site to light reads as a different product rather than the same
+    // one. Only on first run: after that the application's own theme setting
+    // owns it, which is the setting a person would go looking for.
+    if (localStorage.getItem('snmplens-demo-themed') === null) {
+      var site = localStorage.getItem('snmplens-theme');
+      var wanted = site === 'light' || site === 'dark'
+        ? site
+        : (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches
+          ? 'light' : 'dark');
+      var settings = JSON.parse(localStorage.getItem('settings') || '{}');
+      settings.theme = wanted;
+      localStorage.setItem('settings', JSON.stringify(settings));
+      localStorage.setItem('snmplens-demo-themed', '1');
+    }
+  } catch (e) {
+    // Private browsing. The application reads its defaults and the demo still
+    // works, with less in it.
+  }
+})();
+</script>
+
+    <meta charset="UTF-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>SnmpLens</title>
+  <script type="module" crossorigin src="./assets/index.b3a5bef8.js"></script>
+  <link rel="stylesheet" href="./assets/index.e3c437df.css">
+  <link rel="icon" type="image/png" href="../assets/img/favicon-48.png">
+  <meta name="robots" content="noindex">
+</head>
+<body>
+<div id="app"></div>
+
+  <div id="demo-banner"><style>
+/* The demo notice.
+ *
+ * Painted with the APPLICATION's own tokens, not with the site's: it sits
+ * inside the running interface, so it has to follow whatever theme the
+ * interface is in — including a change made from the app's own settings while
+ * someone is looking at it. The fallbacks are only for the instant before the
+ * stylesheet has parsed.
+ *
+ * Fixed at the bottom rather than pushed in at the top, because the application
+ * lays itself out against the full viewport height and a strip that takes 48 px
+ * off it would leave every panel measuring wrong. */
+#demo-banner {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  max-width: min(94vw, 860px);
+  padding: 0.5rem 0.65rem 0.5rem 0.95rem;
+  font: 400 12.5px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--text-color, #e6edf3);
+  background: var(--bg-lighter-color, #262626);
+  border: 1px solid var(--border-color, #3a3a3a);
+  border-radius: 999px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.28);
+}
+
+#demo-banner b { font-weight: 600; }
+
+#demo-banner .demo-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border-color, #3a3a3a);
+}
+
+#demo-banner a {
+  color: var(--accent-color, #58a6ff);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+#demo-banner a:hover { text-decoration: underline; }
+
+#demo-banner button {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--text-muted-color, #8b949e);
+  background: none;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+#demo-banner button:hover { color: var(--text-color, #e6edf3); }
+
+@media (max-width: 720px) {
+  #demo-banner { border-radius: 10px; flex-wrap: wrap; }
+  #demo-banner .demo-sep { display: none; }
+}
+</style>
+
+<span><b>Demo.</b> Every device here is fictional and nothing leaves your browser — the SNMP answers come from fixtures.</span>
+<span class="demo-sep"></span>
+<a href="../download.html">Download the real thing</a>
+<a href="../">Back to the site</a>
+<button type="button" title="Dismiss" aria-label="Dismiss">&times;</button>
+
+<script>
+(function () {
+  var bar = document.getElementById('demo-banner');
+  if (!bar) return;
+
+  // Framed by docs/demo.html, which says all of this above the frame and says it
+  // better — with the site's header still on screen and a way back that is not a
+  // link inside a floating pill. Repeating it here would be the same sentence
+  // twice, one of them covering the interface.
+  //
+  // Kept for the other case: someone who opens /demo/ directly has no other
+  // indication that the devices are fictional.
+  try {
+    if (window.self !== window.top) { bar.remove(); return; }
+  } catch (e) {
+    // A cross-origin parent throws on the comparison. Nothing on this site
+    // frames it from another origin, so treat that as "framed" and stay quiet.
+    bar.remove();
+    return;
+  }
+
+  var btn = bar.querySelector('button');
+  if (btn) btn.addEventListener('click', function () { bar.remove(); });
+})();
+</script>
+</div>
+</body>
+</html>

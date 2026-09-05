@@ -173,6 +173,7 @@ try {
     <nav class="nav" aria-label="Main">
       <a href="documentation.html">Documentation</a>
       <a href="download.html">Download</a>
+      <a href="demo.html">Demo</a>
       <a href="changelog.html" class="hide-sm">Changelog</a>
       <a href="contributing.html" class="hide-sm">Contributing</a>
       <a class="gh" href="https://github.com/Wasabules/SnmpLens">
@@ -200,6 +201,10 @@ try {
       <a class="btn btn-primary" href="download.html">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M7.47 10.78a.75.75 0 0 0 1.06 0l3.75-3.75a.75.75 0 0 0-1.06-1.06L8.75 8.44V1.75a.75.75 0 0 0-1.5 0v6.69L4.78 5.97a.75.75 0 0 0-1.06 1.06l3.75 3.75ZM3.75 13a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z"/></svg>
         Download
+      </a>
+      <a class="btn" href="demo.html">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.7 3.2a.75.75 0 0 1 .77.04l6.5 4.25a.75.75 0 0 1 0 1.26l-6.5 4.25A.75.75 0 0 1 4.3 12.3V3.7a.75.75 0 0 1 .4-.5Z"/></svg>
+        Try it in your browser
       </a>
       <a class="btn" href="documentation.html">Read the documentation</a>
       <a class="btn" href="https://github.com/Wasabules/SnmpLens">
@@ -395,53 +400,59 @@ try {
   <section class="section">
     <div class="wrap">
       <p class="eyebrow">In motion</p>
-      <h2 style="margin-top:0">Three things a still cannot say</h2>
-      <p class="lede" style="margin-bottom:2.5rem">
-        Recorded from the running application by
-        <a href="https://github.com/Wasabules/SnmpLens/blob/main/tools/record.mjs"><code>tools/record.mjs</code></a>,
-        not reconstructed. Silent, and they loop.
-      </p>
+      <h2 style="margin-top:0">Four things a still cannot say</h2>
 
-      <div class="grid grid-2" style="align-items:start">
-        <figure class="clip clip-light">
+      <div class="grid grid-2" style="align-items:start; margin-top:2.5rem">
+        <figure class="clip clip-light" data-zoom>
           <video src="assets/video/walk-to-table-light.mp4"
                  poster="assets/video/walk-to-table-light.jpg"
                  autoplay loop muted playsinline preload="none"
                  aria-label="A walk of ifTable arriving as a flat list and pivoting into a table"></video>
           <figcaption>155 varbinds arrive flat, then pivot into columns split by <code>INDEX</code>.</figcaption>
         </figure>
-        <figure class="clip clip-dark">
+        <figure class="clip clip-dark" data-zoom>
           <video src="assets/video/walk-to-table-dark.mp4"
                  poster="assets/video/walk-to-table-dark.jpg"
                  autoplay loop muted playsinline preload="none"
                  aria-label="A walk of ifTable arriving as a flat list and pivoting into a table"></video>
           <figcaption>155 varbinds arrive flat, then pivot into columns split by <code>INDEX</code>.</figcaption>
         </figure>
-        <figure class="clip clip-light">
+        <figure class="clip clip-light" data-zoom>
+          <video src="assets/video/monitor-live-light.mp4"
+                 poster="assets/video/monitor-live-light.jpg"
+                 autoplay loop muted playsinline preload="none"
+                 aria-label="Five series polled live, one of them climbing past its threshold"></video>
+          <figcaption>Five series polled on a schedule — one climbs past 80% and is marked out of range.</figcaption>
+        </figure>
+        <figure class="clip clip-dark" data-zoom>
+          <video src="assets/video/monitor-live-dark.mp4"
+                 poster="assets/video/monitor-live-dark.jpg"
+                 autoplay loop muted playsinline preload="none"
+                 aria-label="Five series polled live, one of them climbing past its threshold"></video>
+          <figcaption>Five series polled on a schedule — one climbs past 80% and is marked out of range.</figcaption>
+        </figure>
+        <figure class="clip clip-light" data-zoom>
           <video src="assets/video/anonymous-mode-light.mp4"
                  poster="assets/video/anonymous-mode-light.jpg"
                  autoplay loop muted playsinline preload="none"
                  aria-label="Anonymous Mode replacing every address on screen with a stable alias"></video>
           <figcaption>Every address replaced in place, consistently, on one keystroke.</figcaption>
         </figure>
-        <figure class="clip clip-dark">
+        <figure class="clip clip-dark" data-zoom>
           <video src="assets/video/anonymous-mode-dark.mp4"
                  poster="assets/video/anonymous-mode-dark.jpg"
                  autoplay loop muted playsinline preload="none"
                  aria-label="Anonymous Mode replacing every address on screen with a stable alias"></video>
           <figcaption>Every address replaced in place, consistently, on one keystroke.</figcaption>
         </figure>
-      </div>
-
-      <div class="clip-single">
-        <figure class="clip clip-light">
+        <figure class="clip clip-light" data-zoom>
           <video src="assets/video/mib-editor-light.mp4"
                  poster="assets/video/mib-editor-light.jpg"
                  autoplay loop muted playsinline preload="none"
                  aria-label="A MIB opening in the editor and its diagnostics arriving underneath"></video>
           <figcaption>A MIB opens, highlights, and the analysis arrives under it.</figcaption>
         </figure>
-        <figure class="clip clip-dark">
+        <figure class="clip clip-dark" data-zoom>
           <video src="assets/video/mib-editor-dark.mp4"
                  poster="assets/video/mib-editor-dark.jpg"
                  autoplay loop muted playsinline preload="none"
@@ -449,6 +460,35 @@ try {
           <figcaption>A MIB opens, highlights, and the analysis arrives under it.</figcaption>
         </figure>
       </div>
+    </div>
+  </section>
+
+  <!-- ================= DEMO ================= -->
+  <section class="section demo-band">
+    <div class="wrap">
+      <p class="eyebrow">Try it</p>
+      <h2 style="margin-top:0">The whole application, in a browser tab.</h2>
+      <p class="lede">
+        Not a video and not a mock-up — the same Svelte interface the desktop build ships,
+        with the SNMP backend replaced by fixtures. Walk a device, open a MIB, watch a
+        chart, break a MIB and read the diagnostics. Nothing to install and nothing to
+        configure.
+      </p>
+
+      <div class="btn-row" style="margin-top:1.75rem">
+        <a class="btn btn-primary" href="demo.html">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.7 3.2a.75.75 0 0 1 .77.04l6.5 4.25a.75.75 0 0 1 0 1.26l-6.5 4.25A.75.75 0 0 1 4.3 12.3V3.7a.75.75 0 0 1 .4-.5Z"/></svg>
+          Open the demo
+        </a>
+        <a class="btn" href="download.html">Download instead</a>
+      </div>
+
+      <p class="muted small" style="margin-top:1.5rem; max-width:64ch">
+        Every device in it is fictional and nothing leaves your browser. The parts that ask
+        the operating system for something a web page cannot have — installing a service,
+        starting with your session, writing a MIB to disk, sending a real test notification
+        — say so rather than pretending to have done it.
+      </p>
     </div>
   </section>
 

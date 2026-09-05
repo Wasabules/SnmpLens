@@ -56,6 +56,16 @@ const PAIRED = [
     describe: 'Every address on screen is replaced by a stable alias, in place.',
   },
   {
+    base: 'monitor-live',
+    scene: 'monitor-charts',
+    // No steps at all: the subject is that the numbers keep arriving. Seven
+    // series across two sessions, a sample each every 420 ms, and one of them
+    // drifting up towards the threshold the session is written about. The whole
+    // clip is the tail.
+    tail: 11000,
+    describe: 'Seven series polled live, one of them climbing towards its threshold.',
+  },
+  {
     base: 'mib-editor',
     scene: 'mib-editor',
     // Opening a MIB: the file is read, highlighted, and the semantic pass comes

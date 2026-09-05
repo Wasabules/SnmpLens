@@ -61,7 +61,7 @@ function withSettings(base, patch) {
 }
 
 /** One scene. `tab` picks the workspace; `theme` picks dark or light. */
-function scene(base, name, { tab, theme = 'dark', width = 1600, height = 1000, settings = {}, seeds: extra = {}, bindings = {}, latency = {}, events = [], act = [], describe }) {
+function scene(base, name, { tab, theme = 'dark', width = 1600, height = 1000, settings = {}, seeds: extra = {}, bindings = {}, latency = {}, events = [], feed = null, act = [], describe }) {
   return {
     name,
     width,
@@ -79,6 +79,9 @@ function scene(base, name, { tab, theme = 'dark', width = 1600, height = 1000, s
     // under virtual time; only a clip ever sees them.
     latency,
     events,
+    // A repeating event source, for the screens whose subject is that the
+    // numbers keep arriving. See screenshots/bridge/feed.js.
+    feed,
     act,
   };
 }
@@ -125,6 +128,10 @@ const CATALOGUE = [
   {
     base: 'monitor-charts',
     tab: TABS.monitor,
+    // Six hours of history are seeded, and then the samples keep coming: for the
+    // still this changes nothing that virtual time does not spend instantly, and
+    // it is what makes the clip of this screen worth recording at all.
+    feed: { from: 'monitorSamples', everyMs: 420 },
     // Tall enough for the response-time chart below the main one; at 1100 it
     // was sliced through its legend, which reads as a broken layout.
     height: 1320,

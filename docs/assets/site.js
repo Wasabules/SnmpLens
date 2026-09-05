@@ -115,6 +115,91 @@
     });
   }
 
+  /* --- zoom ------------------------------------------------------------- */
+
+  /**
+   * Click a screenshot or a clip to see it at full size.
+   *
+   * These are pictures of an interface: the detail IS the content, and at the
+   * width of a two-column grid a reader can see that there is a table but not
+   * what is in it. The enlarged copy is the SAME element cloned, so it keeps its
+   * srcset — the browser then picks the 2000 px rung it declined at card size —
+   * and a clip keeps playing rather than restarting from its poster.
+   *
+   * A native <dialog>, so Escape and the focus trap are the browser's job rather
+   * than ours.
+   */
+  function addZoom() {
+    var figures = document.querySelectorAll('figure.shot, figure.clip');
+    if (!figures.length || !window.HTMLDialogElement) return;
+
+    var dialog = document.createElement('dialog');
+    dialog.className = 'zoom';
+    dialog.innerHTML = '<button class="zoom-close" type="button" aria-label="Close">&times;</button>'
+      + '<div class="zoom-body"></div>';
+    document.body.appendChild(dialog);
+    var body = dialog.querySelector('.zoom-body');
+
+    function close() {
+      dialog.close();
+      body.innerHTML = '';
+    }
+
+    dialog.querySelector('.zoom-close').addEventListener('click', close);
+
+    // Emptied on `close` so a paused video stops downloading — but only if the
+    // dialog is still shut. The close EVENT is queued as a task rather than
+    // fired synchronously, so closing one figure and opening the next in the
+    // same gesture ran this handler AFTER the new content was in place, and
+    // showed an empty box.
+    dialog.addEventListener('close', function () {
+      if (!dialog.open) body.innerHTML = '';
+    });
+    // A click on the backdrop lands on the dialog itself, never on its content.
+    dialog.addEventListener('click', function (e) { if (e.target === dialog) close(); });
+
+    figures.forEach(function (fig) {
+      // The whole figure is the target, but only the media is cloned: a caption
+      // repeated under a full-bleed image is the one part that does not need to
+      // be bigger.
+      var media = fig.querySelector('img, video');
+      if (!media) return;
+
+      fig.tabIndex = 0;
+      fig.setAttribute('role', 'button');
+      fig.setAttribute('aria-label', 'Enlarge: ' + (media.alt || media.getAttribute('aria-label') || 'screenshot'));
+
+      function open() {
+        var copy = media.cloneNode(true);
+        copy.removeAttribute('class');
+        copy.removeAttribute('loading');
+        if (copy.tagName === 'VIDEO') {
+          copy.autoplay = true;
+          copy.loop = true;
+          copy.muted = true;
+          copy.controls = true;
+        }
+        body.innerHTML = '';
+        body.appendChild(copy);
+
+        var cap = fig.querySelector('figcaption');
+        if (cap) {
+          var p = document.createElement('p');
+          p.className = 'zoom-caption';
+          p.innerHTML = cap.innerHTML;
+          body.appendChild(p);
+        }
+        dialog.showModal();
+      }
+
+      fig.addEventListener('click', open);
+      fig.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+      });
+    });
+  }
+
   buildToggle();
   addCopyButtons();
+  addZoom();
 })();

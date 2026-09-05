@@ -982,16 +982,6 @@ tbody tr:last-child td { border-bottom: 0; }
 :root[data-theme="light"] .clip-light { display: block; }
 :root[data-theme="light"] .clip-dark { display: none; }
 
-/* The third clip stands alone under a pair, at the width of one of them, so the
- * row above does not read as an incomplete grid of three. */
-.clip-single {
-  margin-top: 1.5rem;
-  max-width: calc((100% - 1.5rem) / 2);
-}
-
-@media (max-width: 800px) {
-  .clip-single { max-width: none; }
-}
 
 /* --- typographic polish -------------------------------------------------- */
 
@@ -1057,4 +1047,125 @@ p, li, figcaption { text-wrap: pretty; }
       to { opacity: 1; transform: none; }
     }
   }
+}
+
+/* --- zoom ---------------------------------------------------------------- */
+
+/* A screenshot of an interface is a picture whose detail IS the content, and at
+ * the width of a two-column grid you can see that there is a table but not what
+ * is in it. Clicking one opens it at the size of the window. */
+figure.shot,
+figure.clip {
+  cursor: zoom-in;
+}
+
+figure.shot:focus-visible,
+figure.clip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.zoom {
+  width: min(96vw, 1800px);
+  max-width: none;
+  max-height: 94vh;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--ink);
+  overflow: hidden;
+}
+
+.zoom::backdrop {
+  /* Not a token: ::backdrop is outside the document tree and custom properties
+   * declared on :root do not reach it in every engine. */
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.zoom-body {
+  max-height: 94vh;
+  overflow: auto;
+}
+
+.zoom-body img,
+.zoom-body video {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.zoom-caption {
+  margin: 0;
+  max-width: none;
+  padding: 0.7rem 1rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.85rem;
+  color: var(--ink-3);
+  background: var(--paper-2);
+}
+
+.zoom-close {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.75rem;
+  z-index: 1;
+  width: 32px;
+  height: 32px;
+  font-size: 1.35rem;
+  line-height: 1;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.zoom-close:hover { border-color: var(--ink-3); }
+
+/* --- the demo band ------------------------------------------------------- */
+
+/* The one section on the page that asks for something rather than explaining
+ * something. A tint rather than a border, so it reads as a different KIND of
+ * block without introducing a second card style to the page. */
+.demo-band {
+  background: var(--accent-wash);
+  border-block: 1px solid var(--line-soft);
+}
+
+/* --- the demo page ------------------------------------------------------- */
+
+/* Full-bleed tint, inset content. The band is the width of the window because
+ * the frame below it is; a tinted rectangle stopping short of both edges reads
+ * as a card that failed to lay out. */
+.demo-strip {
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--accent-wash);
+}
+
+.demo-strip-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  padding-block: 1.1rem;
+}
+
+.demo-strip p { margin: 0; max-width: 72ch; font-size: 0.9rem; }
+
+/* The frame takes what is left of the viewport rather than a fixed height: the
+ * application lays itself out against the space it is given, and a short frame
+ * makes it look cramped in a way the product is not.
+ *
+ * `min-height` rather than `height`, so a small laptop still gets a usable
+ * window and simply scrolls. */
+.demo-frame {
+  display: block;
+  width: 100%;
+  height: calc(100vh - 190px);
+  min-height: 620px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper-2);
 }

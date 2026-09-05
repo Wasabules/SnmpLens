@@ -333,3 +333,73 @@ dynamic.GetOidDetails = (oid) => {
   if (!hit) return undefined; // no opinion: answer() falls through to the fixture
   return { name: hit[0], description: hit[1] };
 };
+
+/**
+ * The session list, with its target list kept in step with the series.
+ *
+ * The fixture names three targets and the chart now draws five. The panel takes
+ * its chips, its "N target(s)" label and its per-series buffer cap from THIS
+ * list, so a chart with more curves than the session admits to is a chart whose
+ * legend and header disagree with it.
+ */
+dynamic.MonitorLoadSessions = () => {
+  const base = FIXTURES.MonitorLoadSessions;
+  if (!Array.isArray(base)) return undefined;
+  return base.map((s) => (s.id === CPU_SESSION.sessionId
+    ? { ...s, targets: CPU_SESSION.targets.map((t) => t.address) }
+    : s));
+};
+
+/* ------------------------------------------------------------------------- *
+ * Demo guards
+ *
+ * The screenshot bundle and the browser demo are the same build with the same
+ * fixtures, and for a still that is exactly right: nothing is clicked, so
+ * nothing has to be honest about what it would have done.
+ *
+ * A demo is different. Someone will press "Enable autostart", "Install service",
+ * "Check for updates" and "Send test notification", and a fixture answering
+ * "ok" to those is a lie about what the application did — worse, it is a lie
+ * about what a piece of software just did to their machine. Each of these asks
+ * the operating system for something a web page cannot have, so each says so,
+ * as an error the application already knows how to show.
+ *
+ * Active ONLY when the demo director sets the flag, so no screenshot changes.
+ * ------------------------------------------------------------------------- */
+
+const DEMO_ONLY = {
+  AutostartSet: 'Starting with the session writes a login entry — the HKCU Run key, a LaunchAgent, or an XDG autostart file.',
+  ServiceSetConfig: 'Running in the background registers a per-user service.',
+  CheckForUpdate: 'The updater asks GitHub for a newer release and verifies its Ed25519 signature.',
+  DownloadAndApplyUpdate: 'Applying an update replaces the executable on disk.',
+  BrowseDialog: 'Choosing a file opens the operating system’s file dialog.',
+  ImportMibFiles: 'Importing MIBs copies files into your configuration directory.',
+  ImportHistoryEntries: 'Importing history reads a file from disk.',
+  MibEditorSave: 'Saving writes the MIB to your configuration directory.',
+  MibEditorSaveDraft: 'Drafts are written to a file so they survive closing the window.',
+  MibEditorRestoreBundled: 'Restoring a bundled MIB rewrites it on disk.',
+  MibEditorOpenExternal: 'Opening a MIB from elsewhere uses the file dialog.',
+  NotifyTestSink: 'A test notification opens a real connection to your syslog relay, webhook or mail server.',
+};
+
+for (const [name, why] of Object.entries(DEMO_ONLY)) {
+  dynamic[name] = () => {
+    if (!globalThis.__SNMPLENS_DEMO__) return undefined; // fall through to the fixture
+    return Promise.reject(new Error(`${why} That needs the desktop application — this is a browser demo.`));
+  };
+}
+
+/**
+ * The one native call with a real browser equivalent.
+ *
+ * Everything else here refuses; opening a link is something a page can actually
+ * do, and refusing it would break the documentation links inside the interface
+ * for no reason.
+ */
+dynamic.OpenURL = (url) => {
+  if (!globalThis.__SNMPLENS_DEMO__) return undefined;
+  try {
+    globalThis.open(String(url), '_blank', 'noopener,noreferrer');
+  } catch { /* a blocked popup is not worth an error toast */ }
+  return null;
+};

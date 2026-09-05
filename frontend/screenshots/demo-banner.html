@@ -1,0 +1,99 @@
+<style>
+/* The demo notice.
+ *
+ * Painted with the APPLICATION's own tokens, not with the site's: it sits
+ * inside the running interface, so it has to follow whatever theme the
+ * interface is in — including a change made from the app's own settings while
+ * someone is looking at it. The fallbacks are only for the instant before the
+ * stylesheet has parsed.
+ *
+ * Fixed at the bottom rather than pushed in at the top, because the application
+ * lays itself out against the full viewport height and a strip that takes 48 px
+ * off it would leave every panel measuring wrong. */
+#demo-banner {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  max-width: min(94vw, 860px);
+  padding: 0.5rem 0.65rem 0.5rem 0.95rem;
+  font: 400 12.5px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--text-color, #e6edf3);
+  background: var(--bg-lighter-color, #262626);
+  border: 1px solid var(--border-color, #3a3a3a);
+  border-radius: 999px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.28);
+}
+
+#demo-banner b { font-weight: 600; }
+
+#demo-banner .demo-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border-color, #3a3a3a);
+}
+
+#demo-banner a {
+  color: var(--accent-color, #58a6ff);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+#demo-banner a:hover { text-decoration: underline; }
+
+#demo-banner button {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--text-muted-color, #8b949e);
+  background: none;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+#demo-banner button:hover { color: var(--text-color, #e6edf3); }
+
+@media (max-width: 720px) {
+  #demo-banner { border-radius: 10px; flex-wrap: wrap; }
+  #demo-banner .demo-sep { display: none; }
+}
+</style>
+
+<span><b>Demo.</b> Every device here is fictional and nothing leaves your browser — the SNMP answers come from fixtures.</span>
+<span class="demo-sep"></span>
+<a href="../download.html">Download the real thing</a>
+<a href="../">Back to the site</a>
+<button type="button" title="Dismiss" aria-label="Dismiss">&times;</button>
+
+<script>
+(function () {
+  var bar = document.getElementById('demo-banner');
+  if (!bar) return;
+
+  // Framed by docs/demo.html, which says all of this above the frame and says it
+  // better — with the site's header still on screen and a way back that is not a
+  // link inside a floating pill. Repeating it here would be the same sentence
+  // twice, one of them covering the interface.
+  //
+  // Kept for the other case: someone who opens /demo/ directly has no other
+  // indication that the devices are fictional.
+  try {
+    if (window.self !== window.top) { bar.remove(); return; }
+  } catch (e) {
+    // A cross-origin parent throws on the comparison. Nothing on this site
+    // frames it from another origin, so treat that as "framed" and stay quiet.
+    bar.remove();
+    return;
+  }
+
+  var btn = bar.querySelector('button');
+  if (btn) btn.addEventListener('click', function () { bar.remove(); });
+})();
+</script>
