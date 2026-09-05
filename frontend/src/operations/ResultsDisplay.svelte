@@ -69,7 +69,7 @@
   /**
    * Filter WALK items by text or regex against OID, name, type, and value.
    */
-  function filterWalkItems(items, filterText) {
+  function filterWalkItems(items, filterText, cache) {
     const query = (filterText || '').trim();
     if (!query) return items;
     let test;
@@ -81,7 +81,7 @@
       test = (str) => str.toLowerCase().includes(lower);
     }
     return items.filter(item => {
-      const name = oidInfoCache[item.oid]?.name || '';
+      const name = cache[item.oid]?.name || '';
       return test(item.oid) || test(name) || test(item.type) || test(String(item.value));
     });
   }
@@ -173,9 +173,15 @@
   $: uniqueTargets = [...new Set(bulkResults.filter(r => !r.error).map(r => r.target))];
   $: canCompare = uniqueTargets.length >= 2;
 
-  // Wrapper: resolves oidInfoCache entry then delegates to shared util
-  function formatValueWithEnum(value, oid, snmpType) {
-    return _formatValueWithEnum(value, oidInfoCache[oid], snmpType);
+  // Wrapper: resolves the cache entry then delegates to the shared util.
+  //
+  // `cache` is a parameter and not a read of the `oidInfoCache` prop, for the
+  // reason set out on buildTableData below: this renders. The cache is filled by
+  // an OID lookup that lands after the first paint, and the value it decides
+  // between is `6` and `ethernetCsmacd(6)` — translating an enumeration is the
+  // whole point of a MIB browser.
+  function formatValueWithEnum(value, oid, snmpType, cache) {
+    return _formatValueWithEnum(value, cache[oid], snmpType);
   }
 
 
@@ -252,7 +258,8 @@
     const firstRes = bulkResults.find(r => !r.error && Array.isArray(r.result?.value));
     if (!firstRes) return;
 
-    const tableData = buildTableData(firstRes.result.value, colDefs, sortColumn, sortAscending);
+    const tableData = buildTableData(firstRes.result.value, colDefs, sortColumn, sortAscending,
+      decodedIndexes, tableInfo?.index);
     const lines = [];
 
     // Header. The decoded index columns when there are any, so the file says
@@ -284,7 +291,7 @@
 
   // Display value of a table cell (enum-decoded / formatted, like the rendered cell).
   function cellText(cell) {
-    return cell && cell.value !== undefined ? formatValueWithEnum(cell.value, cell.fullOid || '', cell.type) : '';
+    return cell && cell.value !== undefined ? formatValueWithEnum(cell.value, cell.fullOid || '', cell.type, oidInfoCache) : '';
   }
 
   const htmlEscape = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -297,7 +304,8 @@
     if (colDefs.length === 0) return;
     const firstRes = bulkResults.find(r => !r.error && Array.isArray(r.result?.value));
     if (!firstRes) return;
-    const td = buildTableData(firstRes.result.value, colDefs, sortColumn, sortAscending);
+    const td = buildTableData(firstRes.result.value, colDefs, sortColumn, sortAscending,
+      decodedIndexes, tableInfo?.index);
 
     const headers = [get(_)('results.index'), ...td.columns.map(c => c.name)];
     let html = '<table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse">';
@@ -464,9 +472,21 @@
   // Reconstruct WALK results into a structured table
   // The pivot itself lives in tableRows.js so it can be tested without a
   // browser; what stays here is the wiring to the MIB-decoded index.
-  function buildTableData(walkResults, columnDefs, sortCol = null, sortAsc = true) {
+  //
+  // `decoded` and `indexParts` are ARGUMENTS rather than reads of
+  // `decodedIndexes` and `tableInfo`, and that is load-bearing. This is called
+  // from a `{@const}` in the markup, and both arrive from `loadIndexes` two
+  // awaits later — so a template expression that does not NAME them has nothing
+  // linking it to their arrival. Svelte 3 hid that by recomputing every
+  // `{@const}` on any update; Svelte 5 tracks what the expression actually
+  // reads, and the table rendered its one-time fallback for ever: `ifTable`
+  // showed a column headed "Index" holding the raw instance, which is precisely
+  // what decoding the INDEX exists to replace. Measured, not guessed — the
+  // decode resolved with `ifIndex` and three rows, and this ran exactly once,
+  // before it.
+  function buildTableData(walkResults, columnDefs, sortCol, sortAsc, decoded, indexParts) {
     const base = pivot(walkResults, columnDefs);
-    const withIdx = withDecodedIndexes(base, decodedIndexes, tableInfo?.index);
+    const withIdx = withDecodedIndexes(base, decoded, indexParts);
     return { ...withIdx, rows: sortRows(withIdx.rows, sortCol, sortAsc) };
   }
 
@@ -737,7 +757,7 @@
 
           {#if tableViewEnabled && canShowTableView(effectiveTableNode, bulkResults)}
             {@const colDefs = getTableColumnDefs(effectiveTableNode)}
-            {@const tableData = buildTableData(res.result.value, colDefs, sortColumn, sortAscending)}
+            {@const tableData = buildTableData(res.result.value, colDefs, sortColumn, sortAscending, decodedIndexes, tableInfo?.index)}
             {@const tableRows = filterTableRows(tableData.rows, tableData.columns, walkFilter)}
             <div class="walk-filter-bar">
               <input
@@ -819,7 +839,7 @@
                           on:keydown={(e) => e.key === 'Enter' && row.cells[col.oid] && dispatch('walkResultClick', {oid: row.cells[col.oid].fullOid, value: row.cells[col.oid].value, type: row.cells[col.oid].type})}
                           on:contextmenu={(e) => openCellMenu(e, row, col, tableData.columns, res.target)}
                         >
-                          {row.cells[col.oid]?.value !== undefined ? formatValueWithEnum(row.cells[col.oid].value, row.cells[col.oid].fullOid || '', row.cells[col.oid].type) : '-'}
+                          {row.cells[col.oid]?.value !== undefined ? formatValueWithEnum(row.cells[col.oid].value, row.cells[col.oid].fullOid || '', row.cells[col.oid].type, oidInfoCache) : '-'}
                         </td>
                       {/each}
                     </tr>
@@ -830,7 +850,7 @@
             <p class="table-info">{$_('results.tableInfo', { values: { rows: tableRows.length, cols: tableData.columns.length } })}</p>
           {:else}
             <!-- Raw WALK results table -->
-            {@const filtered = sortWalkItems(filterWalkItems(res.result.value, walkFilter), rawSortKey, rawSortAsc)}
+            {@const filtered = sortWalkItems(filterWalkItems(res.result.value, walkFilter, oidInfoCache), rawSortKey, rawSortAsc)}
             <div class="walk-filter-bar">
               <input
                 type="text"
@@ -870,7 +890,7 @@
                         <span class="oid-raw">{walkItem.oid}</span>
                       </td>
                       <td>{walkItem.type}</td>
-                      <td class="value-cell" title={JSON.stringify(walkItem.value)}>{formatValueWithEnum(walkItem.value, walkItem.oid, walkItem.type)}</td>
+                      <td class="value-cell" title={JSON.stringify(walkItem.value)}>{formatValueWithEnum(walkItem.value, walkItem.oid, walkItem.type, oidInfoCache)}</td>
                       <td class="copy-cell">
                         <button
                           class="btn-copy-small"
@@ -898,7 +918,7 @@
             </span>
             <span class="rfield rfield-grow">
               <span class="rlabel">{$_('common.value')}</span>
-              <span class="rval">{formatValueWithEnum(res.result.value, res.result.oid, res.result.type)}</span>
+              <span class="rval">{formatValueWithEnum(res.result.value, res.result.oid, res.result.type, oidInfoCache)}</span>
               <button class="btn-copy-small" on:click={() => copyToClipboard(String(res.result.value), $_('common.value'))} title={$_('common.copyValue')}><Icon name="copy" size={13} /></button>
             </span>
           </div>

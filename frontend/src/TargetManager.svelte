@@ -71,9 +71,12 @@
     return assignments[address] || 'default';
   }
 
-  function getGroupTargetCount(groupId) {
-    if (groupId === 'all') return targets.length;
-    return targets.filter(t => getGroupForTarget(t.address) === groupId).length;
+  // `list` is a parameter rather than a read of `targets` because this is called
+  // from the markup: an expression that does not name what it depends on is not
+  // re-evaluated when that changes, so the tab kept the count it was first given.
+  function getGroupTargetCount(groupId, list) {
+    if (groupId === 'all') return list.length;
+    return list.filter(t => getGroupForTarget(t.address) === groupId).length;
   }
 
   $: filteredTargets = selectedGroupId === 'all'
@@ -313,7 +316,7 @@
         }}
         title={group.id !== 'default' ? $_('targets.groups.dblClickRename') : ''}
       >
-        {group.name} <span class="group-count">{getGroupTargetCount(group.id)}</span>
+        {group.name} <span class="group-count">{getGroupTargetCount(group.id, targets)}</span>
         {#if group.id !== 'default'}
           <button class="group-delete" on:click|stopPropagation={() => deleteGroup(group.id)} title={$_('common.delete')}><Icon name="x" size={12} /></button>
         {/if}

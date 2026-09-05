@@ -29,8 +29,11 @@
     else dispatch('toggle');
   }
 
-  function getDisplayName(oid) {
-    return findMibNameByOid(oid, mibTree) || oid;
+  // `tree` is a parameter, not a read of the `mibTree` prop: this renders, and
+  // the tree is loaded asynchronously — so an entry showed its raw OID and kept
+  // showing it once the MIB that names it had loaded.
+  function getDisplayName(oid, tree) {
+    return findMibNameByOid(oid, tree) || oid;
   }
 
   function getOperationIcon(operation) {
@@ -113,7 +116,7 @@
     <span class="operation-icon"><Icon name={getOperationIcon(entry.operation)} size={14} /></span>
     <span class="op-badge">{entry.operation}</span>
     <span class="timestamp">{formatTimestamp(entry.timestamp)}</span>
-    <span class="mib-name" title={entry.oid}>{getDisplayName(entry.oid)}</span>
+    <span class="mib-name" title={entry.oid}>{getDisplayName(entry.oid, mibTree)}</span>
     <span class="value-badge {badge.kind}" title={badge.title}>{badge.text}</span>
     <span class="targets-count">{entry.targets?.length || 0} target(s)</span>
     <span class="duration">{formatDuration(entry.duration)}</span>
@@ -132,7 +135,7 @@
   {#if expanded}
     <div class="entry-details">
       <div class="detail-row">
-        <strong>{$_('nodeDetails.name')}</strong> <code class="mib-name-detail">{getDisplayName(entry.oid)}</code>
+        <strong>{$_('nodeDetails.name')}</strong> <code class="mib-name-detail">{getDisplayName(entry.oid, mibTree)}</code>
       </div>
       <div class="detail-row">
         <strong>{$_('nodeDetails.oid')}</strong> <code>{entry.oid}</code>

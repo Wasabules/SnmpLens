@@ -15,8 +15,11 @@
   let compareSortKey = 'oid'; // 'oid' | 'delta' | 'percent'
   let compareSortAsc = true;
 
-  function formatValueWithEnum(value, oid, snmpType) {
-    return _formatValueWithEnum(value, oidInfoCache[oid], snmpType);
+  // `cache` is a parameter rather than a read of the prop: this is called from
+  // the markup, and a rendered expression that does not name what it depends on
+  // is not re-evaluated when that arrives.
+  function formatValueWithEnum(value, oid, snmpType, cache) {
+    return _formatValueWithEnum(value, cache[oid], snmpType);
   }
 
   // ---- Legacy matrix comparison ----
@@ -50,7 +53,7 @@
       const name = oidInfoCache[oid]?.name || '';
       const values = comp.targets.map((t) => {
         const v = comp.targetData[t]?.[oid];
-        return v !== undefined ? formatValueWithEnum(v, oid) : '';
+        return v !== undefined ? formatValueWithEnum(v, oid, undefined, oidInfoCache) : '';
       });
       lines.push([oid, name, ...values].map(escapeCSV).join(','));
     }
@@ -242,7 +245,7 @@
                   class:diff-cell={valuesDiffer(oid, comp.targets, comp.targetData) && val !== undefined}
                   title={val !== undefined ? String(val) : 'N/A'}
                 >
-                  {val !== undefined ? formatValueWithEnum(val, oid) : '-'}
+                  {val !== undefined ? formatValueWithEnum(val, oid, undefined, oidInfoCache) : '-'}
                 </td>
               {/each}
             </tr>

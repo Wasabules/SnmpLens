@@ -256,8 +256,11 @@
     return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
   }
 
-  function sinkName(id) {
-    const s = sinks.find((x) => x.id === id);
+  // `all` is a parameter for the same reason as elsewhere: this renders into the
+  // delivery log, and reading `sinks` without naming it left every row showing a
+  // raw sink id until something else happened to redraw.
+  function sinkName(id, all) {
+    const s = all.find((x) => x.id === id);
     return s ? s.name : id;
   }
 
@@ -384,7 +387,7 @@
           <li class="delivery" class:dead={d.state === 'dead'}>
             <span class="d-state d-{d.state}">{stateLabel(d.state)}</span>
             <span class="d-when">{formatTimestamp(d.createdAt)}</span>
-            <span class="d-sink">{sinkName(d.sinkId)}</span>
+            <span class="d-sink">{sinkName(d.sinkId, sinks)}</span>
             <span class="d-subject" title={d.subject}>{d.subject}</span>
             <span class="d-attempts">{$_('notify.deliveryAttempts', { values: { count: d.attempts } })}</span>
             {#if d.state === 'dead'}

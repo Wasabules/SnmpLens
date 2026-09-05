@@ -143,8 +143,11 @@
     }
   }
 
-  function errorsFor(field) {
-    return (preview?.errors || []).filter((e) => e.field === field);
+  // `p` is a parameter, not a read of `preview`: the preview is fetched and
+  // replaced as you type, and an `{#each}` that does not name it goes on showing
+  // the errors of a template two edits ago.
+  function errorsFor(field, p) {
+    return (p?.errors || []).filter((e) => e.field === field);
   }
 </script>
 
@@ -190,7 +193,7 @@
     <input type="text" bind:this={subjectEl} bind:value={sink.template.subject}
       on:focus={() => (lastFocused = 'subject')}
       placeholder={$_('notify.templateDefault')} />
-    {#each errorsFor('subject') as err}
+    {#each errorsFor('subject', preview) as err}
       <span class="err"><Icon name="circle-x" size={12} /> {err.message}</span>
     {/each}
   </label>
@@ -200,7 +203,7 @@
     <textarea rows="7" bind:this={bodyEl} bind:value={sink.template.body}
       on:focus={() => (lastFocused = 'body')}
       placeholder={$_('notify.templateDefault')}></textarea>
-    {#each errorsFor('body') as err}
+    {#each errorsFor('body', preview) as err}
       <span class="err"><Icon name="circle-x" size={12} /> {err.message}</span>
     {/each}
   </label>

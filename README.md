@@ -175,7 +175,7 @@
 | -------- | -------------------------------------------------------------------------- |
 | Framework | [Wails v2](https://wails.io/) — Go backend + Web frontend in one binary  |
 | Backend  | Go 1.25 — [gosnmp](https://github.com/gosnmp/gosnmp), [gosmi](https://github.com/sleepinggenius2/gosmi), [SQLite](https://pkg.go.dev/modernc.org/sqlite), [pro-bing](https://github.com/prometheus-community/pro-bing) |
-| Frontend | [Svelte 3](https://svelte.dev/) + [Vite](https://vitejs.dev/)             |
+| Frontend | [Svelte 5](https://svelte.dev/) + [Vite](https://vitejs.dev/)             |
 | Charts   | [Chart.js](https://www.chartjs.org/) with date-fns adapter                |
 | i18n     | [svelte-i18n](https://github.com/kaisermann/svelte-i18n)                  |
 | Database | SQLite (embedded, WAL mode)                                                |

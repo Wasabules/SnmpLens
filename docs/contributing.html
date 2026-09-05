@@ -140,8 +140,10 @@ cd frontend && npm test</code></pre>
   </p>
   <p>
     The frontend suite exists for the same reason. It compiles every Svelte component and
-    fails on a reference to something that does not exist, because that warning is emitted
-    into output nobody reads while the branch throws at runtime. It also checks that the five
+    fails on a reference to something that does not exist &mdash; a name nothing declares
+    compiles to a read of nothing, and the branch throws the first time it is evaluated.
+    Svelte used to warn about that and no longer does, so the suite now looks for the free
+    identifier in the generated code itself. It also checks that the five
     locale files carry the same keys and the same placeholders, since the translation library
     falls back silently and a locale can drift for months before anyone who reads that
     language notices.
