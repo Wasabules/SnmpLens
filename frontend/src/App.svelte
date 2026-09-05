@@ -1,5 +1,6 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
+  import { onBackdrop } from './utils/modal';
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
   import { notificationStore } from './stores/notifications';
@@ -56,6 +57,8 @@
   
   // Resizable panel
   let mibPanelWidth = 350; // Default width in pixels
+  const MIN_PANEL = 250;
+  const MAX_PANEL = 800;
   // Collapsed, the tree gives its width back to whatever tab is open. Worth
   // having on every tab, but the editor is where it earns its keep.
   let mibPanelCollapsed = false;
@@ -104,8 +107,24 @@
     const delta = event.clientX - startX;
     const newWidth = startWidth + delta;
     
-    // Constrain width between 250px and 800px
-    mibPanelWidth = Math.max(250, Math.min(800, newWidth));
+    mibPanelWidth = Math.max(MIN_PANEL, Math.min(MAX_PANEL, newWidth));
+  }
+
+  // The handle is a `slider`, not a `separator`, and it is focusable. ARIA calls
+  // a focusable divider a widget, and a widget only a mouse can reach is not one
+  // — so the same bounds are here, driven by the arrow keys. Shift takes bigger
+  // steps, Home and End go to the ends.
+  function resizeKey(event) {
+    if (mibPanelCollapsed) return;
+    const step = event.shiftKey ? 50 : 10;
+    let width = mibPanelWidth;
+    if (event.key === 'ArrowLeft') width -= step;
+    else if (event.key === 'ArrowRight') width += step;
+    else if (event.key === 'Home') width = MIN_PANEL;
+    else if (event.key === 'End') width = MAX_PANEL;
+    else return;
+    event.preventDefault();
+    mibPanelWidth = Math.max(MIN_PANEL, Math.min(MAX_PANEL, width));
   }
 
   function toggleMibPanel() {
@@ -406,8 +425,8 @@
   {/if}
 
   {#if showImportErrors}
-    <div class="modal-backdrop" on:click={() => showImportErrors = false}>
-      <div class="import-error-modal" on:click|stopPropagation>
+    <div class="modal-backdrop" on:click={onBackdrop(() => showImportErrors = false)} role="presentation">
+      <div class="import-error-modal" role="dialog" aria-modal="true" tabindex="-1">
         <div class="import-error-header">
           <span class="import-error-title">{$_('app.mibDrop.errorTitle')}</span>
           <button class="btn btn-small" on:click={() => showImportErrors = false}>&times;</button>
@@ -426,8 +445,8 @@
   {/if}
 
   {#if showTargets}
-    <div class="modal-backdrop" on:mousedown={() => showTargets = false}>
-      <div class="targets-modal" on:mousedown|stopPropagation>
+    <div class="modal-backdrop" on:mousedown={onBackdrop(() => showTargets = false)} role="presentation">
+      <div class="targets-modal" role="dialog" aria-modal="true" tabindex="-1">
         <div class="targets-modal-header">
           <h2><Icon name="target" size={20} /> {$_('targets.title', { values: { count: targetCount } })}</h2>
           <button class="close-btn" on:click={() => showTargets = false}>&times;</button>
@@ -490,12 +509,18 @@
           on:snmpAction={handleSnmpAction}
         />
       </div>
-      <div 
-        class="resize-handle" 
+      <div
+        class="resize-handle"
         class:disabled={mibPanelCollapsed}
         on:mousedown={startResize}
-        role="separator"
+        on:keydown={resizeKey}
+        role="slider"
+        tabindex={mibPanelCollapsed ? -1 : 0}
         aria-orientation="vertical"
+        aria-valuenow={mibPanelWidth}
+        aria-valuemin={MIN_PANEL}
+        aria-valuemax={MAX_PANEL}
+        aria-disabled={mibPanelCollapsed}
         aria-label={$_('app.panel.resize')}
       >
         <div class="resize-handle-inner"></div>
@@ -1048,33 +1073,6 @@
     margin: 0 0 12px;
     font-size: 0.9em;
     color: var(--text-muted);
-  }
-
-  .import-error-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.85em;
-  }
-
-  .import-error-table th,
-  .import-error-table td {
-    padding: 6px 10px;
-    text-align: left;
-    border-bottom: 1px solid var(--border-color);
-  }
-
-  .import-error-table th {
-    font-weight: 600;
-    background: var(--shadow-color);
-  }
-
-  .import-error-table .mono {
-    font-family: 'Courier New', monospace;
-  }
-
-  .import-error-table .error-cell {
-    color: var(--error-color);
-    word-break: break-word;
   }
 
   /* Targets Modal */

@@ -38,13 +38,18 @@
 <svelte:window on:keydown={handleKeydown}/>
 
 <div class="context-menu" style="left: {x}px; top: {y}px;" on:click|stopPropagation on:keydown|stopPropagation role="menu" tabindex="-1">
-  <ul>
+  <!-- The `ul` carries `role="none"`: a `menu` must contain `menuitem`s, and an
+       announced list in between is not what this is. The items are the widgets. -->
+  <ul role="none">
     {#each items as item}
       {#if item.label === '---'}
-        <li class="separator"></li>
+        <li class="separator" role="separator"></li>
       {:else}
         <li
           class:disabled={item.disabled}
+          role="menuitem"
+          tabindex="-1"
+          aria-disabled={item.disabled || undefined}
           on:click={() => handleClick(item)}
           on:keydown|preventDefault|stopPropagation
           title={item.disabled ? item.disabledReason || 'This action is not available' : ''}

@@ -34,4 +34,14 @@ export default defineConfig({
       ignored: ['!**/wailsjs/**'],
     },
   },
+  build: {
+    // Vite's 500 kB notice measures a download. This bundle is not downloaded:
+    // `//go:embed all:frontend/dist` puts it inside the executable, and the
+    // webview reads it from there — so splitting it would buy a second request
+    // against a filesystem, and cost the code-splitting machinery to arrange it.
+    //
+    // The limit is raised rather than switched off, and only to just above what
+    // the app currently weighs, so a real jump still says so.
+    chunkSizeWarningLimit: 1000,
+  },
 })

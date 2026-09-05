@@ -1,5 +1,6 @@
 <script>
   import { createEventDispatcher } from 'svelte';
+  import { onBackdrop } from './utils/modal';
   import { _ } from 'svelte-i18n';
 
   export let entryA;
@@ -104,8 +105,8 @@
      reaches it from a focused control inside the dialog. -->
 <svelte:window on:keydown={(e) => e.key === 'Escape' && dispatch('close')} />
 
-<div class="modal-overlay" on:mousedown={() => dispatch('close')}>
-  <div class="modal" on:mousedown|stopPropagation>
+<div class="modal-overlay" on:mousedown={onBackdrop(() => dispatch('close'))} role="presentation">
+  <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
     <div class="modal-header">
       <h3>{$_('diff.title')}</h3>
       <button class="close-btn" on:click={() => dispatch('close')}>&times;</button>

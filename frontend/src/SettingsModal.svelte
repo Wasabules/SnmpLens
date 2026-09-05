@@ -1,5 +1,7 @@
 <script>
   import { createEventDispatcher, onMount } from 'svelte';
+  import { GetPersistentMibDirectory } from '../wailsjs/go/main/App';
+  import { onBackdrop } from './utils/modal';
   import { _ } from 'svelte-i18n';
   import { settingsStore } from './stores/settingsStore';
   import GeneralSettings from './settings/GeneralSettings.svelte';
@@ -23,7 +25,6 @@
 
   onMount(async () => {
     try {
-      const { GetPersistentMibDirectory } = await import('../wailsjs/go/main/App');
       defaultMibPath = await GetPersistentMibDirectory();
     } catch (e) {
       console.error('Failed to get default MIB path:', e);
@@ -46,8 +47,8 @@
      stopping it first. -->
 <svelte:window on:keydown={(e) => e.key === 'Escape' && handleCancel()} />
 
-<div class="modal-backdrop" on:mousedown={handleCancel}>
-  <div class="modal" on:mousedown|stopPropagation>
+<div class="modal-backdrop" on:mousedown={onBackdrop(handleCancel)} role="presentation">
+  <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
     <div class="modal-header">
       <h2><Icon name="settings" size={20} /> {$_('settings.title')}</h2>
       <button class="close-btn" on:click={handleCancel}>&times;</button>

@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { onBackdrop } from '../utils/modal';
   import { _ } from 'svelte-i18n';
   import { get } from 'svelte/store';
   import Icon from '../Icon.svelte';
@@ -407,8 +408,8 @@
 
 <!-- ================= SINK EDITOR ================= -->
 {#if editingSink}
-  <div class="editor-overlay" on:click={() => (editingSink = null)} role="button" tabindex="-1">
-    <div class="editor sink-editor" on:click|stopPropagation role="dialog">
+  <div class="editor-overlay" on:click={onBackdrop(() => (editingSink = null))} role="presentation">
+    <div class="editor sink-editor" role="dialog" aria-modal="true" tabindex="-1">
       <h3>
         {$_('notify.sinkEditor', { values: { kind: editingSink.kind } })}
         {#if editingSink.name}<span class="sink-name">— {editingSink.name}</span>{/if}
@@ -682,8 +683,8 @@
 
 <!-- ================= ROUTE EDITOR ================= -->
 {#if editingRoute}
-  <div class="editor-overlay" on:click={() => (editingRoute = null)} role="button" tabindex="-1">
-    <div class="editor" on:click|stopPropagation role="dialog">
+  <div class="editor-overlay" on:click={onBackdrop(() => (editingRoute = null))} role="presentation">
+    <div class="editor" role="dialog" aria-modal="true" tabindex="-1">
       <h3>{$_('notify.routeEditor')}</h3>
 
       <label class="fld"><span>{$_('notify.name')}</span>

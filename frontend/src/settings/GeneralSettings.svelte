@@ -235,10 +235,6 @@
     font-size: 0.92em;
   }
 
-  .toggle-row.disabled {
-    opacity: 0.5;
-  }
-
   .toggle-row input[type="checkbox"] {
     width: 16px;
     height: 16px;

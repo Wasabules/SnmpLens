@@ -1,5 +1,6 @@
 <script>
   import { createEventDispatcher } from 'svelte';
+  import { onBackdrop } from '../utils/modal';
   import { _ } from 'svelte-i18n';
 
   export let exportData = '';
@@ -19,13 +20,8 @@
     close();
 }} />
 
-<div
-  class="modal-overlay"
-  on:click={close}
-  role="button"
-  tabindex="-1"
->
-  <div class="modal" on:click|stopPropagation role="dialog">
+<div class="modal-overlay" on:click={onBackdrop(close)} role="presentation">
+  <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
     <h3>{$_('history.exportTitle')}</h3>
     <div class="export-options">
       <div class="export-opt-group">

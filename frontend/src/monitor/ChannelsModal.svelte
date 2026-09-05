@@ -1,5 +1,6 @@
 <script>
   import { createEventDispatcher } from 'svelte';
+  import { onBackdrop } from '../utils/modal';
   import { _ } from 'svelte-i18n';
   import Icon from '../Icon.svelte';
   import { seriesColor, MAX_SERIES } from '../utils/chartPalette';
@@ -89,13 +90,8 @@
     dispatch('close');
 }} />
 
-<div
-  class="modal-overlay"
-  on:click={() => dispatch('close')}
-  role="button"
-  tabindex="-1"
->
-  <div class="channels-modal" on:click|stopPropagation role="dialog" tabindex="-1">
+<div class="modal-overlay" on:click={onBackdrop(() => dispatch('close'))} role="presentation">
+  <div class="channels-modal" role="dialog" aria-modal="true" tabindex="-1">
     <h3><Icon name="activity" size={16} /> {$_('monitor.channelsTitle')}</h3>
     <p class="hint">{$_('monitor.channelsHint', { values: { visible: visibleCount, total: channels.length } })}</p>
 

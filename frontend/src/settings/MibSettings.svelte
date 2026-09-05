@@ -9,7 +9,7 @@
   import { notificationStore } from '../stores/notifications';
   import Icon from '../Icon.svelte';
   import MibDiagnosis from '../mib/MibDiagnosis.svelte';
-  import { MibDiagnose } from '../../wailsjs/go/main/App';
+  import { MibDiagnose, BrowseDialog, ListMibFiles } from '../../wailsjs/go/main/App';
 
   export let defaultMibPath;
 
@@ -24,7 +24,6 @@
 
   async function handleBrowseFolder() {
     try {
-      const { BrowseDialog } = await import('../../wailsjs/go/main/App');
       const selectedPath = await BrowseDialog();
       if (selectedPath && selectedPath.trim()) {
         newMibPath = selectedPath.trim();
@@ -48,7 +47,6 @@
 
   async function scanPathForMibs(path) {
     try {
-      const { ListMibFiles } = await import('../../wailsjs/go/main/App');
       const mibs = await ListMibFiles(path);
       mibPathsStore.setDetectedMibs(path, mibs);
     } catch (e) {

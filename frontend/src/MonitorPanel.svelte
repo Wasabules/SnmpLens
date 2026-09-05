@@ -455,8 +455,8 @@
       </div>
       <span class="field-hint">{$_('monitor.multiOidHint')}</span>
     </div>
-    <div class="form-group targets-picker">
-      <label>{$_('monitor.targetsToWatch')}</label>
+    <div class="form-group targets-picker" role="group" aria-labelledby="targets-to-watch">
+      <span class="group-label" id="targets-to-watch">{$_('monitor.targetsToWatch')}</span>
       <div class="target-chips">
         {#each availableTargets as t}
           <button
