@@ -213,7 +213,12 @@ func (c *Client) handleTrap(packet *gosnmp.SnmpPacket, addr *net.UDPAddr) {
 	// first is what makes background trap collection possible at all.
 	c.recordTrap(source, ts, pduType, packet, vars)
 
-	runtime.EventsEmit(c.ctx, "newTrap", trapData)
+	// Guarded, the same way recordEvent guards its own emit: the runtime refuses
+	// a context it did not issue and takes the process with it. A client built
+	// without one — a test, or a headless run — must still receive traps.
+	if c.ctx != nil {
+		runtime.EventsEmit(c.ctx, "newTrap", trapData)
+	}
 }
 
 // snmpTrapOIDInstance is snmpTrapOID.0, the second varbind RFC 3416 requires in
