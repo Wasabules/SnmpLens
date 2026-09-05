@@ -133,12 +133,6 @@
     return null;
   }
 
-  var PREFERRED = {
-    windows: 'SnmpLens-windows-amd64-setup.exe',
-    macos: 'SnmpLens-macos-universal.dmg',
-    linux: 'SnmpLens-linux-amd64.deb'
-  };
-
   function latestRelease() {
     var hosts = $$('[data-gh="release"]');
     if (!hosts.length) return Promise.resolve();

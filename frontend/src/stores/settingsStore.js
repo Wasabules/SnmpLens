@@ -58,7 +58,15 @@ function withDefaults(base, saved) {
   const merged = { ...base, ...saved };
   for (const [key, value] of Object.entries(base)) {
     if (value && typeof value === 'object' && !Array.isArray(value)) {
-      merged[key] = { ...value, ...(saved && saved[key] ? saved[key] : {}) };
+      // `saved` is never null here — withDefaults is only called when it is —
+      // so the old `saved && saved[key]` guard could not fail, and CodeQL was
+      // right to call it trivial. What it did NOT guard against is the case that
+      // matters: a stored value of the wrong TYPE. localStorage holds whatever
+      // was last written there, and spreading a string gives {0:'a',1:'b'} — a
+      // settings group silently replaced by its own characters.
+      const over = saved[key];
+      const usable = over && typeof over === 'object' && !Array.isArray(over);
+      merged[key] = usable ? { ...value, ...over } : { ...value };
     }
   }
   return merged;

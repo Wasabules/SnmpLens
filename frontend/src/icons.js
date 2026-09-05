@@ -81,7 +81,6 @@ export const icons = {
   'circle-x': '<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>',
   // --- Service / background mode ---
   'server-cog': '<path d="M5 10H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-1"/><path d="M5 14H4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2h-1"/><path d="M6 6h.01"/><path d="M6 18h.01"/><circle cx="12" cy="12" r="3"/><path d="M12 8v1"/><path d="M12 15v1"/><path d="M16 12h-1"/><path d="M9 12H8"/>',
-  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
   'circle-alert': '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>',
   'triangle-alert': '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',

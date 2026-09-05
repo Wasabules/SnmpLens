@@ -1,5 +1,5 @@
 import { writable, get } from 'svelte/store';
-import { LoadAllMibs, LoadEnabledMibs, LoadMibsWithDiagnostics, GetPersistentMibDirectory, ListMibFiles } from '../../wailsjs/go/main/App';
+import { LoadMibsWithDiagnostics, GetPersistentMibDirectory, ListMibFiles } from '../../wailsjs/go/main/App';
 import { notificationStore } from './notifications';
 import { mibPathsStore } from './mibPathsStore';
 

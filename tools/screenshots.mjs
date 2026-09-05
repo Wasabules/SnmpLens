@@ -17,7 +17,7 @@
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
-import { readFileSync, existsSync, mkdirSync, statSync, readdirSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync, statSync } from 'node:fs';
 import { join, dirname, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -115,12 +115,23 @@ const MIME = {
 const server = createServer((req, res) => {
   const path = decodeURIComponent(req.url.split('?')[0]);
   const file = join(dist, path === '/' ? 'index.html' : path);
-  if (!file.startsWith(dist) || !existsSync(file) || statSync(file).isDirectory()) {
+  // The path guard first, then ONE read. Checking existence and then reading is
+  // two answers to a question that can change between them; readFileSync throws
+  // ENOENT for a missing file and EISDIR for a directory, which is both cases
+  // the stat was there for.
+  if (!file.startsWith(dist)) {
+    res.writeHead(404).end('not found');
+    return;
+  }
+  let body;
+  try {
+    body = readFileSync(file);
+  } catch {
     res.writeHead(404).end('not found');
     return;
   }
   res.writeHead(200, { 'Content-Type': MIME[extname(file)] || 'application/octet-stream' });
-  res.end(readFileSync(file));
+  res.end(body);
 });
 
 const port = await new Promise((resolve) => {

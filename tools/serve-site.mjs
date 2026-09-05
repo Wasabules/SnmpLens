@@ -22,7 +22,7 @@
  * too.
  */
 import { createServer } from 'node:http';
-import { readFileSync, existsSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, extname, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -54,18 +54,39 @@ const server = createServer((req, res) => {
 
   const file = join(docs, path === '/' ? 'index.html' : path);
 
-  // Never serve outside docs/, whatever the request says.
-  if (!file.startsWith(docs) || !existsSync(file) || statSync(file).isDirectory()) {
-    const notFound = join(docs, '404.html');
+  // The one thing that must be decided before reading: never serve outside
+  // docs/, whatever the request says.
+  //
+  // Existence, on the other hand, is not worth asking separately. A check
+  // followed by a read is two answers to a question that can change between
+  // them — and here the files under docs/assets/ are REGENERATED while this is
+  // running, so that gap is not hypothetical. One readFileSync answers it:
+  // ENOENT for a missing file, EISDIR for a directory.
+  const miss = () => {
+    let page = 'not found';
+    try {
+      page = readFileSync(join(docs, '404.html'));
+    } catch { /* the site's own 404 is a nicety, not a requirement */ }
     res.writeHead(404, {
       'Content-Type': 'text/html; charset=utf-8',
       'Cache-Control': 'no-store',
     });
-    res.end(existsSync(notFound) ? readFileSync(notFound) : 'not found');
+    res.end(page);
+  };
+
+  if (!file.startsWith(docs)) {
+    miss();
     return;
   }
 
-  const body = readFileSync(file);
+  let body;
+  try {
+    body = readFileSync(file);
+  } catch {
+    miss();
+    return;
+  }
+
   res.writeHead(200, {
     'Content-Type': MIME[extname(file)] || 'application/octet-stream',
     'Content-Length': body.length,
