@@ -32,11 +32,31 @@ CI verification gate (`.github/workflows/ci.yml`, all run from repo root):
 
 ```bash
 go vet -tags webkit2_41 ./...
-go test -race -tags webkit2_41 ./...
-staticcheck ./...                 # go install honnef.co/go/tools/cmd/staticcheck@latest
+go test -race -count=1 -tags webkit2_41 ./...       # on ALL THREE platforms, not just Linux
+staticcheck -tags webkit2_41 ./...                  # PINNED: honnef.co/go/tools/cmd/staticcheck@v0.8.1
 go mod tidy && git diff --exit-code go.mod go.sum   # go.mod must stay tidy
-govulncheck ./...
+go build -tags webkit2_41 ./...                     # the tripwire, see below
+govulncheck -tags webkit2_41 ./...
 ```
+
+Three of those lines are load-bearing in a way the obvious version is not.
+
+**The tests run on every platform we ship.** They used to run on Linux alone "to avoid redundant runs", and they
+are not redundant: `pkg/autostart` is an HKCU Run key, a LaunchAgent and an XDG entry; `pkg/secrets` is DPAPI,
+the Keychain and a file backend; `pkg/network` runs `traceroute6` on macOS and `tracert` on Windows. Three
+implementations behind one interface, one of them ever exercised. The trap-listener race reproduced on Linux and
+never on Windows; the converse is as likely and would have been as invisible.
+
+**`go build` before `govulncheck` is a tripwire, not ceremony.** govulncheck's analysis is only as complete as
+the packages it manages to LOAD, and it does not fail when one does not build — it reports on the rest and
+prints a clean bill of health. The security job had neither the `frontend/dist` placeholder nor the GTK/WebKit
+headers, so on Linux the main package dropped out of every scan it ever ran. Reproduced by deleting
+`frontend/dist`: `go build ./...` fails on the embed while `govulncheck ./...` answers "No vulnerabilities
+found" and exits 0.
+
+**staticcheck is pinned and govulncheck is not**, deliberately and in opposite directions. A linter that floats
+fails a commit that changed nothing when a new check lands; a vulnerability scanner that is pinned reports an
+old world. Dependabot does not see versions inside a `run:` step, so staticcheck is bumped by hand.
 
 Go unit tests live beside the code they cover (`go test ./...`, run in CI). They are deliberately few and target
 the logic that is subtle and easy to break silently — storage pragmas/migrations, aggregation, threshold
@@ -477,6 +497,32 @@ Session credentials follow the same rule as sink credentials: `storage.SessionCo
 ## Releases
 
 Tagging `v*` triggers `.github/workflows/release.yml`, which builds all three platforms and produces: Windows portable zip + NSIS installer (`build/windows/installer/project.nsi`, version string substituted at build time), macOS `.zip` + `.dmg`, Linux `.tar.gz` + `.deb`.
+
+Four things about that workflow are security properties rather than packaging, and each answers a different
+question.
+
+**The build jobs cannot write to the repository.** `permissions: contents: read` at the workflow level;
+`contents: write` is granted to the `release` job alone. The three build jobs run npm packages, Go modules and
+the Wails CLI — third-party code — and a compromised one of those must not be able to rewrite the repository or
+tamper with an existing release.
+
+**Signing is required, not best-effort.** `tools/updatersign` prints a notice and exits 0 when
+`UPDATER_PRIVATE_KEY` is absent, which is right for a local build and wrong in the workflow: a key that quietly
+failed to reach the runner would publish an unsigned release, and the app — which has a public key embedded and
+therefore ENFORCES the signature — would refuse every update from it. A broken release nobody notices until
+someone tries to update. The step fails on an empty secret and asserts the `.sig` is non-empty.
+
+**The manifest is bound to its tag.** Its first line is `version v1.2.3`, and `checkManifestVersion` in
+`pkg/updater` refuses one naming a different release. The signature answers "did we sign this?" and nothing
+else — an OLD manifest satisfies it just as well, so anyone able to serve what the app fetches could hand back a
+previous release's manifest and binaries and have every check pass while an older, possibly vulnerable, version
+is installed. A manifest with no version line is REFUSED rather than tolerated, because tolerating it is the
+replay.
+
+**Provenance is attested** (`actions/attest-build-provenance`), which answers what the Ed25519 signature cannot:
+that these exact bytes were built from this repository by this workflow, rather than signed by whoever holds the
+release key. Verifiable without trusting anything here:
+`gh attestation verify SnmpLens-windows-amd64.exe --repo Wasabules/SnmpLens`.
 
 ## The project site (`docs/`)
 

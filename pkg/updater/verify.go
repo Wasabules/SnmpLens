@@ -42,3 +42,36 @@ func verifyManifestSignature(manifest, sigBase64 []byte) error {
 	}
 	return nil
 }
+
+// manifestVersionLine is the first line the release workflow writes into the
+// checksums manifest: `version v1.2.3`.
+const manifestVersionPrefix = "version "
+
+// checkManifestVersion refuses a manifest that is not the one for `want`.
+//
+// The signature answers "did we sign this?" and nothing else. It cannot answer
+// "is this the manifest for the release being installed?", because an OLD
+// manifest is signed just as validly as a new one — so anyone able to serve
+// what the app fetches can hand back a previous release's manifest and its
+// binaries, and the app would verify both perfectly and install an older,
+// possibly vulnerable, version. Binding the manifest to its tag is what closes
+// that; nothing else in the chain does.
+//
+// A manifest without the line is REFUSED rather than tolerated, because
+// tolerating it is the replay: an attacker replaying a manifest from before
+// this existed would simply be waved through. Only releases published by this
+// workflow are ever installed, and the updater refuses to move backwards, so
+// there is no case where a legitimate update carries a manifest that predates
+// the line.
+func checkManifestVersion(manifest []byte, want string) error {
+	first, _, _ := strings.Cut(strings.TrimSpace(string(manifest)), "\n")
+	first = strings.TrimSpace(first)
+	if !strings.HasPrefix(first, manifestVersionPrefix) {
+		return fmt.Errorf("checksums manifest is not bound to a release; refusing it")
+	}
+	got := strings.TrimSpace(strings.TrimPrefix(first, manifestVersionPrefix))
+	if got != want {
+		return fmt.Errorf("checksums manifest is for %s, not %s; refusing a replayed manifest", got, want)
+	}
+	return nil
+}
