@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { onBackdrop } from '../utils/modal';
   import { _ } from 'svelte-i18n';
   import { get } from 'svelte/store';
   import Icon from '../Icon.svelte';
@@ -256,8 +257,11 @@
     return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
   }
 
-  function sinkName(id) {
-    const s = sinks.find((x) => x.id === id);
+  // `all` is a parameter for the same reason as elsewhere: this renders into the
+  // delivery log, and reading `sinks` without naming it left every row showing a
+  // raw sink id until something else happened to redraw.
+  function sinkName(id, all) {
+    const s = all.find((x) => x.id === id);
     return s ? s.name : id;
   }
 
@@ -384,7 +388,7 @@
           <li class="delivery" class:dead={d.state === 'dead'}>
             <span class="d-state d-{d.state}">{stateLabel(d.state)}</span>
             <span class="d-when">{formatTimestamp(d.createdAt)}</span>
-            <span class="d-sink">{sinkName(d.sinkId)}</span>
+            <span class="d-sink">{sinkName(d.sinkId, sinks)}</span>
             <span class="d-subject" title={d.subject}>{d.subject}</span>
             <span class="d-attempts">{$_('notify.deliveryAttempts', { values: { count: d.attempts } })}</span>
             {#if d.state === 'dead'}
@@ -404,8 +408,8 @@
 
 <!-- ================= SINK EDITOR ================= -->
 {#if editingSink}
-  <div class="editor-overlay" on:click={() => (editingSink = null)} role="button" tabindex="-1">
-    <div class="editor sink-editor" on:click|stopPropagation role="dialog">
+  <div class="editor-overlay" on:click={onBackdrop(() => (editingSink = null))} role="presentation">
+    <div class="editor sink-editor" role="dialog" aria-modal="true" tabindex="-1">
       <h3>
         {$_('notify.sinkEditor', { values: { kind: editingSink.kind } })}
         {#if editingSink.name}<span class="sink-name">— {editingSink.name}</span>{/if}
@@ -679,8 +683,8 @@
 
 <!-- ================= ROUTE EDITOR ================= -->
 {#if editingRoute}
-  <div class="editor-overlay" on:click={() => (editingRoute = null)} role="button" tabindex="-1">
-    <div class="editor" on:click|stopPropagation role="dialog">
+  <div class="editor-overlay" on:click={onBackdrop(() => (editingRoute = null))} role="presentation">
+    <div class="editor" role="dialog" aria-modal="true" tabindex="-1">
       <h3>{$_('notify.routeEditor')}</h3>
 
       <label class="fld"><span>{$_('notify.name')}</span>

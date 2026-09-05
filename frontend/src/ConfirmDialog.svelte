@@ -1,5 +1,6 @@
 <script>
   import { createEventDispatcher } from 'svelte';
+  import { onBackdrop } from './utils/modal';
   import Icon from './Icon.svelte';
 
   // Reusable confirmation modal. All user-facing strings are passed in already
@@ -26,13 +27,8 @@
     cancel();
 }} />
 
-<div
-  class="modal-overlay"
-  on:click={cancel}
-  role="button"
-  tabindex="-1"
->
-  <div class="confirm-dialog" on:click|stopPropagation role="dialog" tabindex="-1">
+<div class="modal-overlay" on:click={onBackdrop(cancel)} role="presentation">
+  <div class="confirm-dialog" role="dialog" aria-modal="true" tabindex="-1">
     <h3 class="confirm-title">
       {#if titleIcon}<Icon name={titleIcon} class="icon-warning" size={18} />{/if}
       {title}

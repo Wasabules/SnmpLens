@@ -109,7 +109,11 @@ button {
   align-items: center;
 }
 
-.form-group label {
+/* `.group-label` is the same thing for a set of controls rather than one: a
+   <label> names a single field, and naming a row of toggle buttons with one is
+   markup that promises a control it cannot point at. */
+.form-group label,
+.form-group .group-label {
   margin-right: 10px;
   min-width: 80px;
   font-weight: 500;

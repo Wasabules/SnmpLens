@@ -53,6 +53,13 @@ for (const file of walk(join(repo, 'frontend', 'src'))) {
       }
     }
   };
+  // STATIC imports only, and that is a trap worth naming: `await import(...)`
+  // of the bridge is invisible here, so the stub gets no export for it and the
+  // screenshot and demo builds run against a bridge with a hole in it. It was
+  // silent for three bindings — including `BrowseDialog`, which dynamic.js had
+  // a refusal message written for that could never fire. Import the bridge
+  // statically; there is nothing to defer, since a dozen components pull the
+  // same module in anyway.
   collect(/import\s*\{([^}]*)\}\s*from\s*['"][^'"]*wailsjs\/go\/main\/App['"]/g, appNames);
   collect(/import\s*\{([^}]*)\}\s*from\s*['"][^'"]*wailsjs\/runtime[^'"]*['"]/g, runtimeNames);
 }

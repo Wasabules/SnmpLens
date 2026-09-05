@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { onBackdrop } from './utils/modal';
   import { _ } from 'svelte-i18n';
   import { get } from 'svelte/store';
   import Icon from './Icon.svelte';
@@ -249,8 +250,8 @@
 </div>
 
 {#if openPayload}
-  <div class="modal-overlay" on:click={() => (openPayload = null)} role="button" tabindex="-1">
-    <div class="modal" on:click|stopPropagation role="dialog">
+  <div class="modal-overlay" on:click={onBackdrop(() => (openPayload = null))} role="presentation">
+    <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
       <h3>{$_('events.payloadTitle')}</h3>
       <textarea readonly>{openPayload.body}</textarea>
       <div class="modal-actions">

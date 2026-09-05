@@ -1,5 +1,6 @@
 <script>
   import { createEventDispatcher } from 'svelte';
+  import { onBackdrop } from '../utils/modal';
   import { _ } from 'svelte-i18n';
   import Icon from '../Icon.svelte';
 
@@ -13,8 +14,10 @@
   const dispatch = createEventDispatcher();
 </script>
 
-<div class="set-confirm-backdrop" on:mousedown={() => dispatch('cancel')}>
-  <div class="set-confirm-modal" on:mousedown|stopPropagation>
+<svelte:window on:keydown={(e) => e.key === 'Escape' && dispatch('cancel')} />
+
+<div class="set-confirm-backdrop" on:mousedown={onBackdrop(() => dispatch('cancel'))} role="presentation">
+  <div class="set-confirm-modal" role="dialog" aria-modal="true" tabindex="-1">
     <h3><Icon name="triangle-alert" class="icon-warning" size={18} /> {$_('operations.setConfirm.title')}</h3>
     <p class="set-confirm-warning">{$_('operations.setConfirm.message')}</p>
     <dl class="set-confirm-details">

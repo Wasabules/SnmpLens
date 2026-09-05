@@ -1,5 +1,6 @@
 <script>
   import { _ } from 'svelte-i18n';
+  import { onBackdrop } from './utils/modal';
   import { get } from 'svelte/store';
   import { createEventDispatcher } from 'svelte';
   import { settingsStore } from './stores/settingsStore';
@@ -71,9 +72,12 @@
     return assignments[address] || 'default';
   }
 
-  function getGroupTargetCount(groupId) {
-    if (groupId === 'all') return targets.length;
-    return targets.filter(t => getGroupForTarget(t.address) === groupId).length;
+  // `list` is a parameter rather than a read of `targets` because this is called
+  // from the markup: an expression that does not name what it depends on is not
+  // re-evaluated when that changes, so the tab kept the count it was first given.
+  function getGroupTargetCount(groupId, list) {
+    if (groupId === 'all') return list.length;
+    return list.filter(t => getGroupForTarget(t.address) === groupId).length;
   }
 
   $: filteredTargets = selectedGroupId === 'all'
@@ -300,24 +304,29 @@
     <button class="group-tab" class:active={selectedGroupId === 'all'} on:click={() => selectedGroupId = 'all'}>
       {$_('targets.groups.all')} <span class="group-count">{targets.length}</span>
     </button>
+    <!-- The tab is a DIV wrapping two sibling buttons, not one button inside
+         another. Nested interactive content is invalid HTML, and the practical
+         cost is that the delete control cannot be reached at all without a
+         mouse: focus stops at the outer button and never enters it. -->
     {#each groups as group (group.id)}
-      <button
-        class="group-tab"
-        class:active={selectedGroupId === group.id}
-        on:click={() => selectedGroupId = group.id}
-        on:dblclick={() => {
-          if (group.id !== 'default') {
-            const newName = prompt($_('targets.groups.renamePrompt'), group.name);
-            if (newName) renameGroup(group.id, newName);
-          }
-        }}
-        title={group.id !== 'default' ? $_('targets.groups.dblClickRename') : ''}
-      >
-        {group.name} <span class="group-count">{getGroupTargetCount(group.id)}</span>
+      <div class="group-tab" class:active={selectedGroupId === group.id}>
+        <button
+          class="group-tab-label"
+          on:click={() => selectedGroupId = group.id}
+          on:dblclick={() => {
+            if (group.id !== 'default') {
+              const newName = prompt($_('targets.groups.renamePrompt'), group.name);
+              if (newName) renameGroup(group.id, newName);
+            }
+          }}
+          title={group.id !== 'default' ? $_('targets.groups.dblClickRename') : ''}
+        >
+          {group.name} <span class="group-count">{getGroupTargetCount(group.id, targets)}</span>
+        </button>
         {#if group.id !== 'default'}
-          <button class="group-delete" on:click|stopPropagation={() => deleteGroup(group.id)} title={$_('common.delete')}><Icon name="x" size={12} /></button>
+          <button class="group-delete" on:click={() => deleteGroup(group.id)} title={$_('common.delete')}><Icon name="x" size={12} /></button>
         {/if}
-      </button>
+      </div>
     {/each}
     <button class="group-tab group-add" on:click={() => showGroupMenu = !showGroupMenu} title={$_('targets.groups.addGroup')}>+</button>
   </div>
@@ -447,8 +456,8 @@
   </div>
 
   {#if showImport}
-    <div class="import-backdrop" on:mousedown={() => showImport = false}>
-      <div class="import-modal" on:mousedown|stopPropagation>
+    <div class="import-backdrop" on:mousedown={onBackdrop(() => showImport = false)} role="presentation">
+      <div class="import-modal" role="dialog" aria-modal="true" tabindex="-1">
         <div class="import-modal-header">
           <h3><Icon name="clipboard-list" size={16} /> {$_('targets.import.title')}</h3>
           <button class="import-close" on:click={() => showImport = false} title={$_('common.close')}>&times;</button>
@@ -498,6 +507,35 @@
     align-items: center;
     gap: 6px;
     white-space: nowrap;
+  }
+
+  /* The wrapper keeps the box the tab always had, padding included, so the two
+     shapes measure the same. The label then reaches BACK OUT through that
+     padding with a negative margin, because the padding used to be part of the
+     button and clicking it selected the group; without this it becomes dead
+     space around a smaller target. `:only-child` covers the right edge too when
+     there is no delete button to sit there. */
+  .group-tab-label {
+    margin: -4px 0 -4px -12px;
+    padding: 4px 0 4px 12px;
+    background: none;
+    border: none;
+    color: inherit;
+    /* font-SIZE, not the `font` shorthand: that one also resets the family, and
+       a <button> does not inherit the app's font. The tab used to BE the button,
+       so it drew in the platform default; the shorthand quietly moved these
+       three tabs to Nunito while `All` and `+`, still plain buttons, stayed
+       behind — a strip in two typefaces. */
+    font-size: inherit;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .group-tab-label:only-child {
+    margin-right: -12px;
+    padding-right: 12px;
   }
 
   .group-tab:hover { background-color: var(--hover-overlay); color: var(--text-color); }

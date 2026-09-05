@@ -275,7 +275,7 @@
       </p>
     {:else}
       <div class="trap-header">
-        <span class="chevron" />
+        <span class="chevron"></span>
         <span class="timestamp">{$_('traps.tableTime')}</span>
         <span class="source">{$_('traps.tableSource')}</span>
         <span class="version">{$_('traps.tableVersion')}</span>

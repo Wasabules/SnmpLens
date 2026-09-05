@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-SnmpLens is a cross-platform SNMP MIB browser / network-management desktop app built with **Wails v2**: a Go backend and a Svelte 3 + Vite frontend compiled into a single native binary. The Go module is `SnmpLens` (see `go.mod`); the frontend lives entirely under `frontend/`.
+SnmpLens is a cross-platform SNMP MIB browser / network-management desktop app built with **Wails v2**: a Go backend and a Svelte 5 + Vite frontend compiled into a single native binary. The Go module is `SnmpLens` (see `go.mod`); the frontend lives entirely under `frontend/`.
 
 ## Commands
 
@@ -47,6 +47,22 @@ bridge under node — it exists because a `ReferenceError` on that path once dis
 outer `try/catch` swallowed it) and neither the Vite build nor `go vet` can see that class of bug. The second
 checks that the five locale files carry the same keys and the same placeholders; svelte-i18n falls back silently,
 so a locale can drift for months and only be noticed by whoever reads that language.
+
+Two of them are static checks over the components, and both exist because SVELTE 5 REMOVED THE WARNING that used
+to do the job. `compile.test.mjs` fails on a name nothing declares: Svelte 3 reported that as
+`missing-declaration`, Svelte 5 reports nothing under any compile option, and the reference survives as a bare
+global read that throws the first time its branch is evaluated — so the check now looks for the free identifier
+in the code the compiler emits. `reactive.test.mjs` fails on a rendered expression that depends on state it does
+not name: Svelte 3 recomputed every `{@const}` and block expression on any update, so a function reaching for
+instance state was re-run often enough to look correct, while Svelte 5 tracks what the EXPRESSION reads and a
+read inside a callee is not one. Eight of those were in the tree at migration time — the visible one rendered
+`ifTable` with a column headed "Index" holding the raw instance, which is precisely what decoding an INDEX
+exists to replace; the rest simply stopped updating, including the enum formatter that decides between `6` and
+`ethernetCsmacd(6)`. The rule the test enforces: **a function called from the markup takes what it needs as
+arguments.** Two exemptions are deliberate: event handlers, because reading instance state is what a handler
+does and reporting them takes the count from 8 to 82; and `const`, which cannot be reassigned. `export let` is
+NOT exempt — props are the state most likely to arrive after the first render, and forgetting that
+`ExportNamedDeclaration` wraps the declaration hid half of them.
 
 Two tests in `pkg/monitor` talk to a real agent and skip unless you point them at one:
 

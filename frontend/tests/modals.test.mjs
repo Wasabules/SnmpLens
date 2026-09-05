@@ -57,8 +57,17 @@ check('there are components to check', files.length > 0, `${files.length} files`
 const swallowers = [];
 const unclosable = [];
 
-// Any of the names this codebase gives a full-screen dialog wrapper.
-const OVERLAY = /class="(modal-backdrop|modal-overlay|editor-overlay)"/;
+// A dialog is recognised by its ROLE, not by the class its wrapper happens to
+// carry. The name list this replaces held three of the six wrapper classes in
+// use, so `set-confirm-backdrop` was never checked — and that dialog had no way
+// out but the mouse until the accessibility pass found it. `role="dialog"` is
+// the marker every one of them now carries, and it cannot drift the way a name
+// list does: a new dialog gets checked because it IS one.
+//
+// It also excludes what is not a dialog. `drop-overlay` is the drag-and-drop
+// indicator: no handlers, nothing to dismiss, it goes away when the drag ends.
+// A name-matching rule would have demanded an Escape key for it.
+const OVERLAY = /role="dialog"/;
 
 for (const file of files) {
   const source = readFileSync(file, 'utf8');
@@ -84,6 +93,13 @@ check('no dialog stops the keydown its own Escape handler waits for',
   swallowers.length === 0, swallowers.join(', '));
 check('every dialog can be closed with Escape', unclosable.length === 0,
   unclosable.join(', '));
+
+// The role is what the check keys on, so it has to actually be there. Eleven
+// dialogs across ten files; a panel that loses the attribute stops being
+// checked, silently, which is the failure mode this whole file exists to avoid.
+const dialogFiles = files.filter((f) => OVERLAY.test(readFileSync(f, 'utf8')));
+check('the dialogs are still marked as dialogs', dialogFiles.length >= 10,
+  `${dialogFiles.length} files`);
 
 // Prove the detector works, or a passing run means nothing.
 check('the detector sees the modifier',

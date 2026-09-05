@@ -699,11 +699,14 @@
     notificationStore.add(get(_)('monitor.csvExported'), 'success');
   }
 
+  const MIN_H = 160;
+  const MAX_H = 900;
+
   function startResize(event) {
     const startY = event.clientY;
     const startH = height;
     const move = (ev) => {
-      height = Math.max(160, Math.min(900, startH + ev.clientY - startY));
+      height = Math.max(MIN_H, Math.min(MAX_H, startH + ev.clientY - startY));
       chart?.resize();
     };
     const up = () => {
@@ -712,6 +715,21 @@
     };
     window.addEventListener('mousemove', move);
     window.addEventListener('mouseup', up);
+  }
+
+  // Same bounds from the keyboard, for the reason given on the MIB panel's
+  // handle: a divider that only a mouse can move is not a control.
+  function resizeKey(event) {
+    const step = event.shiftKey ? 40 : 10;
+    let h = height;
+    if (event.key === 'ArrowUp') h -= step;
+    else if (event.key === 'ArrowDown') h += step;
+    else if (event.key === 'Home') h = MIN_H;
+    else if (event.key === 'End') h = MAX_H;
+    else return;
+    event.preventDefault();
+    height = Math.max(MIN_H, Math.min(MAX_H, h));
+    chart?.resize();
   }
 </script>
 
@@ -764,7 +782,18 @@
   </div>
 
   {#if !fullscreen}
-    <div class="resize-handle" role="separator" aria-label={$_('monitor.resizeChart')} on:mousedown={startResize}></div>
+    <div
+      class="resize-handle"
+      role="slider"
+      tabindex="0"
+      aria-orientation="horizontal"
+      aria-valuenow={height}
+      aria-valuemin={MIN_H}
+      aria-valuemax={MAX_H}
+      aria-label={$_('monitor.resizeChart')}
+      on:mousedown={startResize}
+      on:keydown={resizeKey}
+    ></div>
   {/if}
 </div>
 
