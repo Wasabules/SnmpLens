@@ -70,10 +70,23 @@ function buildJournal() {
                    '10.20.5.8', '192.168.30.5', '10.20.4.42', '10.20.7.3'];
     const source = base.source ? fleet[(i * 3 + 1) % fleet.length] : base.source;
 
+    // `summary` is not what the panel renders. EventsPanel builds its text from
+    // `titleKey` and `params`, so changing the source column alone put
+    // "10.20.4.1" in one column beside "Trap from 10.20.4.11" in the next —
+    // which is precisely the kind of thing a reader who knows SNMP notices
+    // first. Every copy of the address travels together.
+    const swap = (text) => (base.source ? String(text).split(base.source).join(source) : text);
+    const params = {};
+    for (const [k, v] of Object.entries(base.params || {})) {
+      params[k] = typeof v === 'string' ? swap(v) : v;
+    }
+
     items.push({
       ...base,
       source,
-      summary: base.source ? String(base.summary).split(base.source).join(source) : base.summary,
+      params,
+      summary: swap(base.summary),
+      dedupKey: swap(base.dedupKey),
       seq: seq--,
       id: `${base.id.slice(0, 24)}-${String(i).padStart(2, '0')}`,
       ts: new Date(now - minutesBack * 60000).toISOString(),
