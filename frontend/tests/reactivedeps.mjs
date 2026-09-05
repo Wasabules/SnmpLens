@@ -87,10 +87,15 @@ function renderedExpressions(markup) {
  * @returns {Array<{fn: string, reads: string[]}>}
  */
 export function unnamedStateReads(source) {
-  const m = source.match(/<script[^>]*>([\s\S]*?)<\/script>/);
+  // Case-insensitive, and the markup is taken from the SAME match rather than a
+  // second search for `</script>`. Two searches for the same thing are two
+  // chances to disagree, and the case blindness was a real gap even here: a
+  // component written `<SCRIPT>` would have had its whole script counted as
+  // markup, so every name in it would look like a rendered reference.
+  const m = source.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
   if (!m) return [];
   const script = m[1];
-  const markup = source.slice(source.indexOf('</script>') + '</script>'.length);
+  const markup = source.slice(m.index + m[0].length);
 
   let ast;
   try {
