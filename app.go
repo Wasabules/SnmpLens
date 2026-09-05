@@ -825,10 +825,19 @@ func (a *App) deadLetterEvent(q notify.Queued, err error) events.Event {
 //
 // Separated from the write so the same decision can be made on the producer's
 // goroutine or on the router's, and replayed at startup, from one piece of code.
-func (a *App) routedGroupsFor(e events.Event) []storage.RoutedGroup {
+func (a *App) routedGroupsFor(e events.Event) ([]storage.RoutedGroup, error) {
+	// A read that FAILS is not the same as a configuration with nothing in it.
+	//
+	// Returning nil for both made a transient failure indistinguishable from
+	// "no rule matched", and the router then recorded the watermark past the
+	// event — so it was never delivered and never replayed, which is the one
+	// outcome the watermark exists to prevent.
 	routes, err := a.storage.ListRoutes()
-	if err != nil || len(routes) == 0 {
-		return nil
+	if err != nil {
+		return nil, fmt.Errorf("could not read the routing rules: %w", err)
+	}
+	if len(routes) == 0 {
+		return nil, nil
 	}
 	// Evaluated at the EVENT's own time, in the local zone.
 	//
@@ -860,14 +869,14 @@ func (a *App) routedGroupsFor(e events.Event) []storage.RoutedGroup {
 	}
 
 	if len(sinkIDs) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	// Redaction is decided per sink, so group by the rendering it needs rather
 	// than rendering once for everyone.
 	sinks, err := a.storage.ListSinks()
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("could not read the destinations: %w", err)
 	}
 	configBySink := map[string]notify.SinkConfig{}
 	for _, s := range sinks {
@@ -928,7 +937,7 @@ func (a *App) routedGroupsFor(e events.Event) []storage.RoutedGroup {
 			Event: g.event, SinkIDs: g.sinkIDs, Subject: g.subject, Body: g.body,
 		})
 	}
-	return out
+	return out, nil
 }
 
 // routeEvent routes an event and queues its deliveries immediately.
@@ -937,7 +946,11 @@ func (a *App) routedGroupsFor(e events.Event) []storage.RoutedGroup {
 // what the whole application did before routing moved to a background worker,
 // so falling back to it can never be worse than not having one.
 func (a *App) routeEvent(e events.Event) {
-	groups := a.routedGroupsFor(e)
+	groups, err := a.routedGroupsFor(e)
+	if err != nil {
+		log.Printf("notify: could not route event %s: %v", e.ID, err)
+		return
+	}
 	for _, g := range groups {
 		if err := a.storage.EnqueueDeliveries(g.Event, g.SinkIDs, g.Subject, g.Body); err != nil {
 			log.Printf("notify: could not queue deliveries: %v", err)

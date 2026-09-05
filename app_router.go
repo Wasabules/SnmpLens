@@ -198,9 +198,29 @@ func (r *eventRouter) flush(batch *[]events.Event) {
 
 	groups := make([]storage.RoutedGroup, 0, len(pending))
 	seqs := make([]int64, 0, len(pending))
+	var failed int
 	for _, e := range pending {
+		g, err := r.app.routedGroupsFor(e)
+		if err != nil {
+			// Not routed, so it must NOT be settled: leaving it in flight pins
+			// the watermark below it, and the next launch replays it. Claiming
+			// it here would deliver it nowhere and replay it never.
+			//
+			// Best effort at retrying it in this process too; if the queue is
+			// full, the watermark simply stays put until a restart.
+			failed++
+			select {
+			case r.queue <- e:
+			default:
+			}
+			continue
+		}
 		seqs = append(seqs, e.Seq)
-		groups = append(groups, r.app.routedGroupsFor(e)...)
+		groups = append(groups, g...)
+	}
+	if failed > 0 {
+		log.Printf("notify: %d of %d events could not be routed and stay above the "+
+			"watermark", failed, len(pending))
 	}
 
 	mark := r.settle(seqs, 0)
@@ -266,7 +286,16 @@ func (a *App) replayUnrouted() {
 
 		groups := make([]storage.RoutedGroup, 0, len(pending))
 		for _, e := range pending {
-			groups = append(groups, a.routedGroupsFor(e)...)
+			g, err := a.routedGroupsFor(e)
+			if err != nil {
+				// Stop rather than skip: advancing past an event that could not
+				// be routed would lose it for good, and replay is the last
+				// chance it gets.
+				log.Printf("notify: replay stopped at seq %d after %d events: %v",
+					e.Seq, total, err)
+				return
+			}
+			groups = append(groups, g...)
 		}
 		mark = pending[len(pending)-1].Seq
 		if err := a.storage.EnqueueRouted(groups, mark); err != nil {

@@ -350,6 +350,12 @@ func Init(dbPath string) (*Storage, error) {
 	return s, nil
 }
 
+// maxBufferedPoints caps the unwritten sample buffer.
+//
+// Roughly an hour of a busy session. Past this the database has been unwritable
+// long enough that keeping more costs memory without buying anything.
+const maxBufferedPoints = 100_000
+
 // Close flushes pending data and closes the database.
 //
 // Idempotent, and it JOINS the flush goroutine. It used to close a channel
@@ -488,6 +494,14 @@ func (s *Storage) QueueDataPoints(points []DataPoint) {
 	s.mu.Unlock()
 }
 
+// flushBatch writes the buffered data points.
+//
+// A failed write puts the points BACK. They used to be taken out of the buffer
+// before the transaction was even begun, so a SQLITE_BUSY — which is ordinary
+// on a machine where the trap listener and the router are also writing — lost a
+// whole batch of monitoring samples with nothing but a log line. Samples are the
+// thing a monitoring session exists to produce; losing them silently makes a
+// chart lie.
 func (s *Storage) flushBatch() {
 	s.mu.Lock()
 	if len(s.batch) == 0 {
@@ -498,30 +512,55 @@ func (s *Storage) flushBatch() {
 	s.batch = nil
 	s.mu.Unlock()
 
+	if err := s.writePoints(points); err != nil {
+		log.Printf("storage: %d data points could not be written (%v); keeping them "+
+			"for the next flush", len(points), err)
+		s.restoreBatch(points)
+	}
+}
+
+// restoreBatch puts unwritten points back at the front of the buffer.
+//
+// Capped, because a database that is permanently unwritable must not grow the
+// buffer without bound: at that point the oldest samples are dropped, loudly,
+// rather than the process running out of memory.
+func (s *Storage) restoreBatch(points []DataPoint) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.batch = append(points, s.batch...)
+	if over := len(s.batch) - maxBufferedPoints; over > 0 {
+		log.Printf("storage: dropping the %d oldest buffered data points; the "+
+			"database has been unwritable for %d samples", over, len(s.batch))
+		s.batch = s.batch[over:]
+	}
+}
+
+// writePoints inserts a batch in one transaction, all or nothing.
+//
+// An individual row that fails used to be logged and skipped while the
+// transaction committed anyway, so a batch could be silently partial.
+func (s *Storage) writePoints(points []DataPoint) error {
 	tx, err := s.db.Begin()
 	if err != nil {
-		log.Printf("storage: begin tx: %v", err)
-		return
+		return err
 	}
+	defer tx.Rollback()
 
 	stmt, err := tx.Prepare(`INSERT INTO data_points (session_id, target, timestamp, value, delta, rate, response_time_ms, error, snmp_type, oid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
-		tx.Rollback()
-		log.Printf("storage: prepare insert: %v", err)
-		return
+		return err
 	}
 	defer stmt.Close()
 
 	for _, p := range points {
-		_, err := stmt.Exec(p.SessionID, p.Target, p.Timestamp, p.Value, p.Delta, p.Rate, p.ResponseTimeMs, nullableString([]byte(p.Error)), nullableString([]byte(p.SnmpType)), nullableString([]byte(p.OID)))
-		if err != nil {
-			log.Printf("storage: insert point: %v", err)
+		if _, err := stmt.Exec(p.SessionID, p.Target, p.Timestamp, p.Value, p.Delta,
+			p.Rate, p.ResponseTimeMs, nullableString([]byte(p.Error)),
+			nullableString([]byte(p.SnmpType)), nullableString([]byte(p.OID))); err != nil {
+			return err
 		}
 	}
-
-	if err := tx.Commit(); err != nil {
-		log.Printf("storage: commit: %v", err)
-	}
+	return tx.Commit()
 }
 
 // QueryDataPoints retrieves data points for a session, optionally filtered by time range and limited.

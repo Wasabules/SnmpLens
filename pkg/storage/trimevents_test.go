@@ -238,3 +238,116 @@ func TestCloseJoinsTheFlushGoroutine(t *testing.T) {
 		t.Errorf("goroutines went from %d to %d across Close", before, after)
 	}
 }
+
+// aSession creates the row data_points has a foreign key to.
+func aSession(t *testing.T, st *Storage) string {
+	t.Helper()
+	id, err := st.CreateSession("test", "1.3.6.1.2.1.1.3.0", []string{"10.0.0.1"},
+		1000, "2c", time.Now().UTC().Format(time.RFC3339), nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+// A failed write must not lose the samples.
+//
+// flushBatch took the points out of the buffer before the transaction was even
+// begun, so a SQLITE_BUSY — ordinary on a machine where the trap listener and
+// the router are also writing — lost a whole batch with nothing but a log line.
+// Samples are what a monitoring session exists to produce; losing them silently
+// makes a chart lie.
+func TestAFailedFlushKeepsTheDataPoints(t *testing.T) {
+	st := newTestStorage(t)
+	sid := aSession(t, st)
+
+	points := make([]DataPoint, 40)
+	for i := range points {
+		points[i] = DataPoint{
+			SessionID: sid, Target: "10.0.0.1", OID: "1.3.6.1.2.1.1.3.0",
+			Timestamp: time.Now().UTC().Format(time.RFC3339), Value: f64(float64(i)),
+		}
+	}
+	st.QueueDataPoints(points)
+
+	// Make the write fail in a way the retry can recover from.
+	if _, err := st.db.Exec(`ALTER TABLE data_points RENAME TO data_points_hidden`); err != nil {
+		t.Fatal(err)
+	}
+	st.flushBatch()
+
+	st.mu.Lock()
+	kept := len(st.batch)
+	st.mu.Unlock()
+	if kept != len(points) {
+		t.Fatalf("%d of %d points survived a failed flush", kept, len(points))
+	}
+
+	// Restore the table; the next flush must land them.
+	if _, err := st.db.Exec(`ALTER TABLE data_points_hidden RENAME TO data_points`); err != nil {
+		t.Fatal(err)
+	}
+	st.flushBatch()
+
+	var n int
+	if err := st.db.QueryRow(`SELECT COUNT(*) FROM data_points`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != len(points) {
+		t.Errorf("%d of %d points were written on the retry", n, len(points))
+	}
+	st.mu.Lock()
+	left := len(st.batch)
+	st.mu.Unlock()
+	if left != 0 {
+		t.Errorf("%d points are still buffered after a successful flush", left)
+	}
+}
+
+// A batch is all or nothing. One bad row used to be logged and skipped while
+// the transaction committed anyway, so a batch could be silently partial.
+func TestAWriteIsAllOrNothing(t *testing.T) {
+	st := newTestStorage(t)
+	sid := aSession(t, st)
+
+	ok := DataPoint{SessionID: sid, Target: "t", Timestamp: "2026-01-01T00:00:00Z", Value: f64(1)}
+	if err := st.writePoints([]DataPoint{ok, ok}); err != nil {
+		t.Fatalf("a good batch failed: %v", err)
+	}
+	var n int
+	st.db.QueryRow(`SELECT COUNT(*) FROM data_points`).Scan(&n)
+	if n != 2 {
+		t.Errorf("%d rows written, want 2", n)
+	}
+}
+
+// A database that stays unwritable must not grow the buffer without bound.
+func TestTheBufferIsCapped(t *testing.T) {
+	st := newTestStorage(t)
+
+	if _, err := st.db.Exec(`ALTER TABLE data_points RENAME TO data_points_hidden`); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		st.db.Exec(`ALTER TABLE data_points_hidden RENAME TO data_points`)
+	})
+
+	chunk := make([]DataPoint, 20_000)
+	for i := range chunk {
+		chunk[i] = DataPoint{SessionID: "sid", Target: "t", Timestamp: "2026-01-01T00:00:00Z"}
+	}
+	for i := 0; i < 8; i++ {
+		st.QueueDataPoints(chunk)
+		st.flushBatch()
+	}
+
+	st.mu.Lock()
+	held := len(st.batch)
+	st.mu.Unlock()
+	if held > maxBufferedPoints {
+		t.Errorf("%d points buffered, over the cap of %d", held, maxBufferedPoints)
+	}
+	if held == 0 {
+		t.Error("the buffer was emptied entirely; the newest samples should be kept")
+	}
+}
