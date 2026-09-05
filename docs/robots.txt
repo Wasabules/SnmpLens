@@ -1,16 +1,68 @@
-# https://wasabules.github.io/SnmpLens/
+# https://snmplens.com/robots.txt
 #
-# On a GitHub Pages PROJECT site this file is served but not obeyed: a crawler
-# reads robots.txt from the ORIGIN, which is wasabules.github.io/robots.txt, and
-# that belongs to the user site rather than to this repository. It is here so
-# that the rules travel with the site if it ever moves to its own domain, and so
-# that the Sitemap line is discoverable by anything that does look.
-#
-# Discovery does not depend on it either way: every page carries
-# <link rel="sitemap">, and the sitemap should be submitted to Search Console
-# directly, which is the only method that works from a subpath.
+# This file only became meaningful when the site moved to its own domain. A
+# robots.txt is read from the ORIGIN, so while the site was at
+# wasabules.github.io/SnmpLens/ the file that governed it was
+# wasabules.github.io/robots.txt — which belongs to a user site that does not
+# exist. Everything below was served and obeyed by nobody. On snmplens.com it is
+# the origin, so it is now the real policy, and the Sitemap line below is a
+# discovery route rather than a decoration.
 
 User-agent: *
 Allow: /
 
-Sitemap: https://wasabules.github.io/SnmpLens/sitemap.xml
+# The demo is the application itself, built as a bundle. There is nothing in it
+# to index — its text is JavaScript — and a crawler spending its budget on a
+# 1.5 MB chunk is a crawler not reading the documentation. It also carries
+# <meta name="robots" content="noindex">; this saves the fetch as well.
+Disallow: /demo/
+
+# Assistants are welcome, and that is a deliberate choice rather than an
+# oversight.
+#
+# This is free software whose problem is being found at all, not being copied:
+# someone asking a model "what is a good free SNMP MIB browser" is exactly the
+# reader it is written for, and a model can only answer with what it was allowed
+# to read. The licence is MIT, so nothing here is being given away that the
+# repository does not already give away.
+#
+# Named explicitly rather than left to the wildcard above, because the point is
+# to be unambiguous about consent — and because Google-Extended and
+# Applebot-Extended govern AI training separately from the crawlers that feed
+# the search index, so silence there means something different from silence
+# elsewhere.
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+# Not welcome: crawlers that identify themselves and are widely reported to
+# ignore crawl-delay and hammer small sites. Listed for the record — a crawler
+# that ignores robots.txt is not stopped by a line in it, and nothing here
+# pretends otherwise.
+User-agent: Bytespider
+Disallow: /
+
+Sitemap: https://snmplens.com/sitemap.xml

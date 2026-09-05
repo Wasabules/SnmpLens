@@ -15,10 +15,11 @@
  * which is the confusing half of that failure: the bytes on disk were always
  * fine. `no-store` costs nothing on localhost and removes the class.
  *
- * The /SnmpLens/ PREFIX is stripped. GitHub Pages serves this repository from a
- * subpath, and 404.html links to its assets absolutely because a 404 can be
- * served from any depth. Without this, the one page whose links are absolute is
- * the one page the local preview cannot render.
+ * The /SnmpLens/ PREFIX is stripped. The site has its own domain now and is
+ * served from the root, so nothing produces those URLs any more — but GitHub
+ * keeps answering the old wasabules.github.io/SnmpLens/ addresses and redirecting
+ * them, so stale links exist in the wild and it costs one line to open them here
+ * too.
  */
 import { createServer } from 'node:http';
 import { readFileSync, existsSync, statSync } from 'node:fs';

@@ -11,13 +11,13 @@
 </p>
 
 <p align="center">
-  <a href="https://wasabules.github.io/SnmpLens/"><strong>Website</strong></a>
+  <a href="https://snmplens.com/"><strong>Website</strong></a>
   &nbsp;·&nbsp;
-  <a href="https://wasabules.github.io/SnmpLens/demo.html"><strong>Try it in your browser</strong></a>
+  <a href="https://snmplens.com/demo.html"><strong>Try it in your browser</strong></a>
   &nbsp;·&nbsp;
-  <a href="https://wasabules.github.io/SnmpLens/documentation.html">Documentation</a>
+  <a href="https://snmplens.com/documentation.html">Documentation</a>
   &nbsp;·&nbsp;
-  <a href="https://wasabules.github.io/SnmpLens/download.html">Download</a>
+  <a href="https://snmplens.com/download.html">Download</a>
 </p>
 
 <p align="center">
