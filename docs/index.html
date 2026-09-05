@@ -160,7 +160,7 @@ try {
 </script>
 
 </head>
-<body>
+<body class="home">
 
 <a class="skip-link" href="#main">Skip to content</a>
 
@@ -216,34 +216,6 @@ try {
     </div>
   </section>
 
-  <!-- ================= REPO STATS ================= -->
-  <section class="wrap" style="padding-bottom:3rem">
-    <dl class="repo-stats" data-gh="stats">
-      <div>
-        <dt>Stars</dt>
-        <dd><span class="skeleton" data-stat="stars" data-fallback="—">0000</span></dd>
-      </div>
-      <div>
-        <dt>Forks</dt>
-        <dd><span class="skeleton" data-stat="forks" data-fallback="—">000</span></dd>
-      </div>
-      <div>
-        <dt>Open issues</dt>
-        <dd><span class="skeleton" data-stat="issues" data-fallback="—">00</span></dd>
-      </div>
-      <div>
-        <dt>Last commit</dt>
-        <dd style="font-size:1rem"><span class="skeleton" data-stat="updated" data-fallback="see GitHub">Loading</span></dd>
-      </div>
-      <div>
-        <dt>Latest release</dt>
-        <dd style="font-size:1rem" data-gh="release">
-          <a data-release="link" href="https://github.com/Wasabules/SnmpLens/releases/latest"><span class="skeleton" data-release="tag" data-fallback="Releases">v0.0.0</span></a>
-        </dd>
-      </div>
-    </dl>
-  </section>
-
   <!-- ================= SCREENSHOT ================= -->
   <section class="wrap" style="padding-bottom:4.5rem">
     <figure class="shot">
@@ -262,27 +234,58 @@ try {
     </figure>
   </section>
 
-  <!-- ================= WHAT IT IS ================= -->
+  <!-- ================= THE LOOP ================= -->
   <section class="section">
-    <div class="wrap wrap-narrow">
+    <div class="wrap">
       <p class="eyebrow">What it is</p>
-      <h2 style="margin-top:0">A single binary that does the whole loop.</h2>
-      <p>
-        Most SNMP work is the same loop: find the OID, read it from a device, work out
-        whether the number is a problem, and tell somebody. SnmpLens does all four in one
-        application, on the machine in front of you — there is no collector to deploy, no
-        server to run, and no account to make.
+      <h2 style="margin-top:0">The whole loop, in one binary.</h2>
+      <p class="lede" style="margin-bottom:2.5rem">
+        Find the OID, read it from the device, work out whether the number is a problem,
+        tell somebody. Four jobs, four screens — no collector to deploy, no server to run,
+        and no account to make.
       </p>
-      <p>
+
+      <ol class="loop">
+        <li>
+          <div class="crop" style="--cx:20;--cy:416">
+            <img class="shot-light" src="assets/img/mib-browser-light-2000.webp" alt="" loading="lazy" decoding="async" />
+            <img class="shot-dark" src="assets/img/mib-browser-dark-2000.webp" alt="" loading="lazy" decoding="async" />
+          </div>
+          <h3>Find it</h3>
+          <p>The MIB tree, searchable across name, OID, description and syntax.</p>
+        </li>
+        <li>
+          <div class="crop" style="--cx:413;--cy:570">
+            <img class="shot-light" src="assets/img/operations-light-2000.webp" alt="" loading="lazy" decoding="async" />
+            <img class="shot-dark" src="assets/img/operations-dark-2000.webp" alt="" loading="lazy" decoding="async" />
+          </div>
+          <h3>Read it</h3>
+          <p>A walk of <code>ifTable</code>, pivoted into columns and split by INDEX.</p>
+        </li>
+        <li>
+          <div class="crop" style="--cx:1195;--cy:560">
+            <img class="shot-light" src="assets/img/monitor-charts-light-2000.webp" alt="" loading="lazy" decoding="async" />
+            <img class="shot-dark" src="assets/img/monitor-charts-dark-2000.webp" alt="" loading="lazy" decoding="async" />
+          </div>
+          <h3>Judge it</h3>
+          <p>Polled on a schedule, charted, and marked when it leaves its range.</p>
+        </li>
+        <li>
+          <div class="crop" style="--cx:490;--cy:782">
+            <img class="shot-light" src="assets/img/settings-notifications-light-2000.webp" alt="" loading="lazy" decoding="async" />
+            <img class="shot-dark" src="assets/img/settings-notifications-dark-2000.webp" alt="" loading="lazy" decoding="async" />
+          </div>
+          <h3>Tell somebody</h3>
+          <p>Syslog, a webhook or email — with what the relay said when it refused.</p>
+        </li>
+      </ol>
+
+      <p class="muted small" style="margin-top:2.5rem; max-width:68ch">
         The backend is Go, the interface is Svelte, and
         <a href="https://wails.io/">Wails</a> compiles them into one native executable with
         no runtime to install. Its state — the MIBs you added and the history it recorded —
-        lives in a directory you own, as files you can read.
-      </p>
-      <p class="muted small">
-        The only server SnmpLens contacts on its own is GitHub, to check whether a newer
-        release exists. Everything else on the wire is a device you named or a destination
-        you configured.
+        lives in a directory you own, as files you can read. The only server SnmpLens
+        contacts on its own is GitHub, to ask whether a newer release exists.
       </p>
     </div>
   </section>
@@ -384,6 +387,67 @@ try {
           </p>
           <p class="feature-more"><a href="documentation.html#privacy">Read about Anonymous Mode &rarr;</a></p>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= CLIPS ================= -->
+  <section class="section">
+    <div class="wrap">
+      <p class="eyebrow">In motion</p>
+      <h2 style="margin-top:0">Three things a still cannot say</h2>
+      <p class="lede" style="margin-bottom:2.5rem">
+        Recorded from the running application by
+        <a href="https://github.com/Wasabules/SnmpLens/blob/main/tools/record.mjs"><code>tools/record.mjs</code></a>,
+        not reconstructed. Silent, and they loop.
+      </p>
+
+      <div class="grid grid-2" style="align-items:start">
+        <figure class="clip clip-light">
+          <video src="assets/video/walk-to-table-light.mp4"
+                 poster="assets/video/walk-to-table-light.jpg"
+                 autoplay loop muted playsinline preload="none"
+                 aria-label="A walk of ifTable arriving as a flat list and pivoting into a table"></video>
+          <figcaption>155 varbinds arrive flat, then pivot into columns split by <code>INDEX</code>.</figcaption>
+        </figure>
+        <figure class="clip clip-dark">
+          <video src="assets/video/walk-to-table-dark.mp4"
+                 poster="assets/video/walk-to-table-dark.jpg"
+                 autoplay loop muted playsinline preload="none"
+                 aria-label="A walk of ifTable arriving as a flat list and pivoting into a table"></video>
+          <figcaption>155 varbinds arrive flat, then pivot into columns split by <code>INDEX</code>.</figcaption>
+        </figure>
+        <figure class="clip clip-light">
+          <video src="assets/video/anonymous-mode-light.mp4"
+                 poster="assets/video/anonymous-mode-light.jpg"
+                 autoplay loop muted playsinline preload="none"
+                 aria-label="Anonymous Mode replacing every address on screen with a stable alias"></video>
+          <figcaption>Every address replaced in place, consistently, on one keystroke.</figcaption>
+        </figure>
+        <figure class="clip clip-dark">
+          <video src="assets/video/anonymous-mode-dark.mp4"
+                 poster="assets/video/anonymous-mode-dark.jpg"
+                 autoplay loop muted playsinline preload="none"
+                 aria-label="Anonymous Mode replacing every address on screen with a stable alias"></video>
+          <figcaption>Every address replaced in place, consistently, on one keystroke.</figcaption>
+        </figure>
+      </div>
+
+      <div class="clip-single">
+        <figure class="clip clip-light">
+          <video src="assets/video/mib-editor-light.mp4"
+                 poster="assets/video/mib-editor-light.jpg"
+                 autoplay loop muted playsinline preload="none"
+                 aria-label="A MIB opening in the editor and its diagnostics arriving underneath"></video>
+          <figcaption>A MIB opens, highlights, and the analysis arrives under it.</figcaption>
+        </figure>
+        <figure class="clip clip-dark">
+          <video src="assets/video/mib-editor-dark.mp4"
+                 poster="assets/video/mib-editor-dark.jpg"
+                 autoplay loop muted playsinline preload="none"
+                 aria-label="A MIB opening in the editor and its diagnostics arriving underneath"></video>
+          <figcaption>A MIB opens, highlights, and the analysis arrives under it.</figcaption>
+        </figure>
       </div>
     </div>
   </section>
@@ -495,6 +559,34 @@ try {
     </div>
   </section>
 
+  <!-- ================= REPO STATS ================= -->
+  <section class="wrap" style="padding-bottom:3rem">
+    <dl class="repo-stats" data-gh="stats">
+      <div>
+        <dt>Stars</dt>
+        <dd><span class="skeleton" data-stat="stars" data-fallback="—">0000</span></dd>
+      </div>
+      <div>
+        <dt>Forks</dt>
+        <dd><span class="skeleton" data-stat="forks" data-fallback="—">000</span></dd>
+      </div>
+      <div>
+        <dt>Open issues</dt>
+        <dd><span class="skeleton" data-stat="issues" data-fallback="—">00</span></dd>
+      </div>
+      <div>
+        <dt>Last commit</dt>
+        <dd style="font-size:1rem"><span class="skeleton" data-stat="updated" data-fallback="see GitHub">Loading</span></dd>
+      </div>
+      <div>
+        <dt>Latest release</dt>
+        <dd style="font-size:1rem" data-gh="release">
+          <a data-release="link" href="https://github.com/Wasabules/SnmpLens/releases/latest"><span class="skeleton" data-release="tag" data-fallback="Releases">v0.0.0</span></a>
+        </dd>
+      </div>
+    </dl>
+  </section>
+
   <!-- ================= MORE SCREENSHOTS ================= -->
   <section class="section">
     <div class="wrap">
@@ -568,19 +660,6 @@ try {
           <figcaption>Two walks of the same device, diffed.</figcaption>
         </figure>
         <figure class="shot">
-          <img class="shot-light" src="assets/img/anonymous-mode-light-1200.webp"
-               srcset="assets/img/anonymous-mode-light-1200.webp 1200w, assets/img/anonymous-mode-light-2000.webp 2000w"
-               sizes="(max-width: 820px) 100vw, (max-width: 1180px) 50vw, 560px"
-               alt="The SnmpLens same screen with addresses and credentials replaced by stable aliases." width="1600" height="1000"
-               loading="lazy" decoding="async" />
-          <img class="shot-dark" src="assets/img/anonymous-mode-dark-1200.webp"
-               srcset="assets/img/anonymous-mode-dark-1200.webp 1200w, assets/img/anonymous-mode-dark-2000.webp 2000w"
-               sizes="(max-width: 820px) 100vw, (max-width: 1180px) 50vw, 560px"
-               alt="The SnmpLens same screen with addresses and credentials replaced by stable aliases." width="1600" height="1000"
-               loading="lazy" decoding="async" />
-          <figcaption>Anonymous Mode: every address becomes a stable alias.</figcaption>
-        </figure>
-        <figure class="shot">
           <img class="shot-light" src="assets/img/events-journal-light-1200.webp"
                srcset="assets/img/events-journal-light-1200.webp 1200w, assets/img/events-journal-light-2000.webp 2000w"
                sizes="(max-width: 820px) 100vw, (max-width: 1180px) 50vw, 560px"
@@ -592,19 +671,6 @@ try {
                alt="The SnmpLens event journal listing traps, thresholds opened and resolved, reachability changes and a delivery that was given up on." width="1600" height="1000"
                loading="lazy" decoding="async" />
           <figcaption>One journal for everything — including the alerts that never arrived.</figcaption>
-        </figure>
-        <figure class="shot">
-          <img class="shot-light" src="assets/img/mib-editor-light-1200.webp"
-               srcset="assets/img/mib-editor-light-1200.webp 1200w, assets/img/mib-editor-light-2000.webp 2000w"
-               sizes="(max-width: 820px) 100vw, (max-width: 1180px) 50vw, 560px"
-               alt="The SnmpLens MIB editor with a file open, syntax highlighted, and a diagnostic on a line." width="1600" height="1100"
-               loading="lazy" decoding="async" />
-          <img class="shot-dark" src="assets/img/mib-editor-dark-1200.webp"
-               srcset="assets/img/mib-editor-dark-1200.webp 1200w, assets/img/mib-editor-dark-2000.webp 2000w"
-               sizes="(max-width: 820px) 100vw, (max-width: 1180px) 50vw, 560px"
-               alt="The SnmpLens MIB editor with a file open, syntax highlighted, and a diagnostic on a line." width="1600" height="1100"
-               loading="lazy" decoding="async" />
-          <figcaption>The MIB editor, with the analysis that loading alone does not do.</figcaption>
         </figure>
       </div>
       <p class="muted small" style="margin-top:1.25rem">

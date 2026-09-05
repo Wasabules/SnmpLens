@@ -61,7 +61,7 @@ function withSettings(base, patch) {
 }
 
 /** One scene. `tab` picks the workspace; `theme` picks dark or light. */
-function scene(base, name, { tab, theme = 'dark', width = 1600, height = 1000, settings = {}, seeds: extra = {}, bindings = {}, events = [], act = [], describe }) {
+function scene(base, name, { tab, theme = 'dark', width = 1600, height = 1000, settings = {}, seeds: extra = {}, bindings = {}, latency = {}, events = [], act = [], describe }) {
   return {
     name,
     width,
@@ -75,6 +75,9 @@ function scene(base, name, { tab, theme = 'dark', width = 1600, height = 1000, s
       snmplens_active_tab: tab,
     },
     bindings,
+    // How long each call should APPEAR to take. A still spends these instantly
+    // under virtual time; only a clip ever sees them.
+    latency,
     events,
     act,
   };
@@ -91,7 +94,16 @@ const CATALOGUE = [
     // A walk's results are the component's own state, so they cannot be seeded
     // — the walk has to be run. This is the one place the harness presses
     // buttons, and it presses them by their label.
-    act: ['WALK', 'Execute WALK', 'Table'],
+    // 'Table View', not 'Table'. Two buttons in the results toolbar start with
+    // "Table ", the exporter comes first in the document, and the loose match
+    // takes the earliest — so this pressed "Table CSV" and the only visible
+    // effect was a toast saying the table had been exported. It looked like it
+    // worked because Table View is already the default.
+    act: ['WALK', 'Execute WALK', 'Table View'],
+    // The fixture already claims 412 ms in its own responseTimeMs, and answering
+    // instantly contradicted it: 155 varbinds landed in the same frame as the
+    // click, so the button never showed that it was working.
+    latency: { SnmpWalk: 900 },
     describe: 'A walk of ifTable rendered as a real table, split by INDEX.',
   },
   {
@@ -235,6 +247,7 @@ const CATALOGUE = [
     // therefore impossible by design, and the only way in is the application's
     // own Ctrl+Shift+A — pressed after the walk, so there is something on
     // screen for it to mask.
+    latency: { SnmpWalk: 900 },
     act: ['WALK', 'Execute WALK', 'key:shift+A'],
     describe: 'The same screen with every address replaced by a stable alias.',
   },

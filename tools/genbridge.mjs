@@ -143,7 +143,7 @@ lines.push('// was asked. That is not an abstract limitation — GetOidDetails i
 lines.push('// per varbind, and answering the same fixture to all of them put the word');
 lines.push('// "linkDown" in the Name column of every row of the trap screenshot, beside six');
 lines.push('// OIDs that are plainly six different objects.');
-lines.push('function answer(name, args) {');
+lines.push('function resolve(name, args) {');
 lines.push('  const over = scene().bindings || {};');
 lines.push('  if (Object.prototype.hasOwnProperty.call(over, name)) return over[name];');
 lines.push('  if (typeof dynamic[name] === "function") {');
@@ -156,6 +156,18 @@ lines.push('    if (computed !== undefined) return computed;');
 lines.push('  }');
 lines.push('  if (Object.prototype.hasOwnProperty.call(FIXTURES, name)) return FIXTURES[name];');
 lines.push('  return null;');
+lines.push('}');
+lines.push('');
+lines.push('// A scene may declare how long a call takes. Every binding answered on the next');
+lines.push('// microtask, which is right for a still — it wants the end state as fast as it');
+lines.push('// can get there — and leaves a CLIP with nothing to film: the button never');
+lines.push('// shows that it is working, and 155 varbinds land in the same frame as the');
+lines.push('// click that asked for them. Stills are unaffected either way, because virtual');
+lines.push('// time spends the timer instantly.');
+lines.push('function answer(name, args) {');
+lines.push('  const value = resolve(name, args);');
+lines.push('  const ms = (scene().latency || {})[name];');
+lines.push('  return ms ? new Promise((r) => setTimeout(() => r(value), ms)) : value;');
 lines.push('}');
 lines.push('');
 

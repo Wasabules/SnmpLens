@@ -336,6 +336,19 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
         refresh. Community strings and v3 passphrases are removed at the point the entry is
         written, not when it is displayed, so they are never in the buffer to begin with.
       </p>
+          <figure class="shot" style="margin-top:1.5rem">
+        <img class="shot-light" src="assets/img/operations-light-1200.webp"
+             srcset="assets/img/operations-light-1200.webp 1200w, assets/img/operations-light-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="The SnmpLens Operations tab: a walk of ifTable rendered as a sortable table, with the MIB tree beside it." width="1600" height="1000"
+             loading="lazy" decoding="async" />
+        <img class="shot-dark" src="assets/img/operations-dark-1200.webp"
+             srcset="assets/img/operations-dark-1200.webp 1200w, assets/img/operations-dark-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="The SnmpLens Operations tab: a walk of ifTable rendered as a sortable table, with the MIB tree beside it." width="1600" height="1000"
+             loading="lazy" decoding="async" />
+        <figcaption>A walk of <code>ifTable</code> in table view — 155 varbinds, pivoted by column and split by INDEX.</figcaption>
+      </figure>
     </section>
 
     <!-- ---------------------------------------------------------------- -->
@@ -440,6 +453,19 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
         An OCTET STRING index accepts the colon-separated hexadecimal the table displays, so
         a MAC-keyed table can be written as well as read.
       </p>
+          <figure class="shot" style="margin-top:1.5rem">
+        <img class="shot-light" src="assets/img/history-diff-light-1200.webp"
+             srcset="assets/img/history-diff-light-1200.webp 1200w, assets/img/history-diff-light-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="The SnmpLens diff view comparing two walks of the same device, with ifOperStatus changed from 2 to 1." width="1600" height="1150"
+             loading="lazy" decoding="async" />
+        <img class="shot-dark" src="assets/img/history-diff-dark-1200.webp"
+             srcset="assets/img/history-diff-dark-1200.webp 1200w, assets/img/history-diff-dark-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="The SnmpLens diff view comparing two walks of the same device, with ifOperStatus changed from 2 to 1." width="1600" height="1150"
+             loading="lazy" decoding="async" />
+        <figcaption>Two walks of the same device, forty minutes apart: 37 rows changed, 118 identical.</figcaption>
+      </figure>
     </section>
 
     <hr />
@@ -496,6 +522,19 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
           stays the headline rather than the unresolved references it causes.
         </p>
       </div>
+          <figure class="shot" style="margin-top:1.5rem">
+        <img class="shot-light" src="assets/img/mib-browser-light-1200.webp"
+             srcset="assets/img/mib-browser-light-1200.webp 1200w, assets/img/mib-browser-light-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="The SnmpLens MIB tree with a node selected, showing its OID, type, syntax, access and description." width="1600" height="1000"
+             loading="lazy" decoding="async" />
+        <img class="shot-dark" src="assets/img/mib-browser-dark-1200.webp"
+             srcset="assets/img/mib-browser-dark-1200.webp 1200w, assets/img/mib-browser-dark-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="The SnmpLens MIB tree with a node selected, showing its OID, type, syntax, access and description." width="1600" height="1000"
+             loading="lazy" decoding="async" />
+        <figcaption>A resolved node: its OID, its SYNTAX, its ACCESS and the DESCRIPTION from the MIB that defines it.</figcaption>
+      </figure>
     </section>
 
     <!-- ---------------------------------------------------------------- -->
@@ -596,6 +635,19 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
         Binding uses the bare <code>:port</code> wildcard, which Go opens as a dual-stack
         socket, so an IPv4 and an IPv6 device reach the same listener.
       </p>
+          <figure class="shot" style="margin-top:1.5rem">
+        <img class="shot-light" src="assets/img/trap-listener-light-1200.webp"
+             srcset="assets/img/trap-listener-light-1200.webp 1200w, assets/img/trap-listener-light-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="The SnmpLens trap listener running, with one notification expanded to its six varbinds." width="1600" height="1000"
+             loading="lazy" decoding="async" />
+        <img class="shot-dark" src="assets/img/trap-listener-dark-1200.webp"
+             srcset="assets/img/trap-listener-dark-1200.webp 1200w, assets/img/trap-listener-dark-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="The SnmpLens trap listener running, with one notification expanded to its six varbinds." width="1600" height="1000"
+             loading="lazy" decoding="async" />
+        <figcaption>Five notifications across v1, v2c and v3 — trap and inform — each resolved through the loaded MIBs.</figcaption>
+      </figure>
     </section>
 
     <!-- ---------------------------------------------------------------- -->
@@ -634,6 +686,19 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
         A device that stops answering is its own kind of episode, separate from any
         threshold — the distinction between “this is too high” and “I cannot tell”.
       </p>
+          <figure class="shot" style="margin-top:1.5rem">
+        <img class="shot-light" src="assets/img/monitor-charts-light-1200.webp"
+             srcset="assets/img/monitor-charts-light-1200.webp 1200w, assets/img/monitor-charts-light-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="SnmpLens monitoring sessions charted over several hours, with a threshold crossed and marked." width="1600" height="1320"
+             loading="lazy" decoding="async" />
+        <img class="shot-dark" src="assets/img/monitor-charts-dark-1200.webp"
+             srcset="assets/img/monitor-charts-dark-1200.webp 1200w, assets/img/monitor-charts-dark-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="SnmpLens monitoring sessions charted over several hours, with a threshold crossed and marked." width="1600" height="1320"
+             loading="lazy" decoding="async" />
+        <figcaption>Polling sessions charted over six hours, with the value that left its range marked where it did.</figcaption>
+      </figure>
     </section>
 
     <!-- ---------------------------------------------------------------- -->
@@ -674,6 +739,19 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
         since. Retention is per category, because traps arrive in bursts while system events
         trickle, and one shared limit would let a trap storm evict everything else.
       </p>
+          <figure class="shot" style="margin-top:1.5rem">
+        <img class="shot-light" src="assets/img/events-journal-light-1200.webp"
+             srcset="assets/img/events-journal-light-1200.webp 1200w, assets/img/events-journal-light-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="The SnmpLens event journal listing traps, thresholds, reachability changes and a delivery given up on." width="1600" height="1000"
+             loading="lazy" decoding="async" />
+        <img class="shot-dark" src="assets/img/events-journal-dark-1200.webp"
+             srcset="assets/img/events-journal-dark-1200.webp 1200w, assets/img/events-journal-dark-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="The SnmpLens event journal listing traps, thresholds, reachability changes and a delivery given up on." width="1600" height="1000"
+             loading="lazy" decoding="async" />
+        <figcaption>One journal for everything worth remembering — including the alerts that never arrived.</figcaption>
+      </figure>
     </section>
 
     <!-- ---------------------------------------------------------------- -->
@@ -862,6 +940,19 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
         On macOS, an IPv6 traceroute runs <code>traceroute6</code>, because the system
         <code>traceroute</code> there is IPv4-only.
       </p>
+          <figure class="shot" style="margin-top:1.5rem">
+        <img class="shot-light" src="assets/img/network-discovery-light-1200.webp"
+             srcset="assets/img/network-discovery-light-1200.webp 1200w, assets/img/network-discovery-light-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="A SnmpLens CIDR sweep of 192.168.1.0/24 listing thirteen devices with their sysName and sysDescr." width="1600" height="1150"
+             loading="lazy" decoding="async" />
+        <img class="shot-dark" src="assets/img/network-discovery-dark-1200.webp"
+             srcset="assets/img/network-discovery-dark-1200.webp 1200w, assets/img/network-discovery-dark-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="A SnmpLens CIDR sweep of 192.168.1.0/24 listing thirteen devices with their sysName and sysDescr." width="1600" height="1150"
+             loading="lazy" decoding="async" />
+        <figcaption>A sweep of one subnet: each device named, with the sysDescr it actually returned.</figcaption>
+      </figure>
     </section>
 
     <!-- ---------------------------------------------------------------- -->

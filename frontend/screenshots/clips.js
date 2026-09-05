@@ -20,6 +20,14 @@
  *   timeout  ms to wait for the steps to finish
  */
 
+/**
+ * The application announces "14 MIB(s) loaded successfully" when it starts, and
+ * a toast is on screen for about four seconds. A still never sees it — virtual
+ * time has spent those seconds before the shutter — but a clip opens on it, so
+ * every clip waits it out before the camera rolls.
+ */
+const TOAST_CLEARS = 4200;
+
 /** Clips worth recording in both themes, so each matches the site around it. */
 const PAIRED = [
   {
@@ -38,8 +46,13 @@ const PAIRED = [
     // The walk, then Ctrl+Shift+A. Every address on screen is replaced in
     // place, consistently — which as two side-by-side stills is a puzzle, and
     // as one cut is obvious.
-    pace: 1500,
-    tail: 3000,
+    //
+    // Paced per step rather than evenly. Switching to WALK is dead air; the gap
+    // before the mask is the ONLY time the real addresses are on screen, and at
+    // an even 1.5 s it was 1.3 s — long enough to see that something changed and
+    // not long enough to read what.
+    pace: [1200, 3600, 1200],
+    tail: 3400,
     describe: 'Every address on screen is replaced by a stable alias, in place.',
   },
   {
@@ -58,7 +71,7 @@ export const CLIPS = PAIRED.flatMap((clip) =>
   ['dark', 'light'].map((theme) => ({
     name: `${clip.base}-${theme}`,
     scene: `${clip.scene}-${theme}`,
-    settle: clip.settle,
+    settle: clip.settle ?? TOAST_CLEARS,
     lead: clip.lead,
     pace: clip.pace,
     tail: clip.tail,

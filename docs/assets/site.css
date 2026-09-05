@@ -137,7 +137,14 @@ a:hover { text-decoration-thickness: 2px; }
 
 hr { border: 0; border-top: 1px solid var(--line-soft); margin: 3rem 0; }
 
-::selection { background: var(--accent-wash); }
+/* A 7 % wash behind text that keeps its own colour is not a selection, it is a
+ * faint tint — measured against both palettes, it was almost invisible in dark.
+ * color-mix gives a band strong enough to see and weak enough not to shout, and
+ * the foreground is stated so the contrast holds in both themes. */
+::selection {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+  color: var(--ink);
+}
 
 :focus-visible {
   outline: 2px solid var(--accent);
@@ -325,7 +332,14 @@ kbd {
   color: var(--accent-ink);
 }
 
-.btn-primary:hover { filter: brightness(1.08); border-color: var(--accent); }
+/* Not filter: brightness(). It lightens the DARK accent towards white, which
+ * washes it out rather than strengthening it, and it re-rasterises the label —
+ * so the text visibly shifts on hover. Mixing towards ink darkens in light and
+ * towards paper lightens in dark, which is the same gesture in both. */
+.btn-primary:hover {
+  background: color-mix(in srgb, var(--accent) 86%, var(--ink));
+  border-color: var(--accent);
+}
 
 .btn svg { width: 16px; height: 16px; fill: currentColor; flex: none; }
 
@@ -836,4 +850,211 @@ tbody tr:last-child td { border-bottom: 0; }
 .feature-more a:hover {
   color: var(--accent);
   text-decoration: underline;
+}
+
+/* --- cropped screenshots ------------------------------------------------- */
+
+/* A window onto a full-window capture.
+ *
+ * A whole 1600x1000 window scaled into a 348 px card is a grey rectangle: the
+ * point of a screenshot is that you can read what is in it, and at that size
+ * nobody can. So the image is NOT scaled — it is rendered at 1600 CSS pixels,
+ * which is the application's own logical width, and the crop box shows one
+ * region of it at 1:1. The file behind it is the 2000 px rung, so the pixels are
+ * still denser than the CSS asks for.
+ *
+ * --cx/--cy are the top-left of the region in the application's own 1600x1000
+ * coordinates — the same numbers the scene catalogue uses — so a coordinate here
+ * can be checked against the interface rather than guessed at.
+ *
+ * `max-width: none` is not optional: the global `img { max-width: 100% }` would
+ * otherwise shrink the image back down to the card and undo all of it. */
+.crop {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  background: var(--paper-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.crop img {
+  position: absolute;
+  width: 1600px;
+  max-width: none;
+  left: calc(var(--cx, 0) * -1px);
+  top: calc(var(--cy, 0) * -1px);
+}
+
+/* The 2px rule is what gives a text-only card its top edge. When there is a
+ * picture, the picture is the top edge. `:has()` keeps the markup change purely
+ * additive — insert a .crop and the rule takes itself away. */
+.feature > .crop { margin: 0 0 1rem; }
+.feature:has(> .crop) { border-top: 0; padding-top: 0; }
+
+/* --- the loop, in four pictures ------------------------------------------ */
+
+.loop {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  /* `ul, ol { max-width: var(--measure) }` above is a reading-width rule for
+   * prose lists, and it is right for those. This is a grid of pictures, and it
+   * was being squeezed into 68ch — 587 px, which auto-fit then resolved to two
+   * columns instead of four. */
+  max-width: none;
+  gap: 1.75rem 1.5rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  counter-reset: loop;
+}
+
+.loop li { counter-increment: loop; }
+
+.loop h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0.9rem 0 0.35rem;
+  font-size: 1rem;
+}
+
+/* The step number, from the counter rather than from the markup — so reordering
+ * the four cannot leave a "3" above the second one. */
+.loop h3::before {
+  content: counter(loop);
+  font: 600 0.72rem/1 var(--font-mono);
+  color: var(--accent);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.3rem 0.5rem;
+}
+
+.loop p {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--ink-2);
+}
+
+/* --- clips --------------------------------------------------------------- */
+
+/* Some things a still cannot say: that a flat list and a table are the same 155
+ * varbinds, or that every address on screen changed at once and consistently.
+ *
+ * `preload="none"` and no autoplay until it is on screen — a page that leads
+ * with pictures still has to load. The poster is the LAST frame, so what stands
+ * there before playback is the result rather than an empty starting state. */
+.clip {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--paper-2);
+  margin: 0;
+}
+
+.clip video {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--paper-3);
+}
+
+.clip figcaption {
+  border-top: 1px solid var(--line);
+  padding: 0.6rem 0.9rem;
+  font-size: 0.8rem;
+  color: var(--ink-3);
+  background: var(--paper);
+}
+
+/* The same theme pairing as the stills: one clip is in the document, and which
+ * one depends on the palette around it. */
+.clip-light { display: block; }
+.clip-dark { display: none; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .clip-light { display: none; }
+  :root:not([data-theme="light"]) .clip-dark { display: block; }
+}
+
+:root[data-theme="dark"] .clip-light { display: none; }
+:root[data-theme="dark"] .clip-dark { display: block; }
+:root[data-theme="light"] .clip-light { display: block; }
+:root[data-theme="light"] .clip-dark { display: none; }
+
+/* The third clip stands alone under a pair, at the width of one of them, so the
+ * row above does not read as an incomplete grid of three. */
+.clip-single {
+  margin-top: 1.5rem;
+  max-width: calc((100% - 1.5rem) / 2);
+}
+
+@media (max-width: 800px) {
+  .clip-single { max-width: none; }
+}
+
+/* --- typographic polish -------------------------------------------------- */
+
+/* `balance` on headings, which are short enough for the browser to solve, and
+ * `pretty` on the running text, which only prevents the last-line orphan. Both
+ * degrade to nothing at all where they are not supported. */
+h1, h2, h3, .lede { text-wrap: balance; }
+p, li, figcaption { text-wrap: pretty; }
+
+/* Checkboxes and radios in the reader's accent rather than the browser's. */
+:root { accent-color: var(--accent); }
+
+/* Arriving on a deep link should CONFIRM that you arrived. The documentation
+ * has twenty-three of them and none of it said anything: the page jumped and
+ * left you looking at a heading identical to every other heading. */
+.doc-body > section:target > h2 {
+  position: relative;
+}
+
+.doc-body > section:target > h2::before {
+  content: "";
+  position: absolute;
+  left: -1rem;
+  top: 0.15em;
+  bottom: 0.15em;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+/* Only the scrollers that are actually ours. A page-level scrollbar rule
+ * overrides a choice the reader made in their operating system. */
+.doc-toc, .copy-wrap pre, .release-notes {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+/* --- reveal on scroll ---------------------------------------------------- */
+
+/* Deliberately small: 8 px and 240 ms, once, and only on the landing page's
+ * sections. Anything more on a page of technical writing is decoration, and
+ * decoration is what the rest of this stylesheet is written to avoid.
+ *
+ * The @supports gate is not caution for its own sake — without it, a browser
+ * that parses `animation-timeline` as invalid keeps the `opacity: 0` and the
+ * page is BLANK. Inside the gate, a browser that does not support the property
+ * never applies the rule at all.
+ *
+ * `animation-range` stops it at 40 % of the entry so a section is fully solid
+ * well before it reaches reading position, rather than fading as you read it. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .home .section > .wrap,
+    .home .hero,
+    .home .shot {
+      animation: rise linear both;
+      animation-timeline: view();
+      animation-range: entry 5% cover 22%;
+    }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: none; }
+    }
+  }
 }

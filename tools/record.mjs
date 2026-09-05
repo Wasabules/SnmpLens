@@ -316,6 +316,7 @@ async function shoot(clip, scene) {
   ], { stdio: 'ignore' });
 
   const frames = [];
+  let endedAt = 0;
   let cdp = null;
   try {
     cdp = await new CDP(await debuggerUrl(profile)).open();
@@ -356,18 +357,23 @@ async function shoot(clip, scene) {
 
     // A beat of the opening state, so the clip does not begin mid-gesture.
     await sleep(clip.lead ?? 700);
-    await cdp.value(`window.__SNMPLENS_PLAY__(${clip.pace ?? 900})`);
+    // JSON.stringify, not interpolation. A per-step pace is an ARRAY, and
+    // `${[1200, 3600, 1200]}` is "1200,3600,1200" — which reaches the page as
+    // three arguments, of which only the first is read. The clip then ran at an
+    // even 1.2 s and the beat the pacing existed for was gone.
+    await cdp.value(`window.__SNMPLENS_PLAY__(${JSON.stringify(clip.pace ?? 900)})`);
     await cdp.until('window.__SNMPLENS_READY__ === true',
       clip.timeout ?? 60000, 'the steps to finish');
     // And a beat of the result, so it can be read before the loop restarts.
     await sleep(clip.tail ?? 1800);
 
     await cdp.send('Page.stopScreencast');
+    endedAt = Date.now();
   } finally {
     if (cdp) cdp.close();
     child.kill();
   }
-  return frames;
+  return { frames, endedAt };
 }
 
 /**
@@ -378,10 +384,18 @@ async function shoot(clip, scene) {
  * seconds back instantly. Each slot takes the most recent frame at or before it,
  * which is what was actually on screen at that moment.
  */
-function resample(frames, fps) {
+function resample(frames, fps, endedAt) {
   if (!frames.length) return [];
   const t0 = frames[0].t;
-  const span = frames[frames.length - 1].t - t0;
+  // To the moment the camera STOPPED, not to the last frame that arrived.
+  //
+  // The screencast fires on change, so the clip's tail — the seconds held on the
+  // end state, which is what makes a looping clip readable rather than a flicker
+  // — produces no frames at all. Ending the grid at the last frame threw exactly
+  // those seconds away: a clip asked to hold its result for 3.4 s cut to black
+  // the instant the result appeared, every time round the loop.
+  const last = frames[frames.length - 1].t;
+  const span = Math.max(last, endedAt || last) - t0;
   const slots = Math.max(1, Math.round((span / 1000) * fps));
   const out = [];
   let i = 0;
@@ -415,8 +429,8 @@ for (const clip of clips) {
   mkdirSync(dir, { recursive: true });
 
   try {
-    const raw = await shoot(clip, scene);
-    const grid = resample(raw, FPS);
+    const { frames: raw, endedAt } = await shoot(clip, scene);
+    const grid = resample(raw, FPS, endedAt);
     if (grid.length < FPS) {
       throw new Error(`only ${grid.length} frames — nothing moved, or the steps did not run`);
     }
@@ -427,11 +441,15 @@ for (const clip of clips) {
     const pattern = join(dir, 'f-%05d.jpg');
     const scale = `scale=${OUT_WIDTH}:-2:flags=lanczos`;
     const mp4 = join(outDir, `${clip.name}.mp4`);
-    const webm = join(outDir, `${clip.name}.webm`);
     const poster = join(outDir, `${clip.name}.jpg`);
 
-    // H.264 for the browsers that will not decode VP9, VP9 for the size. The
-    // page offers both and lets the browser choose.
+    // H.264 only, which is the opposite of the usual advice, and it is a
+    // measurement rather than a preference. On this content — a flat interface
+    // that is mostly small text on a solid ground — x264 at crf 24 produced
+    // 164 KB, and VP9 needed crf 48 to reach 168; at the quality that actually
+    // matched (crf 36) it was 256. So the second file would be half again as
+    // large for a worse picture, and every browser this site is read in decodes
+    // H.264.
     ffmpeg(['-y', '-framerate', String(FPS), '-i', pattern, '-vf', scale,
       '-c:v', 'libx264', '-preset', 'veryslow', '-crf', '24',
       // yuv420p, or Safari and a good many hardware decoders show nothing at
@@ -439,20 +457,24 @@ for (const clip of clips) {
       // pixel format requires.
       '-pix_fmt', 'yuv420p', '-movflags', '+faststart', mp4], clip.name);
 
-    ffmpeg(['-y', '-framerate', String(FPS), '-i', pattern, '-vf', scale,
-      '-c:v', 'libvpx-vp9', '-crf', '34', '-b:v', '0', '-row-mt', '1',
-      '-pix_fmt', 'yuv420p', webm], clip.name);
-
     // The poster is the LAST frame, not the first: it is what the clip is for,
-    // and it is what stays on screen for anyone whose browser blocks autoplay.
+    // and it is what stays on screen for anyone whose browser blocks autoplay or
+    // asks for reduced motion.
+    //
+    // Half the width of the clip and q:v 6, which took six posters from 1.2 MB
+    // to about 250 KB. It is a still shown for a fraction of a second before the
+    // video takes over, and at q:v 3 it was costing more than the videos.
     ffmpeg(['-y', '-i', join(dir, `f-${String(grid.length).padStart(5, '0')}.jpg`),
-      '-vf', scale, '-q:v', '3', poster], clip.name);
+      '-vf', `scale=${OUT_WIDTH / 2}:-2:flags=lanczos`, '-q:v', '6', poster], clip.name);
 
+    // --gif is for GitHub, not for this site. A README cannot autoplay a video
+    // inline, so there the GIF is the only thing that moves; here it would be
+    // several times the size of the MP4 for a worse picture, because a GIF has
+    // no interframe compression worth the name and 256 colours to spend on
+    // antialiased text. Halved rate and width for the same reason.
     let gifNote = '';
     if (wantGif) {
       const gif = join(outDir, `${clip.name}.gif`);
-      // Halved rate and width: a GIF has no interframe compression worth the
-      // name, so this is the difference between 2 MB and 20.
       ffmpeg(['-y', '-framerate', String(FPS), '-i', pattern,
         '-vf', 'fps=12,scale=1000:-1:flags=lanczos,split[a][b];'
              + '[a]palettegen=max_colors=128[p];'
@@ -463,7 +485,7 @@ for (const clip of clips) {
     const secs = (grid.length / FPS).toFixed(1);
     console.log(
       `  ${clip.name.padEnd(22)} ${secs}s  ${grid.length} frames  `
-      + `mp4 ${String(kb(mp4)).padStart(4)} KB  webm ${String(kb(webm)).padStart(4)} KB${gifNote}`,
+      + `mp4 ${String(kb(mp4)).padStart(4)} KB${gifNote}`,
     );
   } catch (e) {
     console.log(`  ${clip.name.padEnd(22)} FAILED — ${e.message}`);
