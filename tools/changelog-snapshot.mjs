@@ -18,8 +18,9 @@
  * this after tagging.
  *
  * Release notes are inserted as TEXT, never as HTML. They are Markdown written
- * by a person and fetched over the network, and the live renderer treats them
- * the same way for the same reason.
+ * by a person and fetched over the network; assets/github.js escapes them for
+ * the same reason, though it then gives them structure, which this does not.
+ * See the comment beside the <pre> below.
  */
 import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -62,9 +63,16 @@ if (!releases.length) {
 const html = releases.map((rel) => {
   const date = rel.at ? rel.at.slice(0, 10) : '';
   const body = (rel.body || '').trim();
-  // Markdown, rendered as the plain text it is. The live version does the same;
-  // pretending to parse it here would put two different renderings of the same
-  // note on the same page depending on whether the network answered.
+  // Markdown, written out as the text it is rather than parsed.
+  //
+  // This is NOT what the live renderer does, and an earlier comment here claimed
+  // it was — assets/github.js has built h4, ul, strong, em, code, links and rules
+  // out of these notes since before this file existed. The two renderings differ
+  // on purpose: a second Markdown implementation, in another language, kept in
+  // step with the first by hand, to serve a snapshot that a reader with a working
+  // network never sees, is a poor trade. What matters is that the TEXT is
+  // complete and legible, and .release-notes wraps it so a 663-character release
+  // note does not become six screens of horizontal scrolling.
   const notes = body
     ? `<pre class="release-notes no-copy">${esc(body)}</pre>`
     : '<p class="muted small">No notes were written for this release.</p>';

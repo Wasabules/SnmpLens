@@ -1232,3 +1232,18 @@ figure.clip:focus-visible {
   .clip-play { transition: none; }
   .clip-play:hover { transform: translate(-50%, -50%); }
 }
+
+/* --- the baked release notes --------------------------------------------- */
+
+/* The changelog snapshot is raw Markdown in a <pre>, and a release note runs to
+ * 663 characters on one line. `pre` does not wrap, so without this the fallback
+ * — the copy that exists precisely for the reader whose scripts or network
+ * failed — arrived as six screens of horizontal scrolling.
+ *
+ * `anywhere` rather than `break-word`: these notes carry URLs and long option
+ * strings with no space to break at, which is the case `break-word` declines to
+ * handle inside a pre. */
+.release-notes {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
