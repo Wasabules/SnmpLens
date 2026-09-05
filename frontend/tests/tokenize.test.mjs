@@ -13,14 +13,21 @@ const check = (name, ok, extra = '') => {
   if (!ok) failures++;
 };
 
-/** Recover the text a browser would render from the generated markup. */
+/**
+ * Recover the text a browser would render from the generated markup.
+ *
+ * ONE pass, not a chain of replaces. Tags and entities are recognised together,
+ * so a decoded `<` is never looked at again — which is what the chain was
+ * relying on its own ordering to avoid: `&amp;` had to come LAST, or
+ * `&amp;lt;` would decode to `<` instead of to `&lt;`. An inversion that is
+ * correct only in one order is a trap for whoever adds the next entity, and it
+ * is what CodeQL's js/incomplete-multi-character-sanitization is about.
+ */
+const ENTITIES = { lt: '<', gt: '>', quot: '"', amp: '&', '#39': "'" };
+
 function textOf(html) {
-  return html
-    .replace(/<[^>]+>/g, '')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, '&');
+  return html.replace(/<[^>]+>|&(lt|gt|quot|amp|#39);/g,
+    (whole, entity) => (entity === undefined ? '' : ENTITIES[entity]));
 }
 
 const SAMPLES = {
