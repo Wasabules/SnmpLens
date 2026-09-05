@@ -38,3 +38,9 @@ test_snmpv3.py
 
 # Proprietary vendor MIBs
 *.mib
+
+# The screenshot harness builds and serves the real interface against fixtures.
+# The bundle is a build artefact; the bridge is generated from the specification.
+frontend/screenshots/dist/
+frontend/screenshots/bridge/App.js
+frontend/screenshots/bridge/runtime.js

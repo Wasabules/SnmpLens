@@ -367,10 +367,22 @@
           <img src="assets/img/anonymous-mode.png" alt="The same screen with addresses and credentials replaced by stable aliases." loading="lazy" />
           <figcaption>Anonymous Mode: every address becomes a stable alias.</figcaption>
         </figure>
+        <figure class="shot">
+          <img src="assets/img/events-journal.png" alt="The event journal listing traps, thresholds opened and resolved, reachability changes and a delivery that was given up on." loading="lazy" />
+          <figcaption>One journal for everything — including the alerts that never arrived.</figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="assets/img/mib-editor.png" alt="The MIB editor with a file open, syntax highlighted, and a diagnostic on a line." loading="lazy" />
+          <figcaption>The MIB editor, with the analysis that loading alone does not do.</figcaption>
+        </figure>
       </div>
       <p class="muted small" style="margin-top:1.25rem">
-        Screenshots are from a recent release; the interface keeps moving. The
-        <a href="changelog.html">changelog</a> is the authority on what shipped when.
+        Every image here is generated from the real interface by
+        <code>node tools/screenshots.mjs</code> — the same components and stylesheet the
+        application ships, with the backend replaced by fixtures — so they cannot show a
+        layout the application does not actually produce, and they are regenerated rather
+        than retaken. The <a href="changelog.html">changelog</a> is the authority on what
+        shipped when.
       </p>
     </div>
   </section>
