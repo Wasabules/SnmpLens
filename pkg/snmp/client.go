@@ -74,8 +74,16 @@ type Client struct {
 	// raced reproducibly under -race — and visibly without it, since a Start
 	// following a Stop could be refused by a listener that had not cleared
 	// itself yet, or clobber one that was still running.
+	//
+	// trapBound and trapDone belong to the SAME listener as trapListener and are
+	// replaced with it. gosnmp's own Listening() cannot be used for this by more
+	// than one waiter: it is `make(chan bool, 1)` carrying a VALUE, not a channel
+	// that closes, so the first receiver takes it and every other one waits for
+	// ever. These two are closed, which is a broadcast.
 	trapMu       sync.Mutex
 	trapListener *gosnmp.TrapListener
+	trapBound    chan struct{} // closed once the socket is bound
+	trapDone     chan struct{} // closed once Listen has returned
 	debugEnabled bool
 	debugLog     []DebugEntry
 	debugMu      sync.Mutex

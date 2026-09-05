@@ -89,17 +89,31 @@ func (c *Client) StartTrapListener(port int, v3 V3Params) error {
 	// with 8 MiB. The loss is silent — the kernel drops the datagram before Go
 	// sees it, so there is no error, no journal entry and nothing to count.
 	//
-	// Listening() closes once the socket is bound, which is the earliest moment
+	// Listening() delivers once the socket is bound, which is the earliest moment
 	// there is a socket to configure. In its own goroutine so a listener that
 	// never binds cannot hold up the caller.
+	//
+	// THIS IS THE ONLY RECEIVE FROM Listening() IN THE PROGRAM, and it has to be:
+	// gosnmp makes it `make(chan bool, 1)` and SENDS a value rather than closing
+	// it, so a second waiter elsewhere does not learn the socket is up — it
+	// blocks until whatever timeout it carries. `bound` is closed instead, and
+	// closing is a broadcast, so StopTrapListener can wait on the same fact.
+	bound := make(chan struct{})
+	done := make(chan struct{})
 	c.trapListener = listener
+	c.trapBound = bound
+	c.trapDone = done
 
 	go func() {
 		select {
 		case <-listener.Listening():
+			close(bound)
 			raiseTrapReadBuffer(listener, TrapReadBuffer)
-		case <-time.After(5 * time.Second):
-			log.Printf("trap listener: did not bind within 5s; leaving the default read buffer")
+		case <-done:
+			// Listen returned without ever binding. There is no socket to
+			// enlarge, and `bound` stays open on purpose: a stop must be able
+			// to tell "not yet" from "never", and `done` is what says never.
+			log.Printf("trap listener: never bound; leaving the default read buffer")
 		}
 	}()
 
@@ -112,8 +126,11 @@ func (c *Client) StartTrapListener(port int, v3 V3Params) error {
 			c.trapMu.Lock()
 			if c.trapListener == listener {
 				c.trapListener = nil
+				c.trapBound = nil
+				c.trapDone = nil
 			}
 			c.trapMu.Unlock()
+			close(done)
 		}()
 		log.Printf("Starting trap listener on port %d", port)
 		err := listener.Listen(netaddr.ListenAddress(port))
@@ -129,6 +146,8 @@ func (c *Client) StartTrapListener(port int, v3 V3Params) error {
 func (c *Client) StopTrapListener() {
 	c.trapMu.Lock()
 	listener := c.trapListener
+	bound := c.trapBound
+	done := c.trapDone
 	c.trapMu.Unlock()
 
 	if listener == nil {
@@ -144,12 +163,25 @@ func (c *Client) StopTrapListener() {
 	// a listener running with nothing able to stop it. Measured: still running
 	// 2.1 s after Close returned in 73 ms.
 	//
-	// Listening() closes once the socket is bound. A bind that FAILS never
-	// closes it, hence the bound wait: there is nothing to stop in that case
-	// anyway.
+	// THIS WAS A TIMEOUT AND THAT WAS THE BUG. It waited on Listening()
+	// directly, which delivers a single VALUE that the read-buffer goroutine
+	// had normally already taken, so the wait here always ran to its two
+	// seconds and then closed anyway — with no happens-before edge to
+	// listenUDP's unlocked write of `conn`. `go test -race` caught it on CI
+	// (twice, in TestStartingTwiceIsRefused and TestStartStopStart) and it is
+	// not merely a detector artefact: with no edge, Close can read the nil it
+	// returns early on, having already burned `finish`, which is exactly the
+	// failure the paragraph above says was fixed.
+	//
+	// Waiting on the two facts instead needs no timeout, because Listen does
+	// exactly one of them: it binds, or it returns.
 	select {
-	case <-listener.Listening():
-	case <-time.After(stopBindGrace):
+	case <-bound:
+	case <-done:
+		// Never bound. There is no socket, and calling Close would only spend
+		// gosnmp's one-shot `finish` on nothing.
+		log.Println("Trap listener never bound; nothing to stop.")
+		return
 	}
 
 	// Close OUTSIDE the lock: it waits for the listen goroutine to unwind, and
@@ -157,11 +189,6 @@ func (c *Client) StopTrapListener() {
 	log.Println("Stopping trap listener...")
 	listener.Close()
 }
-
-// stopBindGrace is how long a stop waits for the socket to exist before giving
-// up on closing it. Binding is a local syscall; anything slower than this has
-// failed.
-const stopBindGrace = 2 * time.Second
 
 // TrapListenerRunning reports whether a listener is currently bound.
 func (c *Client) TrapListenerRunning() bool {
