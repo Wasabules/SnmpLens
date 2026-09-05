@@ -31,7 +31,11 @@ const dist = join(frontend, 'screenshots', 'dist');
 const args = process.argv.slice(2);
 const outIdx = args.indexOf('--out');
 const outDir = outIdx >= 0 ? args[outIdx + 1] : join(repo, 'docs', 'assets', 'img');
-const filter = args.filter((a, i) => !a.startsWith('--') && i !== outIdx + 1)[0] || '';
+// `outIdx + 1` is 0 when --out is absent, which excluded the FIRST positional
+// argument — so every invocation captured every scene and the filter silently
+// did nothing. Guard on the flag being present at all.
+const outValueIdx = outIdx >= 0 ? outIdx + 1 : -1;
+const filter = args.filter((a, i) => !a.startsWith('--') && i !== outValueIdx)[0] || '';
 
 /* --- Chrome -------------------------------------------------------------- */
 

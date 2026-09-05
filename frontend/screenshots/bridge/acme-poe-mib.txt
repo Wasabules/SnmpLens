@@ -1,0 +1,89 @@
+ACME-POE-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Integer32, Gauge32, Counter32, TimeTicks,
+    enterprises                    FROM SNMPv2-SMI
+    DisplayString                  FROM SNMPv2-TC;
+
+acmePoeMIB MODULE-IDENTITY
+    LAST-UPDATED "202608140000Z"
+    ORGANIZATION "Acme Networks"
+    CONTACT-INFO "noc@acme.example"
+    DESCRIPTION  "Power sourcing equipment on the ACME-4800 series."
+    ::= { enterprises 41112 4 }
+
+acmePoeObjects OBJECT IDENTIFIER ::= { acmePoeMIB 1 }   -- power sourcing subtree
+
+acmePoeDraw OBJECT-TYPE
+    SYNTAX      Integerr32
+    UNITS       "milliwatts"
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Power the attached powered devices are drawing right now."
+    ::= { acmePoeObjects 1 }
+
+acmePoeFaults OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Overload and short-circuit faults since the switch last restarted."
+    ::= { acmePoeObjects 1 }
+
+acmePoePortTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF AcmePoePortEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "One row per PoE-capable port, indexed as in ifTable."
+    ::= { acmePoeObjects 2 }
+
+acmePoePortEntry OBJECT-TYPE
+    SYNTAX      AcmePoePortEntry
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "PoE state of one port."
+    INDEX   { ifIndex }
+    ::= { acmePoePortTable 1 }
+
+AcmePoePortEntry ::= SEQUENCE {
+    acmePoePortEnable   TruthValue,
+    acmePoePortClass    Integer32,
+    acmePoePortDraw     Gauge32,
+    acmePoePortLabel    DisplayString
+}
+
+acmePoePortEnable OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Whether this port is allowed to supply power."
+    ::= { acmePoePortEntry 1 }
+
+acmePoePortClass OBJECT-TYPE
+    SYNTAX      Integer32 (0..8)
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The IEEE 802.3af/at class the attached device negotiated."
+    ::= { acmePoePortEntry 2 }
+
+acmePoePortDraw OBJECT-TYPE
+    SYNTAX      Gauge32
+    UNITS       "milliwatts"
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Power this port is delivering right now."
+    ::= { acmePoePortEntry 3 }
+
+acmePoePortLabel OBJECT-TYPE
+    SYNTAX      DisplayString (SIZE (0..64))
+    MAX-ACCESS  read-write
+    STATUS      current
+    ::= { acmePoePortEntry 4 }
+
+END

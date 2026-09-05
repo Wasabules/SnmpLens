@@ -244,6 +244,10 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
         written — saving a credential fails and says so. It is never silently discarded, and
         good ciphertext is never overwritten with a half-sealed value.
       </p>
+      <figure class="shot" style="margin-top:1.5rem">
+        <img src="assets/img/settings-snmp.png" alt="The SNMP settings tab: version, community, timeouts, and the v3 authentication and privacy protocols." loading="lazy" />
+        <figcaption>The defaults every target inherits until it overrides them.</figcaption>
+      </figure>
     </section>
 
     <!-- ---------------------------------------------------------------- -->
@@ -258,6 +262,11 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
         <strong>Test connection</strong> checks reachability and credentials before you run
         an operation against fifty devices.
       </p>
+      <figure class="shot" style="margin-top:1.5rem">
+        <img src="assets/img/target-manager.png" alt="The targets dialog: eight devices across four groups, three of them carrying a per-device override." loading="lazy" />
+        <figcaption>Groups down the top, and the marker beside an address means that device
+          overrides the defaults — here two routers on v3 and a UPS still on v1.</figcaption>
+      </figure>
     </section>
 
     <!-- ---------------------------------------------------------------- -->
@@ -398,6 +407,12 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
         same module and win. Unsaved work is mirrored to a draft file, so it survives closing
         the window.
       </p>
+      <figure class="shot" style="margin-top:1.5rem">
+        <img src="assets/img/mib-editor.png" alt="The MIB editor with a vendor MIB open, syntax highlighted, two errors underlined, and a list of five diagnostics with their line and column." loading="lazy" />
+        <figcaption>An unsaved draft recovered from a previous session, with the analysis
+          pointing at an unknown type and a duplicated OID — neither of which loading the
+          module would have reported.</figcaption>
+      </figure>
     </section>
 
     <hr />
@@ -600,6 +615,12 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
           200 having been sent nothing — and the delivery would be recorded as successful.
         </p>
       </div>
+      <figure class="shot" style="margin-top:1.5rem">
+        <img src="assets/img/settings-notifications.png" alt="Notification settings: three destinations, three routing rules with priorities, and a delivery log containing one given-up delivery." loading="lazy" />
+        <figcaption>Destinations, the rules that select them, and the delivery log — including
+          the one delivery that was given up on, with what the relay said and a button to try
+          again.</figcaption>
+      </figure>
     </section>
 
     <!-- ---------------------------------------------------------------- -->

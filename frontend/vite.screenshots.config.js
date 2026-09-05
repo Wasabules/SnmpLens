@@ -105,13 +105,20 @@ function injectScene() {
   // and not a broken one.
   function clickText(text) {
     var nodes = document.querySelectorAll('button, .tab-btn, [role="button"]');
+    var loose = null;
+
+    // TWO passes. An exact match anywhere beats a prefix match earlier in the
+    // document: searching for "SNMP" with prefix matching alone finds the
+    // "SNMP Operations" workspace tab long before the "SNMP" settings tab, and
+    // clicks the wrong thing while reporting success.
     for (var i = 0; i < nodes.length; i++) {
-      var label = (nodes[i].textContent || '').trim();
-      if (label === text || label.replace(/\s+/g, ' ') === text) {
-        nodes[i].click();
-        return true;
-      }
+      var label = (nodes[i].textContent || '').replace(/\\s+/g, ' ').trim();
+      if (label === text) { nodes[i].click(); return true; }
+      // The prefix case exists for labels with an adornment after them: the MIB
+      // list appends a bundled marker, so "IF-MIB" arrives as "IF-MIB ◆".
+      if (loose === null && label.indexOf(text + ' ') === 0) loose = nodes[i];
     }
+    if (loose) { loose.click(); return true; }
     return false;
   }
 
@@ -120,7 +127,15 @@ function injectScene() {
     (function next() {
       if (i >= steps.length) { setTimeout(done, 700); return; }
       var step = steps[i++];
-      clickText(step);
+      // "key:," presses Ctrl+comma. Some things have no button at all — the
+      // settings dialog is opened by a shortcut and nothing else.
+      if (step.indexOf('key:') === 0) {
+        window.dispatchEvent(new KeyboardEvent('keydown', {
+          key: step.slice(4), ctrlKey: true, bubbles: true,
+        }));
+      } else {
+        clickText(step);
+      }
       setTimeout(next, 450);
     })();
   }

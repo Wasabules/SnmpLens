@@ -138,3 +138,38 @@ dynamic.SnmpWalk = () => {
   if (!walk) walk = ifTableWalk();
   return walk;
 };
+
+/**
+ * The MIB the editor screenshot has open.
+ *
+ * The specification's `content` was a DESCRIPTION of the file rather than the
+ * file — "<<the 90-line ACME-POE-MIB printed verbatim in visualDirection>>" —
+ * so opening it showed that sentence in a syntax highlighter. The text is here
+ * for real, imported rather than pasted into a JS string, because the diagnostic
+ * positions are derived from it: line 18 column 17 is exactly where `Integerr32`
+ * starts, and line 32 is the second `::= { acmePoeObjects 1 }`. A stray edit to
+ * the text moves the squiggles off the thing they are pointing at.
+ */
+import ACME_POE_MIB from './acme-poe-mib.txt?raw';
+
+// The copy ON DISK is sound: `SYNTAX Gauge32`. The unsaved draft below is what
+// introduced `Integerr32`, and that difference is what makes the editor recover
+// the draft — which is also the only path that runs the analysis on open. So one
+// picture shows two things: work surviving a closed window, and the semantic
+// pass catching what loading alone would not.
+const ON_DISK = ACME_POE_MIB.split('\n')
+  .map((line, i) => (i === 17 ? '    SYNTAX      Gauge32' : line))
+  .join('\n');
+
+dynamic.MibEditorReadDraft = () => ACME_POE_MIB;
+
+dynamic.MibEditorRead = () => ({
+  name: 'ACME-POE-MIB',
+  path: 'C:\Users\ops\AppData\Roaming\SnmpLens\mibs\ACME-POE-MIB',
+  content: ON_DISK,
+  eol: 'lf',
+  bundled: false,
+  external: false,
+  sha256: 'cfbca6d794927294d050e9b093af1dc70fd065f671855aceece1f0e5797c3562',
+  diagnostics: [],
+});
