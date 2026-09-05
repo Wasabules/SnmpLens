@@ -6,7 +6,7 @@
 // turned eight of them from latent into live, and only one was visible.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, basename } from 'node:path';
-import { unnamedStateReads } from './reactivedeps.mjs';
+import { unnamedStateReads, overSuppliedCallbacks } from './reactivedeps.mjs';
 
 const root = new URL('../src/', import.meta.url).pathname.replace(/^[/]([A-Za-z]:)/, '$1');
 
@@ -27,15 +27,25 @@ const check = (name, ok, extra = '') => {
 };
 
 const problems = [];
+const overSupplied = [];
 const files = svelteFiles(root);
 for (const file of files) {
-  for (const hit of unnamedStateReads(readFileSync(file, 'utf8'))) {
+  const source = readFileSync(file, 'utf8');
+  for (const hit of unnamedStateReads(source)) {
     problems.push(`${basename(file)}: ${hit.fn}() reads ${hit.reads.join(', ')} without taking it`);
+  }
+  for (const hit of overSuppliedCallbacks(source)) {
+    overSupplied.push(
+      `${basename(file)}: .${hit.iterator}(${hit.fn}) hands a ${hit.arity}-parameter ` +
+      `function to an iterator that passes the index as its second argument`);
   }
 }
 
 check('every rendered expression names the state it depends on',
   problems.length === 0, problems.join(' | '));
+
+check('no callback is handed to an iterator that over-supplies it',
+  overSupplied.length === 0, overSupplied.join(' | '));
 
 // The detector detects. Both halves matter: the first proves it sees the shape,
 // the second proves the fix this test asks for actually satisfies it — a check
@@ -98,6 +108,27 @@ check('every rendered expression names the state it depends on',
 {#each [1] as r}{@const t = build([r])}<span>{t.length}</span>{/each}`;
   check('and sees it inside {@const}', unnamedStateReads(atConst).length === 1,
     JSON.stringify(unnamedStateReads(atConst)));
+}
+
+// The over-supply detector, on the shape that shipped.
+{
+  const script = '<script>let sinks = [];' +
+    'function sinkName(id, all) { return all.find((x) => x.id === id); }' +
+    'const label = (x) => String(x);</scr' + 'ipt>';
+
+  const pointFree = overSuppliedCallbacks(script + '{(ids || []).map(sinkName).join()}');
+  check('the detector sees a two-parameter function handed to map',
+    pointFree.length === 1 && pointFree[0].fn === 'sinkName', JSON.stringify(pointFree));
+
+  const wrapped = overSuppliedCallbacks(script + '{(ids || []).map((i) => sinkName(i, sinks)).join()}');
+  check('and says nothing once the call is written out', wrapped.length === 0,
+    JSON.stringify(wrapped));
+
+  // The whole point of point-free style, and it is fine: one parameter cannot
+  // be over-supplied.
+  const oneArg = overSuppliedCallbacks(script + '{(ids || []).map(label).join()}');
+  check('and nothing about a one-parameter callback', oneArg.length === 0,
+    JSON.stringify(oneArg));
 }
 
 process.exit(failures ? 1 : 0);

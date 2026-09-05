@@ -343,7 +343,7 @@
               {(r.match.categories || []).join(', ') || $_('notify.allCategories')}
               {#if r.match.minSeverity}· ≥ {$_('events.severity.' + r.match.minSeverity)}{/if}
               {#if (r.match.sources || []).length}· {(r.match.sources || []).join(' ')}{/if}
-              → {(r.sinkIds || []).map(sinkName).join(', ') || '—'}
+              → {(r.sinkIds || []).map((id) => sinkName(id, sinks)).join(', ') || '—'}
             </span>
             {#if r.stop}<span class="chip-flag">{$_('notify.stops')}</span>{/if}
             <button class="btn-copy-small" on:click={() => (editingRoute = JSON.parse(JSON.stringify(r)))} title={$_('common.edit')}>
