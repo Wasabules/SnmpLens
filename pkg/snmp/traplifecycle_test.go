@@ -83,6 +83,43 @@ func TestStartingTwiceIsRefused(t *testing.T) {
 	}
 }
 
+// Stopping a bound listener is immediate, and that is what says the two waits
+// are not fighting over the same value.
+//
+// gosnmp's Listening() is `make(chan bool, 1)` carrying a VALUE, not a channel
+// that closes. Two places here wanted to know the socket was up — the goroutine
+// that enlarges the read buffer, and the stop — and the first to receive took
+// it. In practice the buffer goroutine won at bind time, so EVERY stop then ran
+// to its two-second timeout before closing anything: two seconds added to every
+// window close, and a Close() with no happens-before edge to listenUDP's
+// unlocked write of `conn`, which `go test -race` flagged on CI in
+// TestStartingTwiceIsRefused and TestStartStopStart.
+//
+// Measured rather than asserted in the abstract: this fails at ~2s against the
+// old implementation and passes in milliseconds against the current one.
+func TestStoppingABoundListenerIsImmediate(t *testing.T) {
+	c := NewClient(context.TODO())
+	c.SetRecorder(events.Nop{})
+	port := freePort(t)
+
+	if err := c.StartTrapListener(port, V3Params{}); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	// Let it bind, so this measures the stop and not the bind.
+	time.Sleep(300 * time.Millisecond)
+
+	start := time.Now()
+	c.StopTrapListener()
+	took := time.Since(start)
+
+	// Generous: closing a UDP socket is a syscall. Anything approaching a second
+	// means the stop is waiting on something it will never be handed.
+	if took > 500*time.Millisecond {
+		t.Errorf("stopping a bound listener took %v; it is waiting on a value "+
+			"another goroutine has already taken", took)
+	}
+}
+
 // And after a clean stop, starting again must work — otherwise changing the
 // trap port would need a restart.
 func TestStartStopStart(t *testing.T) {
