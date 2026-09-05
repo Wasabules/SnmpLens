@@ -1169,3 +1169,49 @@ figure.clip:focus-visible {
   border-bottom: 1px solid var(--line);
   background: var(--paper-2);
 }
+
+/* --- a clip that will not play by itself --------------------------------- */
+
+/* Shown when the reader has asked for reduced motion, or when the browser
+ * declines to start a muted clip. The poster is the last frame — the result —
+ * so nothing is missing until they press it; this only says that there is more.
+ *
+ * Deliberately not `video { controls }`: a row of native player chromes changes
+ * the look of the section, and someone who asked for less motion did not ask
+ * for a different page. */
+.clip { position: relative; }
+
+.clip-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  color: var(--paper);
+  background: color-mix(in srgb, var(--ink) 76%, transparent);
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color .12s ease, transform .12s ease;
+}
+
+.clip-play svg { width: 24px; height: 24px; fill: currentColor; }
+
+.clip-play:hover {
+  background: var(--ink);
+  transform: translate(-50%, -50%) scale(1.06);
+}
+
+.clip-play:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clip-play { transition: none; }
+  .clip-play:hover { transform: translate(-50%, -50%); }
+}

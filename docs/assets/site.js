@@ -199,7 +199,88 @@
     });
   }
 
+  /* --- clips ------------------------------------------------------------ */
+
+  /**
+   * Play a clip while it is on screen, and only then.
+   *
+   * The markup used to carry `autoplay`, and measuring what a browser actually
+   * fetched showed why that was wrong: all EIGHT clips were downloaded on load —
+   * including the four the theme hides, since `display: none` does not stop an
+   * autoplaying video from loading. Half the bytes were for pictures nobody
+   * would ever see, and four videos looped for ever whether or not the reader
+   * had scrolled anywhere near them.
+   *
+   * A hidden element never intersects, so the wrong-theme clips are now never
+   * requested at all.
+   *
+   * Reduced motion is honoured by not starting them and giving them controls
+   * instead: the poster is the last frame, so a reader who does not want motion
+   * still sees the result, and can play it if they choose.
+   */
+  function playVisibleClips() {
+    var clips = document.querySelectorAll('.clip video');
+    if (!clips.length) return;
+
+    var still = window.matchMedia
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    /**
+     * When a clip will not play by itself, offer it rather than force it.
+     *
+     * NOT `video.controls = true`, which is what this did first: a row of
+     * native player chromes changes the look of the whole section, and a reader
+     * who asked for less motion did not ask for a different page. The poster is
+     * the LAST frame — the result — so the still is already informative, and
+     * this adds one small button over it.
+     */
+    function offer(v) {
+      var fig = v.closest('figure');
+      if (!fig || fig.querySelector('.clip-play')) return;
+
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'clip-play';
+      btn.setAttribute('aria-label', 'Play this clip');
+      btn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">'
+        + '<path d="M8 5.5a1 1 0 0 1 1.53-.85l9 6.5a1 1 0 0 1 0 1.7l-9 6.5A1 1 0 0 1 8 18.5Z"/></svg>';
+
+      btn.addEventListener('click', function (e) {
+        // The figure opens the lightbox; the button plays in place.
+        e.stopPropagation();
+        btn.remove();
+        v.controls = true;
+        v.play().catch(function () { /* nothing more to offer */ });
+      });
+
+      fig.appendChild(btn);
+    }
+
+    if (still || !window.IntersectionObserver) {
+      clips.forEach(offer);
+      return;
+    }
+
+    var seen = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          // play() rejects when the browser declines — a stricter autoplay
+          // policy, a saver mode, a background tab. Not an error worth
+          // surfacing: the poster is already the informative frame, so offer
+          // the clip instead of reporting a failure nobody can act on.
+          var p = e.target.play();
+          if (p && p.catch) p.catch(function () { offer(e.target); });
+        } else {
+          e.target.pause();
+        }
+      });
+    }, { rootMargin: '150px 0px', threshold: 0.15 });
+
+    clips.forEach(function (v) { seen.observe(v); });
+  }
+
   buildToggle();
   addCopyButtons();
   addZoom();
+  playVisibleClips();
 })();
