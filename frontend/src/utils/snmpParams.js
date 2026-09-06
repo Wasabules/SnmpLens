@@ -38,8 +38,11 @@ export function buildSetRequest(settings, targets, oid, value, valueType) {
 /**
  * Build a SetMultiRequest: several varbinds written in ONE PDU.
  *
- * Mirrors snmp.SetMultiRequest in pkg/snmp/params.go — the JSON field names
- * are the contract, and nothing checks them.
+ * Mirrors snmp.SetMultiRequest in pkg/snmp/params.go. The JSON field names are
+ * the whole of the contract, and tests/snmpparams.test.mjs is what checks it —
+ * in both directions, because both failures are silent: a key Go does not
+ * declare is discarded by encoding/json, and a field the renderer never sets
+ * arrives as the zero value.
  *
  * @param {object} settings
  * @param {string[]} targets
