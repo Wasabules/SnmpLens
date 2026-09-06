@@ -110,7 +110,15 @@ The frontend calls Go through auto-generated bindings in `frontend/wailsjs/`, wh
   rather than a stale tab. `vite.config.js` forces a full reload when anything under `wailsjs/` changes.
 - The public API surface is the set of exported methods on the `App` struct in `app.go`. Each becomes a callable JS function (e.g. `import { SnmpGet } from '../wailsjs/go/main/App'`).
 - After changing any `App` method signature or any Go struct that crosses the bridge, you **must** re-run `wails dev`/`wails build` to regenerate bindings before the frontend can use them. A fresh checkout has no `wailsjs/` until the first build.
-- Request params are passed as structs defined in `pkg/snmp/params.go` (`SnmpRequest`, `SetRequest`, `GetBulkRequest`, etc.). The frontend constructs matching plain objects in `frontend/src/utils/snmpParams.js` — these two must stay in sync by hand (JSON field names are the contract).
+- Request params are passed as structs defined in `pkg/snmp/params.go` (`SnmpRequest`, `SetRequest`, `GetBulkRequest`, etc.). The frontend constructs matching plain objects in
+  `frontend/src/utils/snmpParams.js`, and the JSON field names are the whole of the contract.
+  `frontend/tests/snmpparams.test.mjs` compares the two, per struct and with embedding resolved,
+  in BOTH directions — because both failures are silent. A key Go does not declare is discarded by
+  `encoding/json`, so a renamed `retries` becomes zero retries; a field Go declares that the renderer
+  never sets arrives as the ZERO VALUE, so a forgotten `port` is port 0 and gosnmp fails somewhere
+  far from the cause. Neither shows up in a build or a lint. `V3Params` is the one whose tags are
+  CAPITALISED (`json:"User"`), matching the renderer exactly rather than relying on
+  `encoding/json`'s case-insensitive fallback; the test pins that too.
 - **Numeric serialization gotcha:** `formatSnmpValue` in `pkg/snmp/client.go` converts `*big.Int` to `int64`/`uint64` before returning. This is deliberate — raw `*big.Int` serializes as an object across the bridge and breaks frontend numeric parsing / chart rendering. Preserve this when touching SNMP value handling.
 
 ## Backend layout (`pkg/`)
