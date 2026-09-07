@@ -205,3 +205,61 @@ func TestEmailScrubsWhateverTheServerEchoes(t *testing.T) {
 		t.Errorf("nothing marked: %s", got)
 	}
 }
+
+// validate parses the SUBSTITUTED URL, so url.Parse's error quotes it — token
+// and all. That text goes into notify_outbox.last_error and into the
+// dead-letter event, which is routed to every OTHER destination: a credential
+// written to the database in the clear and forwarded off the machine, from a
+// URL with one stray character in it.
+//
+// Four returns above the transport were unscrubbed. This drives Send, so it
+// covers every path rather than the one the test author thought of.
+func TestTheWebhookCredentialNeverReachesAnErrorMessage(t *testing.T) {
+	const token = "xoxb-9f3a-SUPER-SECRET-TOKEN"
+
+	cases := []struct {
+		name string
+		cfg  WebhookConfig
+	}{
+		{
+			// A control character INSIDE the URL makes url.Parse fail and quote
+			// the whole thing, token and all. Inside, not at the end:
+			// resolvedURL trims the ends, so a trailing newline never reaches
+			// the parser — which is how the first version of this test managed
+			// to pass without the fix. Pasting a URL that a mail client wrapped
+			// is the ordinary way to arrive here.
+			"a URL that will not parse",
+			WebhookConfig{URL: "https://hooks.example.com/services/\n{{secret}}/post", Token: token},
+		},
+		{
+			"a scheme that is not http",
+			WebhookConfig{URL: "gopher://hooks.example.com/{{secret}}", Token: token},
+		},
+		{
+			"a URL with no host",
+			WebhookConfig{URL: "https:///{{secret}}", Token: token},
+		},
+		{
+			"plaintext http with a credential",
+			WebhookConfig{URL: "http://hooks.example.com/{{secret}}", Token: token},
+		},
+		{
+			"a host that does not resolve",
+			WebhookConfig{URL: "https://no-such-host.invalid/{{secret}}", Token: token, Timeout: 1},
+		},
+	}
+
+	for _, c := range cases {
+		err := WebhookSink{Config: c.cfg}.Send(events.Event{
+			ID: "e1", Severity: "minor", Summary: "trap",
+		}, "subject", "body")
+		if err == nil {
+			t.Errorf("%s: no error at all; this case proves nothing", c.name)
+			continue
+		}
+		if strings.Contains(err.Error(), token) {
+			t.Errorf("%s: the credential is in the error that reaches "+
+				"notify_outbox.last_error and every other sink:\n%v", c.name, err)
+		}
+	}
+}
