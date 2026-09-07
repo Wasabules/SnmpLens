@@ -248,6 +248,41 @@ func (c *Client) recoverTrapHandler(addr *net.UDPAddr) {
 	}, "")
 }
 
+// declineToAcknowledge stops gosnmp sending an INFORM's acknowledgement.
+//
+// The whole reason the journal insert is SYNCHRONOUS is that gosnmp sends that
+// acknowledgement after this handler returns, so acknowledging a confirmed
+// notification before it is durably journalled would be a lie. When the insert
+// FAILED, the acknowledgement was sent anyway — the same lie, told at the one
+// moment it matters, and the sender then has no reason to retry.
+//
+// gosnmp decides by reading trap.PDUType after OnNewTrap returns, and
+// deliberately passes the packet rather than a copy ("we don't pass a copy
+// because the SnmpPacket type is somewhat large"), asking handlers not to
+// alter it. This alters it, which is acceptable on the same terms as the
+// socket-buffer reach in trapbuf.go and no others: it is FAIL-SOFT — a gosnmp
+// that starts passing a copy makes this a no-op and restores today's
+// behaviour, nothing breaks — and it is PINNED BY A TEST that drives a real
+// sender against a real listener, so an upgrade that changes it fails CI
+// rather than quietly resuming the lie.
+//
+// Measured before it was written: with the field left alone the sender was
+// acknowledged in 1 ms; with it changed the sender timed out after 900 ms and
+// would have retried. Retrying is the point — an INFORM exists so the sender
+// can know, and a duplicate journal entry after a transient failure costs
+// nothing next to a lost alert.
+//
+// A plain trap has no acknowledgement to withhold, so this only applies to an
+// INFORM; there the log line is all there is.
+func (c *Client) declineToAcknowledge(packet *gosnmp.SnmpPacket, source string, cause error) {
+	if packet == nil || packet.PDUType != gosnmp.InformRequest {
+		return
+	}
+	packet.PDUType = gosnmp.SNMPv2Trap
+	log.Printf("Not acknowledging the INFORM from %s: it could not be journalled (%v). "+
+		"The sender will retry.", source, cause)
+}
+
 func (c *Client) handleTrap(packet *gosnmp.SnmpPacket, addr *net.UDPAddr) {
 	defer c.recoverTrapHandler(addr)
 
@@ -291,7 +326,9 @@ func (c *Client) handleTrap(packet *gosnmp.SnmpPacket, addr *net.UDPAddr) {
 	// the window closed — or simply before the frontend has subscribed — every
 	// received trap used to disappear with no error and no trace. Persisting
 	// first is what makes background trap collection possible at all.
-	c.recordTrap(source, ts, pduType, packet, vars)
+	if err := c.recordTrap(source, ts, pduType, packet, vars); err != nil {
+		c.declineToAcknowledge(packet, source, err)
+	}
 
 	// Guarded, the same way recordEvent guards its own emit: the runtime refuses
 	// a context it did not issue and takes the process with it. A client built
@@ -328,7 +365,10 @@ func trapOIDFrom(vars []Result) string {
 
 // recordTrap writes a received trap to the event journal. The full varbind list
 // goes to the payload side so listing the journal never reads it.
-func (c *Client) recordTrap(source, ts, pduType string, packet *gosnmp.SnmpPacket, vars []Result) {
+//
+// It REPORTS failure, because the caller has something to do about it: an
+// INFORM that was not journalled must not be acknowledged.
+func (c *Client) recordTrap(source, ts, pduType string, packet *gosnmp.SnmpPacket, vars []Result) error {
 	kind := events.KindTrapReceived
 	if pduType == "Inform" {
 		kind = events.KindTrapInform
@@ -368,7 +408,9 @@ func (c *Client) recordTrap(source, ts, pduType string, packet *gosnmp.SnmpPacke
 
 	if err := c.recorder.Record(ev, string(payload)); err != nil {
 		log.Printf("Failed to journal trap from %s: %v", source, err)
+		return err
 	}
+	return nil
 }
 
 // InformResult reports what came back from an INFORM.
