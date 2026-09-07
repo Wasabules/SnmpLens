@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#1e1e1e" media="(prefers-color-scheme: dark)" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Why a MIB will not load — reading "Could not load module"</title>
+<meta name="description" content="One error message covers a missing file, a PDF, a syntax error and an unsatisfied IMPORTS. How to tell them apart, and what SnmpLens reports instead." />
+<meta name="robots" content="max-image-preview:large" />
+<link rel="canonical" href="https://snmplens.com/mib-not-loading.html" />
+<link rel="icon" type="image/png" sizes="48x48" href="assets/img/favicon-48.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="assets/img/favicon-192.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="assets/img/apple-touch-icon.png" />
+
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="SnmpLens" />
+<meta property="og:locale" content="en_GB" />
+<meta property="og:title" content="Why a MIB will not load — reading "Could not load module"" />
+<meta property="og:description" content="One error message covers a missing file, a PDF, a syntax error and an unsatisfied IMPORTS. How to tell them apart, and what SnmpLens reports instead." />
+<meta property="og:url" content="https://snmplens.com/mib-not-loading.html" />
+<meta property="og:image" content="https://snmplens.com/assets/img/og-card-docs.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="The SnmpLens MIB editor showing a located diagnostic with the offending line and column." />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Why a MIB will not load — reading "Could not load module"" />
+<meta name="twitter:description" content="One error message covers a missing file, a PDF, a syntax error and an unsatisfied IMPORTS. How to tell them apart, and what SnmpLens reports instead." />
+<meta name="twitter:image" content="https://snmplens.com/assets/img/og-card-docs.png" />
+<meta name="twitter:image:alt" content="The SnmpLens MIB editor showing a located diagnostic with the offending line and column." />
+<link rel="sitemap" type="application/xml" href="https://snmplens.com/sitemap.xml" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap" rel="stylesheet" />
+<script>
+/* Stamp the chosen theme on <html> BEFORE the stylesheet is parsed.
+   Synchronous and inline on purpose: anything deferred paints one theme and
+   then corrects it, which is the flash this exists to prevent. Absent or
+   unreadable storage means "follow the system", which is the default the
+   stylesheet already implements — so this does nothing at all for most
+   readers, and that is the correct amount. */
+try {
+  var t = localStorage.getItem('snmplens-theme');
+  if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+} catch (e) {}
+</script>
+<!-- One WebPage node and its trail. The SoftwareApplication entity is
+     REFERENCED by @id, never restated: a second copy would give one entity two
+     conflicting url values and a second hand-maintained version number, and it
+     would buy no rich result. Breadcrumbs are not a ranking factor; this is
+     desktop-SERP presentation. -->
+<!-- A TechArticle, and deliberately NOT a FAQPage. documentation.html already
+     marks up "A MIB will not load" as an FAQ entry, and the same question and
+     answer marked up on two URLs is the shape Google treats as duplicated
+     structured data. The FAQ keeps that entry; this page is the article it
+     points to. -->
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@graph": [
+  {
+   "@type": "TechArticle",
+   "@id": "https://snmplens.com/mib-not-loading.html",
+   "url": "https://snmplens.com/mib-not-loading.html",
+   "headline": "Why a MIB will not load",
+   "description": "One error message covers a missing file, a PDF, a syntax error and an unsatisfied IMPORTS. How to tell them apart, and what SnmpLens reports instead.",
+   "inLanguage": "en-GB",
+   "isPartOf": { "@id": "https://snmplens.com/#website" },
+   "about": { "@id": "https://snmplens.com/#app" },
+   "author": { "@type": "Person", "name": "Geoffrey Lecoq" },
+   "proficiencyLevel": "Beginner",
+   "image": "https://snmplens.com/assets/img/og-card-docs.png"
+  },
+  {
+   "@type": "BreadcrumbList",
+   "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "SnmpLens", "item": "https://snmplens.com/" },
+    { "@type": "ListItem", "position": 2, "name": "Documentation", "item": "https://snmplens.com/documentation.html" },
+    { "@type": "ListItem", "position": 3, "name": "Why a MIB will not load", "item": "https://snmplens.com/mib-not-loading.html" }
+   ]
+  }
+ ]
+}
+</script>
+<link rel="stylesheet" href="assets/site.css" />
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="./"><img src="assets/img/favicon-48.png" alt="" width="26" height="26" />SnmpLens</a>
+    <nav class="nav" aria-label="Main">
+      <a href="documentation.html">Documentation</a>
+      <a href="download.html">Download</a>
+      <a href="demo.html">Demo</a>
+      <a href="changelog.html" class="hide-sm">Changelog</a>
+      <a href="contributing.html" class="hide-sm">Contributing</a>
+      <a class="gh" href="https://github.com/Wasabules/SnmpLens">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        GitHub
+      </a>
+      <div data-theme-toggle hidden></div>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="wrap wrap-narrow" style="padding-block:3.5rem 2rem">
+
+  <p class="eyebrow">Troubleshooting</p>
+  <h1 style="margin-bottom:0.3em">Why a MIB will not load</h1>
+  <p class="lede">
+    <code>Could not load module at /path/to/VENDOR-MIB</code> is the same sentence for a missing
+    file, a PDF, a syntax error on line 412 and an IMPORTS clause that cannot be satisfied.
+    Four unrelated problems, one message. Here is how to tell them apart.
+  </p>
+
+  <div class="note">
+    <p style="margin:0">
+      This page describes the errors any SMIv2 tool produces, because they nearly all use the
+      same parser underneath. SnmpLens reports the underlying cause directly — see
+      <a href="#what-snmplens-reports">what it shows instead</a> at the end.
+    </p>
+  </div>
+
+  <h2 id="the-message">Why the message says nothing</h2>
+  <p>
+    The library most tools use to read MIBs, <a href="https://github.com/sleepinggenius2/gosmi">gosmi</a>,
+    wraps libsmi's model. When it cannot load a module it returns
+    <code>Could not load module at X</code> — and it does so after having <em>already computed</em>
+    a precise error and thrown it away. Inside, the real message reads like
+    <code>Parse module: VENDOR-MIB:412:7: unexpected "("</code>. It is printed to standard output
+    with <code>fmt.Println</code> and the function returns an empty string.
+  </p>
+  <p>
+    So the tool showing you <code>Could not load module</code> is not being unhelpful on purpose.
+    It never received anything better. That is why the same sentence covers everything below.
+  </p>
+
+  <h2 id="not-a-mib">First: is the file actually a MIB?</h2>
+  <p>
+    This is the most common cause by a wide margin, and the least suspected — because the file
+    has the right name and a plausible size. Four downloads go wrong in the same way:
+  </p>
+
+  <div class="table-scroll">
+    <table>
+      <caption class="visually-hidden">Files that are commonly mistaken for MIBs, and how to recognise each</caption>
+      <thead><tr><th scope="col">What you actually have</th><th scope="col">How to tell</th><th scope="col">What to do</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>The <strong>web page</strong> around the file</td>
+          <td>It begins with <code>&lt;!DOCTYPE html</code> or <code>&lt;html</code></td>
+          <td>The download returned the page, not the file. Use the raw or download link.</td>
+        </tr>
+        <tr>
+          <td>A <strong>PDF</strong> of the specification</td>
+          <td>The first bytes are <code>%PDF-</code></td>
+          <td>MIBs are plain text. Extract the module from the document, or find the <code>.mib</code>.</td>
+        </tr>
+        <tr>
+          <td>A <strong>zip or gzip</strong> nobody extracted</td>
+          <td>It starts with <code>PK</code>, or with the two bytes <code>1f 8b</code></td>
+          <td>Extract it and import the files inside.</td>
+        </tr>
+        <tr>
+          <td><strong>UTF-16</strong> text</td>
+          <td>A byte-order mark <code>ff fe</code> or <code>fe ff</code>, and NUL bytes throughout</td>
+          <td>Save it as UTF-8 or ASCII. MIB parsers do not accept UTF-16.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>
+    A quick check on any platform, before blaming the syntax:
+  </p>
+  <pre><code>head -c 200 VENDOR-MIB</code></pre>
+  <p>
+    A MIB begins with a module name and the word <code>DEFINITIONS</code>, usually within the first
+    few lines — though vendor files often carry several kilobytes of licence header first, so
+    look further than the first screen before concluding.
+  </p>
+
+  <h2 id="filename">Second: the file name is not the module name</h2>
+  <p>
+    A MIB declares its own name on its first meaningful line:
+  </p>
+  <pre><code>VENDOR-POWER-MIB DEFINITIONS ::= BEGIN</code></pre>
+  <p>
+    That declared name — <code>VENDOR-POWER-MIB</code> — is what every <code>IMPORTS</code> clause
+    in every other file will look for, and it is what the loader looks up by <em>file name</em>.
+    If the file is called <code>vendor_power.txt</code> or <code>VENDOR-POWER-MIB.my</code>, the
+    module itself loads perfectly well when you point at it directly, and is invisible to anything
+    that imports it.
+  </p>
+  <p>
+    This one is nasty because nothing is broken. The file is valid, it loads, and the failure
+    appears in a <em>different</em> file — the one whose <code>IMPORTS</code> cannot be satisfied.
+    Rename the file to the declared module name, with no extension or a consistent one.
+  </p>
+
+  <h2 id="imports">Third: an IMPORTS clause that cannot be satisfied</h2>
+  <p>
+    A vendor MIB rarely stands alone. It imports from <code>SNMPv2-SMI</code>,
+    <code>SNMPv2-TC</code>, often <code>INET-ADDRESS-MIB</code>, and frequently from the vendor's
+    own <em>root</em> MIB, which is a separate download people miss:
+  </p>
+  <pre><code>IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Integer32   FROM SNMPv2-SMI
+    DisplayString                             FROM SNMPv2-TC
+    vendorProducts                            FROM VENDOR-SMI;</code></pre>
+  <p>
+    Missing <code>VENDOR-SMI</code> and the whole file fails, with a message naming neither the
+    module nor the symbol. Three different situations produce it, and they need different answers:
+  </p>
+  <ul>
+    <li>
+      <strong>Absent</strong> — no file for that module anywhere in the MIB directory. Find it,
+      and name the file after the module.
+    </li>
+    <li>
+      <strong>Present but not loaded</strong> — the file is there and is fine; it simply is not
+      enabled. This is usually the answer, and it is not a broken file.
+    </li>
+    <li>
+      <strong>Present and broken itself</strong> — the dependency has its own problem. The
+      failure you are looking at is a symptom; diagnose the dependency instead.
+    </li>
+  </ul>
+
+  <h2 id="loads-and-broken">Fourth: it loaded, and it is still wrong</h2>
+  <p>
+    This is the case that wastes the most time, because every indicator says success.
+  </p>
+  <p>
+    Imports are resolved lazily. A module that imports something unavailable can report a
+    successful load and simply resolve those symbols to nothing. Worse, a file declaring a typo
+    such as <code>SYNTAX Integerr32</code> — <em>and</em> assigning the same OID twice — loads with
+    no error at all: the type is looked up, nothing is found, and the object is added anyway with a
+    nil type and an empty OID.
+  </p>
+  <p>
+    The symptom is not an error. It is an OID that translates to nothing, a table with no columns,
+    or a name that resolves to <code>iso</code> — because asking for an unknown OID returns the
+    closest known <em>ancestor</em> rather than failing.
+  </p>
+
+  <h2 id="what-snmplens-reports">What SnmpLens reports instead</h2>
+  <p>
+    SnmpLens captures the message the library discards and reports a <strong>stage</strong> — how
+    far the file got before something stopped it:
+  </p>
+
+  <div class="table-scroll">
+    <table>
+      <caption class="visually-hidden">The stages a MIB passes through, and what each failure means</caption>
+      <thead><tr><th scope="col">Stage</th><th scope="col">What it means</th></tr></thead>
+      <tbody>
+        <tr><td><code>read</code></td><td>The bytes could not be obtained — missing, unreadable, a directory.</td></tr>
+        <tr><td><code>content</code></td><td>The bytes are not a MIB. This is the PDF, the HTML page, the zip.</td></tr>
+        <tr><td><code>parse</code></td><td>The grammar rejected it, with a line and a column.</td></tr>
+        <tr><td><code>imports</code></td><td>It needs a module that is not here, named, with the symbols it wanted.</td></tr>
+        <tr><td><code>build</code></td><td>Refused for another reason, with whatever the library actually said.</td></tr>
+        <tr><td><code>semantic</code></td><td>It loaded and resolves to nonsense — unknown types, duplicate OIDs.</td></tr>
+        <tr><td><code>loaded</code></td><td>It is in the tree.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>With the stage come the things that make it actionable:</p>
+  <ul>
+    <li>the located error, with an excerpt of the source and a caret under the column;</li>
+    <li>each unsatisfied import, <strong>with the symbols that needed it</strong> — so you know whether the module matters;</li>
+    <li>a dependency chain followed to its root, so a failure is reported where it is, not where it shows;</li>
+    <li>the warning that a file's name does not match the module it declares;</li>
+    <li>the module name as <em>declared</em>, which is what everything else looks for.</li>
+  </ul>
+
+  <p>
+    Diagnosis is offered on files that <em>loaded</em> too, for the reason in the fourth case above:
+    success is not proof. And it only ever reads — it never loads modules as a side effect, because
+    an explanation that quietly re-enables a MIB you switched off changes the answers every other
+    lookup gives.
+  </p>
+
+  <div class="note">
+    <p style="margin:0 0 0.5rem"><strong>Try it against your own file.</strong></p>
+    <p style="margin:0">
+      Drop a MIB onto the window, or open the <a href="documentation.html#mib-editor">MIB editor</a>.
+      There is also a <a href="demo.html">browser demo</a> if you would rather not install anything
+      first. <a href="download.html">Download SnmpLens</a> — free, MIT licensed, Windows, macOS and Linux.
+    </p>
+  </div>
+
+  <h2 id="checklist">The short version</h2>
+  <ol>
+    <li>Look at the first bytes. Is it text, and does it contain <code>DEFINITIONS</code>?</li>
+    <li>Does the file name match the module the file declares?</li>
+    <li>Read the <code>IMPORTS</code> clause. Is every module named there present <em>and</em> enabled?</li>
+    <li>If it loads but resolves to nothing, suspect an unknown type or a duplicated OID — not the loader.</li>
+  </ol>
+
+  <p class="muted small" style="margin-top:2rem">
+    More on the MIB directory, importing and the editor in the
+    <a href="documentation.html#mibs">documentation</a>.
+  </p>
+
+</main>
+
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <a class="brand" href="./" style="margin-bottom:0.6rem"><img src="assets/img/favicon-48.png" alt="" width="26" height="26" />SnmpLens</a>
+        <p class="muted small" style="max-width:34ch">A desktop SNMP MIB browser, editor and alert router. MIT licensed, built in the open.</p>
+      </div>
+      <div>
+        <h2>Project</h2>
+        <ul>
+          <li><a href="documentation.html">Documentation</a></li>
+          <li><a href="download.html">Download</a></li>
+          <li><a href="changelog.html">Changelog</a></li>
+        </ul>
+      </div>
+      <div>
+        <h2>Contribute</h2>
+        <ul>
+          <li><a href="contributing.html">Contributing guide</a></li>
+          <li><a href="security.html">Security policy</a></li>
+          <li><a href="https://github.com/Wasabules/SnmpLens/issues">Issue tracker</a></li>
+        </ul>
+      </div>
+      <div>
+        <h2>Source</h2>
+        <ul>
+          <li><a href="https://github.com/Wasabules/SnmpLens">Repository</a></li>
+          <li><a href="https://github.com/Wasabules/SnmpLens/releases">Releases</a></li>
+          <li><a href="https://github.com/Wasabules/SnmpLens/blob/main/LICENSE">MIT licence</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="colophon">
+      <p>© 2026 Geoffrey Lecoq · Released under the MIT licence.</p>
+      <p>Built with <a href="https://wails.io/">Wails</a>, <a href="https://go.dev/">Go</a> and <a href="https://svelte.dev/">Svelte</a>.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/site.js" defer></script>
+</body>
+</html>
