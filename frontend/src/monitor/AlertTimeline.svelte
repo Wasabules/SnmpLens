@@ -9,6 +9,11 @@
   import { oidName, oidTooltip } from '../utils/oidDisplay';
   import { EventsQuery } from '../../wailsjs/go/main/App';
   import { EventsOn } from '../../wailsjs/runtime/runtime';
+  import { capNewestFirst } from '../utils/burst';
+
+  // Far more incidents than anyone reads on a timeline, and a ceiling all
+  // the same: 'event:new' arrives at whatever rate the network chooses.
+  const MAX_INCIDENTS = 500;
   import { displayTarget as labelled } from '../utils/targets';
 
   export let session;
@@ -41,7 +46,10 @@
     unlisten = EventsOn('event:new', (ev) => {
       if (!ev || ev.sessionId !== session?.id) return;
       if (ev.category !== 'threshold' && ev.category !== 'reachability') return;
-      incidents = [ev, ...incidents];
+      // Capped: this list is fed by 'event:new', which a trap flood drives at
+      // the rate the network chooses. It has no paging, so dropping the tail
+      // costs nothing a reload does not restore.
+      incidents = capNewestFirst([ev, ...incidents], MAX_INCIDENTS);
     });
   });
 

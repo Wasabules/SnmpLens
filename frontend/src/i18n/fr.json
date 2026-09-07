@@ -389,6 +389,7 @@
     "listenerStopFailed": "Échec de l'arrêt de l'écoute : {error}",
     "allCleared": "Tous les traps ont été effacés.",
     "newTrapReceived": "Nouveau {type} reçu de {source}",
+    "moreTrapsReceived": "et {count} autres traps",
     "listenerError": "Erreur de l'écoute : {error}",
     "enterTarget": "Veuillez saisir une adresse IP cible.",
     "enterTrapOid": "Veuillez saisir un Trap OID.",

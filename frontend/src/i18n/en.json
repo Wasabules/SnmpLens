@@ -389,6 +389,7 @@
     "listenerStopFailed": "Failed to stop trap listener: {error}",
     "allCleared": "All traps cleared.",
     "newTrapReceived": "New {type} received from {source}",
+    "moreTrapsReceived": "and {count} more traps",
     "listenerError": "Trap listener error: {error}",
     "enterTarget": "Please enter a target IP.",
     "enterTrapOid": "Please enter a Trap OID.",

@@ -178,6 +178,11 @@ function createEventsStore() {
     await load(get({ subscribe }).filter);
   }
 
+  // How many events the LIVE TAIL may hold. loadMore is a deliberate user
+  // action and is not bounded by this; what is bounded is growth driven from
+  // the network.
+  const MAX_LIVE_ITEMS = 2000;
+
   /**
    * Live tail. The Go side persists an event and THEN emits this — the row
    * exists whether or not a window was listening, so a missed emit costs a
@@ -195,7 +200,28 @@ function createEventsStore() {
         // otherwise the list would silently disagree with its own filter.
         if (s.nextCursor && s.items.length === 0) return s;
         if (!matchesFilter(ev, s.filter)) return s;
-        return { ...s, items: [ev, ...s.items], total: s.total + 1 };
+
+        // Capped, and the CURSOR IS REPAIRED with it. The live tail had no
+        // ceiling, and it is fed at whatever rate the network sends traps —
+        // the Go side absorbs 2000 a second by design, and every one of them
+        // is emitted here.
+        //
+        // Truncating the tail alone would open a hole: nextCursor is a
+        // beforeSeq, so paging would resume below the events just dropped and
+        // silently skip them. Setting it to the seq of the last kept item
+        // means "load more" continues exactly where the visible list ends,
+        // which is what the cursor already meant.
+        const items = [ev, ...s.items];
+        if (items.length <= MAX_LIVE_ITEMS) {
+          return { ...s, items, total: s.total + 1 };
+        }
+        const kept = items.slice(0, MAX_LIVE_ITEMS);
+        return {
+          ...s,
+          items: kept,
+          total: s.total + 1,
+          nextCursor: kept[kept.length - 1].seq || s.nextCursor,
+        };
       });
     });
   }

@@ -389,6 +389,7 @@
     "listenerStopFailed": "Error al detener el receptor de Traps: {error}",
     "allCleared": "Todos los Traps borrados.",
     "newTrapReceived": "Nuevo {type} recibido de {source}",
+    "moreTrapsReceived": "y {count} traps más",
     "listenerError": "Error del receptor de Traps: {error}",
     "enterTarget": "Por favor, introduzca una IP de objetivo.",
     "enterTrapOid": "Por favor, introduzca un OID de Trap.",

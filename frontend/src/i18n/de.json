@@ -389,6 +389,7 @@
     "listenerStopFailed": "Trap-Listener konnte nicht gestoppt werden: {error}",
     "allCleared": "Alle Traps gelöscht.",
     "newTrapReceived": "Neuer {type} empfangen von {source}",
+    "moreTrapsReceived": "und {count} weitere Traps",
     "listenerError": "Trap-Listener-Fehler: {error}",
     "enterTarget": "Bitte geben Sie eine Ziel-IP ein.",
     "enterTrapOid": "Bitte geben Sie eine Trap OID ein.",

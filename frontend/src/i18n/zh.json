@@ -389,6 +389,7 @@
     "listenerStopFailed": "停止 Trap 监听器失败：{error}",
     "allCleared": "所有 Trap 已清除。",
     "newTrapReceived": "收到新的 {type}，来自 {source}",
+    "moreTrapsReceived": "以及另外 {count} 个 trap",
     "listenerError": "Trap 监听器错误：{error}",
     "enterTarget": "请输入目标 IP。",
     "enterTrapOid": "请输入 Trap OID。",
