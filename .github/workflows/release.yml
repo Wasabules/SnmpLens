@@ -177,6 +177,24 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-24.04
+
+    # The signing key lives behind an environment, not loose in the repository.
+    #
+    # UPDATER_PRIVATE_KEY is the key every installed copy trusts: verify.go
+    # holds the matching public key compiled into the binary, there is one of
+    # them, and there is no revocation story. As a plain repository secret it
+    # was readable by any workflow run this repository can start, which
+    # includes every `v*` tag push. Moving it to an environment means the run
+    # has to be admitted before the secret is materialised.
+    #
+    # This declaration is only half of it: the environment must also carry a
+    # protection rule (a required reviewer, or a branch/tag policy) in
+    # Settings -> Environments -> release. Without one, GitHub creates the
+    # environment on first use and admits every run, which is exactly today's
+    # behaviour — so the setting is what makes this real, and the workflow
+    # cannot assert it.
+    environment: release
+
     permissions:
       contents: write
       # Build provenance: id-token for the OIDC token that proves the
