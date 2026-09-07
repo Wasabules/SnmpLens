@@ -1,6 +1,7 @@
 <script>
   import { createEventDispatcher } from 'svelte';
   import { onBackdrop } from './utils/modal';
+  import { escapeCSV, downloadFile } from './utils/csv';
   import { _ } from 'svelte-i18n';
 
   export let entryA;
@@ -80,19 +81,10 @@
   function exportDiffCSV() {
     const lines = ['Status,OID,Value A,Value B'];
     for (const row of visibleRows) {
-      const escape = (s) => {
-        if (s.includes(',') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g, '""') + '"';
-        return s;
-      };
-      lines.push(`${row.status},${escape(row.oid)},${escape(row.valueA)},${escape(row.valueB)}`);
+      lines.push(`${row.status},${escapeCSV(row.oid)},${escapeCSV(row.valueA)},${escapeCSV(row.valueB)}`);
     }
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `snmp-diff-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    downloadFile(lines.join('\n'), `snmp-diff-${stamp}.csv`, 'text/csv');
   }
 
   function formatLabel(entry) {

@@ -157,15 +157,10 @@
 
   function exportEnhancedComparisonCSV() {
     const { targets, rows } = comparisonData;
-    const escape = (s) => {
-      s = String(s ?? '');
-      if (s.includes(',') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g, '""') + '"';
-      return s;
-    };
-    const header = ['OID', 'Name', ...targets, 'Delta', '% Diff', 'Status'].join(',');
+    const header = ['OID', 'Name', ...targets, 'Delta', '% Diff', 'Status'].map(escapeCSV).join(',');
     const lines = [header, ...rows.map((r) => [
-      escape(r.oid), escape(r.name),
-      ...targets.map((t) => escape(r.values[t]?.value ?? '')),
+      escapeCSV(r.oid), escapeCSV(r.name),
+      ...targets.map((t) => escapeCSV(r.values[t]?.value ?? '')),
       r.delta != null ? r.delta.toFixed(2) : '',
       r.percentDiff != null ? r.percentDiff.toFixed(1) + '%' : '',
       r.status,

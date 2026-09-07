@@ -95,7 +95,7 @@
   function exportCSV() {
     const lines = ['IP,SysName,SysDescr,SysUpTime,ResponseTime(ms),Reachable'];
     for (const r of filteredResults) {
-      lines.push(`${r.ip},${escapeCSV(r.sysName)},${escapeCSV(r.sysDescr)},${escapeCSV(r.sysUpTime)},${r.responseTime},${r.reachable}`);
+      lines.push(`${escapeCSV(r.ip)},${escapeCSV(r.sysName)},${escapeCSV(r.sysDescr)},${escapeCSV(r.sysUpTime)},${r.responseTime},${r.reachable}`);
     }
     const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     downloadFile(lines.join('\n'), `discovery-${ts}.csv`, 'text/csv');

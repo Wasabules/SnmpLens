@@ -12,7 +12,7 @@
   import { oidName, oidTooltip } from './utils/oidDisplay';
   import { formatTimestamp } from './utils/formatting';
   import { anonMode, anonymizeIp, anonymizeText } from './utils/anonymize';
-  import { downloadFile } from './utils/csv';
+  import { escapeCSV, downloadFile } from './utils/csv';
   import { EventsPayload } from '../wailsjs/go/main/App';
   import { displayTarget as labelled } from './utils/targets';
 
@@ -115,13 +115,9 @@
   function exportCsv() {
     const items = $eventsStore.items;
     if (!items.length) return;
-    const esc = (v) => {
-      const s = String(v ?? '');
-      return /[",\r\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-    };
     const rows = [['timestamp', 'severity', 'category', 'kind', 'source', 'oid', 'summary'].join(',')];
     for (const e of items) {
-      rows.push([e.ts, e.severity, e.category, e.kind, e.source || '', e.oid || '', e.summary].map(esc).join(','));
+      rows.push([e.ts, e.severity, e.category, e.kind, e.source || '', e.oid || '', e.summary].map(escapeCSV).join(','));
     }
     downloadFile(rows.join('\n'), 'snmp-events.csv', 'text/csv');
     notificationStore.add(get(_)('events.exported'), 'success');
