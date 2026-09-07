@@ -100,3 +100,47 @@ if (untracked.length) {
 
 if (absent.length || untracked.length) process.exit(1);
 console.log('Every one of them is in the repository.');
+
+// SECURITY.md and the published policy must keep pointing at each other.
+//
+// They are two files saying the same thing to two audiences: GitHub reads
+// SECURITY.md to fill in "Report a vulnerability", and docs/security.html is
+// what a reader or a procurement questionnaire is sent to. The failure is not
+// that either goes missing — it is that one is edited and the other is not,
+// and a researcher then follows a link to a policy that no longer says what
+// the repository says. Cheap to check, and impossible to notice by hand.
+// The phrase is matched across whitespace: both files wrap their prose, and
+// the first run of this check failed on 'private vulnerability' ending a line
+// in SECURITY.md. A check that a line break can defeat is worse than none.
+const policyUrl = 'https://snmplens.com/security.html';
+const problems = [];
+
+const securityMd = join(repo, 'SECURITY.md');
+if (!existsSync(securityMd)) {
+  problems.push("SECURITY.md is missing - GitHub's Report a vulnerability entry point is empty.");
+} else {
+  const md = readFileSync(securityMd, 'utf8');
+  if (!md.includes(policyUrl)) {
+    problems.push(`SECURITY.md no longer links ${policyUrl}, so the short form and the full policy have drifted apart.`);
+  }
+  // Both must name the same reporting channel. There is no email address on
+  // purpose: the channel is GitHub's private reporting, and inventing a second
+  // one is how a report ends up somewhere nobody reads.
+  if (!/private\s+vulnerability\s+reporting/i.test(md)) {
+    problems.push('SECURITY.md no longer names the private vulnerability reporting channel.');
+  }
+}
+
+const policyPage = join(docs, 'security.html');
+if (!existsSync(policyPage)) {
+  problems.push('docs/security.html is missing, but SECURITY.md sends readers to it.');
+} else if (!/private\s+vulnerability\s+reporting/i.test(readFileSync(policyPage, 'utf8'))) {
+  problems.push('docs/security.html no longer names the private vulnerability reporting channel.');
+}
+
+if (problems.length) {
+  console.error(''); console.error('Security policy:');
+  for (const line of problems) console.error(`  ${line}`);
+  process.exit(1);
+}
+console.log('SECURITY.md and docs/security.html agree on where to report.');
