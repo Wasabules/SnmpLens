@@ -48,6 +48,24 @@ function lastmodFor(file) {
   return committed;
 }
 
+// A shallow clone cannot answer this question, and answers it WRONGLY rather
+// than not at all — which is why this refuses instead of degrading.
+//
+// With `--depth 1` the single grafted commit appears to contain the whole tree,
+// so `git log -1 --format=%cs -- <any file>` returns the date of the checkout.
+// In --check mode that shows up as every date being wrong; in write mode it
+// would have stamped today on all seven pages, which is the over-claiming
+// direction this file exists to avoid. actions/checkout defaults to depth 1, so
+// this is the normal state in CI unless fetch-depth: 0 is set.
+if (git('rev-parse', '--is-shallow-repository') === 'true') {
+  console.error('sitemap-lastmod: this is a SHALLOW clone, so every file looks as though it');
+  console.error('changed in the one commit that was fetched. The dates cannot be derived.');
+  console.error('');
+  console.error('In CI, set `fetch-depth: 0` on the checkout step. Locally, run');
+  console.error('`git fetch --unshallow`.');
+  process.exit(1);
+}
+
 const xml = readFileSync(sitemapPath, 'utf8');
 const entries = [...xml.matchAll(/<loc>([^<]+)<\/loc>\s*<lastmod>(\d{4}-\d{2}-\d{2})<\/lastmod>/g)];
 if (entries.length === 0) {
