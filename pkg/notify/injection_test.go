@@ -91,25 +91,41 @@ func TestMailHeadersStripControlCharacters(t *testing.T) {
 
 // Syslog framing: over TCP and TLS the frame is octet-counted, so a newline in
 // the message cannot make the collector see a second, forged record.
-func TestSyslogMessageCannotForgeASecondFrame(t *testing.T) {
+// The octet count covers the whole message — the TRANSPORT half of the problem.
+//
+// THIS TEST USED TO CLAIM MORE THAN IT CHECKED, and the overclaim is why the
+// content half went unnoticed for as long as it did. It was called
+// "CannotForgeASecondFrame", which is true of a FRAME and was read as "cannot
+// forge a record": RFC6587 octet counting does mean a collector reads exactly
+// this many bytes as one message, whatever they contain — and the comment said
+// so — but a message whose CONTENT holds a newline still becomes two lines the
+// moment anything line-oriented reads it, which is what syslog is for.
+//
+// It also carried `t.Skip("no newline survived")`, so it would have gone quiet
+// rather than green if the newline had ever been stripped. A test that skips
+// when the thing it describes is fixed is a test nobody revisits.
+//
+// The content half is now syslog_injection_test.go. This one keeps the framing
+// property, which is real and worth pinning, and says only that.
+func TestSyslogOctetCountCoversTheWholeMessage(t *testing.T) {
 	e := hostileEvent("x")
 	hostile := "ok\n<13>1 2026-01-01T00:00:00Z evil - - - - forged entry"
 	line := FormatRFC5424(SyslogConfig{Facility: 16, Hostname: "w"}, e, hostile)
 
+	// The count is in OCTETS of the whole line, so a non-ASCII summary cannot
+	// desynchronise the collector by a rune-versus-byte mismatch.
 	framed := len(line)
-	// The receiver reads exactly `framed` octets and treats them as ONE
-	// message, whatever they contain.
-	if strings.Count(line, "\n") == 0 {
-		t.Skip("no newline survived; nothing to prove")
+	if framed != len([]byte(line)) {
+		t.Fatalf("the count is not in octets: len=%d bytes=%d", framed, len([]byte(line)))
 	}
-	if framed != len(line) {
-		t.Fatal("length and content disagree")
+	// Everything the caller supplied is inside the counted region, including
+	// the part after the newline the sanitiser has now escaped. A count that
+	// stopped early is what would let the remainder be parsed separately.
+	if !strings.Contains(line, "forged entry") {
+		t.Error("the caller's text did not survive into the counted message at all")
 	}
-	// What must hold is that the count covers the whole payload, newline
-	// included — a count that stopped at the newline is what would let the
-	// remainder be parsed as a new record.
-	if !strings.Contains(line[:framed], "forged entry") {
-		t.Error("the octet count does not cover the whole message")
+	if !strings.HasSuffix(line, "forged entry") {
+		t.Errorf("the count does not reach the end of the payload:\n%s", line)
 	}
 }
 

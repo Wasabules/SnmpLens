@@ -85,6 +85,54 @@ func sanitizePrintUSASCII(s string, max int) string {
 	return b.String()
 }
 
+// sanitizeBody escapes the control characters that give a syslog record its
+// shape, leaving every other rune alone.
+//
+// The MSG and the structured-data values are the two places where UNTRUSTED
+// TEXT reaches this line. A trap arrives from the network unauthenticated, its
+// varbinds become the summary and the OID, and `isPrintableOctet` in
+// pkg/snmp/client.go deliberately admits \n, \r and \t — so a device that sends
+// a newline used to put one straight into the record. Measured against the real
+// formatter: one event produced two lines, the second a well-formed RFC5424
+// record claiming another host had accepted an admin login.
+//
+// The transport framing was never the weak part — TCP and TLS use RFC6587
+// octet counting and UDP is one datagram per message, so a collector cannot
+// desynchronise. The forgery lands where syslog usually ends up: written to a
+// file, or read by anything line-oriented. Which is the whole point of
+// forwarding.
+//
+// ESCAPED, not stripped. An operator reading the journal should be able to see
+// that a device sent a newline; deleting it hides the attempt. TAB is kept
+// because it has no framing meaning and does appear in legitimate sysDescr.
+func sanitizeBody(s string) string {
+	if !strings.ContainsFunc(s, needsBodyEscape) {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s) + 8)
+	for _, r := range s {
+		switch {
+		case r == '\n':
+			b.WriteString(`\n`)
+		case r == '\r':
+			b.WriteString(`\r`)
+		case r == 0:
+			b.WriteString(`\0`)
+		case needsBodyEscape(r):
+			fmt.Fprintf(&b, `\x%02x`, r)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// needsBodyEscape reports the C0 controls and DEL, minus TAB.
+func needsBodyEscape(r rune) bool {
+	return (r < 0x20 && r != '\t') || r == 0x7f
+}
+
 // FormatRFC5424 renders one event as a syslog line.
 //
 // <PRI>1 TIMESTAMP HOSTNAME APP-NAME PROCID MSGID STRUCTURED-DATA MSG
@@ -116,10 +164,12 @@ func FormatRFC5424(cfg SyslogConfig, e events.Event, message string) string {
 	}
 	ts := stamp.Format("2006-01-02T15:04:05.000000Z")
 
-	// Structured data: PARAM-VALUE escapes ", \ and ].
+	// Structured data: PARAM-VALUE escapes ", \ and ] per RFC5424 6.3.3, and the
+	// control characters per sanitizeBody — the three RFC characters are what a
+	// PARSER needs, the controls are what a READER needs.
 	esc := func(v string) string {
 		r := strings.NewReplacer(`\`, `\\`, `"`, `\"`, `]`, `\]`)
-		return r.Replace(v)
+		return r.Replace(sanitizeBody(v))
 	}
 	sd := syslogNil
 	if !cfg.OmitStructuredData {
@@ -146,7 +196,7 @@ func FormatRFC5424(cfg SyslogConfig, e events.Event, message string) string {
 		sanitizePrintUSASCII(e.Kind, 32),
 		sd,
 		" "+utf8BOM,
-		message,
+		sanitizeBody(message),
 	)
 }
 
