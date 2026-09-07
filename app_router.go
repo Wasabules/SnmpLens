@@ -102,6 +102,20 @@ type eventRouter struct {
 	inflight  map[int64]bool
 	highest   int64 // the highest seq ever accepted
 	confirmed int64 // the highest seq known to be written
+
+	// enqueue overrides the storage write, and exists so a test can fail THAT
+	// specifically. Closing the database fails routedGroupsFor first, which is
+	// a different path with a different answer, so the one case that matters
+	// here — the configuration reads fine and the write does not — has no
+	// other way to be reached.
+	enqueue func([]storage.RoutedGroup, int64) error
+}
+
+func (r *eventRouter) enqueueRouted(groups []storage.RoutedGroup, mark int64) error {
+	if r.enqueue != nil {
+		return r.enqueue(groups, mark)
+	}
+	return r.app.storage.EnqueueRouted(groups, mark)
 }
 
 func newEventRouter(a *App) *eventRouter {
@@ -134,6 +148,47 @@ func (r *eventRouter) accept(e events.Event) bool {
 		r.settle(nil, e.Seq)
 		return false
 	}
+}
+
+// markIfSettled returns the watermark that WOULD be safe if seqs were settled,
+// without settling them.
+//
+// The order matters and it was wrong. settle ran before EnqueueRouted, so a
+// failed write left the batch out of `inflight` and `confirmed` already moved
+// past it. The comment at the failure site was right that the STORED watermark
+// stays put — EnqueueRouted is atomic — and that a restart therefore replays
+// them. What it missed is the running process: the next successful flush
+// computes its mark from an `inflight` those seqs are no longer in, and writes
+// a watermark ABOVE a batch whose deliveries were never written. Neither
+// delivered nor replayed, which is the single outcome this whole design exists
+// to prevent.
+//
+// So nothing settles until the write has succeeded.
+func (r *eventRouter) markIfSettled(seqs []int64) int64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	settling := make(map[int64]struct{}, len(seqs))
+	for _, s := range seqs {
+		settling[s] = struct{}{}
+	}
+	lowest := int64(0)
+	for s := range r.inflight {
+		if _, going := settling[s]; going {
+			continue
+		}
+		if lowest == 0 || s < lowest {
+			lowest = s
+		}
+	}
+	mark := r.highest
+	if lowest > 0 {
+		mark = lowest - 1
+	}
+	if mark < r.confirmed {
+		mark = r.confirmed
+	}
+	return mark
 }
 
 // settle marks seqs as no longer owed and returns the watermark that is now
@@ -223,6 +278,7 @@ func (r *eventRouter) flush(batch *[]events.Event) {
 
 	groups := make([]storage.RoutedGroup, 0, len(pending))
 	seqs := make([]int64, 0, len(pending))
+	routed := make([]events.Event, 0, len(pending))
 	var failed int
 	for _, e := range pending {
 		g, err := r.app.routedGroupsFor(e)
@@ -241,6 +297,7 @@ func (r *eventRouter) flush(batch *[]events.Event) {
 			continue
 		}
 		seqs = append(seqs, e.Seq)
+		routed = append(routed, e)
 		groups = append(groups, g...)
 	}
 	if failed > 0 {
@@ -248,17 +305,27 @@ func (r *eventRouter) flush(batch *[]events.Event) {
 			"watermark", failed, len(pending))
 	}
 
-	mark := r.settle(seqs, 0)
-	if err := r.app.storage.EnqueueRouted(groups, mark); err != nil {
-		// The events stay above the watermark, because settle only ever moves
-		// the number we intend to write and EnqueueRouted is atomic — so a
-		// failure leaves the stored watermark where it was, and the next launch
-		// replays them. Copying flushBatch, which drops its buffer before the
-		// write and only logs, would lose the whole batch here.
-		log.Printf("notify: routing %d events failed, they will be replayed on the "+
-			"next launch: %v", len(pending), err)
+	mark := r.markIfSettled(seqs)
+	if err := r.enqueueRouted(groups, mark); err != nil {
+		// NOTHING has been settled at this point, so the batch is still owed:
+		// the watermark cannot pass it in this process, and the stored one has
+		// not moved either, so a restart replays it. Best effort at another
+		// attempt here too — and if the queue is full, staying owed is the
+		// safe outcome, since a replay is INSERT OR IGNORE against
+		// UNIQUE(event_id, sink_id).
+		requeued := 0
+		for _, e := range routed {
+			select {
+			case r.queue <- e:
+				requeued++
+			default:
+			}
+		}
+		log.Printf("notify: writing %d routed events failed (%d requeued, the rest stay "+
+			"owed and are replayed next launch): %v", len(routed), requeued, err)
 		return
 	}
+	r.settle(seqs, 0)
 	if r.app.dispatcher != nil {
 		r.app.dispatcher.Wake()
 	}
