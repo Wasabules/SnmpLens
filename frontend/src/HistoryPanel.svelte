@@ -15,6 +15,7 @@
   import { ResolveOids } from '../wailsjs/go/main/App';
   import { findNodeByOid, findMibNameByOid, formatValueWithEnum } from './utils/mibTree';
   import { anonMode, anonymizeIp } from './utils/anonymize';
+  import { escapeCSV } from './utils/csv';
 
   // Entry to reveal (expand + scroll to) when opened from Recent history.
   export let highlightId = null;
@@ -334,14 +335,10 @@
     return count > 0 ? String(count) : '';
   }
 
-  function csvCell(v) {
-    let s = String(v ?? '');
-    // Neutralize spreadsheet formula injection: a leading =, +, -, @ (or a
-    // control char) makes Excel/LibreOffice treat device-supplied text as a
-    // formula. Prefix with an apostrophe to force a literal string.
-    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
-    return /[",\r\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-  }
+  // The formula neutralisation this function used to carry privately now lives
+  // in utils/csv.js, where every other export reaches it. It was correct here
+  // and absent everywhere else, including in the shared helper — which is how
+  // the events export, the one carrying raw trap text, ended up without it.
 
   function toCsv(entries) {
     const header = ['timestamp', 'operation', 'targets', 'oid', 'name', 'value', 'version', 'durationMs', 'success', 'error'];
@@ -356,7 +353,7 @@
       e.duration ?? '',
       e.success ? 'true' : 'false',
       e.error || '',
-    ].map(csvCell).join(','));
+    ].map(escapeCSV).join(','));
     return [header.join(','), ...lines].join('\r\n');
   }
 

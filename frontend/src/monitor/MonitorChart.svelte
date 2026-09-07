@@ -13,7 +13,7 @@
   import { mibStore } from '../stores/mibStore';
   import { oidName } from '../utils/oidDisplay';
   import { notificationStore } from '../stores/notifications';
-  import { downloadFile } from '../utils/csv';
+  import { escapeCSV, downloadFile } from '../utils/csv';
   import { chartSync, broadcastRange, broadcastLive } from './chartSync';
 
   Chart.register(...registerables, zoomPlugin);
@@ -692,7 +692,7 @@
       const source = ds._data || ds.data;
       for (const pt of source) {
         if (pt.x < from || pt.x > to) continue;
-        rows.push([new Date(pt.x).toISOString(), ds.label, pt.y ?? '', unit.label].join(','));
+        rows.push([new Date(pt.x).toISOString(), ds.label, pt.y ?? '', unit.label].map(escapeCSV).join(','));
       }
     }
     downloadFile(rows.join('\n'), 'snmp-monitor-' + mode + '.csv', 'text/csv');
