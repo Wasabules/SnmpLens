@@ -38,11 +38,25 @@ function fileFor(loc) {
   return join('docs', path === '' ? 'index.html' : path);
 }
 
+// today, in the SAME timezone git uses.
+//
+// `%cs` is the committer date in LOCAL time; toISOString() is UTC. Between
+// midnight and the offset they name different days — measured at 00:18 in
+// +02:00, the tool wrote 2026-09-07 into the sitemap while the commit it
+// belonged to was recorded as 2026-09-08. The next run then compares the two
+// and fails, having been given both numbers by the same program. Two clocks
+// for one date is the bug; this leaves one.
+function today() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 function lastmodFor(file) {
   // Staged or unstaged, either counts: the page is being changed in the commit
   // this run belongs to.
   const dirty = git('status', '--porcelain', '--', file) !== '';
-  if (dirty) return new Date().toISOString().slice(0, 10);
+  if (dirty) return today();
   const committed = git('log', '-1', '--format=%cs', '--', file);
   if (!committed) throw new Error(`${file} is not in git and has no changes; cannot date it`);
   return committed;
