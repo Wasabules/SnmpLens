@@ -14,6 +14,15 @@
 //
 // which writes path/to/file.sig (base64-encoded Ed25519 signature). With no
 // key set, signing is skipped so unsigned builds keep working.
+//
+// Ask which public key the configured secret corresponds to:
+//
+//	UPDATER_PRIVATE_KEY=<hex> go run ./tools/updatersign pubkey
+//
+// An Ed25519 private key CONTAINS its public half, so this needs no network and
+// no other input. It exists because a GitHub Actions secret is write-only once
+// stored — you cannot read it back to check it is the key the shipped binaries
+// trust. This answers that question without ever printing the private half.
 package main
 
 import (
@@ -38,6 +47,8 @@ func main() {
 			usage()
 		}
 		sign(os.Args[2])
+	case "pubkey":
+		pubkey()
 	default:
 		usage()
 	}
@@ -53,6 +64,36 @@ func keygen() {
 	fmt.Println()
 	fmt.Println("Private key — add as GitHub secret UPDATER_PRIVATE_KEY (keep secret!):")
 	fmt.Println("  " + hex.EncodeToString(priv))
+}
+
+// pubkey prints the public half of the configured private key.
+//
+// Compare it with updaterPublicKey in pkg/updater/verify.go: if they differ,
+// the secret is not the key installed copies trust, and every signature it
+// makes will be refused by the updater it is meant to satisfy.
+func pubkey() {
+	key := loadKey()
+	fmt.Println(base64.StdEncoding.EncodeToString([]byte(ed25519.PrivateKey(key).Public().(ed25519.PublicKey))))
+}
+
+// loadKey reads and validates UPDATER_PRIVATE_KEY, or exits.
+//
+// The error says the LENGTH it found and never the value: this runs in CI, and
+// a private key in a log line is the failure this whole mechanism exists to
+// prevent.
+func loadKey() []byte {
+	keyHex := strings.TrimSpace(os.Getenv("UPDATER_PRIVATE_KEY"))
+	if keyHex == "" {
+		fatal(fmt.Errorf("UPDATER_PRIVATE_KEY is not set"))
+	}
+	key, err := hex.DecodeString(keyHex)
+	if err != nil {
+		fatal(fmt.Errorf("UPDATER_PRIVATE_KEY is not hexadecimal (%d characters)", len(keyHex)))
+	}
+	if len(key) != ed25519.PrivateKeySize {
+		fatal(fmt.Errorf("UPDATER_PRIVATE_KEY decodes to %d bytes, want %d", len(key), ed25519.PrivateKeySize))
+	}
+	return key
 }
 
 func sign(path string) {
@@ -78,7 +119,7 @@ func sign(path string) {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: updatersign keygen | sign <file>")
+	fmt.Fprintln(os.Stderr, "usage: updatersign keygen | sign <file> | pubkey")
 	os.Exit(2)
 }
 
