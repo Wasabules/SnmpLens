@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,6 +27,34 @@ import (
 //
 // On a successful self-apply the application relaunches and quits, so callers
 // should not expect this method to return in that case.
+// releaseHosts are the hosts a GitHub release asset is served from.
+//
+// browser_download_url is github.com; the API also hands out
+// objects.githubusercontent.com for the same bytes, and both are accepted so a
+// change on GitHub's side does not break updating.
+var releaseHosts = map[string]bool{
+	"github.com":                           true,
+	"www.github.com":                       true,
+	"objects.githubusercontent.com":        true,
+	"release-assets.githubusercontent.com": true,
+}
+
+// checkReleaseHost refuses a download address that is not GitHub's.
+func checkReleaseHost(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("the release names a download address that cannot be parsed")
+	}
+	if !strings.EqualFold(u.Scheme, "https") {
+		return fmt.Errorf("refusing to open the download over %q; it must be https", u.Scheme)
+	}
+	if !releaseHosts[strings.ToLower(u.Hostname())] {
+		return fmt.Errorf("refusing to open a download from %q: a release asset is served "+
+			"from GitHub, and this address is not", u.Hostname())
+	}
+	return nil
+}
+
 func (s *Service) DownloadAndApply() error {
 	s.mu.Lock()
 	p := s.pending
@@ -37,7 +66,22 @@ func (s *Service) DownloadAndApply() error {
 	ctx := s.context()
 
 	// Fallback: let the OS/browser handle formats we can't self-apply.
+	//
+	// This path applies nothing — the operator downloads the .dmg or .deb over
+	// HTTPS and installs it by hand — so it is not the "install an unverified
+	// binary" the self-apply path would be. What it DOES do is send the
+	// operator to an address taken from the GitHub JSON, and that address is
+	// the only thing here nobody checks. Anyone able to change what the app
+	// reads back could point it at any host at all, and the operator would
+	// have every reason to trust the destination: the application sent them.
+	//
+	// The self-apply path does not need this, because a redirected asset fails
+	// the checksum from the signed manifest. This one has no such backstop, so
+	// the host is checked instead.
 	if p.mode == applyBrowser {
+		if err := checkReleaseHost(p.assetURL); err != nil {
+			return err
+		}
 		wruntime.BrowserOpenURL(ctx, p.assetURL)
 		return nil
 	}

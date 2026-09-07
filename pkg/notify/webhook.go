@@ -228,7 +228,22 @@ func (w WebhookSink) client(timeout time.Duration) (*http.Client, error) {
 }
 
 // Send posts one event.
-func (w WebhookSink) Send(e events.Event, subject, body string) error {
+func (w WebhookSink) Send(e events.Event, subject, body string) (err error) {
+	// Scrubbed on EVERY path, not on the ones somebody remembered.
+	//
+	// Four returns above the transport were unscrubbed, and the first of them
+	// is the one that matters: validate parses the SUBSTITUTED URL, so
+	// url.Parse's error quotes it — token and all — and that text goes into
+	// notify_outbox.last_error and into the dead-letter event, which is then
+	// routed to every OTHER destination. A credential written to the database
+	// in the clear and forwarded off the machine, from a URL with a stray
+	// character in it.
+	//
+	// The same shape as email.go's deferred scrub, and for the same reason: a
+	// rule each return statement has to remember is a rule that will be
+	// forgotten by the next one added.
+	defer func() { err = w.scrub(err) }()
+
 	if _, err := w.validate(); err != nil {
 		return err
 	}

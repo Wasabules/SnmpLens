@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -197,7 +198,94 @@ func (c *Client) TrapListenerRunning() bool {
 	return c.trapListener != nil
 }
 
+// recoverTrapHandler contains a panic raised while handling one datagram.
+//
+// This is the only place in pkg/snmp where a panic can be reached by an
+// unauthenticated remote party, and it was the only background goroutine in
+// the application without a guard. gosnmp recovers inside its DECODER
+// (marshal.go and v3.go) and nowhere around OnNewTrap, and its receive loop is
+// one goroutine, so a panic anywhere below this line unwinds through
+// listenUDP and ends the process.
+//
+// Measured, with a handler that dereferences a nil PDU on the first trap:
+// unguarded the process died with "exit status 2" and never saw the second
+// trap; guarded it recovered and handled it. The cost of that crash is not one
+// datagram — it is every monitoring session, every threshold, the notification
+// dispatcher and the outbox drain, from a UDP packet nobody authenticated.
+//
+// Losing the trap is the right outcome here, and the reason it is acceptable
+// is that the panic happened before anything durable was written. What is NOT
+// acceptable is losing it silently, so the event says which source produced
+// it. DedupKey is per source: a device sending the same malformed varbind ten
+// thousand times must not become ten thousand major events.
+//
+// The journal write gets a guard of its own. A recover that panics is a
+// process kill with extra steps, and this one runs when the process is already
+// in a state nobody predicted.
+func (c *Client) recoverTrapHandler(addr *net.UDPAddr) {
+	r := recover()
+	if r == nil {
+		return
+	}
+	source := "unknown"
+	if addr != nil && addr.IP != nil {
+		source = addr.IP.String()
+	}
+	log.Printf("PANIC while handling a trap from %s: %v\n%s", source, r, debug.Stack())
+
+	defer func() { _ = recover() }()
+	_ = c.recorder.Record(events.Event{
+		Ts:       time.Now().UTC().Format(time.RFC3339),
+		Category: events.CategorySystem,
+		Kind:     events.KindSystemListenerError,
+		Severity: events.SevMajor.String(),
+		State:    events.StateOneshot,
+		Source:   source,
+		DedupKey: "trap.panic|" + source,
+		TitleKey: "events.kind." + events.KindSystemListenerError,
+		Summary:  fmt.Sprintf("Dropped a trap from %s: the handler panicked (%v)", source, r),
+		Params:   map[string]any{"source": source},
+	}, "")
+}
+
+// declineToAcknowledge stops gosnmp sending an INFORM's acknowledgement.
+//
+// The whole reason the journal insert is SYNCHRONOUS is that gosnmp sends that
+// acknowledgement after this handler returns, so acknowledging a confirmed
+// notification before it is durably journalled would be a lie. When the insert
+// FAILED, the acknowledgement was sent anyway — the same lie, told at the one
+// moment it matters, and the sender then has no reason to retry.
+//
+// gosnmp decides by reading trap.PDUType after OnNewTrap returns, and
+// deliberately passes the packet rather than a copy ("we don't pass a copy
+// because the SnmpPacket type is somewhat large"), asking handlers not to
+// alter it. This alters it, which is acceptable on the same terms as the
+// socket-buffer reach in trapbuf.go and no others: it is FAIL-SOFT — a gosnmp
+// that starts passing a copy makes this a no-op and restores today's
+// behaviour, nothing breaks — and it is PINNED BY A TEST that drives a real
+// sender against a real listener, so an upgrade that changes it fails CI
+// rather than quietly resuming the lie.
+//
+// Measured before it was written: with the field left alone the sender was
+// acknowledged in 1 ms; with it changed the sender timed out after 900 ms and
+// would have retried. Retrying is the point — an INFORM exists so the sender
+// can know, and a duplicate journal entry after a transient failure costs
+// nothing next to a lost alert.
+//
+// A plain trap has no acknowledgement to withhold, so this only applies to an
+// INFORM; there the log line is all there is.
+func (c *Client) declineToAcknowledge(packet *gosnmp.SnmpPacket, source string, cause error) {
+	if packet == nil || packet.PDUType != gosnmp.InformRequest {
+		return
+	}
+	packet.PDUType = gosnmp.SNMPv2Trap
+	log.Printf("Not acknowledging the INFORM from %s: it could not be journalled (%v). "+
+		"The sender will retry.", source, cause)
+}
+
 func (c *Client) handleTrap(packet *gosnmp.SnmpPacket, addr *net.UDPAddr) {
+	defer c.recoverTrapHandler(addr)
+
 	log.Printf("Received trap from %s (Version: %s)", addr.IP.String(), packet.Version)
 
 	vars := make([]Result, 0)
@@ -238,7 +326,9 @@ func (c *Client) handleTrap(packet *gosnmp.SnmpPacket, addr *net.UDPAddr) {
 	// the window closed — or simply before the frontend has subscribed — every
 	// received trap used to disappear with no error and no trace. Persisting
 	// first is what makes background trap collection possible at all.
-	c.recordTrap(source, ts, pduType, packet, vars)
+	if err := c.recordTrap(source, ts, pduType, packet, vars); err != nil {
+		c.declineToAcknowledge(packet, source, err)
+	}
 
 	// Guarded, the same way recordEvent guards its own emit: the runtime refuses
 	// a context it did not issue and takes the process with it. A client built
@@ -275,7 +365,10 @@ func trapOIDFrom(vars []Result) string {
 
 // recordTrap writes a received trap to the event journal. The full varbind list
 // goes to the payload side so listing the journal never reads it.
-func (c *Client) recordTrap(source, ts, pduType string, packet *gosnmp.SnmpPacket, vars []Result) {
+//
+// It REPORTS failure, because the caller has something to do about it: an
+// INFORM that was not journalled must not be acknowledged.
+func (c *Client) recordTrap(source, ts, pduType string, packet *gosnmp.SnmpPacket, vars []Result) error {
 	kind := events.KindTrapReceived
 	if pduType == "Inform" {
 		kind = events.KindTrapInform
@@ -315,7 +408,9 @@ func (c *Client) recordTrap(source, ts, pduType string, packet *gosnmp.SnmpPacke
 
 	if err := c.recorder.Record(ev, string(payload)); err != nil {
 		log.Printf("Failed to journal trap from %s: %v", source, err)
+		return err
 	}
+	return nil
 }
 
 // InformResult reports what came back from an INFORM.

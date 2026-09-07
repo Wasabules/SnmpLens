@@ -6,6 +6,37 @@ import { notificationStore } from './notifications';
 import { settingsStore } from './settingsStore';
 import { buildTrapListenerRequest } from '../utils/snmpParams';
 import { sendNativeNotification } from '../utils/nativeNotify';
+import { createBurstGate } from '../utils/burst';
+
+// What a trap flood used to do to the window that is supposed to show it.
+//
+// Every received trap raised a toast when the panel was hidden, sent an OS
+// notification when the window was unfocused, and — for the OS notification —
+// awaited GetOidDetails, a bridge call into pkg/mib that takes the
+// package-level EXCLUSIVE gosmi mutex. Nothing rate-limited any of the three,
+// so an unauthenticated remote sender chose how often the renderer acquired
+// the lock that every MIB operation in the product needs.
+//
+// Leading edge plus a trailing summary: the first trap in a window is reported
+// at once, and the rest arrive as "and N more". Only the leading one performs
+// the OID lookup, which is what takes the rate control down to the lock.
+//
+// Three seconds for the in-app toast, which is cheap and lives for five; ten
+// for the OS notification, which the desktop queues and the operator dismisses
+// by hand.
+const trapToastGate = createBurstGate({
+  windowMs: 3000,
+  onSummary: (count) => {
+    notificationStore.add(get(_)('traps.moreTrapsReceived', { values: { count } }), 'info');
+  },
+});
+
+const nativeTrapGate = createBurstGate({
+  windowMs: 10000,
+  onSummary: (count) => {
+    sendNativeNotification('SnmpLens', get(_)('traps.moreTrapsReceived', { values: { count } }));
+  },
+});
 
 const STORAGE_KEY = 'trapHistory';
 const MAX_TRAPS_DEFAULT = 1000;
@@ -93,14 +124,17 @@ function createTrapStore() {
     const storeState = get(trapStore);
 
     // Show internal notification if panel is hidden
-    if (!storeState.isPanelVisible) {
+    if (!storeState.isPanelVisible && trapToastGate.offer()) {
       const t = get(_);
       notificationStore.add(t('traps.newTrapReceived', { values: { type: trap.pduType || 'Trap', source: trap.source } }), 'info');
     }
 
     // Send native OS notification (Windows toast / macOS / Linux)
     const settings = get(settingsStore);
-    if (settings.traps?.nativeNotifications && !storeState.isWindowFocused) {
+    // The gate is asked LAST, so a suppressed trap does not consume a window
+    // it was never eligible for — and, more to the point, so the GetOidDetails
+    // call below happens only for the one trap that is actually reported.
+    if (settings.traps?.nativeNotifications && !storeState.isWindowFocused && nativeTrapGate.offer()) {
       (async () => {
         const trapOidVar = trap.variables?.find(v =>
           v.oid === 'snmpTrapOID.0' ||

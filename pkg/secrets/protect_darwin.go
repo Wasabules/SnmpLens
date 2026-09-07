@@ -16,6 +16,20 @@ import (
 // darwin/universal.
 type keychainProtector struct{ service, account string }
 
+// securityTool is the ABSOLUTE path, deliberately.
+//
+// exec.Command with a bare name searches $PATH, and this is the one exec site
+// in the application that puts a credential on a command line: whatever ran
+// instead would be handed the data-encryption key as argv. `security` has
+// shipped at this path since Mac OS X 10.0, and a machine where it is missing
+// is one where the Keychain backend should fail rather than fall back to
+// whatever else answers to the name.
+//
+// The exec sites in pkg/network resolve `traceroute` and friends through PATH
+// too, and are a weaker version of the same thing: they pass a hostname, not a
+// secret. This one is fixed because the consequence is different in kind.
+const securityTool = "/usr/bin/security"
+
 func newProtector(dir string) keyProtector {
 	_ = dir
 	return &keychainProtector{service: "SnmpLens", account: "sink-secrets"}
@@ -30,7 +44,7 @@ func (p *keychainProtector) name() string { return "macos-keychain" }
 const keychainItemNotFound = 44
 
 func (p *keychainProtector) loadKey() ([]byte, error) {
-	out, err := exec.Command("security", "find-generic-password",
+	out, err := exec.Command(securityTool, "find-generic-password",
 		"-s", p.service, "-a", p.account, "-w").Output()
 	if err != nil {
 		var exit *exec.ExitError
@@ -47,7 +61,7 @@ func (p *keychainProtector) saveKey(key []byte) error {
 	// -U updates an existing item instead of failing. The secret is passed with
 	// -w on stdin-free form; `security` is exec'd directly, never through a
 	// shell, so it never reaches a shell history.
-	cmd := exec.Command("security", "add-generic-password",
+	cmd := exec.Command(securityTool, "add-generic-password",
 		"-s", p.service, "-a", p.account, "-w", encoded, "-U")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("keychain store: %w (%s)", err, strings.TrimSpace(string(out)))

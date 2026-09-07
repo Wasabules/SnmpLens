@@ -409,6 +409,10 @@ func (a *App) ListMibFiles(dirPath string) ([]string, error) {
 }
 
 // MibImportResult holds per-file results for a MIB import operation.
+// maxImportBytes bounds what ImportMibFiles will read into memory. The largest
+// MIBs in circulation are a couple of megabytes.
+const maxImportBytes = 16 << 20
+
 type MibImportResult struct {
 	FileName string `json:"fileName"`
 	Success  bool   `json:"success"`
@@ -455,10 +459,70 @@ func (a *App) importSingleFile(src string) MibImportResult {
 	name := filepath.Base(src)
 	dst := filepath.Join(a.persistentMibDir, name)
 
+	// Bounded before it is read. os.ReadFile on a renderer-named path is an
+	// unbounded allocation, so a path to a large file — or to a device that
+	// never ends — is a way to take the process down without sending a single
+	// packet. The largest MIB anyone ships is a couple of megabytes; the
+	// benchmark in pkg/mib uses 185 KB.
+	if info, err := os.Stat(src); err == nil && info.Size() > maxImportBytes {
+		return MibImportResult{FileName: name, Success: false,
+			Error: fmt.Sprintf("this file is %d MB; a MIB is text and nothing legitimate is over %d MB",
+				info.Size()/(1<<20), maxImportBytes/(1<<20))}
+	}
+
 	srcData, err := os.ReadFile(src)
 	if err != nil {
 		log.Printf("ImportMibFiles: failed to read %s: %v", src, err)
 		return MibImportResult{FileName: name, Success: false, Error: fmt.Sprintf("read error: %v", err)}
+	}
+
+	// A standard MIB that ships in the binary is never overwritten from here.
+	//
+	// This is not an exotic case: vendor archives routinely include their own
+	// SNMPv2-SMI, SNMPv2-TC and SNMPv2-CONF, and nearly every other MIB imports
+	// from those three. Replacing one with a copy that differs or is truncated
+	// breaks the tree for everything, and it STAYS broken across restarts,
+	// because ensureStandardMibs restores only files that are ABSENT
+	// (`if _, err := os.Stat(destPath); err == nil { continue }`) — a replaced
+	// one is never repaired. So one drag-and-drop of a vendor zip could take
+	// out MIB resolution for good, with nothing saying what happened.
+	//
+	// Refused rather than backed up: the MIB editor already owns deliberate
+	// change to a bundled file, with its own backup directory and
+	// MibEditorRestoreBundled to undo it. An import is a bulk operation nobody
+	// reads the results of unless something goes wrong, which is exactly when
+	// this needs to be loud. The refusal reaches the per-file error list the
+	// import dialog already shows.
+	if _, bundled := a.bundledContent(name); bundled {
+		log.Printf("ImportMibFiles: refused to replace the bundled %s", name)
+		return MibImportResult{
+			FileName: name,
+			Success:  false,
+			Error: fmt.Sprintf("%s ships with SnmpLens and nearly every MIB imports from it; "+
+				"replacing it would break MIB resolution. Use the MIB editor if you really mean to change it.", name),
+		}
+	}
+
+	// Only a MIB gets into the MIB directory.
+	//
+	// This is a security boundary as much as a usability one. This method reads
+	// any absolute path the renderer names, and MibEditorRead hands the content
+	// of anything in that directory back — so the two calls together are an
+	// arbitrary-file-read primitive over the bridge. What decides how much that
+	// is worth is what is allowed to land here. A private key, a password file,
+	// a browser profile: not a MIB, not admitted, never readable.
+	//
+	// It is NOT a validity check: a MIB with a syntax error is precisely what
+	// the diagnosis feature exists for. The refusal reuses pkg/mib's own
+	// description of the files people download by mistake, so an HTML page or a
+	// PDF is still named as what it is — now without leaving a copy behind.
+	if summary, hint, reject := mib.ImportRejection(srcData); reject {
+		msg := summary
+		if hint != "" {
+			msg += " — " + hint
+		}
+		log.Printf("ImportMibFiles: refused %s (%s)", name, summary)
+		return MibImportResult{FileName: name, Success: false, Error: msg}
 	}
 
 	// Check if the destination already has an identical file
@@ -530,6 +594,25 @@ func (a *App) CheckForUpdate() updater.UpdateInfo {
 	if err != nil {
 		log.Printf("Update check failed: %v", err)
 	}
+	return withCheckError(info, err)
+}
+
+// withCheckError puts the reason a check failed where the renderer can see it.
+//
+// Separate from the bridge method so it can be tested without a network: the
+// Service holds its http.Client unexported, so there is no seam in package
+// main, and the interesting part is not the HTTP call — it is that the error
+// stops being dropped.
+//
+// Available is forced false as well. A check that failed cannot have found an
+// update, and leaving whatever the zero value happened to be would let a
+// failure offer a download.
+func withCheckError(info updater.UpdateInfo, err error) updater.UpdateInfo {
+	if err == nil {
+		return info
+	}
+	info.Error = err.Error()
+	info.Available = false
 	return info
 }
 
@@ -619,9 +702,29 @@ func (a *App) MonitorLoadHistoricalData(sessionID, from, to string) ([]storage.D
 }
 
 // MonitorDeleteSession removes a session and all its data.
+// MonitorDeleteSession removes a session AND the credentials it named.
+//
+// Deleting the row alone left the session's community and v3 passphrases in
+// DPAPI, the Keychain or the file store forever, under a key nothing in the
+// app will ever look up again — the same defect NotifyDeleteSink had, in the
+// other place that writes to pkg/secrets. Session credentials are deliberately
+// kept out of monitoring.db (storage.SessionConn holds only what is safe to
+// read in a copied database), which is exactly why deleting the database row
+// cannot be the whole of it.
+//
+// The credential goes first, for the reason NotifyDeleteSink gives: it is the
+// part that cannot be retried once the row is gone. If the store refuses — a
+// locked keychain — the session stays and the operator can try again after
+// unlocking. With no store at all there is nothing that could have been
+// written, so the deletion proceeds.
 func (a *App) MonitorDeleteSession(sessionID string) error {
 	if a.storage == nil {
 		return fmt.Errorf("storage not initialized")
+	}
+	if a.secrets != nil {
+		if err := a.secrets.Delete(secrets.SessionRef(sessionID)); err != nil {
+			return fmt.Errorf("the session was kept: its stored credentials could not be removed: %w", err)
+		}
 	}
 	return a.storage.DeleteSession(sessionID)
 }
@@ -639,7 +742,19 @@ func (a *App) MonitorCleanup(daysToKeep int) (int64, error) {
 	if a.storage == nil {
 		return 0, fmt.Errorf("storage not initialized")
 	}
-	return a.storage.Cleanup(time.Duration(daysToKeep) * 24 * time.Hour)
+	n, removedSessions, err := a.storage.Cleanup(time.Duration(daysToKeep) * 24 * time.Hour)
+	// The rows are gone; their credentials must go with them. Best effort and
+	// logged rather than returned: retention has already done the part the
+	// operator asked for, and a locked keychain is not a reason to report the
+	// cleanup as failed.
+	if a.secrets != nil {
+		for _, id := range removedSessions {
+			if delErr := a.secrets.Delete(secrets.SessionRef(id)); delErr != nil {
+				log.Printf("monitor: session %s was removed but its credentials could not be: %v", id, delErr)
+			}
+		}
+	}
+	return n, err
 }
 
 // MonitorLoadBuckets returns a session's data aggregated into fixed-width time
@@ -1167,6 +1282,48 @@ func (a *App) sinkSecret(sinkID string) string {
 	return v
 }
 
+// storedSink returns the destination currently on file under id.
+//
+// There is no GetSink, and adding one for this would put a second read path
+// against notify_sinks; the list is a handful of rows read on a settings
+// screen, not a hot path.
+func (a *App) storedSink(id string) (notify.SinkConfig, bool) {
+	if a.storage == nil || id == "" {
+		return notify.SinkConfig{}, false
+	}
+	sinks, err := a.storage.ListSinks()
+	if err != nil {
+		return notify.SinkConfig{}, false
+	}
+	for _, s := range sinks {
+		if s.ID == id {
+			return s, true
+		}
+	}
+	return notify.SinkConfig{}, false
+}
+
+// boundSinkSecret returns the stored credential for cfg.ID, but ONLY if cfg
+// still names the destination that credential was stored against.
+//
+// See notify.Destination for why this exists: resolving by id while taking the
+// address from the caller is the one path that turns a write-only credential
+// store into a read primitive.
+func (a *App) boundSinkSecret(cfg notify.SinkConfig) (string, error) {
+	stored, ok := a.storedSink(cfg.ID)
+	if !ok {
+		// Nothing on file under that id: a sink being tested before it is
+		// saved. There is no stored credential to hand out, and the caller
+		// supplying one in cfg.Secret is the normal path for a new sink.
+		return "", nil
+	}
+	if !notify.SameDestination(stored, cfg) {
+		return "", fmt.Errorf("this destination differs from the saved one, so the stored credential " +
+			"cannot be used with it. Enter the credential to test the new destination")
+	}
+	return a.sinkSecret(cfg.ID), nil
+}
+
 // SecretsBackend names the protection actually in use on this machine, so the
 // settings UI can state what is true here rather than what was hoped for.
 func (a *App) SecretsBackend() string {
@@ -1247,9 +1404,28 @@ func (a *App) NotifySaveSink(cfg notify.SinkConfig) (notify.SinkConfig, error) {
 	incoming := cfg.Secret
 	cfg.Secret = ""
 
+	// Pointing an EXISTING sink at a new destination is the durable version of
+	// the same problem NotifyTestSink has: the save path never compared the
+	// address it was given with the address the credential was stored against,
+	// so a renderer that cannot read a credential could still aim it. Read the
+	// previous row BEFORE writing over it.
+	previous, hadRow := a.storedSink(cfg.ID)
+	rebound := hadRow && !notify.SameDestination(previous, cfg)
+
 	saved, err := a.storage.SaveSink(cfg)
 	if err != nil {
 		return saved, err
+	}
+
+	// A credential does not follow its destination. Deleted rather than
+	// refused: a collector really does move, and refusing the save would leave
+	// the operator editing a form they cannot submit, holding a credential
+	// they cannot read back. HasSecret then comes back false, which is what
+	// the form shows, and the renderer says so out loud.
+	if rebound && incoming == "" && a.secrets != nil {
+		if err := a.secrets.Delete(secrets.SinkRef(saved.ID)); err != nil {
+			log.Printf("NotifySaveSink: could not unbind the credential of %s: %v", saved.ID, err)
+		}
 	}
 
 	// An empty field means "leave the stored credential alone", not "clear it":
@@ -1362,13 +1538,23 @@ func (a *App) NotifyTestSink(cfg notify.SinkConfig) error {
 	// already-saved sink authenticating with nothing. The symptom was the
 	// confusing one — "Test fails but the alerts themselves arrive".
 	//
-	// Looking the credential up by sink id means a caller could name one sink
-	// and point the test at another destination. That is accepted: the caller
-	// is our own renderer, and anyone able to drive it already has the user's
-	// session and could simply read the sink list instead.
+	// Looking the credential up by sink id is BOUND to the destination stored
+	// under that id. Without that, this method is a read primitive over a
+	// write-only store: name an existing sink's id, point the URL at your own
+	// server, press Test, receive the bearer token or the SMTP password.
+	//
+	// The comment that used to stand here accepted it, on the grounds that
+	// anyone able to drive the renderer "could simply read the sink list
+	// instead". The line above in NotifyListSinks — sinks[i].Secret = "" —
+	// disproves that: the store is deliberately write-only from the renderer,
+	// and this was the one hole in it.
 	secret := cfg.Secret
 	if secret == "" {
-		secret = a.sinkSecret(cfg.ID)
+		bound, err := a.boundSinkSecret(cfg)
+		if err != nil {
+			return err
+		}
+		secret = bound
 	}
 	sink, ok := notify.Build(cfg, secret)
 	if !ok {

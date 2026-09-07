@@ -73,6 +73,21 @@ const (
 	// notify.StopGrace does: an application that will not close is worse than a
 	// flush that finishes on the next launch, which the watermark makes safe.
 	routeStopGrace = 5 * time.Second
+
+	// routeRetryMin and routeRetryMax bound how fast a FAILING flush is retried.
+	//
+	// A batch that cannot be written is put back, and putting it back into the
+	// queue meant the loop read it straight out again: measured at 1244 failed
+	// database transactions in 300 ms, about 4 000 a second, each one a write
+	// attempt against a database that had just refused one. Shutdown never
+	// converged either — drain kept finding the events it had just requeued, so
+	// stopping took the whole 5 s grace period every time.
+	//
+	// Failed events wait in `deferred` instead, held by the router goroutine
+	// and retried on a doubling backoff. They stay in `inflight` throughout, so
+	// the watermark cannot pass them whatever happens here.
+	routeRetryMin = 1 * time.Second
+	routeRetryMax = 30 * time.Second
 )
 
 // eventRouter carries journalled events from their producer to the outbox.
@@ -92,6 +107,12 @@ type eventRouter struct {
 	// flushed": that would strand a lower-seq event still waiting.
 	//
 	// What is safe is the LOWEST seq still in flight, minus one.
+	// Retry bookkeeping for batches that could not be written, touched only by
+	// the router goroutine.
+	deferred []events.Event
+	retryAt  time.Time
+	backoff  time.Duration
+
 	// Pool-wait bookkeeping, touched only by the router goroutine.
 	lastPoolCount int64
 	lastPoolWait  time.Duration
@@ -102,6 +123,20 @@ type eventRouter struct {
 	inflight  map[int64]bool
 	highest   int64 // the highest seq ever accepted
 	confirmed int64 // the highest seq known to be written
+
+	// enqueue overrides the storage write, and exists so a test can fail THAT
+	// specifically. Closing the database fails routedGroupsFor first, which is
+	// a different path with a different answer, so the one case that matters
+	// here — the configuration reads fine and the write does not — has no
+	// other way to be reached.
+	enqueue func([]storage.RoutedGroup, int64) error
+}
+
+func (r *eventRouter) enqueueRouted(groups []storage.RoutedGroup, mark int64) error {
+	if r.enqueue != nil {
+		return r.enqueue(groups, mark)
+	}
+	return r.app.storage.EnqueueRouted(groups, mark)
 }
 
 func newEventRouter(a *App) *eventRouter {
@@ -134,6 +169,47 @@ func (r *eventRouter) accept(e events.Event) bool {
 		r.settle(nil, e.Seq)
 		return false
 	}
+}
+
+// markIfSettled returns the watermark that WOULD be safe if seqs were settled,
+// without settling them.
+//
+// The order matters and it was wrong. settle ran before EnqueueRouted, so a
+// failed write left the batch out of `inflight` and `confirmed` already moved
+// past it. The comment at the failure site was right that the STORED watermark
+// stays put — EnqueueRouted is atomic — and that a restart therefore replays
+// them. What it missed is the running process: the next successful flush
+// computes its mark from an `inflight` those seqs are no longer in, and writes
+// a watermark ABOVE a batch whose deliveries were never written. Neither
+// delivered nor replayed, which is the single outcome this whole design exists
+// to prevent.
+//
+// So nothing settles until the write has succeeded.
+func (r *eventRouter) markIfSettled(seqs []int64) int64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	settling := make(map[int64]struct{}, len(seqs))
+	for _, s := range seqs {
+		settling[s] = struct{}{}
+	}
+	lowest := int64(0)
+	for s := range r.inflight {
+		if _, going := settling[s]; going {
+			continue
+		}
+		if lowest == 0 || s < lowest {
+			lowest = s
+		}
+	}
+	mark := r.highest
+	if lowest > 0 {
+		mark = lowest - 1
+	}
+	if mark < r.confirmed {
+		mark = r.confirmed
+	}
+	return mark
 }
 
 // settle marks seqs as no longer owed and returns the watermark that is now
@@ -190,6 +266,7 @@ func (r *eventRouter) start() {
 				}
 
 			case <-ticker.C:
+				r.takeDeferred(&batch)
 				r.flush(&batch)
 				r.watchPool()
 			}
@@ -213,6 +290,50 @@ func (r *eventRouter) drain(batch *[]events.Event) {
 	}
 }
 
+// defer1 holds an event for a later attempt.
+//
+// Bounded: past routeQueueDepth the surplus is dropped FROM THE LIST ONLY. It
+// stays in `inflight`, so the watermark cannot pass it and the next launch
+// replays it from the journal — which is the same guarantee a crash would
+// give, and strictly better than growing without limit inside a process that
+// is already failing to write.
+func (r *eventRouter) defer1(e events.Event) {
+	if len(r.deferred) >= routeQueueDepth {
+		return
+	}
+	r.deferred = append(r.deferred, e)
+}
+
+// failedFlush doubles the retry delay.
+func (r *eventRouter) failedFlush() {
+	if r.backoff == 0 {
+		r.backoff = routeRetryMin
+	} else if r.backoff < routeRetryMax {
+		r.backoff *= 2
+		if r.backoff > routeRetryMax {
+			r.backoff = routeRetryMax
+		}
+	}
+	r.retryAt = time.Now().Add(r.backoff)
+}
+
+// takeDeferred moves due events back into the batch, bounded by the batch size
+// so one transaction stays one transaction.
+func (r *eventRouter) takeDeferred(batch *[]events.Event) {
+	if len(r.deferred) == 0 || time.Now().Before(r.retryAt) {
+		return
+	}
+	room := routeBatchSize - len(*batch)
+	if room <= 0 {
+		return
+	}
+	if room > len(r.deferred) {
+		room = len(r.deferred)
+	}
+	*batch = append(*batch, r.deferred[:room]...)
+	r.deferred = append(r.deferred[:0], r.deferred[room:]...)
+}
+
 // flush routes a batch and writes it, with the watermark, in one transaction.
 func (r *eventRouter) flush(batch *[]events.Event) {
 	if len(*batch) == 0 {
@@ -223,6 +344,7 @@ func (r *eventRouter) flush(batch *[]events.Event) {
 
 	groups := make([]storage.RoutedGroup, 0, len(pending))
 	seqs := make([]int64, 0, len(pending))
+	routed := make([]events.Event, 0, len(pending))
 	var failed int
 	for _, e := range pending {
 		g, err := r.app.routedGroupsFor(e)
@@ -234,13 +356,11 @@ func (r *eventRouter) flush(batch *[]events.Event) {
 			// Best effort at retrying it in this process too; if the queue is
 			// full, the watermark simply stays put until a restart.
 			failed++
-			select {
-			case r.queue <- e:
-			default:
-			}
+			r.defer1(e)
 			continue
 		}
 		seqs = append(seqs, e.Seq)
+		routed = append(routed, e)
 		groups = append(groups, g...)
 	}
 	if failed > 0 {
@@ -248,17 +368,26 @@ func (r *eventRouter) flush(batch *[]events.Event) {
 			"watermark", failed, len(pending))
 	}
 
-	mark := r.settle(seqs, 0)
-	if err := r.app.storage.EnqueueRouted(groups, mark); err != nil {
-		// The events stay above the watermark, because settle only ever moves
-		// the number we intend to write and EnqueueRouted is atomic — so a
-		// failure leaves the stored watermark where it was, and the next launch
-		// replays them. Copying flushBatch, which drops its buffer before the
-		// write and only logs, would lose the whole batch here.
-		log.Printf("notify: routing %d events failed, they will be replayed on the "+
-			"next launch: %v", len(pending), err)
+	mark := r.markIfSettled(seqs)
+	if err := r.enqueueRouted(groups, mark); err != nil {
+		// NOTHING has been settled at this point, so the batch is still owed:
+		// the watermark cannot pass it in this process, and the stored one has
+		// not moved either, so a restart replays it. Best effort at another
+		// attempt here too — and if the queue is full, staying owed is the
+		// safe outcome, since a replay is INSERT OR IGNORE against
+		// UNIQUE(event_id, sink_id).
+		for _, e := range routed {
+			r.defer1(e)
+		}
+		r.failedFlush()
+		log.Printf("notify: writing %d routed events failed; retrying in %s (they stay "+
+			"owed, so the watermark cannot pass them): %v", len(routed), r.backoff, err)
 		return
 	}
+	r.settle(seqs, 0)
+	// A write got through, so whatever was wrong is not wrong any more.
+	r.backoff = 0
+	r.retryAt = time.Time{}
 	if r.app.dispatcher != nil {
 		r.app.dispatcher.Wake()
 	}

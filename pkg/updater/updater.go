@@ -43,6 +43,17 @@ type UpdateInfo struct {
 	// (self-replace or installer). When false the frontend offers a plain
 	// "Download" button that opens the browser.
 	CanSelfApply bool `json:"canSelfApply"`
+
+	// Error says why the check could not be answered.
+	//
+	// It exists because App.CheckForUpdate returns no error across the bridge:
+	// a failed check produced the zero value, Available was false, and the
+	// renderer said "You're on the latest version". Every reason a check fails
+	// — no network, GitHub rate-limiting, a proxy, a refused response — was
+	// reported to the operator as reassurance. In a product whose updates carry
+	// security fixes, "I could not ask" and "there is nothing new" are not the
+	// same answer, and the difference is exactly the one an operator needs.
+	Error string `json:"error,omitempty"`
 }
 
 // pending caches the details needed by DownloadAndApply between the check and

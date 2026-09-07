@@ -3,6 +3,7 @@ package notify
 import (
 	"encoding/base64"
 	"os"
+	"strconv"
 	"strings"
 
 	"SnmpLens/pkg/events"
@@ -57,6 +58,66 @@ type SinkConfig struct {
 }
 
 var osHostname = os.Hostname
+
+// Destination names WHERE a sink sends, and is the identity a stored
+// credential is bound to.
+//
+// A sink's credential is write-only from the renderer by deliberate design:
+// ListSinks blanks Secret, and the settings form shows "configured" from
+// HasSecret without ever receiving the value. That control has one hole, and
+// it is the pair of methods that RESOLVE a credential by sink id while taking
+// the destination from whatever the caller sent — name an existing sink's id,
+// point the URL at your own server, receive the bearer token or the SMTP
+// password. The comment on NotifyTestSink used to accept this on the grounds
+// that a caller who can drive the renderer "could simply read the sink list
+// instead", which the adjacent ListSinks line disproves.
+//
+// So the rule is: a stored credential may be used only with the destination it
+// was stored against. What counts as the destination is per kind, and includes
+// the parts that decide whether the credential travels protected:
+//
+//   - webhook: the URL, EXACTLY as configured and NOT substituted. A URL may
+//     legitimately contain {{secret}} — Slack, Teams and Discord authenticate
+//     by the URL alone, so for those receivers the address IS the credential.
+//     Fingerprinting the substituted form would make every save look like a
+//     rebinding. The scheme is part of the string, so https to http is one.
+//   - email: host, port and encryption. The password goes to the SMTP server,
+//     so downgrading starttls to none on the same host puts it on the wire in
+//     the clear and is a rebinding for this purpose. AuthMethod is not here:
+//     "none" sends no password at all.
+//   - syslog: protocol and address. The credential is the mutual-TLS client
+//     KEY, which signs and is never transmitted, so this one cannot be
+//     exfiltrated by redirection — it is bound anyway, because a uniform rule
+//     is the one that still holds when a fourth kind is added.
+//
+// ok is false for a kind Build would refuse. The caller must treat that as
+// "cannot bind" rather than comparing two empty strings and finding them
+// equal.
+func Destination(cfg SinkConfig) (string, bool) {
+	norm := func(v string) string { return strings.ToLower(strings.TrimSpace(v)) }
+	switch cfg.Kind {
+	case SinkSyslog:
+		return SinkSyslog + "|" + norm(cfg.Syslog.Protocol) + "|" + norm(cfg.Syslog.Address), true
+	case SinkWebhook:
+		return SinkWebhook + "|" + strings.TrimSpace(cfg.Webhook.URL), true
+	case SinkEmail:
+		return SinkEmail + "|" + norm(cfg.Email.Host) + "|" +
+			strconv.Itoa(cfg.Email.Port) + "|" + norm(cfg.Email.Encryption), true
+	default:
+		return "", false
+	}
+}
+
+// SameDestination reports whether two configs send to the same place. A kind
+// nothing can build is never the same as anything, including itself.
+func SameDestination(a, b SinkConfig) bool {
+	da, ok := Destination(a)
+	if !ok {
+		return false
+	}
+	db, ok := Destination(b)
+	return ok && da == db
+}
 
 // Build turns a stored config into a live sink. secret is the sink's credential
 // (SMTP password, bearer token), supplied by the caller from secure storage.

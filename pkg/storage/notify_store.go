@@ -290,6 +290,12 @@ func (s *Storage) noteOutboxWrite() {
 		if err := s.TrimOutbox(OutboxRetention); err != nil {
 			log.Printf("storage: trimming the delivery outbox failed: %v", err)
 		}
+		if n, err := s.TrimDeadLetters(MaxDeadLetters); err != nil {
+			log.Printf("storage: capping the dead-letter list failed: %v", err)
+		} else if n > 0 {
+			log.Printf("storage: discarded %d dead letters beyond the newest %d; "+
+				"a destination has been failing long enough to fill the outbox", n, MaxDeadLetters)
+		}
 	}
 }
 
@@ -306,6 +312,11 @@ func (s *Storage) MarkFailed(id int64, errMsg string, nextTry time.Time, dead bo
 		SET attempts = attempts + 1, last_error = ?, next_try_at = ?, state = ?
 		WHERE id = ?`,
 		errMsg, nextTry.UTC().Format(time.RFC3339), state, id)
+	// A failure is a write like any other, and this was the one write path
+	// that did not say so. The trimmer therefore stopped exactly when the
+	// outbox was growing fastest: a sink nothing can reach produces failures
+	// and no MarkSent at all, so nothing ever ran retention again.
+	s.noteOutboxWrite()
 	return err
 }
 
@@ -333,8 +344,58 @@ func (s *Storage) RetryDelivery(id int64) error {
 // lost.
 const OutboxRetention = 14 * 24 * time.Hour
 
+// MaxDeadLetters caps how many given-up deliveries are kept.
+//
+// Retention deliberately does not cover dead rows — a dead letter is the only
+// record that a notification never arrived — and with nothing else bounding
+// them that made the outbox the one table in the database with no ceiling at
+// all. A trap flood routed to an unreachable collector produces one row per
+// event per sink, each holding the complete event JSON plus the rendered
+// subject and body, and every one of them ends up dead. That fills the disk,
+// and a full disk takes the event journal, the monitoring history and the
+// credential store with it.
+//
+// So the trade is explicit: the newest 5 000 are kept and older ones are
+// discarded, with a log line saying so. Five thousand is far more than an
+// operator will ever work through by hand, and the hundred-thousandth dead
+// letter from one broken relay carries no information the first hundred did
+// not. Losing the oldest few is a real loss; losing the database is a larger
+// one.
+//
+// The right answer to the underlying situation is a circuit breaker that stops
+// queueing for a destination that has been failing for hours. This is the
+// ceiling, not that.
+const MaxDeadLetters = 5000
+
+// TrimDeadLetters keeps the newest keep dead rows and reports how many it
+// removed.
+//
+// Ordered by id rather than created_at: id is AUTOINCREMENT, so it is the
+// insertion order exactly, and created_at is a text timestamp several rows can
+// share to the second.
+func (s *Storage) TrimDeadLetters(keep int) (int64, error) {
+	if keep < 0 {
+		keep = 0
+	}
+	res, err := s.db.Exec(`
+		DELETE FROM notify_outbox
+		WHERE state = 'dead'
+		  AND id <= COALESCE(
+		        (SELECT id FROM notify_outbox WHERE state = 'dead'
+		          ORDER BY id DESC LIMIT 1 OFFSET ?), -1)`, keep)
+	if err != nil {
+		return 0, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, nil
+	}
+	return n, nil
+}
+
 // TrimOutbox drops delivered rows older than the retention window. Dead letters
-// are deliberately excluded: they are kept until the operator deals with them.
+// are not covered here — they have their own ceiling, MaxDeadLetters, because
+// age is the wrong axis for a record the operator has not read yet.
 func (s *Storage) TrimOutbox(keepSentFor time.Duration) error {
 	cutoff := time.Now().Add(-keepSentFor).UTC().Format(time.RFC3339)
 	_, err := s.db.Exec(`DELETE FROM notify_outbox WHERE state = 'sent' AND created_at < ?`, cutoff)

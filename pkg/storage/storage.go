@@ -283,6 +283,12 @@ func Init(dbPath string) (*Storage, error) {
 
 	CREATE INDEX IF NOT EXISTS idx_ob_due ON notify_outbox(state, next_try_at);
 
+	-- Partial, for the dead-letter ceiling: idx_ob_due leads on state and then
+	-- next_try_at, which is the wrong order for "the newest N dead rows". The
+	-- same reasoning as the partial index behind the payload cap — the trimmer
+	-- runs on a write path and must not scan the table.
+	CREATE INDEX IF NOT EXISTS idx_ob_dead ON notify_outbox(id) WHERE state = 'dead';
+
 	-- How far routing has got through the event journal.
 	--
 	-- One row, enforced by the CHECK. It is written in the SAME transaction as
@@ -665,15 +671,64 @@ func (s *Storage) GetSessionStats(sessionID string) (SessionStats, error) {
 }
 
 // Cleanup deletes data points older than the given duration. Returns count deleted.
-func (s *Storage) Cleanup(olderThan time.Duration) (int64, error) {
+func (s *Storage) Cleanup(olderThan time.Duration) (int64, []string, error) {
 	cutoff := time.Now().Add(-olderThan).UTC().Format(time.RFC3339)
 	result, err := s.db.Exec(`DELETE FROM data_points WHERE timestamp < ?`, cutoff)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
-	// Also remove sessions with no data points that are inactive
-	s.db.Exec(`DELETE FROM sessions WHERE active = 0 AND id NOT IN (SELECT DISTINCT session_id FROM data_points)`)
-	return result.RowsAffected()
+	// Also remove sessions with no data points that are inactive.
+	//
+	// Their ids are RETURNED, because a session's community and v3 passphrases
+	// live in pkg/secrets under SessionRef(id) and not in this database — so a
+	// caller that deletes the row and nothing else leaves credentials behind
+	// under a key nothing will ever look up again. That was the defect in
+	// MonitorDeleteSession; deleting them in bulk here is the same defect at a
+	// larger scale, and the caller cannot fix it without knowing which ids went.
+	removed, err := s.deleteEmptyInactiveSessions()
+	if err != nil {
+		log.Printf("storage: cleanup could not remove empty sessions: %v", err)
+	}
+	n, err := result.RowsAffected()
+	return n, removed, err
+}
+
+// deleteEmptyInactiveSessions removes finished sessions that hold no data, and
+// says which ones it removed. Selected before the delete rather than after, in
+// one transaction, so the list matches what was actually removed.
+func (s *Storage) deleteEmptyInactiveSessions() ([]string, error) {
+	const where = `active = 0 AND id NOT IN (SELECT DISTINCT session_id FROM data_points)`
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	rows, err := tx.Query(`SELECT id FROM sessions WHERE ` + where)
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		return nil, tx.Commit()
+	}
+	if _, err := tx.Exec(`DELETE FROM sessions WHERE ` + where); err != nil {
+		return nil, err
+	}
+	return ids, tx.Commit()
 }
 
 // ImportLocalStorageData imports legacy data from the frontend's localStorage migration.
