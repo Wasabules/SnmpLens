@@ -1,12 +1,32 @@
 package snmp
 
 import (
+	"context"
 	"net"
 	"strings"
 	"testing"
 
 	"SnmpLens/pkg/events"
 )
+
+// newHeadlessClient builds a Client with NO Wails context.
+//
+// handleTrap emits every received trap to the webview when it has one, and the
+// Wails runtime answers a context it did not issue by ENDING THE PROCESS —
+// which under test looks like a trap that was never handled, or an INFORM that
+// was never acknowledged, i.e. exactly the results these tests assert. The
+// guarded branch in handleTrap is `if c.ctx != nil`, so the field has to be
+// nil, not a background context.
+//
+// Assigned rather than passed, because staticcheck refuses a literal nil
+// Context (SA1012) and it is right to: the reason this one is nil is a
+// property of the code under test, and it belongs in a comment rather than in
+// eight call sites.
+func newHeadlessClient() *Client {
+	c := NewClient(context.TODO())
+	c.ctx = nil
+	return c
+}
 
 // A panic while handling one datagram must cost that datagram and nothing
 // else. gosnmp's receive loop is a single goroutine with a recover in its
@@ -20,7 +40,7 @@ import (
 // recovered and handled it.
 func TestATrapHandlerPanicDoesNotEscape(t *testing.T) {
 	var got events.Event
-	c := NewClient(nil)
+	c := newHeadlessClient()
 	c.SetRecorder(events.RecorderFunc(func(e events.Event, _ string) error {
 		got = e
 		return nil
@@ -64,7 +84,7 @@ func TestATrapHandlerPanicDoesNotEscape(t *testing.T) {
 // predicted, so it must not itself panic on a missing address or a recorder
 // that fails.
 func TestTheRecoveryPathSurvivesANilAddressAndAFailingRecorder(t *testing.T) {
-	c := NewClient(nil)
+	c := newHeadlessClient()
 	c.SetRecorder(events.RecorderFunc(func(events.Event, string) error {
 		panic("the journal is the thing that broke")
 	}))

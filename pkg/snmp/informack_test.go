@@ -21,7 +21,7 @@ import (
 // PDU type gosnmp reads after the handler returns, and only a real sender can
 // say whether an acknowledgement arrived.
 func TestAnInformIsNotAcknowledgedWhenTheJournalWriteFails(t *testing.T) {
-	c := NewClient(nil)
+	c := newHeadlessClient()
 	c.SetRecorder(events.RecorderFunc(func(events.Event, string) error {
 		return errors.New("database is locked")
 	}))
@@ -33,7 +33,7 @@ func TestAnInformIsNotAcknowledgedWhenTheJournalWriteFails(t *testing.T) {
 	defer c.StopTrapListener()
 	waitBound(t, c)
 
-	sender := NewClient(nil)
+	sender := newHeadlessClient()
 	res := sender.SendInform("127.0.0.1", port, "public", "v2c", "1.3.6.1.6.3.1.1.5.3", nil)
 
 	if res.Acknowledged {
@@ -47,7 +47,7 @@ func TestAnInformIsNotAcknowledgedWhenTheJournalWriteFails(t *testing.T) {
 // the journal working, the INFORM IS acknowledged. A change that broke
 // acknowledgement altogether would pass the test above.
 func TestAnInformIsAcknowledgedWhenTheJournalWriteSucceeds(t *testing.T) {
-	c := NewClient(nil)
+	c := newHeadlessClient()
 	c.SetRecorder(events.Nop{})
 
 	port := freePort(t)
@@ -57,7 +57,7 @@ func TestAnInformIsAcknowledgedWhenTheJournalWriteSucceeds(t *testing.T) {
 	defer c.StopTrapListener()
 	waitBound(t, c)
 
-	sender := NewClient(nil)
+	sender := newHeadlessClient()
 	res := sender.SendInform("127.0.0.1", port, "public", "v2c", "1.3.6.1.6.3.1.1.5.3", nil)
 
 	if !res.Acknowledged {
@@ -74,7 +74,7 @@ func TestAnInformIsAcknowledgedWhenTheJournalWriteSucceeds(t *testing.T) {
 // Pinned here for the same reason trapbuf.go's reach into the socket is: the
 // upgrade should fail CI rather than change behaviour nobody is watching.
 func TestGosnmpStillLetsTheHandlerDeclineAnAcknowledgement(t *testing.T) {
-	c := NewClient(nil)
+	c := newHeadlessClient()
 	// A recorder that fails is what triggers the decline; if gosnmp started
 	// passing a copy, this listener would acknowledge anyway.
 	c.SetRecorder(events.RecorderFunc(func(events.Event, string) error {
@@ -88,7 +88,7 @@ func TestGosnmpStillLetsTheHandlerDeclineAnAcknowledgement(t *testing.T) {
 	defer c.StopTrapListener()
 	waitBound(t, c)
 
-	sender := NewClient(nil)
+	sender := newHeadlessClient()
 	start := time.Now()
 	res := sender.SendInform("127.0.0.1", port, "public", "v2c", "1.3.6.1.6.3.1.1.5.3", nil)
 	elapsed := time.Since(start)
@@ -104,11 +104,11 @@ func TestGosnmpStillLetsTheHandlerDeclineAnAcknowledgement(t *testing.T) {
 // a port nothing is listening on would time out and look exactly like the
 // suppression working.
 //
-// Note what the listeners above are built with: NewClient(nil). handleTrap
-// emits the trap to the webview when it has a context, and the Wails runtime
-// answers a context it did not issue by ENDING THE PROCESS — which under test
-// looks like an unacknowledged INFORM, i.e. exactly the result being asserted.
-// The nil context takes the guarded emit branch instead.
+// Note what the listeners above are built with: newHeadlessClient, which is
+// where the reason lives. handleTrap emits the trap to the webview when it has
+// a context, and the Wails runtime answers a context it did not issue by
+// ENDING THE PROCESS — which under test looks like an unacknowledged INFORM,
+// i.e. exactly the result being asserted.
 func waitBound(t *testing.T, c *Client) {
 	t.Helper()
 	// trapBound, not TrapListenerRunning(): the latter reports trapListener !=
