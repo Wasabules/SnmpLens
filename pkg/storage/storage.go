@@ -283,6 +283,12 @@ func Init(dbPath string) (*Storage, error) {
 
 	CREATE INDEX IF NOT EXISTS idx_ob_due ON notify_outbox(state, next_try_at);
 
+	-- Partial, for the dead-letter ceiling: idx_ob_due leads on state and then
+	-- next_try_at, which is the wrong order for "the newest N dead rows". The
+	-- same reasoning as the partial index behind the payload cap — the trimmer
+	-- runs on a write path and must not scan the table.
+	CREATE INDEX IF NOT EXISTS idx_ob_dead ON notify_outbox(id) WHERE state = 'dead';
+
 	-- How far routing has got through the event journal.
 	--
 	-- One row, enforced by the CHECK. It is written in the SAME transaction as
