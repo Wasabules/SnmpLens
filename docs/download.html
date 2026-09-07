@@ -6,7 +6,8 @@
 <meta name="theme-color" content="#1e1e1e" media="(prefers-color-scheme: dark)" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Download SnmpLens — SNMP MIB browser for Windows, macOS, Linux</title>
-<meta name="description" content="Download the SnmpLens SNMP MIB browser: Windows installer or portable exe, macOS .dmg, Linux .deb or tarball. One binary, no runtime, signed checksums." />
+<meta name="description" content="Download the free SnmpLens SNMP MIB browser: Windows installer or portable exe, macOS .dmg, Linux .deb or tarball. One binary, no runtime, signed checksums." />
+<meta name="robots" content="max-image-preview:large" />
 <link rel="canonical" href="https://snmplens.com/download.html" />
 <link rel="icon" type="image/png" sizes="48x48" href="assets/img/favicon-48.png" />
 <link rel="icon" type="image/png" sizes="192x192" href="assets/img/favicon-192.png" />
@@ -14,7 +15,7 @@
 
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="SnmpLens" />
-<meta property="og:locale" content="en" />
+<meta property="og:locale" content="en_GB" />
 <meta property="og:title" content="Download SnmpLens — SNMP MIB browser for Windows, macOS, Linux" />
 <meta property="og:description" content="Download the SnmpLens SNMP MIB browser: Windows installer or portable exe, macOS .dmg, Linux .deb or tarball. One binary, no runtime, signed checksums." />
 <meta property="og:url" content="https://snmplens.com/download.html" />
@@ -26,6 +27,7 @@
 <meta name="twitter:title" content="Download SnmpLens — SNMP MIB browser for Windows, macOS, Linux" />
 <meta name="twitter:description" content="Download the SnmpLens SNMP MIB browser: Windows installer or portable exe, macOS .dmg, Linux .deb or tarball. One binary, no runtime, signed checksums." />
 <meta name="twitter:image" content="https://snmplens.com/assets/img/og-card.png" />
+<meta name="twitter:image:alt" content="The SnmpLens Operations tab, showing a walk of ifTable as a sortable table." />
 <link rel="sitemap" type="application/xml" href="https://snmplens.com/sitemap.xml" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -41,6 +43,33 @@ try {
   var t = localStorage.getItem('snmplens-theme');
   if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
 } catch (e) {}
+</script>
+<!-- One WebPage node and its trail. The SoftwareApplication entity is
+     REFERENCED by @id, never restated: a second copy would give one entity two
+     conflicting url values and a second hand-maintained version number, and it
+     would buy no rich result. Breadcrumbs are not a ranking factor; this is
+     desktop-SERP presentation. -->
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@graph": [
+  {
+   "@type": "WebPage",
+   "@id": "https://snmplens.com/download.html",
+   "url": "https://snmplens.com/download.html",
+   "name": "Download SnmpLens",
+   "isPartOf": { "@id": "https://snmplens.com/#website" },
+   "about": { "@id": "https://snmplens.com/#app" }
+  },
+  {
+   "@type": "BreadcrumbList",
+   "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "SnmpLens", "item": "https://snmplens.com/" },
+    { "@type": "ListItem", "position": 2, "name": "Download", "item": "https://snmplens.com/download.html" }
+   ]
+  }
+ ]
+}
 </script>
 <link rel="stylesheet" href="assets/site.css" />
 </head>
@@ -70,9 +99,10 @@ try {
 
 <section class="wrap" style="padding-block:3.5rem 2rem">
   <p class="eyebrow">Download</p>
-  <h1 style="margin-bottom:0.3em">Get SnmpLens</h1>
+  <h1 style="margin-bottom:0.3em">Download the SnmpLens SNMP MIB browser</h1>
   <p class="lede">
-    One executable, no runtime, no installer required unless you want one.
+    Browse and edit MIBs, walk and set OIDs, and route trap alerts — one executable,
+    no runtime, no installer required unless you want one.
     Free software under the MIT licence.
   </p>
 
@@ -220,7 +250,8 @@ Get-FileHash .\SnmpLens-windows-amd64-setup.exe -Algorithm SHA256</code></pre>
     </p>
     <div class="table-scroll">
       <table>
-        <thead><tr><th>How you installed it</th><th>What happens</th></tr></thead>
+        <caption class="visually-hidden">How each installation method updates itself</caption>
+        <thead><tr><th scope="col">How you installed it</th><th scope="col">What happens</th></tr></thead>
         <tbody>
           <tr><td>Windows installer</td><td>Downloads and runs the new installer, then relaunches</td></tr>
           <tr><td>Windows or Linux portable binary</td><td>Replaces the running executable in place, then relaunches</td></tr>
@@ -262,7 +293,7 @@ wails build</code></pre>
         <p class="muted small" style="max-width:34ch">A desktop SNMP MIB browser, editor and alert router. MIT licensed, built in the open.</p>
       </div>
       <div>
-        <h4>Project</h4>
+        <h2>Project</h2>
         <ul>
           <li><a href="documentation.html">Documentation</a></li>
           <li><a href="download.html">Download</a></li>
@@ -270,7 +301,7 @@ wails build</code></pre>
         </ul>
       </div>
       <div>
-        <h4>Contribute</h4>
+        <h2>Contribute</h2>
         <ul>
           <li><a href="contributing.html">Contributing guide</a></li>
           <li><a href="security.html">Security policy</a></li>
@@ -278,7 +309,7 @@ wails build</code></pre>
         </ul>
       </div>
       <div>
-        <h4>Source</h4>
+        <h2>Source</h2>
         <ul>
           <li><a href="https://github.com/Wasabules/SnmpLens">Repository</a></li>
           <li><a href="https://github.com/Wasabules/SnmpLens/releases">Releases</a></li>

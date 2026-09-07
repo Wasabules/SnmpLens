@@ -7,6 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>SnmpLens documentation — SNMP walks, MIBs, traps and alerting</title>
 <meta name="description" content="How to use SnmpLens: run SNMP GET, WALK and GETBULK, load and fix MIBs, read conceptual tables, receive traps, poll OIDs and route alerts to syslog or email." />
+<meta name="robots" content="max-image-preview:large" />
 <link rel="canonical" href="https://snmplens.com/documentation.html" />
 <link rel="icon" type="image/png" sizes="48x48" href="assets/img/favicon-48.png" />
 <link rel="icon" type="image/png" sizes="192x192" href="assets/img/favicon-192.png" />
@@ -14,7 +15,7 @@
 
 <meta property="og:type" content="article" />
 <meta property="og:site_name" content="SnmpLens" />
-<meta property="og:locale" content="en" />
+<meta property="og:locale" content="en_GB" />
 <meta property="og:title" content="SnmpLens documentation — SNMP walks, MIBs, traps and alerting" />
 <meta property="og:description" content="How to use SnmpLens: run SNMP GET, WALK and GETBULK, load and fix MIBs, read conceptual tables, receive traps, poll OIDs and route alerts to syslog or email." />
 <meta property="og:url" content="https://snmplens.com/documentation.html" />
@@ -26,6 +27,7 @@
 <meta name="twitter:title" content="SnmpLens documentation — SNMP walks, MIBs, traps and alerting" />
 <meta name="twitter:description" content="How to use SnmpLens: run SNMP GET, WALK and GETBULK, load and fix MIBs, read conceptual tables, receive traps, poll OIDs and route alerts to syslog or email." />
 <meta name="twitter:image" content="https://snmplens.com/assets/img/og-card-docs.png" />
+<meta name="twitter:image:alt" content="The SnmpLens MIB editor with a vendor MIB open, syntax highlighted and its diagnostics listed." />
 <link rel="sitemap" type="application/xml" href="https://snmplens.com/sitemap.xml" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -268,7 +270,7 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
         <table>
           <caption class="visually-hidden">Credentials accepted by the test agent</caption>
           <thead>
-            <tr><th>Version</th><th>User</th><th>Authentication</th><th>Privacy</th></tr>
+            <tr><th scope="col">Version</th><th scope="col">User</th><th scope="col">Authentication</th><th scope="col">Privacy</th></tr>
           </thead>
           <tbody>
             <tr><td>v1 / v2c</td><td>—</td><td>community <code>public</code></td><td>—</td></tr>
@@ -358,7 +360,8 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
       <p>SNMP v1, v2c and v3 are supported everywhere, including traps and informs.</p>
       <div class="table-scroll">
         <table>
-          <thead><tr><th>v3 security</th><th>Supported</th></tr></thead>
+          <caption class="visually-hidden">SNMPv3 security levels and whether SnmpLens supports each</caption>
+          <thead><tr><th scope="col">v3 security</th><th scope="col">Supported</th></tr></thead>
           <tbody>
             <tr><td>Authentication</td><td>MD5, SHA-1, SHA-224, SHA-256, SHA-384, SHA-512</td></tr>
             <tr><td>Privacy</td><td>DES, AES-128, AES-192, AES-256</td></tr>
@@ -550,7 +553,8 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
       <p>Because three different things can be wrong, and each is found by a different pass:</p>
       <div class="table-scroll">
         <table>
-          <thead><tr><th>Pass</th><th>Finds</th><th>When</th></tr></thead>
+          <caption class="visually-hidden">The three validation passes, what each finds, and when it runs</caption>
+          <thead><tr><th scope="col">Pass</th><th scope="col">Finds</th><th scope="col">When</th></tr></thead>
           <tbody>
             <tr><td>Parser</td><td>Syntax errors, with line and column</td><td>As you type</td></tr>
             <tr><td>Loader</td><td>Whether the module can be built at all</td><td>On demand</td></tr>
@@ -661,7 +665,8 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
       </p>
       <div class="table-scroll">
         <table>
-          <thead><tr><th>View</th><th>Shows</th></tr></thead>
+          <caption class="visually-hidden">Monitoring views and what each one shows</caption>
+          <thead><tr><th scope="col">View</th><th scope="col">Shows</th></tr></thead>
           <tbody>
             <tr><td>Value</td><td>The counter or gauge as read</td></tr>
             <tr><td>Delta</td><td>The change since the previous sample</td></tr>
@@ -765,7 +770,8 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
       </p>
       <div class="table-scroll">
         <table>
-          <thead><tr><th>Field</th><th>Notes</th></tr></thead>
+          <caption class="visually-hidden">Fields of a routing rule and how each is matched</caption>
+          <thead><tr><th scope="col">Field</th><th scope="col">Notes</th></tr></thead>
           <tbody>
             <tr>
               <td>Source</td>
@@ -984,7 +990,8 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
       <p>Settings are in the application (<kbd>Ctrl ,</kbd>). What lands on disk:</p>
       <div class="table-scroll">
         <table>
-          <thead><tr><th>Platform</th><th>Directory</th></tr></thead>
+          <caption class="visually-hidden">Where SnmpLens keeps its files, per platform</caption>
+          <thead><tr><th scope="col">Platform</th><th scope="col">Directory</th></tr></thead>
           <tbody>
             <tr><td>Windows</td><td><code>%APPDATA%\SnmpLens\</code></td></tr>
             <tr><td>macOS</td><td><code>~/.config/SnmpLens/</code></td></tr>
@@ -994,7 +1001,8 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
       </div>
       <div class="table-scroll">
         <table>
-          <thead><tr><th>Item</th><th>What it is</th></tr></thead>
+          <caption class="visually-hidden">The items in the configuration directory and what each holds</caption>
+          <thead><tr><th scope="col">Item</th><th scope="col">What it is</th></tr></thead>
           <tbody>
             <tr><td><code>mibs/</code></td><td>The bundled MIBs, extracted on first run, plus everything you added</td></tr>
             <tr><td><code>mib-backups/</code></td><td>Automatic backups taken before a bundled MIB is overwritten</td></tr>
@@ -1015,7 +1023,8 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
       <h2>Keyboard shortcuts</h2>
       <div class="table-scroll">
         <table>
-          <thead><tr><th>Keys</th><th>Action</th></tr></thead>
+          <caption class="visually-hidden">Keyboard shortcuts and the action each performs</caption>
+          <thead><tr><th scope="col">Keys</th><th scope="col">Action</th></tr></thead>
           <tbody>
             <tr><td><kbd>Ctrl 1</kbd></td><td>Operations</td></tr>
             <tr><td><kbd>Ctrl 2</kbd></td><td>Traps</td></tr>
@@ -1105,7 +1114,7 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
         <p class="muted small" style="max-width:34ch">A desktop SNMP MIB browser, editor and alert router. MIT licensed, built in the open.</p>
       </div>
       <div>
-        <h4>Project</h4>
+        <h2>Project</h2>
         <ul>
           <li><a href="documentation.html">Documentation</a></li>
           <li><a href="download.html">Download</a></li>
@@ -1113,7 +1122,7 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
         </ul>
       </div>
       <div>
-        <h4>Contribute</h4>
+        <h2>Contribute</h2>
         <ul>
           <li><a href="contributing.html">Contributing guide</a></li>
           <li><a href="security.html">Security policy</a></li>
@@ -1121,7 +1130,7 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
         </ul>
       </div>
       <div>
-        <h4>Source</h4>
+        <h2>Source</h2>
         <ul>
           <li><a href="https://github.com/Wasabules/SnmpLens">Repository</a></li>
           <li><a href="https://github.com/Wasabules/SnmpLens/releases">Releases</a></li>
@@ -1153,8 +1162,14 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
     entries.forEach(function (e) { seen[e.target.id] = e.isIntersecting; });
     var current = null;
     Object.keys(map).forEach(function (id) { if (seen[id] && !current) current = id; });
-    links.forEach(function (a) { a.classList.remove('current'); });
-    if (current && map[current]) map[current].classList.add('current');
+    // Paired with aria-current, not colour alone. Position in a 1100-line page
+    // was conveyed by a tint and a 2 px border and nothing else; the site
+    // already uses the attribute correctly on the header nav one level up.
+    links.forEach(function (a) { a.classList.remove('current'); a.removeAttribute('aria-current'); });
+    if (current && map[current]) {
+      map[current].classList.add('current');
+      map[current].setAttribute('aria-current', 'true');
+    }
   }, { rootMargin: '-80px 0px -70% 0px' });
 
   Object.keys(map).forEach(function (id) { io.observe(document.getElementById(id)); });

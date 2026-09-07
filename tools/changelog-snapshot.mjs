@@ -60,6 +60,12 @@ if (!releases.length) {
   process.exit(1);
 }
 
+// The id a reader would guess, derived from the TAG rather than from the
+// heading text — which is `rel.name || rel.tag` and can differ from it. The
+// live path in github.js derives the same slug the same way; if the two ever
+// disagree, an anchor works only while GitHub is reachable.
+const slug = (tag) => String(tag || '').replace(/[^\w.-]/g, '');
+
 const html = releases.map((rel) => {
   const date = rel.at ? rel.at.slice(0, 10) : '';
   const body = (rel.body || '').trim();
@@ -78,7 +84,7 @@ const html = releases.map((rel) => {
     : '<p class="muted small">No notes were written for this release.</p>';
   return `      <section class="release-entry">
         <div class="release-head">
-          <h2><a href="${esc(rel.url)}">${esc(rel.name || rel.tag)}</a></h2>
+          <h2 id="${esc(slug(rel.tag))}"><a href="${esc(rel.url)}">${esc(rel.name || rel.tag)}</a><a class="anchor" href="#${esc(slug(rel.tag))}" aria-label="Link to ${esc(rel.tag)}">#</a></h2>
           <time datetime="${esc(rel.at)}">${esc(date)}</time>
           ${rel.pre ? '<span class="badge">pre-release</span>' : ''}
         </div>
@@ -112,3 +118,33 @@ if (s.includes(OPEN)) {
 
 writeFileSync(page, s);
 console.log(`Wrote ${releases.length} releases into docs/changelog.html.`);
+
+// And close the loop on the one version number the site hardcodes.
+//
+// index.html's SoftwareApplication carried "1.4.1" while this page linked
+// v1.5.0 — the single hardcoded version on a site where every other one is
+// fetched live, landed once and never touched again. It is entity accuracy for
+// JSON-LD consumers rather than a ranking input: Google does not read
+// softwareVersion for the software rich result.
+//
+// The first release that is neither a draft nor a prerelease, because
+// releases[0] can be either: `pre` is kept above and only ever used to BADGE
+// an entry.
+const stable = releases.find((x) => !x.pre);
+if (!stable) {
+  console.warn('No stable release found; index.html softwareVersion was left alone.');
+} else {
+  const version = String(stable.tag).replace(/^v/, '');
+  const indexPath = join(here, '..', 'docs', 'index.html');
+  const idx = readFileSync(indexPath, 'utf8');
+  const field = /("softwareVersion":\s*")[^"]*(")/;
+  if (!field.test(idx)) {
+    console.error('index.html no longer declares softwareVersion; not guessing where it went.');
+    process.exit(1);
+  }
+  const next = idx.replace(field, `$1${version}$2`);
+  if (next !== idx) {
+    writeFileSync(indexPath, next);
+    console.log(`Set index.html softwareVersion to ${version}.`);
+  }
+}

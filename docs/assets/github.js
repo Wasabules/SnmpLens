@@ -330,11 +330,27 @@
         head.className = 'release-head';
 
         var h2 = document.createElement('h2');
-        h2.id = 'v' + String(r.tag_name || '').replace(/[^\w.-]/g, '');
+        // tag_name is already "v1.5.0", so prefixing another 'v' emitted
+        // id="vv1.5.0" — and the BAKED path emitted no id at all. So
+        // changelog.html#v1.5.0, the shape anyone would guess, was dead in both
+        // states, and the id that did exist depended on whether the reader's IP
+        // had hit GitHub's 60/hr limit. Derived from the tag in both paths now.
+        var slug = String(r.tag_name || '').replace(/[^\w.-]/g, '');
+        h2.id = slug;
         var a = document.createElement('a');
         a.href = r.html_url;
         a.textContent = r.tag_name;
         h2.appendChild(a);
+        // A visible anchor, because an id no reader can obtain except through
+        // DevTools is most of why this went unnoticed.
+        if (slug) {
+          var perma = document.createElement('a');
+          perma.className = 'anchor';
+          perma.href = '#' + slug;
+          perma.textContent = '#';
+          perma.setAttribute('aria-label', 'Link to ' + r.tag_name);
+          h2.appendChild(perma);
+        }
         head.appendChild(h2);
 
         var date = document.createElement('span');

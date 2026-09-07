@@ -165,9 +165,23 @@
       var media = fig.querySelector('img, video');
       if (!media) return;
 
-      fig.tabIndex = 0;
-      fig.setAttribute('role', 'button');
-      fig.setAttribute('aria-label', 'Enlarge: ' + (media.alt || media.getAttribute('aria-label') || 'screenshot'));
+      /* A real button INSIDE the figure, not a role on the figure itself.
+       *
+       * role="button" overrode the native figure role, and a figcaption is the
+       * caption of a figure — so "A walk of ifTable, pivoted into columns and
+       * split by INDEX" stopped being the caption of anything, while the
+       * aria-label meant it was not part of the accessible name either. The
+       * text was in the DOM and related to nothing.
+       *
+       * It was also nested-interactive: playVisibleClips appends a real
+       * <button class="clip-play"> into this same element, so a reader with
+       * reduced motion — or any browser that declined autoplay — got a button
+       * inside a button. */
+      var label = 'Enlarge: ' + (media.alt || media.getAttribute('aria-label') || 'screenshot');
+      var zoomBtn = document.createElement('button');
+      zoomBtn.type = 'button';
+      zoomBtn.className = 'zoom-open';
+      zoomBtn.setAttribute('aria-label', label);
 
       function open() {
         var copy = media.cloneNode(true);
@@ -192,10 +206,8 @@
         dialog.showModal();
       }
 
-      fig.addEventListener('click', open);
-      fig.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
-      });
+      zoomBtn.addEventListener('click', open);
+      fig.appendChild(zoomBtn);
     });
   }
 
@@ -245,9 +257,11 @@
       btn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">'
         + '<path d="M8 5.5a1 1 0 0 1 1.53-.85l9 6.5a1 1 0 0 1 0 1.7l-9 6.5A1 1 0 0 1 8 18.5Z"/></svg>';
 
-      btn.addEventListener('click', function (e) {
-        // The figure opens the lightbox; the button plays in place.
-        e.stopPropagation();
+      btn.addEventListener('click', function () {
+        // No stopPropagation any more: the zoom lives on its own <button>
+        // overlay rather than on the figure, so this click has nothing to
+        // bubble into. Keeping it would describe a structure that no longer
+        // exists.
         btn.remove();
         v.controls = true;
         v.play().catch(function () { /* nothing more to offer */ });
@@ -256,21 +270,57 @@
       fig.appendChild(btn);
     }
 
-    if (still || !window.IntersectionObserver) {
-      clips.forEach(offer);
+    /* Attach the poster at the moment the clip is about to be seen.
+     *
+     * A poster has no lazy equivalent: the browser fetches it as soon as the
+     * attribute exists, whatever the element's visibility. Measured on the
+     * live page, all eight were requested at t≈180 ms — 368 KB, of which
+     * 194 KB was for the four figures the theme HIDES and nobody can see,
+     * fetched 701 ms before the LCP image and at a higher priority. site.css
+     * hides the <figure>, and the mechanism that correctly saves the
+     * wrong-theme stills does not reach inside it.
+     *
+     * So the file name waits in data-poster until this runs. A reader with no
+     * JavaScript gets correctly-sized empty boxes with their figcaptions
+     * instead of eight posters, which is the accepted cost.
+     */
+    function showPoster(v) {
+      if (!v.dataset.poster) return;
+      v.poster = v.dataset.poster;
+      delete v.dataset.poster;
+    }
+
+    if (!window.IntersectionObserver) {
+      /* No observer to hang it on, so the height is the gate. `forEach(offer)`
+       * with no gate is exactly how the saving is lost: it puts all eight
+       * posters back, including the four the theme hides. */
+      clips.forEach(function (v) {
+        if (v.getBoundingClientRect().height > 0) {
+          showPoster(v);
+          offer(v);
+        }
+      });
       return;
     }
 
     var seen = new IntersectionObserver(function (entries) {
       entries.forEach(function (e) {
         if (e.isIntersecting) {
+          showPoster(e.target);
+          /* A reader who asked for less motion still gets the observer, rather
+           * than the immediate `forEach(offer)` this used to take — that is
+           * what keeps the four hidden posters unfetched for them too. */
+          if (still) {
+            offer(e.target);
+            return;
+          }
           // play() rejects when the browser declines — a stricter autoplay
           // policy, a saver mode, a background tab. Not an error worth
           // surfacing: the poster is already the informative frame, so offer
           // the clip instead of reporting a failure nobody can act on.
           var p = e.target.play();
           if (p && p.catch) p.catch(function () { offer(e.target); });
-        } else {
+        } else if (!still) {
           e.target.pause();
         }
       });
