@@ -7,6 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>SnmpLens — free SNMP MIB browser for Windows, macOS and Linux</title>
 <meta name="description" content="SnmpLens is a free, open-source SNMP MIB browser for Windows, macOS and Linux. Walk devices over v1, v2c and v3, receive traps, chart OIDs and route alerts." />
+<meta name="robots" content="max-image-preview:large" />
 <link rel="canonical" href="https://snmplens.com/" />
 <link rel="icon" type="image/png" sizes="48x48" href="assets/img/favicon-48.png" />
 <link rel="icon" type="image/png" sizes="192x192" href="assets/img/favicon-192.png" />
@@ -14,7 +15,7 @@
 
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="SnmpLens" />
-<meta property="og:locale" content="en" />
+<meta property="og:locale" content="en_GB" />
 <meta property="og:title" content="SnmpLens — free SNMP MIB browser for Windows, macOS and Linux" />
 <meta property="og:description" content="SnmpLens is a free, open-source SNMP MIB browser for Windows, macOS and Linux. Walk devices over v1, v2c and v3, receive traps, chart OIDs and route alerts." />
 <meta property="og:url" content="https://snmplens.com/" />
@@ -26,6 +27,7 @@
 <meta name="twitter:title" content="SnmpLens — free SNMP MIB browser for Windows, macOS and Linux" />
 <meta name="twitter:description" content="SnmpLens is a free, open-source SNMP MIB browser for Windows, macOS and Linux. Walk devices over v1, v2c and v3, receive traps, chart OIDs and route alerts." />
 <meta name="twitter:image" content="https://snmplens.com/assets/img/og-card.png" />
+<meta name="twitter:image:alt" content="The SnmpLens Operations tab: a MIB tree on the left, a walk of ifTable rendered as a sortable table on the right." />
 <link rel="sitemap" type="application/xml" href="https://snmplens.com/sitemap.xml" />
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -43,6 +45,22 @@ try {
   if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
 } catch (e) {}
 </script>
+<!-- Preload the LCP screenshot.
+     imagesrcset and imagesizes must match the <img> below byte for byte or the
+     preload is not reused and the image is fetched twice. The media query
+     follows the SYSTEM setting while the toggle above stamps data-theme, so a
+     reader who chose light on a dark machine preloads one file they will not
+     use; it is a hint, so that degrades to the previous behaviour rather than
+     costing anything. loading="lazy" stays on both <img> tags: it is what stops
+     the wrong-theme copy downloading at all. -->
+<link rel="preload" as="image" fetchpriority="high" media="(prefers-color-scheme: dark)"
+      href="assets/img/operations-dark-1200.webp"
+      imagesrcset="assets/img/operations-dark-1200.webp 1200w, assets/img/operations-dark-2000.webp 2000w"
+      imagesizes="(max-width: 1180px) 100vw, 1140px" />
+<link rel="preload" as="image" fetchpriority="high" media="(prefers-color-scheme: light)"
+      href="assets/img/operations-light-1200.webp"
+      imagesrcset="assets/img/operations-light-1200.webp 1200w, assets/img/operations-light-2000.webp 2000w"
+      imagesizes="(max-width: 1180px) 100vw, 1140px" />
 <link rel="stylesheet" href="assets/site.css" />
 
 <script type="application/ld+json">
@@ -56,10 +74,10 @@ try {
    "alternateName": "SnmpLens SNMP MIB browser",
    "description": "A free, open-source SNMP MIB browser, trap receiver and OID monitor for Windows, macOS and Linux. Walk devices over SNMP v1, v2c and v3, read conceptual tables as tables, edit MIBs with real diagnostics, and route alerts to syslog, a webhook or email.",
    "url": "https://snmplens.com/",
-   "applicationCategory": "NetworkingApplication",
+   "applicationCategory": "UtilitiesApplication",
    "applicationSubCategory": "SNMP MIB browser",
    "operatingSystem": "Windows 10, Windows 11, macOS, Linux",
-   "softwareVersion": "1.4.1",
+   "softwareVersion": "1.5.0",
    "downloadUrl": "https://github.com/Wasabules/SnmpLens/releases/latest",
    "installUrl": "https://snmplens.com/download.html",
    "releaseNotes": "https://snmplens.com/changelog.html",
@@ -190,11 +208,11 @@ try {
   <!-- ================= HERO ================= -->
   <section class="wrap hero">
     <p class="eyebrow">Open source SNMP tooling</p>
-    <h1>A desktop SNMP browser, MIB editor and alert router.</h1>
+    <h1>A desktop SNMP MIB browser, editor and alert router.</h1>
     <p class="lede">
-      One native binary for Windows, macOS and Linux. Walk devices over v1, v2c or v3,
-      read conceptual tables as tables, edit MIBs with diagnostics that name the line,
-      and route what matters to syslog, a webhook or your inbox.
+      A free MIB browser in one native binary for Windows, macOS and Linux. Walk devices
+      over v1, v2c or v3, read conceptual tables as tables, edit MIBs with diagnostics
+      that name the line, and route what matters to syslog, a webhook or your inbox.
     </p>
 
     <div class="btn-row">
@@ -214,7 +232,7 @@ try {
     </div>
 
     <div class="hero-meta">
-      <span>MIT licensed</span>
+      <span>Free — MIT licensed</span>
       <span>Windows · macOS · Linux</span>
       <span>SNMP v1 / v2c / v3</span>
       <span>No agent, no account</span>
@@ -243,7 +261,7 @@ try {
   <section class="section">
     <div class="wrap">
       <p class="eyebrow">What it is</p>
-      <h2 style="margin-top:0">The whole loop, in one binary.</h2>
+      <h2 style="margin-top:0">The whole SNMP loop, in one binary.</h2>
       <p class="lede" style="margin-bottom:2.5rem">
         Find the OID, read it from the device, work out whether the number is a problem,
         tell somebody. Four jobs, four screens — no collector to deploy, no server to run,
@@ -299,7 +317,7 @@ try {
   <section class="section">
     <div class="wrap">
       <p class="eyebrow">Capabilities</p>
-      <h2 style="margin-top:0">Seven workspaces</h2>
+      <h2 style="margin-top:0">Seven workspaces: browse MIBs, walk devices, receive traps</h2>
       <p class="lede" style="margin-bottom:2.5rem">
         Each tab is a job, and the keyboard shortcut is in brackets.
       </p>
@@ -405,56 +423,56 @@ try {
       <div class="grid grid-2" style="align-items:start; margin-top:2.5rem">
         <figure class="clip clip-light" data-zoom>
           <video src="assets/video/walk-to-table-light.mp4"
-                 poster="assets/video/walk-to-table-light.jpg"
+                 data-poster="assets/video/walk-to-table-light.jpg" width="800" height="458"
                  loop muted playsinline preload="none"
                  aria-label="A walk of ifTable arriving as a flat list and pivoting into a table"></video>
           <figcaption>155 varbinds arrive flat, then pivot into columns split by <code>INDEX</code>.</figcaption>
         </figure>
         <figure class="clip clip-dark" data-zoom>
           <video src="assets/video/walk-to-table-dark.mp4"
-                 poster="assets/video/walk-to-table-dark.jpg"
+                 data-poster="assets/video/walk-to-table-dark.jpg" width="800" height="458"
                  loop muted playsinline preload="none"
                  aria-label="A walk of ifTable arriving as a flat list and pivoting into a table"></video>
           <figcaption>155 varbinds arrive flat, then pivot into columns split by <code>INDEX</code>.</figcaption>
         </figure>
         <figure class="clip clip-light" data-zoom>
           <video src="assets/video/monitor-live-light.mp4"
-                 poster="assets/video/monitor-live-light.jpg"
+                 data-poster="assets/video/monitor-live-light.jpg" width="800" height="618"
                  loop muted playsinline preload="none"
                  aria-label="Five series polled live, one of them climbing past its threshold"></video>
           <figcaption>Five series polled on a schedule — one climbs past 80% and is marked out of range.</figcaption>
         </figure>
         <figure class="clip clip-dark" data-zoom>
           <video src="assets/video/monitor-live-dark.mp4"
-                 poster="assets/video/monitor-live-dark.jpg"
+                 data-poster="assets/video/monitor-live-dark.jpg" width="800" height="618"
                  loop muted playsinline preload="none"
                  aria-label="Five series polled live, one of them climbing past its threshold"></video>
           <figcaption>Five series polled on a schedule — one climbs past 80% and is marked out of range.</figcaption>
         </figure>
         <figure class="clip clip-light" data-zoom>
           <video src="assets/video/anonymous-mode-light.mp4"
-                 poster="assets/video/anonymous-mode-light.jpg"
+                 data-poster="assets/video/anonymous-mode-light.jpg" width="800" height="458"
                  loop muted playsinline preload="none"
                  aria-label="Anonymous Mode replacing every address on screen with a stable alias"></video>
           <figcaption>Every address replaced in place, consistently, on one keystroke.</figcaption>
         </figure>
         <figure class="clip clip-dark" data-zoom>
           <video src="assets/video/anonymous-mode-dark.mp4"
-                 poster="assets/video/anonymous-mode-dark.jpg"
+                 data-poster="assets/video/anonymous-mode-dark.jpg" width="800" height="458"
                  loop muted playsinline preload="none"
                  aria-label="Anonymous Mode replacing every address on screen with a stable alias"></video>
           <figcaption>Every address replaced in place, consistently, on one keystroke.</figcaption>
         </figure>
         <figure class="clip clip-light" data-zoom>
           <video src="assets/video/mib-editor-light.mp4"
-                 poster="assets/video/mib-editor-light.jpg"
+                 data-poster="assets/video/mib-editor-light.jpg" width="800" height="508"
                  loop muted playsinline preload="none"
                  aria-label="A MIB opening in the editor and its diagnostics arriving underneath"></video>
           <figcaption>A MIB opens, highlights, and the analysis arrives under it.</figcaption>
         </figure>
         <figure class="clip clip-dark" data-zoom>
           <video src="assets/video/mib-editor-dark.mp4"
-                 poster="assets/video/mib-editor-dark.jpg"
+                 data-poster="assets/video/mib-editor-dark.jpg" width="800" height="508"
                  loop muted playsinline preload="none"
                  aria-label="A MIB opening in the editor and its diagnostics arriving underneath"></video>
           <figcaption>A MIB opens, highlights, and the analysis arrives under it.</figcaption>
@@ -631,7 +649,7 @@ try {
   <section class="section">
     <div class="wrap">
       <p class="eyebrow">More of it</p>
-      <h2 style="margin-top:0">Screenshots</h2>
+      <h2 style="margin-top:0">SnmpLens screenshots: MIB tree, trap listener, monitoring charts</h2>
 
       <div class="grid grid-2" style="margin-top:2rem">
         <figure class="shot">
@@ -740,7 +758,7 @@ try {
         </p>
       </div>
       <div>
-        <h4>Project</h4>
+        <h2>Project</h2>
         <ul>
           <li><a href="documentation.html">Documentation</a></li>
           <li><a href="download.html">Download</a></li>
@@ -748,7 +766,7 @@ try {
         </ul>
       </div>
       <div>
-        <h4>Contribute</h4>
+        <h2>Contribute</h2>
         <ul>
           <li><a href="contributing.html">Contributing guide</a></li>
           <li><a href="security.html">Security policy</a></li>
@@ -756,7 +774,7 @@ try {
         </ul>
       </div>
       <div>
-        <h4>Source</h4>
+        <h2>Source</h2>
         <ul>
           <li><a href="https://github.com/Wasabules/SnmpLens">Repository</a></li>
           <li><a href="https://github.com/Wasabules/SnmpLens/releases">Releases</a></li>

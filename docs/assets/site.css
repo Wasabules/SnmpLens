@@ -371,6 +371,10 @@ kbd {
 /* --- screenshot frame --------------------------------------------------- */
 
 .shot {
+  /* The overlay button needs a containing block. .clip already had one for
+     .clip-play; this one had none, so the zoom control would have positioned
+     itself against the viewport. */
+  position: relative;
   border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
@@ -658,6 +662,41 @@ tbody tr:last-child td { border-bottom: 0; }
   margin-bottom: 0.35rem;
 }
 
+/* The permalink beside a release heading.
+ *
+ * Quiet until the heading is hovered or the link itself is focused, because it
+ * is a tool rather than content — but it must be REACHABLE, which is the whole
+ * point: the ids existed and no reader could obtain one except through
+ * DevTools, which is most of why the wrong id ("vv1.5.0") went unnoticed. It
+ * stays visible on keyboard focus, so it is not a mouse-only affordance. */
+.release-head h2 { position: relative; }
+.release-head h2 .anchor {
+  /* Out of flow. At opacity 0 it still occupied its inline box and pushed the
+     release date 20 px to the right — measured, before and after. Absolute at
+     left:100% puts it immediately after the heading text, inside the 0.75rem
+     flex gap, so nothing moves whether it is visible or not. */
+  position: absolute;
+  left: 100%;
+  top: 0;
+  margin-left: 0.15rem;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.release-head:hover h2 .anchor,
+.release-head h2 .anchor:focus-visible {
+  opacity: 1;
+}
+@media (hover: none) {
+  /* No hover to reveal it, so it simply stays. */
+  .release-head h2 .anchor { opacity: 0.55; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .release-head h2 .anchor { transition: none; }
+}
+
 .tag {
   font-family: var(--font-mono);
   font-size: 0.95rem;
@@ -744,7 +783,12 @@ tbody tr:last-child td { border-bottom: 0; }
   gap: 2rem;
 }
 
-.footer-grid h4 {
+/* h2, not h4: these are top-level groupings inside the contentinfo
+   landmark, and every content page jumped straight from an h2 to them —
+   a document outline with a hole in it, which is the standard this site
+   states on download.html. This block already sets the size, so it wins
+   on specificity over the global h2 and nothing moves visually. */
+.footer-grid h2 {
   font-family: var(--font-mono);
   font-size: 0.7rem;
   letter-spacing: 0.09em;
@@ -786,6 +830,15 @@ tbody tr:last-child td { border-bottom: 0; }
   padding: 0; margin: -1px; overflow: hidden;
   clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
+
+/* A caption needs the display override to go with it.
+ *
+ * `position: absolute` does not take a `display: table-caption` box out of the
+ * table's layout: the browser keeps a caption row, so the table dropped ~18 px
+ * and grew a stray rule above its header. Measured before and after, on
+ * contributing.html — and it was already true of the one caption that predates
+ * this, at documentation.html, where nobody had looked. */
+caption.visually-hidden { display: block; }
 
 .skip-link {
   position: absolute;
@@ -1066,10 +1119,36 @@ figure.clip {
   cursor: zoom-in;
 }
 
-figure.shot:focus-visible,
-figure.clip:focus-visible {
+/* The focus ring follows the thing that is actually focusable.
+ *
+ * It used to sit on the figure, which carried tabIndex and role="button". Both
+ * are gone — a figcaption must be the caption of a figure, and a real <button>
+ * nested inside one that only claimed to be a button was nested-interactive —
+ * so without moving this, the new control would have no visible focus at all. */
+.zoom-open:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
+}
+
+/* An invisible overlay covering the media, so the whole picture stays the
+ * click target it has always been. It sits under .clip-play, which is painted
+ * later in the DOM, so a clip offers both: play in place, or enlarge. */
+.zoom-open {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: none;
+  cursor: zoom-in;
+}
+
+/* The caption is lifted over the overlay so it stays selectable text and any
+   link inside it stays clickable. It is the only child that must not be
+   covered; the media below it is exactly what the control is for. */
+figure.shot > figcaption,
+figure.clip > figcaption {
+  position: relative;
+  z-index: 1;
 }
 
 .zoom {
