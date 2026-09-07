@@ -73,6 +73,21 @@ const (
 	// notify.StopGrace does: an application that will not close is worse than a
 	// flush that finishes on the next launch, which the watermark makes safe.
 	routeStopGrace = 5 * time.Second
+
+	// routeRetryMin and routeRetryMax bound how fast a FAILING flush is retried.
+	//
+	// A batch that cannot be written is put back, and putting it back into the
+	// queue meant the loop read it straight out again: measured at 1244 failed
+	// database transactions in 300 ms, about 4 000 a second, each one a write
+	// attempt against a database that had just refused one. Shutdown never
+	// converged either — drain kept finding the events it had just requeued, so
+	// stopping took the whole 5 s grace period every time.
+	//
+	// Failed events wait in `deferred` instead, held by the router goroutine
+	// and retried on a doubling backoff. They stay in `inflight` throughout, so
+	// the watermark cannot pass them whatever happens here.
+	routeRetryMin = 1 * time.Second
+	routeRetryMax = 30 * time.Second
 )
 
 // eventRouter carries journalled events from their producer to the outbox.
@@ -92,6 +107,12 @@ type eventRouter struct {
 	// flushed": that would strand a lower-seq event still waiting.
 	//
 	// What is safe is the LOWEST seq still in flight, minus one.
+	// Retry bookkeeping for batches that could not be written, touched only by
+	// the router goroutine.
+	deferred []events.Event
+	retryAt  time.Time
+	backoff  time.Duration
+
 	// Pool-wait bookkeeping, touched only by the router goroutine.
 	lastPoolCount int64
 	lastPoolWait  time.Duration
@@ -245,6 +266,7 @@ func (r *eventRouter) start() {
 				}
 
 			case <-ticker.C:
+				r.takeDeferred(&batch)
 				r.flush(&batch)
 				r.watchPool()
 			}
@@ -266,6 +288,50 @@ func (r *eventRouter) drain(batch *[]events.Event) {
 			return
 		}
 	}
+}
+
+// defer1 holds an event for a later attempt.
+//
+// Bounded: past routeQueueDepth the surplus is dropped FROM THE LIST ONLY. It
+// stays in `inflight`, so the watermark cannot pass it and the next launch
+// replays it from the journal — which is the same guarantee a crash would
+// give, and strictly better than growing without limit inside a process that
+// is already failing to write.
+func (r *eventRouter) defer1(e events.Event) {
+	if len(r.deferred) >= routeQueueDepth {
+		return
+	}
+	r.deferred = append(r.deferred, e)
+}
+
+// failedFlush doubles the retry delay.
+func (r *eventRouter) failedFlush() {
+	if r.backoff == 0 {
+		r.backoff = routeRetryMin
+	} else if r.backoff < routeRetryMax {
+		r.backoff *= 2
+		if r.backoff > routeRetryMax {
+			r.backoff = routeRetryMax
+		}
+	}
+	r.retryAt = time.Now().Add(r.backoff)
+}
+
+// takeDeferred moves due events back into the batch, bounded by the batch size
+// so one transaction stays one transaction.
+func (r *eventRouter) takeDeferred(batch *[]events.Event) {
+	if len(r.deferred) == 0 || time.Now().Before(r.retryAt) {
+		return
+	}
+	room := routeBatchSize - len(*batch)
+	if room <= 0 {
+		return
+	}
+	if room > len(r.deferred) {
+		room = len(r.deferred)
+	}
+	*batch = append(*batch, r.deferred[:room]...)
+	r.deferred = append(r.deferred[:0], r.deferred[room:]...)
 }
 
 // flush routes a batch and writes it, with the watermark, in one transaction.
@@ -290,10 +356,7 @@ func (r *eventRouter) flush(batch *[]events.Event) {
 			// Best effort at retrying it in this process too; if the queue is
 			// full, the watermark simply stays put until a restart.
 			failed++
-			select {
-			case r.queue <- e:
-			default:
-			}
+			r.defer1(e)
 			continue
 		}
 		seqs = append(seqs, e.Seq)
@@ -313,19 +376,18 @@ func (r *eventRouter) flush(batch *[]events.Event) {
 		// attempt here too — and if the queue is full, staying owed is the
 		// safe outcome, since a replay is INSERT OR IGNORE against
 		// UNIQUE(event_id, sink_id).
-		requeued := 0
 		for _, e := range routed {
-			select {
-			case r.queue <- e:
-				requeued++
-			default:
-			}
+			r.defer1(e)
 		}
-		log.Printf("notify: writing %d routed events failed (%d requeued, the rest stay "+
-			"owed and are replayed next launch): %v", len(routed), requeued, err)
+		r.failedFlush()
+		log.Printf("notify: writing %d routed events failed; retrying in %s (they stay "+
+			"owed, so the watermark cannot pass them): %v", len(routed), r.backoff, err)
 		return
 	}
 	r.settle(seqs, 0)
+	// A write got through, so whatever was wrong is not wrong any more.
+	r.backoff = 0
+	r.retryAt = time.Time{}
 	if r.app.dispatcher != nil {
 		r.app.dispatcher.Wake()
 	}
