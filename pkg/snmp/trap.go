@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -197,7 +198,59 @@ func (c *Client) TrapListenerRunning() bool {
 	return c.trapListener != nil
 }
 
+// recoverTrapHandler contains a panic raised while handling one datagram.
+//
+// This is the only place in pkg/snmp where a panic can be reached by an
+// unauthenticated remote party, and it was the only background goroutine in
+// the application without a guard. gosnmp recovers inside its DECODER
+// (marshal.go and v3.go) and nowhere around OnNewTrap, and its receive loop is
+// one goroutine, so a panic anywhere below this line unwinds through
+// listenUDP and ends the process.
+//
+// Measured, with a handler that dereferences a nil PDU on the first trap:
+// unguarded the process died with "exit status 2" and never saw the second
+// trap; guarded it recovered and handled it. The cost of that crash is not one
+// datagram — it is every monitoring session, every threshold, the notification
+// dispatcher and the outbox drain, from a UDP packet nobody authenticated.
+//
+// Losing the trap is the right outcome here, and the reason it is acceptable
+// is that the panic happened before anything durable was written. What is NOT
+// acceptable is losing it silently, so the event says which source produced
+// it. DedupKey is per source: a device sending the same malformed varbind ten
+// thousand times must not become ten thousand major events.
+//
+// The journal write gets a guard of its own. A recover that panics is a
+// process kill with extra steps, and this one runs when the process is already
+// in a state nobody predicted.
+func (c *Client) recoverTrapHandler(addr *net.UDPAddr) {
+	r := recover()
+	if r == nil {
+		return
+	}
+	source := "unknown"
+	if addr != nil && addr.IP != nil {
+		source = addr.IP.String()
+	}
+	log.Printf("PANIC while handling a trap from %s: %v\n%s", source, r, debug.Stack())
+
+	defer func() { _ = recover() }()
+	_ = c.recorder.Record(events.Event{
+		Ts:       time.Now().UTC().Format(time.RFC3339),
+		Category: events.CategorySystem,
+		Kind:     events.KindSystemListenerError,
+		Severity: events.SevMajor.String(),
+		State:    events.StateOneshot,
+		Source:   source,
+		DedupKey: "trap.panic|" + source,
+		TitleKey: "events.kind." + events.KindSystemListenerError,
+		Summary:  fmt.Sprintf("Dropped a trap from %s: the handler panicked (%v)", source, r),
+		Params:   map[string]any{"source": source},
+	}, "")
+}
+
 func (c *Client) handleTrap(packet *gosnmp.SnmpPacket, addr *net.UDPAddr) {
+	defer c.recoverTrapHandler(addr)
+
 	log.Printf("Received trap from %s (Version: %s)", addr.IP.String(), packet.Version)
 
 	vars := make([]Result, 0)
