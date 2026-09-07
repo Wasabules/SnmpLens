@@ -469,6 +469,33 @@ func (a *App) importSingleFile(src string) MibImportResult {
 		}
 	}
 
+	// A standard MIB that ships in the binary is never overwritten from here.
+	//
+	// This is not an exotic case: vendor archives routinely include their own
+	// SNMPv2-SMI, SNMPv2-TC and SNMPv2-CONF, and nearly every other MIB imports
+	// from those three. Replacing one with a copy that differs or is truncated
+	// breaks the tree for everything, and it STAYS broken across restarts,
+	// because ensureStandardMibs restores only files that are ABSENT
+	// (`if _, err := os.Stat(destPath); err == nil { continue }`) — a replaced
+	// one is never repaired. So one drag-and-drop of a vendor zip could take
+	// out MIB resolution for good, with nothing saying what happened.
+	//
+	// Refused rather than backed up: the MIB editor already owns deliberate
+	// change to a bundled file, with its own backup directory and
+	// MibEditorRestoreBundled to undo it. An import is a bulk operation nobody
+	// reads the results of unless something goes wrong, which is exactly when
+	// this needs to be loud. The refusal reaches the per-file error list the
+	// import dialog already shows.
+	if _, bundled := a.bundledContent(name); bundled {
+		log.Printf("ImportMibFiles: refused to replace the bundled %s", name)
+		return MibImportResult{
+			FileName: name,
+			Success:  false,
+			Error: fmt.Sprintf("%s ships with SnmpLens and nearly every MIB imports from it; "+
+				"replacing it would break MIB resolution. Use the MIB editor if you really mean to change it.", name),
+		}
+	}
+
 	if err := os.WriteFile(dst, srcData, 0644); err != nil {
 		log.Printf("ImportMibFiles: failed to write %s: %v", dst, err)
 		return MibImportResult{FileName: name, Success: false, Error: fmt.Sprintf("write error: %v", err)}
@@ -1167,6 +1194,48 @@ func (a *App) sinkSecret(sinkID string) string {
 	return v
 }
 
+// storedSink returns the destination currently on file under id.
+//
+// There is no GetSink, and adding one for this would put a second read path
+// against notify_sinks; the list is a handful of rows read on a settings
+// screen, not a hot path.
+func (a *App) storedSink(id string) (notify.SinkConfig, bool) {
+	if a.storage == nil || id == "" {
+		return notify.SinkConfig{}, false
+	}
+	sinks, err := a.storage.ListSinks()
+	if err != nil {
+		return notify.SinkConfig{}, false
+	}
+	for _, s := range sinks {
+		if s.ID == id {
+			return s, true
+		}
+	}
+	return notify.SinkConfig{}, false
+}
+
+// boundSinkSecret returns the stored credential for cfg.ID, but ONLY if cfg
+// still names the destination that credential was stored against.
+//
+// See notify.Destination for why this exists: resolving by id while taking the
+// address from the caller is the one path that turns a write-only credential
+// store into a read primitive.
+func (a *App) boundSinkSecret(cfg notify.SinkConfig) (string, error) {
+	stored, ok := a.storedSink(cfg.ID)
+	if !ok {
+		// Nothing on file under that id: a sink being tested before it is
+		// saved. There is no stored credential to hand out, and the caller
+		// supplying one in cfg.Secret is the normal path for a new sink.
+		return "", nil
+	}
+	if !notify.SameDestination(stored, cfg) {
+		return "", fmt.Errorf("this destination differs from the saved one, so the stored credential " +
+			"cannot be used with it. Enter the credential to test the new destination")
+	}
+	return a.sinkSecret(cfg.ID), nil
+}
+
 // SecretsBackend names the protection actually in use on this machine, so the
 // settings UI can state what is true here rather than what was hoped for.
 func (a *App) SecretsBackend() string {
@@ -1247,9 +1316,28 @@ func (a *App) NotifySaveSink(cfg notify.SinkConfig) (notify.SinkConfig, error) {
 	incoming := cfg.Secret
 	cfg.Secret = ""
 
+	// Pointing an EXISTING sink at a new destination is the durable version of
+	// the same problem NotifyTestSink has: the save path never compared the
+	// address it was given with the address the credential was stored against,
+	// so a renderer that cannot read a credential could still aim it. Read the
+	// previous row BEFORE writing over it.
+	previous, hadRow := a.storedSink(cfg.ID)
+	rebound := hadRow && !notify.SameDestination(previous, cfg)
+
 	saved, err := a.storage.SaveSink(cfg)
 	if err != nil {
 		return saved, err
+	}
+
+	// A credential does not follow its destination. Deleted rather than
+	// refused: a collector really does move, and refusing the save would leave
+	// the operator editing a form they cannot submit, holding a credential
+	// they cannot read back. HasSecret then comes back false, which is what
+	// the form shows, and the renderer says so out loud.
+	if rebound && incoming == "" && a.secrets != nil {
+		if err := a.secrets.Delete(secrets.SinkRef(saved.ID)); err != nil {
+			log.Printf("NotifySaveSink: could not unbind the credential of %s: %v", saved.ID, err)
+		}
 	}
 
 	// An empty field means "leave the stored credential alone", not "clear it":
@@ -1362,13 +1450,23 @@ func (a *App) NotifyTestSink(cfg notify.SinkConfig) error {
 	// already-saved sink authenticating with nothing. The symptom was the
 	// confusing one — "Test fails but the alerts themselves arrive".
 	//
-	// Looking the credential up by sink id means a caller could name one sink
-	// and point the test at another destination. That is accepted: the caller
-	// is our own renderer, and anyone able to drive it already has the user's
-	// session and could simply read the sink list instead.
+	// Looking the credential up by sink id is BOUND to the destination stored
+	// under that id. Without that, this method is a read primitive over a
+	// write-only store: name an existing sink's id, point the URL at your own
+	// server, press Test, receive the bearer token or the SMTP password.
+	//
+	// The comment that used to stand here accepted it, on the grounds that
+	// anyone able to drive the renderer "could simply read the sink list
+	// instead". The line above in NotifyListSinks — sinks[i].Secret = "" —
+	// disproves that: the store is deliberately write-only from the renderer,
+	// and this was the one hole in it.
 	secret := cfg.Secret
 	if secret == "" {
-		secret = a.sinkSecret(cfg.ID)
+		bound, err := a.boundSinkSecret(cfg)
+		if err != nil {
+			return err
+		}
+		secret = bound
 	}
 	sink, ok := notify.Build(cfg, secret)
 	if !ok {
