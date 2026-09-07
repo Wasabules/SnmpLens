@@ -865,6 +865,7 @@
     "secretOnFile": "stored — leave blank to keep it",
     "secretSet": "credential set",
     "secretCleared": "Credential removed.",
+    "secretUnbound": "The destination changed, so the stored credential was removed. Enter it again to authenticate to the new one.",
     "clearSecret": "Remove the stored credential",
     "secretHint": "Stored outside the database, protected by: {backend}",
     "urlSecretHint": "Slack, Teams and Discord authenticate by the URL alone. Write {{secret}} in it and that part is kept with the credential instead of in the database.",

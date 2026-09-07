@@ -865,6 +865,7 @@
     "secretOnFile": "已保存 — 留空则保持不变",
     "secretSet": "已设置凭据",
     "secretCleared": "凭据已删除。",
+    "secretUnbound": "目标已更改，因此已删除已保存的凭据。请重新输入以向新目标进行身份验证。",
     "clearSecret": "删除已保存的凭据",
     "secretHint": "存储在数据库之外，保护方式：{backend}",
     "urlSecretHint": "Slack、Teams 和 Discord 仅凭 URL 进行身份验证。在其中写入 {{secret}}，该部分将与凭据一同保存，而不写入数据库。",

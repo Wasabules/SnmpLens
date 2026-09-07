@@ -103,10 +103,19 @@
         editingSink.email.to = editingSink.email.toRaw.split(/[,;]+/).map((x) => x.trim()).filter(Boolean);
         delete editingSink.email.toRaw;
       }
-      await NotifySaveSink(editingSink);
+      // A stored credential is bound to the destination it was stored
+      // against, so pointing an existing sink somewhere new unbinds it. Say
+      // so: the form will show the credential as no longer configured, and a
+      // sink that silently stops authenticating is the failure this whole
+      // screen exists to avoid.
+      const hadSecret = !!editingSink.hasSecret && !editingSink.secret;
+      const saved = await NotifySaveSink(editingSink);
       editingSink = null;
       await reload();
       notificationStore.add(get(_)('notify.sinkSaved'), 'success');
+      if (hadSecret && saved && !saved.hasSecret) {
+        notificationStore.add(get(_)('notify.secretUnbound'), 'info');
+      }
     } catch (e) {
       notificationStore.add(String(e), 'error');
     }

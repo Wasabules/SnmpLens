@@ -865,6 +865,7 @@
     "secretOnFile": "gespeichert — leer lassen zum Beibehalten",
     "secretSet": "Zugangsdaten gesetzt",
     "secretCleared": "Zugangsdaten entfernt.",
+    "secretUnbound": "Das Ziel wurde geändert, daher wurden die gespeicherten Zugangsdaten entfernt. Geben Sie sie erneut ein, um sich beim neuen Ziel zu authentifizieren.",
     "clearSecret": "Gespeicherte Zugangsdaten entfernen",
     "secretHint": "Außerhalb der Datenbank gespeichert, geschützt durch: {backend}",
     "urlSecretHint": "Slack, Teams und Discord authentifizieren sich allein über die URL. Schreiben Sie {{secret}} hinein, dann wird dieser Teil beim Zugangsdatum statt in der Datenbank gespeichert.",
