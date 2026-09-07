@@ -17,7 +17,13 @@
       notificationStore.add(t('update.checkFailed', { values: { error: String(e) } }), 'error');
       return null;
     });
-    if (info && !info.available) {
+    // .error before .available: a check that failed reports the zero value, so
+    // "not available" is also what a failure looks like. Saying "you're on the
+    // latest version" because GitHub was unreachable is reassurance produced
+    // by a failure, in a product whose updates carry security fixes.
+    if (info && info.error) {
+      notificationStore.add(t('update.checkFailed', { values: { error: info.error } }), 'error');
+    } else if (info && !info.available) {
       notificationStore.add(t('update.upToDate'), 'success');
     }
   }

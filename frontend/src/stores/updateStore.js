@@ -51,6 +51,11 @@ function createUpdateStore() {
       update((s) => ({
         ...s,
         checking: false,
+        // A check that could not be answered is an ERROR, not "up to date".
+        // Go returns no error across the bridge — it returns UpdateInfo with
+        // the reason in .error — so this is the only place the difference
+        // exists.
+        error: info.error || null,
         currentVersion: strip(info.currentVersion) || s.currentVersion,
         available: !!info.available,
         latestVersion: strip(info.latestVersion),
