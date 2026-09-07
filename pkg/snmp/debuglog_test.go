@@ -240,3 +240,55 @@ func TestTrapListenerLoggingIsScrubbedAndGated(t *testing.T) {
 		t.Errorf("a trap sender's community was buffered: %s", entries[0].Message)
 	}
 }
+
+// A community is an arbitrary octet string, and the redaction used to assume
+// it contained neither a comma nor a space.
+//
+// `Community:[^,]*` is right until a community has a comma in it, and gosnmp's
+// SafeString prints "…, Community:%s, PDUType:%s, …" on every sending packet —
+// so the tail survived into the ring buffer the debug panel shows. "Parsed
+// community \S*" had the same shape of bug with a space, on every received
+// packet, where the community belongs to whoever sent the trap.
+func TestTheCommunityIsRedactedWhateverIsInIt(t *testing.T) {
+	cases := []struct {
+		name      string
+		line      string
+		mustNotBe []string
+	}{
+		{
+			"a comma in a sending packet",
+			"SENDING PACKET: Version:2c, MsgFlags:NoAuthNoPriv, Community:pub,lic,secret, PDUType:GetRequest, MsgID:1",
+			[]string{"lic", "secret"},
+		},
+		{
+			"a space in a parsed community",
+			"Parsed community hunter two three",
+			[]string{"two", "three"},
+		},
+		{
+			"the ordinary case still works",
+			"SENDING PACKET: Version:2c, Community:public, PDUType:GetRequest, MsgID:1",
+			[]string{"public"},
+		},
+	}
+
+	for _, c := range cases {
+		got := scrubSecrets(c.line, nil)
+		for _, leak := range c.mustNotBe {
+			if strings.Contains(got, leak) {
+				t.Errorf("%s: %q survived redaction:\n%s", c.name, leak, got)
+			}
+		}
+		// The line has to stay readable, or the debug panel loses its point.
+		if !strings.Contains(got, redacted) {
+			t.Errorf("%s: nothing was redacted at all: %s", c.name, got)
+		}
+	}
+
+	// The fields AFTER the community must survive: redacting to the end of the
+	// line would be safe and would also throw away what the log is read for.
+	got := scrubSecrets("Version:2c, Community:pub,lic, PDUType:GetRequest, MsgID:77", nil)
+	if !strings.Contains(got, "PDUType:GetRequest") || !strings.Contains(got, "MsgID:77") {
+		t.Errorf("redaction ate the rest of the packet: %s", got)
+	}
+}

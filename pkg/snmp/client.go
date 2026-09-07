@@ -384,8 +384,23 @@ const redacted = "[redacted]"
 // formats "Community:%s" on every SENDING PACKET (marshal.go:159), and
 // unmarshalling logs "Parsed community %s" (marshal.go:1010).
 var (
-	communityField  = regexp.MustCompile(`Community:[^,]*`)
-	parsedCommunity = regexp.MustCompile(`Parsed community \S*`)
+	// gosnmp's SafeString prints "…, Community:%s, PDUType:%s, …", so the
+	// community is bounded by the NEXT FIELD NAME, not by the next comma. It
+	// used to be matched as `Community:[^,]*`, which is right until a community
+	// contains a comma — and then everything after it survived into the buffer
+	// the debug panel shows. A community is an arbitrary octet string; nothing
+	// stops an operator, or a trap sender, from putting a comma in one.
+	//
+	// Anchored first, loose second: the anchored pattern is exact for the shape
+	// gosnmp actually logs, and the loose one still covers any other line that
+	// names the field.
+	communityInPacket = regexp.MustCompile(`Community:.*?, PDUType:`)
+	communityField    = regexp.MustCompile(`Community:[^,
+]*`)
+	// "Parsed community %s" ends the line, so everything to the end of it is
+	// the value. `\S*` stopped at the first space and leaked the rest of a
+	// community containing one.
+	parsedCommunity = regexp.MustCompile(`Parsed community .*`)
 	// A raw packet, rendered by fmt as decimal bytes. gosnmp prints whole
 	// datagrams this way — "GET RESPONSE OK: %+v" on a []byte (marshal.go:313),
 	// and the same shape at "Last 4 Bytes" and "Enterprise" — and in SNMPv1 and
@@ -410,6 +425,7 @@ var (
 // shape the patterns do not know, which is the failure mode a gosnmp upgrade
 // would introduce silently.
 func scrubSecrets(msg string, secrets []string) string {
+	msg = communityInPacket.ReplaceAllString(msg, "Community:"+redacted+", PDUType:")
 	msg = communityField.ReplaceAllString(msg, "Community:"+redacted)
 	msg = parsedCommunity.ReplaceAllString(msg, "Parsed community "+redacted)
 	msg = byteDump.ReplaceAllStringFunc(msg, redactBytes)
