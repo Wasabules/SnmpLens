@@ -342,7 +342,13 @@ Binaries ship with an Ed25519-signed `SnmpLens-checksums.txt`, verified by the i
           <time datetime="2026-07-09T22:11:31Z">2026-07-09</time>
           
         </div>
-        <pre class="release-notes no-copy">**Full Changelog**: https://github.com/Wasabules/SnmpLens/compare/v1.2.0...v1.3.1</pre>
+        <pre class="release-notes no-copy">## v1.3.1
+
+**No code change.** This tag points at the same commit as v1.3.0 (`c1daf05`) and was published six minutes later to correct the release assets. Everything described in the v1.3.0 notes applies unchanged.
+
+If you are on v1.3.0 there is nothing here to update to. The first release with changes after this one is [v1.3.2](https://github.com/Wasabules/SnmpLens/releases/tag/v1.3.2).
+
+**Full Changelog**: https://github.com/Wasabules/SnmpLens/compare/v1.2.0...v1.3.1</pre>
       </section>
       <section class="release-entry">
         <div class="release-head">
@@ -350,7 +356,17 @@ Binaries ship with an Ed25519-signed `SnmpLens-checksums.txt`, verified by the i
           <time datetime="2026-07-09T22:05:48Z">2026-07-09</time>
           
         </div>
-        <pre class="release-notes no-copy">**Full Changelog**: https://github.com/Wasabules/SnmpLens/compare/v1.2.0...v1.3.0</pre>
+        <pre class="release-notes no-copy">## What's new in v1.3.0
+
+### Features
+- **In-app auto-update** — SnmpLens checks GitHub Releases and can download and install an update from within the app. Release checksums are signed with Ed25519 and verified before anything is applied; a missing or invalid signature is a refusal, not a warning.
+- **Lucide icon set throughout**, replacing the emojis, so the interface renders the same on every platform and at every font setting.
+- **New application icon.**
+
+### Fixes
+- Settings and MIB-tree layout issues.
+
+**Full Changelog**: https://github.com/Wasabules/SnmpLens/compare/v1.2.0...v1.3.0</pre>
       </section>
       <section class="release-entry">
         <div class="release-head">
@@ -358,7 +374,14 @@ Binaries ship with an Ed25519-signed `SnmpLens-checksums.txt`, verified by the i
           <time datetime="2026-06-19T19:49:48Z">2026-06-19</time>
           
         </div>
-        <pre class="release-notes no-copy">**Full Changelog**: https://github.com/Wasabules/SnmpLens/compare/v1.1.1...v1.2.0</pre>
+        <pre class="release-notes no-copy">## What's new in v1.2.0
+
+### Features
+- **The standard MIBs now ship inside the binary.** SNMPv2-SMI, SNMPv2-TC, IF-MIB, IP-MIB, TCP-MIB, UDP-MIB and the rest are extracted to the per-user MIB directory on first run, so a fresh install resolves `sysDescr` and walks `ifTable` without downloading anything first.
+- **Import button in the target dialog**, next to drag and drop, for anyone who would rather pick a file.
+- **Targets can be edited** individually instead of removed and re-added.
+
+**Full Changelog**: https://github.com/Wasabules/SnmpLens/compare/v1.1.1...v1.2.0</pre>
       </section>
       <section class="release-entry">
         <div class="release-head">
@@ -366,7 +389,12 @@ Binaries ship with an Ed25519-signed `SnmpLens-checksums.txt`, verified by the i
           <time datetime="2026-04-02T13:36:40Z">2026-04-02</time>
           
         </div>
-        <pre class="release-notes no-copy">**Full Changelog**: https://github.com/Wasabules/SnmpLens/compare/v1.1.0...v1.1.1</pre>
+        <pre class="release-notes no-copy">## What's new in v1.1.1
+
+### Fixes
+- **The Windows installer no longer asks for administrator rights.** It installs per user (`RequestExecutionLevel user`), which is all SnmpLens needs: it writes only to the user's own configuration directory and registers no service. An SNMP browser that demands elevation to install is one that does not get installed on a managed workstation.
+
+**Full Changelog**: https://github.com/Wasabules/SnmpLens/compare/v1.1.0...v1.1.1</pre>
       </section>
       <section class="release-entry">
         <div class="release-head">
@@ -374,7 +402,21 @@ Binaries ship with an Ed25519-signed `SnmpLens-checksums.txt`, verified by the i
           <time datetime="2026-04-01T19:54:45Z">2026-04-01</time>
           
         </div>
-        <pre class="release-notes no-copy">**Full Changelog**: https://github.com/Wasabules/SnmpLens/compare/v1.0.0...v1.1.0</pre>
+        <pre class="release-notes no-copy">## What's new in v1.1.0
+
+### Features
+- **Anonymous Mode** — masks target addresses and other identifying values on screen, so a session can be shown or screen-shared without exposing the estate. Display masking only, and deliberately off again on restart.
+- **Drag and drop MIB import** — drop a file or a whole folder onto the window. Duplicates are detected rather than silently overwritten, and anything that fails to load is reported in a modal that says which file and why.
+- **Native OS notifications** — Windows toast, macOS and Linux, for traps arriving while the window is not in front.
+- **Value formatting** — typed SNMP values are rendered as what they are instead of as raw text.
+- **Bundled SNMP test agent** — `tools/snmp_test_agent.py` serves v1, v2c and v3 with realistic OIDs and periodic traps, so the app can be exercised without a device.
+
+### Fixes
+- **The monitoring graph and the debug panel showed nothing.** Both are now driven by the polling store rather than by their own state.
+- **Traps mounted incorrectly** on arrival.
+- **Per-target overrides could not be bound dynamically** — Svelte does not allow a dynamic `bind:`, so the override form now dispatches instead.
+
+**Full Changelog**: https://github.com/Wasabules/SnmpLens/compare/v1.0.0...v1.1.0</pre>
       </section>
       <section class="release-entry">
         <div class="release-head">
@@ -382,7 +424,20 @@ Binaries ship with an Ed25519-signed `SnmpLens-checksums.txt`, verified by the i
           <time datetime="2026-04-01T15:27:16Z">2026-04-01</time>
           
         </div>
-        <pre class="release-notes no-copy">**Full Changelog**: https://github.com/Wasabules/SnmpLens/commits/v1.0.0</pre>
+        <pre class="release-notes no-copy">## What's new in v1.0.0
+
+The first release. SnmpLens is a desktop SNMP MIB browser in a single native binary — no runtime, no agent, no account — for Windows, macOS and Linux.
+
+### Features
+- **MIB browser** — load MIB files from a persistent directory, browse the tree, and read a node's definition, syntax and access. Per-file load diagnostics report which module failed and why.
+- **SNMP operations** — GET, GETNEXT, GETBULK, SET and WALK over SNMPv1, v2c and v3, against one target or several at once.
+- **Traps** — a built-in listener that receives traps, and a sender for testing a collector.
+- **Discovery** — sweep a range and report which hosts answer SNMP.
+- **Monitoring** — poll an OID on a schedule and chart it, with the history kept in a local SQLite database.
+- **Network tools** — ping and traceroute in pure Go, with no elevated privileges.
+- **Working aids** — favourites, saved queries, recent history, a result diff, a breadcrumb over the tree, a context menu and a keyboard-shortcut reference.
+- **Five languages** — English, French, German, Spanish and Chinese.
+- **Debug panel** — the raw SNMP exchange, when a device does something unexpected.</pre>
       </section>
       <p class="muted small">
         This list is a snapshot, written into the page so that it can be read without
