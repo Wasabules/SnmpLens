@@ -318,10 +318,45 @@ func describeNonMib(raw []byte) (summary, hint string, bad bool) {
 		return "the file is not valid UTF-8", "save it as UTF-8; a stray byte in a DESCRIPTION is enough to stop the parser", true
 	}
 	if !strings.Contains(strings.ToUpper(string(head)), "DEFINITIONS") {
-		return "no DEFINITIONS clause was found near the start of the file",
+		return noDefinitionsSummary,
 			"a MIB begins with `MODULE-NAME DEFINITIONS ::= BEGIN`; this file may be a fragment or a different format", true
 	}
 	return "", "", false
+}
+
+// noDefinitionsSummary is named because ImportRejection has to tell that answer
+// apart from the others: it is the only one describeNonMib reaches by looking
+// at a WINDOW rather than at the bytes themselves.
+const noDefinitionsSummary = "no DEFINITIONS clause was found near the start of the file"
+
+// ImportRejection says why a file must not be copied into the MIB directory,
+// or reports that it may be.
+//
+// This is a security boundary as much as a usability one. ImportMibFiles reads
+// any absolute path the renderer names and copies it in; MibEditorRead then
+// hands the content back. Those two calls together are an arbitrary-file-read
+// primitive over the bridge, and the only thing standing between them is what
+// is allowed to land in the directory. A private key, a password file, a
+// browser profile: none of them are a MIB, and none of them get in.
+//
+// It does NOT try to decide whether a MIB is VALID — a MIB with a syntax error
+// is exactly what the diagnosis feature exists for, and refusing those would
+// remove the reason someone imports a broken file in the first place.
+//
+// The DEFINITIONS check is re-run over the WHOLE file rather than
+// describeNonMib's first 4 KiB. That window is right for a diagnosis and too
+// strict for a gate: vendor MIBs routinely carry a licence header longer than
+// that, and refusing a real MIB is a worse failure here than accepting a text
+// file that happens to contain the word.
+func ImportRejection(raw []byte) (summary, hint string, reject bool) {
+	s, h, bad := describeNonMib(raw)
+	if !bad {
+		return "", "", false
+	}
+	if s == noDefinitionsSummary && strings.Contains(strings.ToUpper(string(raw)), "DEFINITIONS") {
+		return "", "", false
+	}
+	return s, h, true
 }
 
 // missingImports reports the modules an IMPORTS clause names that are not

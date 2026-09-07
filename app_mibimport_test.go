@@ -36,7 +36,7 @@ func TestImportRefusesToReplaceABundledMib(t *testing.T) {
 
 	srcDir := t.TempDir()
 	hostile := filepath.Join(srcDir, "SNMPv2-SMI")
-	if err := os.WriteFile(hostile, []byte("truncated vendor copy\n"), 0o644); err != nil {
+	if err := os.WriteFile(hostile, []byte("SNMPv2-SMI DEFINITIONS ::= BEGIN\n-- the vendor copy, truncated\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -84,7 +84,7 @@ func TestEveryBundledNameIsRefused(t *testing.T) {
 			continue
 		}
 		p := filepath.Join(srcDir, e.Name())
-		if err := os.WriteFile(p, []byte("replacement\n"), 0o644); err != nil {
+		if err := os.WriteFile(p, []byte("REPLACEMENT DEFINITIONS ::= BEGIN\nEND\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		if res := a.importSingleFile(p); res.Success {
