@@ -81,17 +81,8 @@ func TestBundledPresetsAreExtractedOnceAndNotRestored(t *testing.T) {
 	a, dir := newPresetApp(t)
 	a.presets = presets
 
-	// newPresetApp already created the directory, which is what a second run
-	// looks like: nothing is written.
-	a.ensureBundledPresets()
-	if list := a.ListPresets(); len(list) != 0 {
-		t.Fatalf("an existing library was populated anyway: %+v", list)
-	}
-
-	// A first run: the directory does not exist yet.
-	if err := os.RemoveAll(dir); err != nil {
-		t.Fatal(err)
-	}
+	// A first run. The directory existing is not what decides this — see
+	// TestAnEmptyDirectoryStillGetsTheExamples for why it cannot be.
 	a.ensureBundledPresets()
 	first := a.ListPresets()
 	if len(first) < 3 {
@@ -103,7 +94,8 @@ func TestBundledPresetsAreExtractedOnceAndNotRestored(t *testing.T) {
 		}
 	}
 
-	// Deleting one and restarting must leave it deleted.
+	// Deleting one and restarting must leave it deleted: the marker is what
+	// says the examples have been offered, and it survives the deletion.
 	if err := a.DeletePreset(first[0].File); err != nil {
 		t.Fatal(err)
 	}
@@ -116,6 +108,16 @@ func TestBundledPresetsAreExtractedOnceAndNotRestored(t *testing.T) {
 		if p.File == first[0].File {
 			t.Errorf("%s was restored after being deleted", p.File)
 		}
+	}
+
+	// And deleting the whole directory is how somebody asks for them back: the
+	// marker goes with it.
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatal(err)
+	}
+	a.ensureBundledPresets()
+	if again := a.ListPresets(); len(again) != len(first) {
+		t.Errorf("%d preset(s) after deleting the directory, want %d", len(again), len(first))
 	}
 }
 
@@ -143,5 +145,60 @@ func TestAtLeastOneBundledPresetClaimsADevice(t *testing.T) {
 	}
 	if _, matched := rankForDevice(list, "1.3.6.1.4.1.911.1"); matched != 0 {
 		t.Error("a Cisco preset matched enterprise 911; the prefix is being compared as text")
+	}
+}
+
+// The directory existing is NOT the same as the library existing.
+//
+// presetDir() creates the directory as a SIDE EFFECT and is called by
+// ListPresets, so opening the preset settings once — on any earlier version —
+// was enough to make every later startup skip the extraction. An installation
+// that had been running for weeks got no examples at all, which is exactly what
+// happened. The marker is what "already offered" means now.
+func TestAnEmptyDirectoryStillGetsTheExamples(t *testing.T) {
+	a, dir := newPresetApp(t) // newPresetApp calls presetDir(), which creates it
+	a.presets = presets
+
+	if _, err := os.Stat(dir); err != nil {
+		t.Fatalf("setup: the directory should already exist: %v", err)
+	}
+	a.ensureBundledPresets()
+
+	list := a.ListPresets()
+	if len(list) < 3 {
+		t.Fatalf("an empty-but-existing directory got %d preset(s)", len(list))
+	}
+	// The marker is a dotfile, so it is not one of them.
+	for _, p := range list {
+		if strings.HasPrefix(p.File, ".") {
+			t.Errorf("the marker is listed as a preset: %s", p.File)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, extractedMarker)); err != nil {
+		t.Errorf("nothing recorded that the extraction ran: %v", err)
+	}
+}
+
+// A library somebody has already curated is left alone, and the marker is
+// written anyway so the examples do not land on top of it later.
+func TestAnExistingLibraryIsNotOverwritten(t *testing.T) {
+	a, dir := newPresetApp(t)
+	a.presets = presets
+	a.importSinglePreset(writeSrc(t, t.TempDir(), "mine.json", goodPreset))
+
+	a.ensureBundledPresets()
+
+	list := a.ListPresets()
+	if len(list) != 1 || list[0].File != "mine.json" {
+		t.Fatalf("a curated library was added to: %+v", list)
+	}
+	if _, err := os.Stat(filepath.Join(dir, extractedMarker)); err != nil {
+		t.Error("the marker was not written, so the examples would arrive on a later start")
+	}
+
+	// And a second start changes nothing.
+	a.ensureBundledPresets()
+	if list := a.ListPresets(); len(list) != 1 {
+		t.Errorf("%d preset(s) after a second start", len(list))
 	}
 }

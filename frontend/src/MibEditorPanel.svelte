@@ -1122,7 +1122,10 @@
   .outline {
     display: flex;
     flex-direction: column;
-    min-height: 0;
+    /* A share of the rail rather than the remainder of it, and a floor so it
+       cannot be squeezed out of existence by a long file list. */
+    flex: 1 1 60%;
+    min-height: 6rem;
     border-top: 1px solid var(--border-color);
     padding-top: 0.35rem;
   }
@@ -1158,6 +1161,7 @@
     padding: 0;
     overflow-y: auto;
     min-height: 0;
+    flex: 1 1 auto;
   }
 
   .outline-item {
@@ -1245,13 +1249,17 @@
     justify-content: center;
   }
 
+  /* The rail holds TWO lists and has to divide its height between them.
+     `flex: 1` here claimed everything left over, so the outline below rendered
+     at zero height: present in the DOM, scrollable, and invisible. With no file
+     open there is no outline and this still takes the whole rail. */
   .files {
     list-style: none;
     margin: 0;
     padding: 0;
     overflow-y: auto;
-    min-height: 0;
-    flex: 1;
+    min-height: 4rem;
+    flex: 1 1 40%;
   }
 
   .file {

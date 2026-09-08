@@ -615,7 +615,10 @@
     "presetDetectHint": "Das Gerät fragen, was es ist, und passende Vorlagen nach oben stellen.",
     "presetMatched": "{count} Vorlage(n) passen zu diesem Gerät.",
     "presetNoMatch": "Keine Vorlage nennt dieses Gerät.",
-    "presetDeviceMasked": "Gerät erkannt"
+    "presetDeviceMasked": "Gerät erkannt",
+    "presetBind": "Binden",
+    "presetBindTooltip": "Eine Dashboard-Vorlage an dieses Gerät binden",
+    "presetAlreadyBound": "Bereits gebunden: {names}. Eine weitere fügt eine zweite Abfrageuhr hinzu."
   },
   "update": {
     "available": "SnmpLens {version} ist verfügbar",

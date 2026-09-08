@@ -615,7 +615,10 @@
     "presetDetectHint": "Ask this equipment what it is, and put the presets that match it first.",
     "presetMatched": "{count} preset(s) match this equipment.",
     "presetNoMatch": "No preset names this equipment.",
-    "presetDeviceMasked": "Equipment identified"
+    "presetDeviceMasked": "Equipment identified",
+    "presetBind": "Bind",
+    "presetBindTooltip": "Bind a dashboard preset to this equipment",
+    "presetAlreadyBound": "Already bound: {names}. Binding another adds a second poll clock."
   },
   "update": {
     "available": "SnmpLens {version} is available",

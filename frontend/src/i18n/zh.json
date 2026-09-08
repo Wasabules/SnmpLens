@@ -615,7 +615,10 @@
     "presetDetectHint": "询问该设备的型号，并把匹配的预设排在前面。",
     "presetMatched": "有 {count} 个预设匹配此设备。",
     "presetNoMatch": "没有预设指明此设备。",
-    "presetDeviceMasked": "设备已识别"
+    "presetDeviceMasked": "设备已识别",
+    "presetBind": "绑定",
+    "presetBindTooltip": "将仪表板预设绑定到此设备",
+    "presetAlreadyBound": "已绑定：{names}。再绑定一个会增加一个轮询时钟。"
   },
   "update": {
     "available": "SnmpLens {version} 可用",

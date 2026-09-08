@@ -615,7 +615,10 @@
     "presetDetectHint": "Preguntar al equipo qué es y poner primero los presets que le corresponden.",
     "presetMatched": "{count} preset(s) corresponden a este equipo.",
     "presetNoMatch": "Ningún preset menciona este equipo.",
-    "presetDeviceMasked": "Equipo identificado"
+    "presetDeviceMasked": "Equipo identificado",
+    "presetBind": "Vincular",
+    "presetBindTooltip": "Vincular un preset de panel a este equipo",
+    "presetAlreadyBound": "Ya vinculado: {names}. Vincular otro añade un segundo reloj de sondeo."
   },
   "update": {
     "available": "SnmpLens {version} está disponible",
