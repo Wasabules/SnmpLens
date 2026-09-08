@@ -159,18 +159,23 @@ function createPollingStore() {
       throw e;
     }
 
+    // Built through the SAME function as a session restored from Go. It used
+    // to be a second object literal here, and it had already drifted: it never
+    // set needsConnection, so the field consumers test was simply absent on
+    // every session created in this window and present on every restored one.
     update((sessions) => [...sessions, {
-      id,
-      name: (name || '').trim(),
-      oid: oidList[0],
-      oids: oidList,
-      targets,
-      interval: intervalMs,
-      snmpVersion,
-      results: [],
+      ...sessionFromBackend({
+        id,
+        name: (name || '').trim(),
+        oid: oidKey,
+        targets,
+        intervalMs,
+        snmpVersion,
+        startedAt: new Date().toISOString(),
+        thresholds: thresholdsPayload || {},
+        conn,
+      }),
       running: true,
-      startedAt: new Date().toISOString(),
-      thresholds: thresholdsPayload || {},
     }]);
 
     try {
@@ -227,6 +232,45 @@ function createPollingStore() {
     await Promise.allSettled(ids.map((id) => MonitorStop(id)));
   }
 
+  /**
+   * One session, in the shape the rest of the interface expects.
+   *
+   * ONE function, for the same reason normalisePoint is one: there are two ways
+   * a session arrives from Go — restored at startup, and handed back by
+   * PresetBind — and two builders of the same object is the defect, not the
+   * symptom. Every consumer reads `oids`, `interval` and `needsConnection`, and
+   * a second copy that forgets one of them produces a session that renders
+   * almost correctly.
+   */
+  function sessionFromBackend(s, results = []) {
+    const oids = (s.oid || '').split(',').map((o) => o.trim()).filter(Boolean);
+    return {
+      id: s.id,
+      name: s.name || '',
+      oid: oids[0] || '',
+      oids,
+      targets: s.targets || [],
+      interval: s.intervalMs,
+      snmpVersion: s.snmpVersion,
+      results,
+      running: false,
+      startedAt: s.startedAt,
+      thresholds: s.thresholds || {},
+      // A session stored before the connection was persisted cannot be polled
+      // from Go; the UI offers to re-arm it with the current settings rather
+      // than failing silently.
+      needsConnection: !s.conn,
+      // The dashboard layout this session was bound with, or null. A SNAPSHOT:
+      // Go took it when the preset was bound, so editing the file afterwards
+      // changes nothing here.
+      preset: s.preset || null,
+      // Declared from the start rather than attached when the first report
+      // arrives, so a consumer testing it sees null on a fresh session instead
+      // of undefined — and so both ways in produce the same object.
+      overrun: null,
+    };
+  }
+
   // Load persisted sessions, then ask Go which ones are actually polling. That
   // second question matters: with the window closed the scheduler kept running,
   // so the database's `active` flag is a record of intent while MonitorRunning
@@ -240,7 +284,6 @@ function createPollingStore() {
       }
       const loaded = [];
       for (const s of sessions) {
-        const oids = (s.oid || '').split(',').map((o) => o.trim()).filter(Boolean);
         let results = [];
         try {
           const points = await MonitorLoadSessionData(s.id, MAX_DATA_POINTS * (s.targets?.length || 1));
@@ -248,23 +291,7 @@ function createPollingStore() {
         } catch (e) {
           console.warn('Failed to load session data:', e);
         }
-        loaded.push({
-          id: s.id,
-          name: s.name || '',
-          oid: oids[0] || '',
-          oids,
-          targets: s.targets || [],
-          interval: s.intervalMs,
-          snmpVersion: s.snmpVersion,
-          results,
-          running: false,
-          startedAt: s.startedAt,
-          thresholds: s.thresholds || {},
-          // A session stored before the connection was persisted cannot be
-          // polled from Go; the UI offers to re-arm it with the current
-          // settings rather than failing silently.
-          needsConnection: !s.conn,
-        });
+        loaded.push(sessionFromBackend(s, results));
       }
       set(loaded);
     } catch (e) {
@@ -358,9 +385,29 @@ function createPollingStore() {
     }
   }
 
+  /**
+   * Take a session Go has just created — PresetBind — into the store.
+   *
+   * It is already stored and already polling by the time this runs, so this
+   * adds no session and starts nothing: it makes the window show what the poll
+   * clock is doing. Idempotent, because a caller that retries after a slow
+   * bridge call must not produce two rows for one monitoring.
+   */
+  function adoptSession(s) {
+    if (!s || !s.id) return null;
+    const shaped = { ...sessionFromBackend(s), running: true };
+    update((sessions) => (
+      sessions.some((x) => x.id === s.id)
+        ? sessions.map((x) => (x.id === s.id ? { ...shaped, results: x.results } : x))
+        : [...sessions, shaped]
+    ));
+    return shaped;
+  }
+
   return {
     subscribe,
     acceptSlow,
+    adoptSession,
     startPolling,
     resumeSession,
     stopPolling,

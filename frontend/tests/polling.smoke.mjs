@@ -224,4 +224,50 @@ check('the session reads as stopped', !!s && s.running === false);
   check('recovering takes the banner away', o === null, JSON.stringify(o));
 }
 
+// One builder for the session shape.
+//
+// There are two ways a session arrives: created here, and handed back by Go
+// (PresetBind, or restored at startup). Two object literals building the same
+// thing is the defect normalisePoint was written to end, and it had already
+// happened — the local one never set needsConnection, so the field every
+// consumer tests was absent on sessions made in this window and present on
+// restored ones.
+{
+  const local = get(pollingStore).find((x) => x.id === id);
+  const adopted = pollingStore.adoptSession({
+    id: 'bound-1',
+    name: 'Cisco Catalyst',
+    oid: '1.3.6.1.2.1.1.3.0,1.3.6.1.2.1.2.2.1.10.1',
+    targets: ['10.0.0.9'],
+    intervalMs: 45000,
+    snmpVersion: 'v2c',
+    startedAt: '2026-01-01T00:00:00Z',
+    conn: { port: 161 },
+    preset: { file: 'cisco.json', formatVersion: 1, widgets: [{ kind: 'value', title: 'Uptime', oids: ['1.3.6.1.2.1.1.3.0'] }] },
+  });
+
+  const keys = (o) => Object.keys(o).sort().join(',');
+  check('a bound session has the same shape as a locally created one',
+    keys(local) === keys(adopted), `${keys(local)} vs ${keys(adopted)}`);
+
+  check('the OID list was split out of the stored column',
+    adopted.oids.length === 2 && adopted.oid === '1.3.6.1.2.1.1.3.0', JSON.stringify(adopted.oids));
+  check('the cadence came across', adopted.interval === 45000, String(adopted.interval));
+  check('a session with a connection does not ask to be re-armed', adopted.needsConnection === false);
+  check('the dashboard layout came with it', adopted.preset?.widgets?.length === 1);
+  check('and it is polling, because Go already started it', adopted.running === true);
+
+  const inStore = get(pollingStore).find((x) => x.id === 'bound-1');
+  check('the bound session reached the store', !!inStore && inStore.name === 'Cisco Catalyst');
+
+  // Adopting twice must not produce two rows for one monitoring: a caller that
+  // retries after a slow bridge call is the ordinary case, not the exotic one.
+  pollingStore.adoptSession({ id: 'bound-1', oid: '1.1', targets: ['10.0.0.9'], intervalMs: 45000, conn: {} });
+  check('adopting the same session twice is idempotent',
+    get(pollingStore).filter((x) => x.id === 'bound-1').length === 1);
+
+  check('a session with no connection asks to be re-armed',
+    pollingStore.adoptSession({ id: 'legacy-1', oid: '1.1', targets: ['x'], intervalMs: 1000 }).needsConnection === true);
+}
+
 process.exit(failures ? 1 : 0);

@@ -68,7 +68,7 @@ func TestDeleteSessionCascadesDataPoints(t *testing.T) {
 	st := newTestStorage(t)
 	now := time.Now().UTC().Format(time.RFC3339)
 
-	id, err := st.CreateSession("", "1.3.6.1.2.1.1.3.0", []string{"10.0.0.1"}, 5000, "v2c", now, nil, nil)
+	id, err := st.CreateSession("", "1.3.6.1.2.1.1.3.0", []string{"10.0.0.1"}, 5000, "v2c", now, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateSession: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestLegacyThresholdsMigrateToFirstOID(t *testing.T) {
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	id, err := st.CreateSession("legacy", "1.3.6.1.2.1.1.3.0,1.3.6.1.2.1.2.2.1.10.1",
-		[]string{"10.0.0.1"}, 5000, "v2c", now, nil, nil)
+		[]string{"10.0.0.1"}, 5000, "v2c", now, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateSession: %v", err)
 	}
@@ -142,7 +142,7 @@ func TestQueryBucketsAggregatesPerOIDAndWindow(t *testing.T) {
 	base := time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC)
 
 	id, err := st.CreateSession("", "a,b", []string{"10.0.0.1"}, 5000, "v2c",
-		base.Format(time.RFC3339), nil, nil)
+		base.Format(time.RFC3339), nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateSession: %v", err)
 	}
@@ -232,7 +232,7 @@ func TestSessionConnRoundTripsWithoutCredentials(t *testing.T) {
 		Port: 1161, TimeoutSec: 3, Retries: 2,
 		V3User: "snmplens", V3AuthProto: "SHA", V3PrivProto: "AES", V3SecLevel: "authPriv",
 	}
-	id, err := st.CreateSession("wan", "1.3.6.1.2.1.1.3.0", []string{"10.0.0.1"}, 5000, "v3", now, nil, conn)
+	id, err := st.CreateSession("wan", "1.3.6.1.2.1.1.3.0", []string{"10.0.0.1"}, 5000, "v3", now, nil, conn, nil)
 	if err != nil {
 		t.Fatalf("CreateSession: %v", err)
 	}
@@ -265,7 +265,7 @@ func TestSessionConnRoundTripsWithoutCredentials(t *testing.T) {
 func TestSessionWithoutConnIsDistinguishable(t *testing.T) {
 	st := newTestStorage(t)
 	now := time.Now().UTC().Format(time.RFC3339)
-	if _, err := st.CreateSession("", "1.1", []string{"10.0.0.1"}, 5000, "v2c", now, nil, nil); err != nil {
+	if _, err := st.CreateSession("", "1.1", []string{"10.0.0.1"}, 5000, "v2c", now, nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	sessions, _ := st.ListSessions()
@@ -277,7 +277,7 @@ func TestSessionWithoutConnIsDistinguishable(t *testing.T) {
 func TestUpdateSessionConn(t *testing.T) {
 	st := newTestStorage(t)
 	now := time.Now().UTC().Format(time.RFC3339)
-	id, _ := st.CreateSession("", "1.1", []string{"10.0.0.1"}, 5000, "v2c", now, nil, nil)
+	id, _ := st.CreateSession("", "1.1", []string{"10.0.0.1"}, 5000, "v2c", now, nil, nil, nil)
 
 	if err := st.UpdateSessionConn(id, &SessionConn{Port: 1161, TimeoutSec: 9}); err != nil {
 		t.Fatalf("UpdateSessionConn: %v", err)

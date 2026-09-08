@@ -243,7 +243,7 @@ func TestCloseJoinsTheFlushGoroutine(t *testing.T) {
 func aSession(t *testing.T, st *Storage) string {
 	t.Helper()
 	id, err := st.CreateSession("test", "1.3.6.1.2.1.1.3.0", []string{"10.0.0.1"},
-		1000, "2c", time.Now().UTC().Format(time.RFC3339), nil, nil)
+		1000, "2c", time.Now().UTC().Format(time.RFC3339), nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

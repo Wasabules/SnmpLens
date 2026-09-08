@@ -19,7 +19,7 @@ func TestDeletingASessionRemovesItsCredentials(t *testing.T) {
 	a := newTestApp(t)
 
 	id, err := a.storage.CreateSession("core switches", "1.3.6.1.2.1.2.2.1.10.1",
-		[]string{"10.0.0.1"}, 1000, "v2c", time.Now().UTC().Format(time.RFC3339), nil, nil)
+		[]string{"10.0.0.1"}, 1000, "v2c", time.Now().UTC().Format(time.RFC3339), nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateSession: %v", err)
 	}
@@ -42,7 +42,7 @@ func TestRetentionRemovesTheCredentialsOfTheSessionsItDeletes(t *testing.T) {
 	a := newTestApp(t)
 
 	id, err := a.storage.CreateSession("finished", "1.3.6.1.2.1.1.3.0",
-		[]string{"10.0.0.2"}, 1000, "v2c", time.Now().UTC().Format(time.RFC3339), nil, nil)
+		[]string{"10.0.0.2"}, 1000, "v2c", time.Now().UTC().Format(time.RFC3339), nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateSession: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestRetentionLeavesLiveSessionsAndTheirCredentialsAlone(t *testing.T) {
 	a := newTestApp(t)
 
 	live, err := a.storage.CreateSession("running", "1.3.6.1.2.1.1.3.0",
-		[]string{"10.0.0.3"}, 1000, "v2c", time.Now().UTC().Format(time.RFC3339), nil, nil)
+		[]string{"10.0.0.3"}, 1000, "v2c", time.Now().UTC().Format(time.RFC3339), nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"SnmpLens/pkg/preset"
+
 	_ "modernc.org/sqlite"
 )
 
@@ -27,6 +29,14 @@ type Storage struct {
 	historySaves int // counter to trim query_history only periodically
 	eventWrites  int // counter to trim the event journal only periodically
 	outboxWrites int // same, for the delivery outbox
+	// sessionsHavePreset records whether the preset column is really there.
+	//
+	// ensureColumn logs and continues when an ALTER fails, which is right for
+	// an optional column — but a SELECT that names it unconditionally then
+	// fails with "no such column" and EVERY session disappears from the
+	// interface, including the ones still polling. Reading the answer once at
+	// startup costs nothing and bounds that to a missing label.
+	sessionsHavePreset bool
 }
 
 type Session struct {
@@ -47,6 +57,35 @@ type Session struct {
 	// now lives in Go: a background poll has no renderer to ask for the
 	// connection settings, and after a restart there is no renderer at all.
 	Conn *SessionConn `json:"conn,omitempty"`
+	// Preset is the dashboard description this session was created from, if it
+	// was created from one at all. Nil for a session someone built by hand.
+	Preset *SessionPreset `json:"preset,omitempty"`
+}
+
+// SessionPreset is what a bound preset left behind, and it is a SNAPSHOT.
+//
+// Not a reference to the file. Editing a preset afterwards changes nothing
+// already bound, and deleting it stops nothing — rebinding is how an edit is
+// adopted. The alternative reads well right up to the moment somebody fixes a
+// typo in a preset and three sessions silently start polling different OIDs,
+// with the charts keeping the old labels.
+//
+// It is also the reason the session row still carries oid and interval_ms in
+// its own columns: what to poll is materialised there, so the poll clock never
+// reads this blob and a session whose snapshot cannot be decoded still polls.
+// This is notify_outbox's rule — self-contained, never joining back to what
+// produced it — applied to the one other place a stranger's file reaches
+// durable state.
+type SessionPreset struct {
+	// File is where it came from, for the label. It may no longer exist.
+	File string `json:"file"`
+	Name string `json:"name,omitempty"`
+	// FormatVersion is the version that was READ, so a session bound by an
+	// older release is recognisable rather than reinterpreted.
+	FormatVersion int `json:"formatVersion"`
+	BoundAt       string `json:"boundAt,omitempty"`
+	// Widgets is the layout, exactly as the file declared it.
+	Widgets []preset.Widget `json:"widgets"`
 }
 
 // SessionConn holds the NON-SECRET SNMP connection parameters of a session.
@@ -331,11 +370,13 @@ func Init(dbPath string) (*Storage, error) {
 	ensureColumn(db, "data_points", "oid", "TEXT")
 	ensureColumn(db, "sessions", "name", "TEXT")
 	ensureColumn(db, "sessions", "conn", "TEXT")
+	havePreset := ensureColumn(db, "sessions", "preset", "TEXT")
 
 	s := &Storage{
-		db:          db,
-		batchTicker: time.NewTicker(5 * time.Second),
-		done:        make(chan struct{}),
+		db:                 db,
+		batchTicker:        time.NewTicker(5 * time.Second),
+		done:               make(chan struct{}),
+		sessionsHavePreset: havePreset,
 	}
 
 	// Background batch flush goroutine. Close waits for it.
@@ -385,7 +426,7 @@ func (s *Storage) Close() error {
 }
 
 // CreateSession inserts a new monitoring session and returns its UUID.
-func (s *Storage) CreateSession(name, oid string, targets []string, intervalMs int, snmpVersion, startedAt string, thresholds map[string]*Thresholds, conn *SessionConn) (string, error) {
+func (s *Storage) CreateSession(name, oid string, targets []string, intervalMs int, snmpVersion, startedAt string, thresholds map[string]*Thresholds, conn *SessionConn, bound *SessionPreset) (string, error) {
 	id := generateUUID()
 	targetsJSON, _ := json.Marshal(targets)
 	var thresholdsJSON []byte
@@ -396,11 +437,23 @@ func (s *Storage) CreateSession(name, oid string, targets []string, intervalMs i
 	if conn != nil {
 		connJSON, _ = json.Marshal(conn)
 	}
-	_, err := s.db.Exec(
-		`INSERT INTO sessions (id, name, oid, targets, interval_ms, snmp_version, started_at, thresholds, active, conn)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
-		id, nullableString([]byte(name)), oid, string(targetsJSON), intervalMs, snmpVersion, startedAt, nullableString(thresholdsJSON), nullableString(connJSON),
-	)
+	cols := `(id, name, oid, targets, interval_ms, snmp_version, started_at, thresholds, active, conn)`
+	vals := `VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`
+	args := []any{id, nullableString([]byte(name)), oid, string(targetsJSON), intervalMs, snmpVersion, startedAt,
+		nullableString(thresholdsJSON), nullableString(connJSON)}
+	// The snapshot is written only when the column is really there. A session
+	// that loses its layout still polls; a session that could not be INSERTed
+	// at all does not exist.
+	if s.sessionsHavePreset {
+		var presetJSON []byte
+		if bound != nil {
+			presetJSON, _ = json.Marshal(bound)
+		}
+		cols = `(id, name, oid, targets, interval_ms, snmp_version, started_at, thresholds, active, conn, preset)`
+		vals = `VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
+		args = append(args, nullableString(presetJSON))
+	}
+	_, err := s.db.Exec(`INSERT INTO sessions `+cols+` `+vals, args...)
 	if err != nil {
 		return "", fmt.Errorf("create session: %w", err)
 	}
@@ -442,7 +495,16 @@ func (s *Storage) DeleteSession(id string) error {
 
 // ListSessions returns all persisted sessions.
 func (s *Storage) ListSessions() ([]Session, error) {
-	rows, err := s.db.Query(`SELECT id, COALESCE(name, ''), oid, targets, interval_ms, snmp_version, started_at, stopped_at, thresholds, active, conn FROM sessions ORDER BY started_at DESC`)
+	// The preset column is named only when it is really there. ensureColumn
+	// logs and continues when an ALTER fails; a SELECT that named it anyway
+	// would fail with "no such column" and take EVERY session with it,
+	// including the ones still polling.
+	presetCol := "NULL"
+	if s.sessionsHavePreset {
+		presetCol = "preset"
+	}
+	rows, err := s.db.Query(`SELECT id, COALESCE(name, ''), oid, targets, interval_ms, snmp_version, started_at, stopped_at, thresholds, active, conn, ` +
+		presetCol + ` FROM sessions ORDER BY started_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -455,9 +517,10 @@ func (s *Storage) ListSessions() ([]Session, error) {
 		var stoppedAt sql.NullString
 		var thresholdsJSON sql.NullString
 		var connJSON sql.NullString
+		var presetJSON sql.NullString
 		var active int
 
-		if err := rows.Scan(&sess.ID, &sess.Name, &sess.OID, &targetsJSON, &sess.IntervalMs, &sess.SnmpVersion, &sess.StartedAt, &stoppedAt, &thresholdsJSON, &active, &connJSON); err != nil {
+		if err := rows.Scan(&sess.ID, &sess.Name, &sess.OID, &targetsJSON, &sess.IntervalMs, &sess.SnmpVersion, &sess.StartedAt, &stoppedAt, &thresholdsJSON, &active, &connJSON, &presetJSON); err != nil {
 			return nil, err
 		}
 
@@ -482,6 +545,14 @@ func (s *Storage) ListSessions() ([]Session, error) {
 			var c SessionConn
 			if json.Unmarshal([]byte(connJSON.String), &c) == nil {
 				sess.Conn = &c
+			}
+		}
+		// Decoded defensively, like Conn: a snapshot that cannot be read costs
+		// the dashboard its layout and must not cost the session its poll.
+		if presetJSON.Valid && presetJSON.String != "" {
+			var bound SessionPreset
+			if json.Unmarshal([]byte(presetJSON.String), &bound) == nil {
+				sess.Preset = &bound
 			}
 		}
 		sess.Active = active == 1
@@ -940,11 +1011,14 @@ func (s *Storage) ImportHistoryEntries(entries []map[string]interface{}) error {
 
 // ensureColumn adds a column to an existing table when it is missing. Errors
 // are logged, not fatal: a failure here only means the extra data is unavailable.
-func ensureColumn(db *sql.DB, table, column, ddl string) {
+// ensureColumn adds a column to an existing table, and reports whether the
+// column is there AFTERWARDS — which is not the same as whether it did
+// anything: it is already present on a fresh database, and an ALTER can fail.
+func ensureColumn(db *sql.DB, table, column, ddl string) bool {
 	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
 	if err != nil {
 		log.Printf("storage: inspect %s: %v", table, err)
-		return
+		return false
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -953,15 +1027,17 @@ func ensureColumn(db *sql.DB, table, column, ddl string) {
 		var notnull, pk int
 		var dflt sql.NullString
 		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
-			return
+			return false
 		}
 		if name == column {
-			return // already present
+			return true // already present
 		}
 	}
 	if _, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, ddl)); err != nil {
 		log.Printf("storage: add %s.%s: %v", table, column, err)
+		return false
 	}
+	return true
 }
 
 // QueryBuckets aggregates a session's data points into fixed-width time buckets
