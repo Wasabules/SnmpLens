@@ -1,0 +1,58 @@
+{
+  "formatVersion": 1,
+  "name": "Server (HOST-RESOURCES-MIB)",
+  "author": "SnmpLens",
+  "description": "Processor load, memory and disks of a server or workstation, from HOST-RESOURCES-MIB. The storage and processor indexes are per device: run a walk of 1.3.6.1.2.1.25.2.3.1.3 to see what yours calls them, and edit the instance numbers to match.",
+  "intervalSec": 60,
+  "widgets": [
+    {
+      "kind": "value",
+      "title": "Uptime",
+      "oids": [
+        "1.3.6.1.2.1.25.1.1.0"
+      ]
+    },
+    {
+      "kind": "value",
+      "title": "Processes",
+      "oids": [
+        "1.3.6.1.2.1.25.1.6.0"
+      ]
+    },
+    {
+      "kind": "value",
+      "title": "Users",
+      "oids": [
+        "1.3.6.1.2.1.25.1.5.0"
+      ]
+    },
+    {
+      "kind": "chart",
+      "title": "Processor load",
+      "oids": [
+        "1.3.6.1.2.1.25.3.3.1.2.1",
+        "1.3.6.1.2.1.25.3.3.1.2.2",
+        "1.3.6.1.2.1.25.3.3.1.2.3",
+        "1.3.6.1.2.1.25.3.3.1.2.4"
+      ],
+      "unit": "%"
+    },
+    {
+      "kind": "chart",
+      "title": "Storage used",
+      "oids": [
+        "1.3.6.1.2.1.25.2.3.1.6.1",
+        "1.3.6.1.2.1.25.2.3.1.6.2",
+        "1.3.6.1.2.1.25.2.3.1.6.3"
+      ],
+      "unit": "allocation units"
+    },
+    {
+      "kind": "value",
+      "title": "Storage 1 size",
+      "oids": [
+        "1.3.6.1.2.1.25.2.3.1.5.1"
+      ]
+    }
+  ]
+}

@@ -45,7 +45,14 @@
 
   // One tile per target, one row per OID inside it: a separate tile grid per
   // OID stacked vertically and burned a lot of height for the same information.
-  function buildTiles(s, m, _hidden, _scope, _range, _stats, _layout, _theme) {
+  // inferUnit reads a NAME, and every caller was handing it a numeric OID.
+  //
+  // Its patterns are /octets|bytes|bandwidth/ and /percent|utili|load/, which
+  // "1.3.6.1.2.1.2.2.1.10.1" cannot match — so no session has ever had a unit
+  // inferred: an interface counter rendered as a bare scaled number instead of
+  // bit/s, and a processor load lost its %. The tree is what turns one into the
+  // other, and this component already has it.
+  function buildTiles(s, m, _hidden, _scope, _range, _stats, _layout, _theme, tree) {
     const source = s?.results || [];
     const field = FIELD[m] || 'value';
     const dark = theme !== 'light';
@@ -101,7 +108,7 @@
           rows.push({
             oid: o,
             color: seriesColor(colorIdx, dark),
-            unit: inferUnit(o, (series.find((r) => r.snmpType) || {}).snmpType || '', m),
+            unit: inferUnit(oidName(o, tree), (series.find((r) => r.snmpType) || {}).snmpType || '', m),
             summary,
             spark: recent,
             trend,
@@ -114,7 +121,7 @@
       .filter((t) => t.rows.length);
   }
 
-  $: tiles = buildTiles(session, mode, hiddenSet, scope, range, stats, layout, theme);
+  $: tiles = buildTiles(session, mode, hiddenSet, scope, range, stats, layout, theme, $mibStore.tree);
 
   // Sparkline as an SVG polyline in a 100x20 viewBox.
   function sparkPath(values) {

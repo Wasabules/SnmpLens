@@ -114,7 +114,9 @@
     return list.filter((r) => (r.oid || s?.oid || oid) === oid);
   }
 
-  $: unit = inferUnit(oid || session?.oid || '', snmpTypeOf(session), mode);
+  // The NAME, not the numeric OID: inferUnit matches on words and every caller
+  // was handing it digits, so no chart has ever inferred a unit. See MetricTiles.
+  $: unit = inferUnit(oidName(oid || session?.oid || '', mibTree), snmpTypeOf(session), mode);
 
   $: labels = $targetLabels;
   $: mibTree = $mibStore.tree;
@@ -157,7 +159,7 @@
         id: axisId,
         index: axes.length,
         oid: o,
-        unit: inferUnit(o, type, m),
+        unit: inferUnit(oidName(o, mibTree), type, m),
         color: seriesColor(drawable[0].colorIndex, dark),
       });
 

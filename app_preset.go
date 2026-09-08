@@ -69,6 +69,57 @@ type PresetDetail struct {
 	Cost   PresetCost     `json:"cost"`
 }
 
+// ensureBundledPresets writes the example presets out, ON FIRST RUN ONLY.
+//
+// Deliberately NOT the shape ensureStandardMibs has. That one runs on every
+// startup and restores any bundled MIB that is absent, because nearly every
+// other MIB imports from those three and a missing one breaks the tree for
+// everything — self-healing is worth more there than obeying a deletion.
+//
+// A preset is the opposite: nothing depends on it, and it is a file the
+// operator curates. Restoring one they deleted would be the application
+// arguing with them, once per restart, forever. So the whole extraction is
+// skipped as soon as the directory exists — which also means an operator who
+// wants the examples back can delete the directory rather than hunt for a
+// setting.
+func (a *App) ensureBundledPresets() {
+	if a.persistentMibDir == "" {
+		return
+	}
+	dir := filepath.Join(filepath.Dir(a.persistentMibDir), presetSubdir)
+	if _, err := os.Stat(dir); err == nil {
+		return // this machine has a preset library already
+	}
+
+	entries, err := a.presets.ReadDir(presetSubdir)
+	if err != nil {
+		log.Printf("WARNING: could not read the embedded presets: %v", err)
+		return
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		log.Printf("WARNING: could not create the preset directory: %v", err)
+		return
+	}
+
+	written := 0
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		data, err := a.presets.ReadFile(presetSubdir + "/" + e.Name())
+		if err != nil {
+			log.Printf("WARNING: could not read the embedded preset %s: %v", e.Name(), err)
+			continue
+		}
+		if err := os.WriteFile(filepath.Join(dir, e.Name()), data, 0o600); err != nil {
+			log.Printf("WARNING: could not write the preset %s: %v", e.Name(), err)
+			continue
+		}
+		written++
+	}
+	log.Printf("Extracted %d example preset(s) to %s", written, dir)
+}
+
 // presetDir returns the preset directory, creating it on first use.
 func (a *App) presetDir() (string, error) {
 	if a.persistentMibDir == "" {

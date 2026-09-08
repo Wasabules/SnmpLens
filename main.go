@@ -21,6 +21,10 @@ var assets embed.FS
 //go:embed mibs
 var mibs embed.FS
 
+// The example presets, extracted on FIRST RUN only — see ensureBundledPresets.
+//go:embed presets
+var presets embed.FS
+
 // Tray artwork. Windows needs an .ico; the other desktops want a .png. Both
 // are a couple of kilobytes, so embedding both beats a build-tagged file.
 //
@@ -42,7 +46,7 @@ func main() {
 		log.Printf("WARNING: could not read %s, using defaults: %v", service.Path(cfgDir), err)
 	}
 
-	app := NewApp(mibs)
+	app := NewApp(mibs, presets)
 	app.configDir = cfgDir
 	app.serviceCfg = svcCfg
 	app.trayIcons = trayIcons{png: iconPNG, ico: iconICO}
