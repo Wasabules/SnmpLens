@@ -8,7 +8,12 @@ import (
 
 // Reading is one target's answer to one GET.
 type Reading struct {
-	Target         string   `json:"target"`
+	Target string `json:"target"`
+	// OID says which of the requested OIDs this reading answers. It exists
+	// because one Fetch now returns every OID for every target in one slice,
+	// and a reading that cannot say what it measured cannot be paired with the
+	// previous sample it derives a rate from.
+	OID            string   `json:"oid"`
 	Value          *float64 `json:"value"`
 	SnmpType       string   `json:"snmpType"`
 	ResponseTimeMs int      `json:"responseTimeMs"`
@@ -21,7 +26,16 @@ type Reading struct {
 // v3 passphrases: the caller closes over them when it builds this function.
 // That keeps credentials out of this package entirely and makes the whole
 // scheduler testable without a network.
-type FetchFunc func(ctx context.Context, oid string, targets []string) []Reading
+// FetchFunc reads EVERY oid from EVERY target, in as few round trips as the
+// transport allows, and returns one Reading per (target, oid) pair — including
+// for failures, because a pair with no reading at all is indistinguishable
+// from a session nobody started.
+//
+// It used to take one OID. The scheduler then walked the OIDs serially while
+// only the targets ran concurrently, so a session with ten OIDs against an
+// unreachable device spent ten full timeouts in a row on the poll clock — the
+// one that runs with the window closed.
+type FetchFunc func(ctx context.Context, oids []string, targets []string) []Reading
 
 // Point is one stored sample, with the derived values the charts need.
 type Point struct {
@@ -149,44 +163,43 @@ func (s *Scheduler) tick(ctx context.Context, spec SessionSpec, last map[string]
 	var points []Point
 	var samples []Sample
 
-	for _, oid := range spec.OIDs {
-		if ctx.Err() != nil {
-			return
+	if ctx.Err() != nil {
+		return
+	}
+	for _, r := range spec.Fetch(ctx, spec.OIDs, spec.Targets) {
+		oid := r.OID
+		key := r.Target + "|" + oid
+		p := Point{
+			SessionID: spec.ID, Target: r.Target, OID: oid, Timestamp: stamp,
+			Value: r.Value, ResponseTimeMs: r.ResponseTimeMs, Error: r.Error, SnmpType: r.SnmpType,
 		}
-		for _, r := range spec.Fetch(ctx, oid, spec.Targets) {
-			key := r.Target + "|" + oid
-			p := Point{
-				SessionID: spec.ID, Target: r.Target, OID: oid, Timestamp: stamp,
-				Value: r.Value, ResponseTimeMs: r.ResponseTimeMs, Error: r.Error, SnmpType: r.SnmpType,
-			}
 
-			if r.Value != nil {
-				if prev, ok := last[key]; ok {
-					typ := r.SnmpType
-					if typ == "" {
-						typ = prev.typ
-					}
-					if d, ok := CorrectedDelta(prev.value, *r.Value, typ); ok {
-						delta := d
-						p.Delta = &delta
-						if dt, ok := ElapsedSeconds(prev.at, now); ok {
-							rate := d / dt
-							p.Rate = &rate
-						}
+		if r.Value != nil {
+			if prev, ok := last[key]; ok {
+				typ := r.SnmpType
+				if typ == "" {
+					typ = prev.typ
+				}
+				if d, ok := CorrectedDelta(prev.value, *r.Value, typ); ok {
+					delta := d
+					p.Delta = &delta
+					if dt, ok := ElapsedSeconds(prev.at, now); ok {
+						rate := d / dt
+						p.Rate = &rate
 					}
 				}
-				last[key] = lastSample{value: *r.Value, at: now, typ: r.SnmpType}
-			} else {
-				// A failed poll breaks the series: the next delta must not
-				// span the outage as though nothing happened.
-				delete(last, key)
 			}
-
-			points = append(points, p)
-			samples = append(samples, Sample{
-				Target: r.Target, OID: oid, Timestamp: stamp, Value: r.Value, Error: r.Error,
-			})
+			last[key] = lastSample{value: *r.Value, at: now, typ: r.SnmpType}
+		} else {
+			// A failed poll breaks the series: the next delta must not
+			// span the outage as though nothing happened.
+			delete(last, key)
 		}
+
+		points = append(points, p)
+		samples = append(samples, Sample{
+			Target: r.Target, OID: oid, Timestamp: stamp, Value: r.Value, Error: r.Error,
+		})
 	}
 
 	if len(points) == 0 {

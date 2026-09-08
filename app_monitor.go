@@ -174,11 +174,19 @@ func (a *App) buildFetch(sess storage.Session) monitor.FetchFunc {
 	community := creds.Community
 	port, timeout, retries := conn.Port, conn.TimeoutSec, conn.Retries
 
-	return func(_ context.Context, oid string, targets []string) []monitor.Reading {
-		results := a.snmpClient.Get(targets, oid, community, version, port, timeout, retries, v3)
-		readings := make([]monitor.Reading, 0, len(results))
-		for _, r := range results {
-			readings = append(readings, toReading(r))
+	// One connection per target, every OID in one PDU, rather than one
+	// connection per (target, OID) walked serially. The old shape cost a full
+	// timeout per OID against an unreachable device — ten OIDs at the default
+	// five seconds was a fifty-second tick on the clock that runs with the
+	// window closed, and the scheduler could only check for a stop between
+	// OIDs, so it could not be interrupted.
+	return func(_ context.Context, oids []string, targets []string) []monitor.Reading {
+		results := a.snmpClient.GetMany(targets, oids, community, version, port, timeout, retries, v3)
+		readings := make([]monitor.Reading, 0, len(results)*len(oids))
+		for _, m := range results {
+			for _, oid := range oids {
+				readings = append(readings, toReading(m.Target, oid, m.Results[oid], m.Errors[oid], m.ResponseTimeMs))
+			}
 		}
 		return readings
 	}
@@ -194,18 +202,31 @@ var nonNumericTypes = []string{"octetstring", "objectidentifier", "ipaddress", "
 var errorSentinels = map[string]bool{"noSuchObject": true, "noSuchInstance": true, "endOfMibView": true}
 
 // toReading converts one SNMP answer into a scheduler reading.
-func toReading(r *snmp.BulkResult) monitor.Reading {
+//
+// Keyed on the pieces rather than on a *BulkResult, because the batched path
+// (GetMany) has no BulkResult and the rules below — the error sentinels, and
+// which SNMP types are not numbers — must not exist twice. A second copy that
+// drifts would show a string OID as a chart point on one path and not the
+// other.
+func toReading(target, oid string, res *snmp.Result, errMsg string, ms int64) monitor.Reading {
 	out := monitor.Reading{
-		Target:         r.Target,
-		Error:          r.Error,
-		ResponseTimeMs: int(r.ResponseTimeMs),
+		Target:         target,
+		OID:            oid,
+		Error:          errMsg,
+		ResponseTimeMs: int(ms),
 	}
-	if r.Result == nil {
+	if res == nil {
+		if out.Error == "" {
+			// Neither a value nor an error: the agent answered without this
+			// varbind. Silence would look like a paused session rather than a
+			// device that did not reply.
+			out.Error = "no result returned"
+		}
 		return out
 	}
-	out.SnmpType = r.Result.Type
+	out.SnmpType = res.Type
 
-	if s, ok := r.Result.Value.(string); ok && errorSentinels[s] {
+	if s, ok := res.Value.(string); ok && errorSentinels[s] {
 		out.Error = s
 		return out
 	}
@@ -215,7 +236,7 @@ func toReading(r *snmp.BulkResult) monitor.Reading {
 			return out
 		}
 	}
-	if v, ok := numericValue(r.Result.Value); ok {
+	if v, ok := numericValue(res.Value); ok {
 		out.Value = &v
 	}
 	return out
