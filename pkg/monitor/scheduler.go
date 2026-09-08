@@ -132,6 +132,39 @@ func (s *Scheduler) Start(spec SessionSpec) {
 	s.notifyStateChange()
 }
 
+// startSpreadWindow bounds how late a first poll can be.
+//
+// Two seconds is enough to break the simultaneity that matters — the burst of
+// inserts against SQLite's single writer, and the burst of sockets — while
+// staying under what anyone notices as a delay when they press Start.
+const startSpreadWindow = 2 * time.Second
+
+// startSpread is where in the window this session's first poll falls.
+//
+// FNV-1a over the id: cheap, dependency-free, and deterministic, which is the
+// property that matters. A random offset would spread just as well and could
+// not be tested, and would reshuffle every restart so a session's slot would
+// never settle.
+func startSpread(id string, interval time.Duration) time.Duration {
+	window := startSpreadWindow
+	if interval < window {
+		// A fast session must not have its first point pushed past its own
+		// period, or the spread would look like a missed poll.
+		window = interval
+	}
+	if window <= 0 {
+		return 0
+	}
+	const offset64 = 14695981039346656037
+	const prime64 = 1099511628211
+	h := uint64(offset64)
+	for i := 0; i < len(id); i++ {
+		h ^= uint64(id[i])
+		h *= prime64
+	}
+	return time.Duration(h % uint64(window))
+}
+
 func (s *Scheduler) loop(ctx context.Context, h *handle, spec SessionSpec) {
 	defer close(h.done)
 
@@ -139,8 +172,31 @@ func (s *Scheduler) loop(ctx context.Context, h *handle, spec SessionSpec) {
 	ticker := time.NewTicker(spec.Interval)
 	defer ticker.Stop()
 
-	// Poll immediately: waiting a full interval for the first point makes a
-	// slow monitoring look broken.
+	// Spread the first poll, then keep the promise of a prompt first point.
+	//
+	// Measured before this existed: twenty sessions started back to back — which
+	// is exactly what resumeActiveSessions does after a reboot — took their
+	// first tick with a spread of 0 ms. Every device asked at once, every insert
+	// arriving at once on a database with one writer and a four-connection pool.
+	//
+	// The offset is DERIVED FROM THE SESSION ID, not drawn at random: a session
+	// lands in the same slot on every restart, so the spread is stable and can
+	// be asserted rather than hoped for. Two sessions can still collide; twenty
+	// cannot all collide.
+	//
+	// Bounded by startSpreadWindow rather than by the interval, because the
+	// comment this replaces was right: waiting a full interval for the first
+	// point makes a slow monitoring look broken, and an hourly session must not
+	// take an hour to show anything.
+	if d := startSpread(spec.ID, spec.Interval); d > 0 {
+		timer := time.NewTimer(d)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+	}
 	s.tick(ctx, spec, last)
 
 	for {
