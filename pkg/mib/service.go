@@ -62,6 +62,10 @@ func (s *Service) LoadAll() ([]*Node, error) {
 		return nil, fmt.Errorf("could not read MIB directory %s: %v", s.path, err)
 	}
 
+	// The loaded set is about to change, whatever the outcome: a partial load
+	// changes it too.
+	invalidateCatalogue()
+
 	loadedModuleNames := []string{}
 	for _, fileName := range files {
 		moduleName, err := gosmi.LoadModule(fileName)
@@ -80,6 +84,40 @@ func (s *Service) LoadAll() ([]*Node, error) {
 	return s.buildTree(loadedModuleNames)
 }
 
+// InitPath initialises gosmi and points it at the persistent MIB directory.
+//
+// Here rather than in main, because gosmi's state is global and this package
+// owns the mutex that guards it. A caller reaching for gosmi directly writes to
+// that state without the lock — and, now that the symbol catalogue is cached,
+// without dropping what describes it.
+func InitPath(path string) {
+	gosmiMu.Lock()
+	defer gosmiMu.Unlock()
+	gosmi.Init()
+	gosmi.AppendPath(path)
+	invalidateCatalogue()
+}
+
+// LoadCore loads modules BY NAME and reports which ones failed.
+//
+// The startup path used to call gosmi.LoadModule itself, outside this package
+// and outside the lock. Nothing else runs at that point, so it raced with
+// nothing — but it also meant the one load that always happens was the one load
+// that did not go through here, which is the shape a stale cache is made of.
+func LoadCore(names ...string) map[string]error {
+	gosmiMu.Lock()
+	defer gosmiMu.Unlock()
+	invalidateCatalogue()
+
+	failed := map[string]error{}
+	for _, name := range names {
+		if _, err := gosmi.LoadModule(name); err != nil {
+			failed[name] = err
+		}
+	}
+	return failed
+}
+
 // LoadSpecific loads only the specified MIB files from the service's path.
 func (s *Service) LoadSpecific(fileNames []string) ([]*Node, error) {
 	gosmiMu.Lock()
@@ -91,6 +129,8 @@ func (s *Service) LoadSpecific(fileNames []string) ([]*Node, error) {
 		log.Println("No MIB files specified. The tree will be empty.")
 		return []*Node{}, nil
 	}
+
+	invalidateCatalogue()
 
 	loadedModuleNames := []string{}
 	for _, fileName := range fileNames {
@@ -246,6 +286,8 @@ func (s *Service) loadWithDiagnosticsLocked(fileNames []string) MibLoadResponse 
 	// This only surfaced when the filter here was fixed: it required a .mib
 	// or .txt suffix, and the bundled MIBs are extension-less, so the
 	// fallback quietly loaded nothing and looked correct.
+
+	invalidateCatalogue()
 
 	// Shared across every diagnosis this loop triggers: the directory listing
 	// is the same for all of them.

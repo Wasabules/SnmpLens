@@ -27,7 +27,6 @@ import (
 
 	"time"
 
-	"github.com/sleepinggenius2/gosmi"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -97,9 +96,8 @@ func (a *App) startup(ctx context.Context) {
 	a.ensureStandardMibs()
 
 	// 2. Initialize gosmi and our MIB service
-	gosmi.Init()
 	log.Printf("Setting MIB search path to: %s", a.persistentMibDir)
-	gosmi.AppendPath(a.persistentMibDir)
+	mib.InitPath(a.persistentMibDir)
 	a.mibService = mib.NewService(a.persistentMibDir)
 
 	// 3. Initialize SQLite storage for monitoring data
@@ -143,8 +141,9 @@ func (a *App) startup(ctx context.Context) {
 
 	// 4. Load core MIBs
 	coreMibs := []string{"SNMPv2-SMI", "SNMPv2-TC"}
+	failed := mib.LoadCore(coreMibs...)
 	for _, mibName := range coreMibs {
-		if _, err := gosmi.LoadModule(mibName); err != nil {
+		if err, bad := failed[mibName]; bad {
 			log.Printf("ERROR: Failed to load core MIB '%s': %v.", mibName, err)
 		} else {
 			log.Printf("Successfully loaded core MIB: %s", mibName)

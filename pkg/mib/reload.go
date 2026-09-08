@@ -78,6 +78,12 @@ func (s *Service) Rebuild(fileNames []string) Reloaded {
 	gosmiMu.Lock()
 	defer gosmiMu.Unlock()
 
+	// The whole world is about to be replaced, so nothing cached about it
+	// survives. Dropped BEFORE the teardown rather than after the reload,
+	// because the lock is held across both and a panic in between must not
+	// leave a catalogue describing modules that no longer exist.
+	invalidateCatalogue()
+
 	gosmi.Exit()
 	gosmi.Init()
 	gosmi.SetPath(s.path)
