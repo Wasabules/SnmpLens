@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func valid() Preset {
@@ -201,6 +202,13 @@ func TestLabelsBelongOnlyToStatus(t *testing.T) {
 	if errs := Validate(p); !has(errs, "widgets[0].labels") {
 		t.Error("labels on a value widget were accepted silently")
 	}
+	// A grid is a wall of states, so it takes them too.
+	p2 := valid()
+	p2.Widgets[0] = Widget{Kind: KindGrid, Title: "Ports", OIDs: []string{"1.3.6.1.2.1.2.2.1.8.1"},
+		Labels: map[string]string{"1": "up"}}
+	if errs := Validate(p2); has(errs, "widgets[0].labels") {
+		t.Error("labels on a grid widget were refused")
+	}
 }
 
 // The cost is arithmetic that can be shown BEFORE anything is polled, and it
@@ -215,13 +223,142 @@ func TestTheCostIsStatedInVarbinds(t *testing.T) {
 	if c.Widgets != 3 {
 		t.Errorf("Widgets = %d, want 3", c.Widgets)
 	}
-	if c.RequestsPerHour != 120 {
-		t.Errorf("RequestsPerHour = %d, want 120", c.RequestsPerHour)
+	if c.PollsPerDay != 2880 {
+		t.Errorf("PollsPerDay = %d, want 2880", c.PollsPerDay)
 	}
-	// One request carries every OID, so the request count alone understates
-	// what the agent does work for.
-	if c.VarbindsPerHour != 480 {
-		t.Errorf("VarbindsPerHour = %d, want 480", c.VarbindsPerHour)
+	// One round carries every OID, so counting rounds alone understates what
+	// the agent does work for.
+	if c.VarbindsPerDay != 11520 {
+		t.Errorf("VarbindsPerDay = %d, want 11520", c.VarbindsPerDay)
+	}
+}
+
+// The screen whose whole job is to say what a preset will cost must not answer
+// "nothing" for a preset that polls slowly.
+//
+// An hourly base is integer-divided to ZERO for every cadence past 3600 s, and
+// MaxIntervalSec is 86400 — so a third of the legal range reported no cost at
+// all, on the one number an operator is shown before agreeing to it.
+func TestACadenceLongerThanAnHourStillHasACost(t *testing.T) {
+	for _, iv := range []int{3601, 7200, 43200, MaxIntervalSec} {
+		p := valid()
+		p.IntervalSec = iv
+		if errs := Validate(p); len(errs) != 0 {
+			t.Fatalf("interval %d is legal and was refused: %s", iv, fieldsOf(errs))
+		}
+		c := Estimate(p)
+		if c.PollsPerDay < 1 || c.VarbindsPerDay < 1 {
+			t.Errorf("interval %d reports %d polls and %d varbinds a day; a preset that polls has a cost",
+				iv, c.PollsPerDay, c.VarbindsPerDay)
+		}
+	}
+	// And two different cadences do not collapse onto the same answer.
+	a, b := valid(), valid()
+	a.IntervalSec, b.IntervalSec = 2400, 3600
+	if Estimate(a).PollsPerDay == Estimate(b).PollsPerDay {
+		t.Error("forty minutes and an hour report the same number of polls")
+	}
+}
+
+// MaxTextLen is about layout, and layout is measured in characters. This
+// application ships a zh locale: counting bytes refuses a title that fits.
+func TestAuthorTextIsBoundedInCharactersNotBytes(t *testing.T) {
+	p := valid()
+	p.Widgets[0].Title = strings.Repeat("端", 44) // 44 runes, 132 bytes
+	if errs := Validate(p); has(errs, "widgets[0].title") {
+		t.Error("a 44-character title was refused for being too long")
+	}
+	p.Widgets[0].Title = strings.Repeat("端", MaxTextLen+1)
+	if errs := Validate(p); !has(errs, "widgets[0].title") {
+		t.Error("an over-long title was accepted because its runes were counted as bytes")
+	}
+}
+
+// clip quotes the offending value back to the author. Slicing bytes splits a
+// rune, and encoding/json rewrites the broken tail — so the message naming the
+// value would misquote it.
+func TestClipNeverProducesInvalidUtf8(t *testing.T) {
+	for _, s := range []string{strings.Repeat("é", 80), strings.Repeat("端", 80), strings.Repeat("a", 80)} {
+		if got := clip(s); !utf8.ValidString(got) {
+			t.Errorf("clip produced invalid UTF-8 from %d runes", utf8.RuneCountInString(s))
+		}
+	}
+}
+
+// An OID is not just a shape: gosnmp marshals a sub-identifier as a uint32 and
+// RFC 2578 caps the depth. Past either, it is not a large OID — it is not one.
+func TestAnOidOutsideTheWireFormatIsRefused(t *testing.T) {
+	bad := map[string]string{
+		"an arc past uint32":   "1.3.6.1.4.1.4294967296",
+		"a huge arc":           "1.3.6.1.99999999999999999999",
+		"a non-root first arc": "3.6.1.2.1.1.3.0",
+		"too deep":             "1." + strings.TrimSuffix(strings.Repeat("1.", maxOIDDepth), "."),
+	}
+	for name, oid := range bad {
+		p := valid()
+		p.Widgets[0].OIDs = []string{oid}
+		if errs := Validate(p); !has(errs, "widgets[0].oids[0]") {
+			t.Errorf("%s: %q was accepted", name, oid)
+		}
+	}
+	// The top of the range is still an OID.
+	p := valid()
+	p.Widgets[0].OIDs = []string{"1.3.6.1.4.1.4294967295"}
+	if errs := Validate(p); has(errs, "widgets[0].oids[0]") {
+		t.Error("the largest legal sub-identifier was refused")
+	}
+}
+
+// A version below one fell through both branches and was read as though it had
+// been declared.
+func TestANegativeFormatVersionIsRefused(t *testing.T) {
+	p := valid()
+	p.FormatVersion = -1
+	if errs := Validate(p); !has(errs, "formatVersion") {
+		t.Error("a negative format version was accepted")
+	}
+}
+
+// The label KEY is author-supplied text too: it is interpolated into
+// Error.Field and rendered as the name of a state.
+func TestALabelKeyIsCheckedAsWellAsItsValue(t *testing.T) {
+	for _, k := range []string{"up", "1\n2", "", strings.Repeat("9", 40)} {
+		p := valid()
+		p.Widgets[2] = Widget{Kind: KindStatus, Title: "Link", OIDs: []string{"1.3.6.1.2.1.2.2.1.8.1"},
+			Labels: map[string]string{k: "up"}}
+		if errs := Validate(p); !has(errs, "widgets[2].labels") {
+			t.Errorf("%q was accepted as a label key: %s", k, fieldsOf(errs))
+		}
+	}
+	p := valid()
+	p.Widgets[2].Labels = map[string]string{"-1": "down", "2": "up"}
+	if errs := Validate(p); has(errs, "widgets[2].labels") {
+		t.Errorf("a negative state number was refused: %s", fieldsOf(errs))
+	}
+}
+
+// The port panel: one widget, one cell per interface, one label map.
+//
+// It replaces the table kind, which the GET-only poll path cannot feed. What
+// makes it work is that the instances are named explicitly — which is also what
+// keeps the cost knowable before the preset runs.
+func TestAPortPanelIsOneWidget(t *testing.T) {
+	oids := make([]string, 0, 48)
+	for i := 1; i <= 48; i++ {
+		oids = append(oids, "1.3.6.1.2.1.2.2.1.8."+strconv.Itoa(i))
+	}
+	p := valid()
+	p.Widgets = []Widget{{Kind: KindGrid, Title: "Ports", OIDs: oids,
+		Labels: map[string]string{"1": "up", "2": "down"}}}
+	if errs := Validate(p); len(errs) != 0 {
+		t.Fatalf("a 48-port grid was refused: %s", fieldsOf(errs))
+	}
+	if c := Estimate(p); c.OIDs != 48 || c.Widgets != 1 {
+		t.Errorf("cost = %d OIDs across %d widgets, want 48 across 1", c.OIDs, c.Widgets)
+	}
+	// And a table kind no longer exists: it would need a walk.
+	if _, known := widgetDoc("table"); known {
+		t.Error("the table kind is still in the vocabulary; the poll path is GET-only")
 	}
 }
 

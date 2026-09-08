@@ -33,7 +33,9 @@ package preset
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // FormatVersion is the shape this package writes and understands.
@@ -51,8 +53,11 @@ const (
 	MaxOIDsPerPreset = 500
 	// MaxWidgets bounds the panel, and the render loop that draws it.
 	MaxWidgets = 40
-	// MinIntervalSec floors the declared cadence. Below this a preset is
-	// asking the poll clock for something the scheduler will floor anyway.
+	// MinIntervalSec floors the declared cadence, and it is a POLICY rather
+	// than a restatement of something downstream. The scheduler's own floor is
+	// minInterval = 250 ms (pkg/monitor/scheduler.go), which exists to stop a
+	// corrupt row spinning a goroutine; this one is the only real cap on how
+	// much traffic a file somebody else wrote can make this application emit.
 	MinIntervalSec = 5
 	// MaxIntervalSec is a day: past that, a dashboard is a report.
 	MaxIntervalSec = 86400
@@ -74,9 +79,21 @@ const (
 	// KindStatus shows one reading as a state, mapped through the widget's own
 	// labels — ifOperStatus 1 as "up" rather than as 1.
 	KindStatus = "status"
-	// KindTable shows a conceptual table, split by INDEX.
-	KindTable = "table"
+	// KindGrid shows one cell per OID, all sharing the widget's label map:
+	// the port panel of a switch, where forty-eight readings are one thing to
+	// look at rather than forty-eight things.
+	KindGrid = "grid"
 )
+
+// There is deliberately no "table" kind.
+//
+// A conceptual table is a WALK, and the poll path a preset feeds is GET-only:
+// PollOIDs goes to snmp.GetMany, which sends what it is given as varbinds, and
+// a table's OID GET'd answers noSuchObject. The pivot also needs the column
+// definitions and the INDEX rules out of the MIB (pkg/mib/table.go), which a
+// flat list of numeric OIDs cannot supply. KindGrid is what that want actually
+// reduces to here: the instances named explicitly, which is also what makes
+// the cost of the preset knowable before it runs.
 
 // WidgetDoc describes one kind for the settings UI.
 //
@@ -97,8 +114,14 @@ var widgetKinds = []WidgetDoc{
 	{Kind: KindRate, MaxOIDs: 1},
 	{Kind: KindStatus, MaxOIDs: 1},
 	{Kind: KindChart, MaxOIDs: 8},
-	{Kind: KindTable, MaxOIDs: 0},
+	{Kind: KindGrid, MaxOIDs: 96},
 }
+
+// kindTakesLabels: a label map turns a number into a state, so it belongs to
+// the two kinds that show a state and nowhere else. On any other kind it is a
+// sign the author expected something this vocabulary does not do, and silence
+// would leave them wondering why nothing happened.
+func kindTakesLabels(kind string) bool { return kind == KindStatus || kind == KindGrid }
 
 // WidgetKinds serves the vocabulary to the UI.
 //
@@ -194,6 +217,43 @@ func errf(field, msg string, args map[string]string) Error {
 // from the file that caused it.
 var numericOID = regexp.MustCompile(`^\.?\d+(\.\d+)+$`)
 
+// maxOIDDepth and maxSubIdentifier are what an OID can BE on the wire.
+//
+// The regexp above says the shape; these say the range. gosnmp marshals a
+// sub-identifier as a uint32 and an object identifier is at most 128 of them
+// (RFC 2578 7.1.3), so a value past either is not a large OID — it is not an
+// OID, and refusing it here is the difference between a message naming the
+// file and a failure somewhere inside the encoder.
+const (
+	maxOIDDepth      = 128
+	maxSubIdentifier = 4294967295
+)
+
+// checkOID validates one OID string completely.
+func checkOID(field, oid string) []Error {
+	if !numericOID.MatchString(oid) {
+		return []Error{errf(field, "notAnOid", map[string]string{"value": clip(oid)})}
+	}
+	arcs := strings.Split(strings.TrimPrefix(oid, "."), ".")
+	if len(arcs) > maxOIDDepth {
+		return []Error{errf(field, "oidTooDeep", map[string]string{
+			"found": fmt.Sprint(len(arcs)), "max": fmt.Sprint(maxOIDDepth),
+		})}
+	}
+	for _, a := range arcs {
+		// Parsed rather than compared as a string: "0000000000004" is four.
+		n, err := strconv.ParseUint(a, 10, 64)
+		if err != nil || n > maxSubIdentifier {
+			return []Error{errf(field, "oidOutOfRange", map[string]string{"value": clip(oid)})}
+		}
+	}
+	// The root has three children and always did: ccitt, iso, joint-iso-ccitt.
+	if arcs[0] != "0" && arcs[0] != "1" && arcs[0] != "2" {
+		return []Error{errf(field, "notAnOid", map[string]string{"value": clip(oid)})}
+	}
+	return nil
+}
+
 // Validate checks a preset completely and returns every problem, not the first.
 //
 // Everything, because a preset is edited in a text editor by someone who is not
@@ -202,7 +262,9 @@ var numericOID = regexp.MustCompile(`^\.?\d+(\.\d+)+$`)
 func Validate(p Preset) []Error {
 	var errs []Error
 
-	if p.FormatVersion == 0 {
+	if p.FormatVersion < 1 {
+		// Below one, not equal to zero: a negative version fell through both
+		// branches and was accepted as though it had been read.
 		errs = append(errs, errf("formatVersion", "missing", nil))
 	} else if p.FormatVersion > FormatVersion {
 		errs = append(errs, errf("formatVersion", "tooNew", map[string]string{
@@ -230,10 +292,7 @@ func Validate(p Preset) []Error {
 	}
 
 	for i, prefix := range p.Match.SysObjectIDPrefix {
-		if !numericOID.MatchString(prefix) {
-			errs = append(errs, errf(fmt.Sprintf("match.sysObjectIdPrefix[%d]", i), "notAnOid",
-				map[string]string{"value": clip(prefix)}))
-		}
+		errs = append(errs, checkOID(fmt.Sprintf("match.sysObjectIdPrefix[%d]", i), prefix)...)
 	}
 
 	if len(p.Widgets) == 0 {
@@ -264,17 +323,22 @@ func Validate(p Preset) []Error {
 			}))
 		}
 		for j, oid := range w.OIDs {
-			if !numericOID.MatchString(oid) {
-				errs = append(errs, errf(fmt.Sprintf("%s.oids[%d]", at, j), "notAnOid",
-					map[string]string{"value": clip(oid)}))
-			}
+			errs = append(errs, checkOID(fmt.Sprintf("%s.oids[%d]", at, j), oid)...)
 		}
 		total += len(w.OIDs)
 
-		if w.Kind != KindStatus && len(w.Labels) > 0 {
-			errs = append(errs, errf(at+".labels", "labelsOnlyForStatus", map[string]string{"kind": w.Kind}))
+		if len(w.Labels) > 0 && !kindTakesLabels(w.Kind) {
+			errs = append(errs, errf(at+".labels", "labelsOnlyForStatus", map[string]string{"kind": clip(w.Kind)}))
 		}
 		for k, v := range w.Labels {
+			// The KEY as well as the value. It is author-supplied text that is
+			// interpolated into Error.Field and rendered as the name of the
+			// state it maps, so a newline or a hundred characters in it travel
+			// exactly as far as one in the value would.
+			if _, err := strconv.ParseInt(k, 10, 64); err != nil {
+				errs = append(errs, errf(at+".labels", "labelKey", map[string]string{"key": clip(k)}))
+				continue
+			}
 			errs = append(errs, checkText(at+".labels."+k, v)...)
 		}
 	}
@@ -297,15 +361,30 @@ func Validate(p Preset) []Error {
 // cost less than five over a satellite link, so a number derived from the count
 // alone would be a guess dressed as a fact.
 type Cost struct {
-	OIDs            int `json:"oids"`
-	Widgets         int `json:"widgets"`
-	IntervalSec     int `json:"intervalSec"`
-	RequestsPerHour int `json:"requestsPerHour"`
-	// VarbindsPerHour is the honest measure of what the device is asked for:
-	// one request carries every OID, so the request count alone understates it
-	// and the varbind count is what the agent actually does work for.
-	VarbindsPerHour int `json:"varbindsPerHour"`
+	OIDs        int `json:"oids"`
+	Widgets     int `json:"widgets"`
+	IntervalSec int `json:"intervalSec"`
+	// PollsPerDay and VarbindsPerDay are stated over a DAY, not an hour.
+	//
+	// Not a presentation choice: MaxIntervalSec is a day, so an hourly base is
+	// integer-divided to ZERO for every cadence slower than 3600 s — a preset
+	// polling twice a day reported "0 requests, 0 varbinds" on the one screen
+	// whose job is to say what it will cost. A day is the coarsest cadence the
+	// format admits, so the count is at least one for every valid preset.
+	PollsPerDay int `json:"pollsPerDay"`
+	// VarbindsPerDay is the honest measure of what the device is asked for:
+	// one request carries every OID, so counting rounds alone understates what
+	// the agent does work for.
+	//
+	// There is no REQUEST count here on purpose. How many requests a round
+	// takes depends on the transport's chunk size, which is pkg/snmp's to know
+	// and not this package's — a copy of it here is a copy that drifts.
+	VarbindsPerDay int `json:"varbindsPerDay"`
 }
+
+// secondsPerDay is the base Estimate divides. Equal to MaxIntervalSec, and
+// that is the point: the slowest cadence the format admits still counts one.
+const secondsPerDay = 86400
 
 // Estimate reports what one target bound to this preset will ask for.
 func Estimate(p Preset) Cost {
@@ -327,9 +406,8 @@ func Estimate(p Preset) Cost {
 	if c.IntervalSec <= 0 {
 		return c
 	}
-	perHour := 3600 / c.IntervalSec
-	c.RequestsPerHour = perHour
-	c.VarbindsPerHour = perHour * c.OIDs
+	c.PollsPerDay = secondsPerDay / c.IntervalSec
+	c.VarbindsPerDay = c.PollsPerDay * c.OIDs
 	return c
 }
 
@@ -356,9 +434,13 @@ func checkText(field, s string) []Error {
 		return nil
 	}
 	var errs []Error
-	if len(s) > MaxTextLen {
+	// Runes, not bytes. MaxTextLen is about LAYOUT, which is a property of what
+	// is displayed — and this application ships a zh locale, where a
+	// forty-character title is a hundred and twenty bytes and would be refused
+	// for being too long to fit in a panel it fits in comfortably.
+	if n := utf8.RuneCountInString(s); n > MaxTextLen {
 		errs = append(errs, errf(field, "tooLong", map[string]string{
-			"found": fmt.Sprint(len(s)), "max": fmt.Sprint(MaxTextLen),
+			"found": fmt.Sprint(n), "max": fmt.Sprint(MaxTextLen),
 		}))
 	}
 	// A control character in a title reaches a panel, a log line and — through
@@ -373,9 +455,22 @@ func checkText(field, s string) []Error {
 	return errs
 }
 
+// clip shortens a value for an error message, on a RUNE boundary.
+//
+// Slicing bytes splits a multi-byte rune, and the result travels: Error.Args
+// crosses the bridge as JSON, where encoding/json rewrites the broken tail to
+// U+FFFD — so the message naming the offending value would misquote it.
 func clip(s string) string {
-	if len(s) > 40 {
-		return s[:40] + "…"
+	const max = 40
+	if utf8.RuneCountInString(s) <= max {
+		return s
+	}
+	n := 0
+	for i := range s {
+		if n == max {
+			return s[:i] + "…"
+		}
+		n++
 	}
 	return s
 }
