@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -273,5 +275,72 @@ func TestAnEmptyLibraryListsAsAnArray(t *testing.T) {
 	raw, _ := json.Marshal(list)
 	if string(raw) != "[]" {
 		t.Errorf("an empty library crossed as %s", raw)
+	}
+}
+
+// Nothing in this application read sysObjectID before, so preset.Match had no
+// data source at all: the rule was written and never wired. This is the wiring,
+// and the part worth testing is the counting rather than the round trip.
+func TestRankingTheLibraryForOneDevice(t *testing.T) {
+	list := []preset.Info{
+		{File: "zzz-generic.json", Name: "Generic interfaces"},
+		{File: "cisco.json", Name: "Cisco", SysObjectIDPrefix: []string{"1.3.6.1.4.1.9"}},
+		{File: "cat9k.json", Name: "Catalyst 9300", SysObjectIDPrefix: []string{"1.3.6.1.4.1.9.1.2494"}},
+		{File: "juniper.json", Name: "Juniper", SysObjectIDPrefix: []string{"1.3.6.1.4.1.2636"}},
+	}
+
+	ranked, matched := rankForDevice(list, ".1.3.6.1.4.1.9.1.2494")
+	if matched != 2 {
+		t.Errorf("matched = %d, want 2 (the model and the vendor)", matched)
+	}
+	if len(ranked) != len(list) {
+		t.Fatalf("ranking dropped %d entries; Match is advice, not a filter", len(list)-len(ranked))
+	}
+	if ranked[0].File != "cat9k.json" {
+		t.Errorf("first is %q; the most specific match should lead", ranked[0].File)
+	}
+	// formatSnmpValue renders an ObjectIdentifier WITH a leading dot, and a
+	// preset file is written by hand either way. If this stopped working the
+	// symptom would be "0 presets match" on every device.
+	if _, withoutDot := rankForDevice(list, "1.3.6.1.4.1.9.1.2494"); withoutDot != 2 {
+		t.Error("the leading dot changed the answer")
+	}
+
+	// A device that did not answer still gets the library, in its own order.
+	same, none := rankForDevice(list, "")
+	if none != 0 || len(same) != len(list) || same[0].File != "zzz-generic.json" {
+		t.Errorf("an unidentified device got %d entries, %d matched", len(same), none)
+	}
+}
+
+// A device that does not answer must not take the picker away with it.
+func TestIdentifyingAnUnreachableDeviceStillReturnsTheLibrary(t *testing.T) {
+	a, _ := newPresetApp(t)
+	a.snmpClient = snmp.NewClient(context.Background())
+	a.importSinglePreset(writeSrc(t, t.TempDir(), "cisco.json", goodPreset))
+
+	// A bound-then-closed UDP port: the address is real and nothing answers.
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := pc.LocalAddr().(*net.UDPAddr).Port
+	pc.Close()
+
+	got := a.IdentifyDevice(snmp.TestRequest{
+		Target: "127.0.0.1", Community: "public", Version: "v2c", Port: port, Timeout: 1,
+	})
+
+	if len(got.Presets) != 1 {
+		t.Errorf("the library came back with %d entries", len(got.Presets))
+	}
+	if got.Presets == nil {
+		t.Error("nil crosses the bridge as null and throws on .map")
+	}
+	if got.SysObjectID != "" {
+		t.Errorf("an unreachable device reported %q", got.SysObjectID)
+	}
+	if got.Error == "" {
+		t.Error("it failed silently")
 	}
 }

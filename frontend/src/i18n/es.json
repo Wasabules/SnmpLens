@@ -610,7 +610,12 @@
     "presetPick": "Sin preset",
     "presetNone": "Ningún preset disponible",
     "presetHint": "Vincular un preset de panel a este equipo. La consulta empieza de inmediato; su coste está en Ajustes > Presets.",
-    "presetBound": "{address} ya consulta su preset."
+    "presetBound": "{address} ya consulta su preset.",
+    "presetDetect": "Detectar",
+    "presetDetectHint": "Preguntar al equipo qué es y poner primero los presets que le corresponden.",
+    "presetMatched": "{count} preset(s) corresponden a este equipo.",
+    "presetNoMatch": "Ningún preset menciona este equipo.",
+    "presetDeviceMasked": "Equipo identificado"
   },
   "update": {
     "available": "SnmpLens {version} está disponible",

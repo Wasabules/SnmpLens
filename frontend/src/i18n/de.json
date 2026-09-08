@@ -610,7 +610,12 @@
     "presetPick": "Keine Vorlage",
     "presetNone": "Keine Vorlage verfügbar",
     "presetHint": "Eine Dashboard-Vorlage an dieses Gerät binden. Die Abfrage beginnt sofort; was sie kostet, steht unter Einstellungen > Vorlagen.",
-    "presetBound": "{address} fragt jetzt seine Vorlage ab."
+    "presetBound": "{address} fragt jetzt seine Vorlage ab.",
+    "presetDetect": "Erkennen",
+    "presetDetectHint": "Das Gerät fragen, was es ist, und passende Vorlagen nach oben stellen.",
+    "presetMatched": "{count} Vorlage(n) passen zu diesem Gerät.",
+    "presetNoMatch": "Keine Vorlage nennt dieses Gerät.",
+    "presetDeviceMasked": "Gerät erkannt"
   },
   "update": {
     "available": "SnmpLens {version} ist verfügbar",

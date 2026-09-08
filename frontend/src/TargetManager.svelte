@@ -6,7 +6,7 @@
   import { settingsStore } from './stores/settingsStore';
   import { notificationStore } from './stores/notifications';
   import { onMount } from 'svelte';
-  import { TestConnection, ListPresets } from '../wailsjs/go/main/App';
+  import { TestConnection, ListPresets, IdentifyDevice } from '../wailsjs/go/main/App';
   import { pollingStore } from './stores/pollingStore';
   import { requestTab } from './stores/tabRequest';
   import { buildTestRequest } from './utils/snmpParams';
@@ -100,6 +100,40 @@
   let presets = [];
   let newPreset = '';
   let binding = false;
+  let identifying = false;
+  // What the device said about itself, or null. Reset whenever the address
+  // changes, because it describes an address and not a form.
+  let identity = null;
+
+  // Nothing in this application read sysObjectID until now, so a preset's
+  // `match` had no data source at all — the rule was written and never wired.
+  // This is the wiring, and it ORDERS the list rather than filtering it: match
+  // is advice to the person binding, and a preset that says nothing about which
+  // device it is for is still one they downloaded for this one.
+  async function identify() {
+    const address = newAddress.trim();
+    if (!address) return;
+    identifying = true;
+    identity = null;
+    try {
+      const settings = getEffectiveSettings($settingsStore, address);
+      const result = await IdentifyDevice(buildTestRequest(settings, address));
+      identity = result;
+      if (Array.isArray(result.presets) && result.presets.length) {
+        presets = result.presets;
+      }
+      // Offer the best match, without choosing it: the operator still has to
+      // see which preset is selected before pressing Add.
+      if (result.matched > 0 && !newPreset) {
+        const best = (result.presets || []).find((p) => p.problems === 0);
+        if (best) newPreset = best.file;
+      }
+    } catch (e) {
+      identity = { error: String(e) };
+    } finally {
+      identifying = false;
+    }
+  }
 
   onMount(async () => {
     try {
@@ -408,7 +442,14 @@
 
   {#if showAddForm}
     <div class="add-form">
-      <input type="text" bind:value={newAddress} placeholder={$_('targets.addressPlaceholder')} on:keydown={(e) => e.key === 'Enter' && addTarget()} />
+      <input type="text" bind:value={newAddress}
+        placeholder={$_('targets.addressPlaceholder')}
+        on:input={() => (identity = null)}
+        on:keydown={(e) => e.key === 'Enter' && addTarget()} />
+      <button class="btn-sm" on:click={identify} disabled={!newAddress.trim() || identifying}
+        title={$_('targets.presetDetectHint')}>
+        {identifying ? $_('common.working') : $_('targets.presetDetect')}
+      </button>
       <input type="text" bind:value={newLabel} placeholder={$_('targets.labelPlaceholder')} on:keydown={(e) => e.key === 'Enter' && addTarget()} />
       <!-- The preset is chosen HERE, when the equipment is added, because that
            is the only moment somebody knows what the equipment is. -->
@@ -422,6 +463,23 @@
         {binding ? $_('common.working') : $_('common.add')}
       </button>
     </div>
+
+    {#if identity}
+      <p class="identity" class:failed={!!identity.error}>
+        {#if identity.error}
+          {identity.error}
+        {:else}
+          <!-- sysObjectID names a vendor and a model as plainly as sysDescr
+               does, so Anonymous Mode masks it with everything else. -->
+          {$anonMode ? $_('targets.presetDeviceMasked') : (identity.sysDescr || identity.sysObjectId || '')}
+          <span class="matched">
+            {identity.matched > 0
+              ? $_('targets.presetMatched', { values: { count: identity.matched } })
+              : $_('targets.presetNoMatch')}
+          </span>
+        {/if}
+      </p>
+    {/if}
   {/if}
 
   <div class="target-list">

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -274,6 +275,93 @@ func (a *App) ImportPresetDialog() ([]PresetImportResult, error) {
 	// Cancelled. An empty ARRAY rather than nil: the caller renders a result
 	// list, and null throws on .map.
 	return a.ImportPresetFiles(paths), nil
+}
+
+// DeviceIdentity is what a device says it is, and which presets claim it.
+type DeviceIdentity struct {
+	Target string `json:"target"`
+	// SysObjectID is the vendor and model as an OID. Presets match on it and
+	// not on sysDescr, which is prose that differs between two firmware
+	// revisions of the same switch.
+	SysObjectID string `json:"sysObjectId,omitempty"`
+	SysDescr    string `json:"sysDescr,omitempty"`
+	SysName     string `json:"sysName,omitempty"`
+	Error       string `json:"error,omitempty"`
+	// Presets is the whole library, ORDERED for this device rather than
+	// filtered to it. Match is advice to the person binding, never an automatic
+	// action — hiding the rest would turn that advice into a decision, and a
+	// preset that says nothing about which device it is for is still one
+	// somebody downloaded for this one.
+	Presets []preset.Info `json:"presets"`
+	// Matched is how many of them claim this device, so the interface can say
+	// so without recomputing the rule in JavaScript.
+	Matched int `json:"matched"`
+}
+
+// IdentifyDevice asks a device what it is and orders the preset library for it.
+//
+// A separate method from TestConnection, which answers a different question —
+// "did these credentials work" — and answers it with one varbind. This one is
+// three varbinds in one request, and it exists because nothing in this
+// application read sysObjectID before: preset.Match had no data source at all,
+// so the matching rule was written and never wired.
+//
+// It never fails hard. A device that does not answer still gets the library
+// back, unordered, because the operator picking a preset by hand is the normal
+// path and an unreachable device must not take the picker away with it.
+func (a *App) IdentifyDevice(req snmp.TestRequest) DeviceIdentity {
+	out := DeviceIdentity{Target: req.Target, Presets: a.ListPresets()}
+
+	const (
+		oidSysDescr    = "1.3.6.1.2.1.1.1.0"
+		oidSysObjectID = "1.3.6.1.2.1.1.2.0"
+		oidSysName     = "1.3.6.1.2.1.1.5.0"
+	)
+	results := a.snmpClient.GetMany(context.Background(),
+		[]string{req.Target}, []string{oidSysDescr, oidSysObjectID, oidSysName},
+		req.Community, req.Version, req.Port, req.Timeout, 1, req.V3)
+
+	if len(results) == 0 {
+		out.Error = "no response"
+		return out
+	}
+	m := results[0]
+	if err, bad := m.Errors[oidSysObjectID]; bad {
+		out.Error = err
+	}
+	text := func(oid string) string {
+		if r := m.Results[oid]; r != nil {
+			return fmt.Sprintf("%v", r.Value)
+		}
+		return ""
+	}
+	out.SysObjectID = text(oidSysObjectID)
+	out.SysDescr = text(oidSysDescr)
+	out.SysName = text(oidSysName)
+
+	out.Presets, out.Matched = rankForDevice(out.Presets, out.SysObjectID)
+	return out
+}
+
+// rankForDevice orders the library for one device and counts what claims it.
+//
+// Split out because the counting rule is the part worth testing and the SNMP
+// round trip is the part that needs a device: with them in one function the
+// only way to check that "3 presets match" is 3 is to have a switch.
+func rankForDevice(list []preset.Info, sysObjectID string) ([]preset.Info, int) {
+	if strings.TrimSpace(sysObjectID) == "" {
+		// Nothing to rank by. The library comes back in its own order rather
+		// than empty: picking by hand is the normal path.
+		return list, 0
+	}
+	ranked := preset.Rank(list, sysObjectID)
+	matched := 0
+	for _, p := range ranked {
+		if preset.MatchDepth(p.SysObjectIDPrefix, sysObjectID) > 0 {
+			matched++
+		}
+	}
+	return ranked, matched
 }
 
 // PresetBind is the moment a preset stops being a file and starts being a
