@@ -423,3 +423,23 @@ func (a *App) MibEditorDiscardDraft(name string) error {
 	}
 	return nil
 }
+
+// MibDependencyGraph reports what every MIB in the directory imports.
+//
+// Cheap enough to offer freely: readImports reads the head of each file as text
+// and stops at the semicolon ending the IMPORTS clause — no parse, no gosmi,
+// and therefore no exclusive lock held across the scan.
+func (a *App) MibDependencyGraph() ([]mib.GraphNode, error) {
+	if a.mibService == nil {
+		return []mib.GraphNode{}, fmt.Errorf("MIB service not initialized")
+	}
+	nodes, err := a.mibService.ModuleGraph()
+	if err != nil {
+		return []mib.GraphNode{}, err
+	}
+	if nodes == nil {
+		// Never nil: it crosses the bridge as null and throws on the first .map.
+		return []mib.GraphNode{}, nil
+	}
+	return nodes, nil
+}

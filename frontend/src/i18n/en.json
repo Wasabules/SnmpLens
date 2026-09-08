@@ -694,7 +694,14 @@
       "removeConfirm": "Remove MIB path: {path}?",
       "openInEditor": "Open in the editor",
       "diagnose": "Diagnose",
-      "diagnosing": "Checking…"
+      "diagnosing": "Checking…",
+      "graphTitle": "Dependency tree",
+      "graphEmpty": "No MIB in the directory yet.",
+      "graphSummary": "{modules} module(s), {roots} tree(s), {missing} missing",
+      "graphMissing": "missing",
+      "graphNotLoaded": "not loaded",
+      "graphCycle": "cycle",
+      "graphRepeated": "shown above"
     },
     "snmp": {
       "v1v2cTitle": "SNMP v1/v2c",
