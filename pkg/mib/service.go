@@ -198,6 +198,15 @@ type MibLoadResult struct {
 	FileName string `json:"fileName"`
 	Success  bool   `json:"success"`
 	Error    string `json:"error,omitempty"`
+	// ModuleName is what the file DECLARES, which is what every IMPORTS clause
+	// elsewhere looks for and is not necessarily what the file is called.
+	//
+	// gosmi.LoadModule returns it and it was being discarded on success. It
+	// costs nothing to keep — no extra read, no extra time under the exclusive
+	// gosmi mutex — and without it a caller can list which files loaded and
+	// still cannot say which MODULES are resident, which is the question every
+	// unsatisfied import is really asking.
+	ModuleName string `json:"moduleName,omitempty"`
 	// Diagnosis explains a failure: the stage it stopped at, the located
 	// problems, the imports it could not satisfy. Present only for failures —
 	// it re-reads and re-parses the file, which is worth doing once something
@@ -280,8 +289,9 @@ func (s *Service) loadWithDiagnosticsLocked(fileNames []string) MibLoadResponse 
 		} else {
 			log.Printf("Diagnostic: loaded '%s' as module '%s'", fileName, moduleName)
 			diagnostics = append(diagnostics, MibLoadResult{
-				FileName: fileName,
-				Success:  true,
+				FileName:   fileName,
+				Success:    true,
+				ModuleName: moduleName,
 			})
 			loadedModuleNames = append(loadedModuleNames, moduleName)
 		}
