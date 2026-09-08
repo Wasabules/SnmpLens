@@ -412,6 +412,11 @@ func (a *analysis) checkUnusedImports() {
 type Analysis struct {
 	Diagnostics []Diagnostic    `json:"diagnostics"`
 	Missing     []MissingImport `json:"missing"`
+	// Outline is what the buffer DEFINES, from the same parse. It rides along
+	// because the parse is the expensive part and it has already happened —
+	// asking for it separately would double the cost of every pause in typing
+	// to answer a question the parse already knows.
+	Outline []OutlineItem `json:"outline"`
 }
 
 // AnalyseAll runs every check from ONE parse.
@@ -429,6 +434,7 @@ func AnalyseAll(content string, cat Catalogue) Analysis {
 		Missing:     checkImportsParsed(content, module, err, index),
 	}
 	out.Diagnostics = append(out.Diagnostics, analyseParsed(content, module, err, cat)...)
+	out.Outline = outlineOf(module)
 	if out.Missing == nil {
 		out.Missing = []MissingImport{}
 	}

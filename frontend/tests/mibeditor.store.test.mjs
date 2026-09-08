@@ -319,4 +319,43 @@ check('a pending draft is not written under the newly opened file',
     JSON.stringify(keys));
 }
 
+// The outline rides on the analysis, and it must not outlive the file it
+// describes.
+//
+// A stale outline is worse than none: it lists definitions that are not in the
+// buffer, and clicking one puts the caret on a line that now holds something
+// else entirely.
+{
+  await mibEditorStore.open('O-MIB');
+  pending = [];
+  mibEditorStore.setBuffer('anything');
+  mibEditorStore.refresh();
+  await tick();
+  pending[0].resolve({
+    diagnostics: [],
+    missing: [],
+    outline: [{ name: 'oUptime', kind: 'object', line: 12, column: 1, syntax: 'Counter32' }],
+  });
+  await tick();
+
+  check('the outline reaches the store', get(mibEditorStore).outline?.length === 1,
+    JSON.stringify(get(mibEditorStore).outline));
+
+  // Opening another file must clear it, BEFORE its own analysis answers.
+  pending = [];
+  await mibEditorStore.open('P-MIB');
+  check('opening another file clears the previous outline',
+    (get(mibEditorStore).outline || []).length === 0, JSON.stringify(get(mibEditorStore).outline));
+
+  // An answer with no outline at all — an older backend, or a failure — leaves
+  // an array rather than undefined, because the pane maps over it.
+  mibEditorStore.setBuffer('x');
+  mibEditorStore.refresh();
+  await tick();
+  pending[pending.length - 1].resolve({ diagnostics: [], missing: [] });
+  await tick();
+  check('a response with no outline still leaves an array',
+    Array.isArray(get(mibEditorStore).outline), JSON.stringify(get(mibEditorStore).outline));
+}
+
 process.exit(failures ? 1 : 0);

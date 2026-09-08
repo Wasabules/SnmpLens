@@ -1089,7 +1089,11 @@
     "undo": "撤销",
     "redo": "重做",
     "matchCase": "区分大小写",
-    "matchesCapped": "仅列出前 {max} 个匹配项，还有更多。"
+    "matchesCapped": "仅列出前 {max} 个匹配项，还有更多。",
+    "outline": "大纲",
+    "outlineFilter": "筛选定义",
+    "outlineEmpty": "尚未定义任何内容。",
+    "outlineNoMatch": "没有匹配的定义。"
   },
   "preset": {
     "title": "仪表板预设",

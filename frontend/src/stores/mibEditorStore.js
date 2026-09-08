@@ -24,6 +24,9 @@ const EMPTY = {
   buffer: '',         // what the user is editing
   diagnostics: [],
   missingImports: [],
+  // What the buffer defines, from the same parse as the diagnostics. Empty
+  // until the first analysis answers, which is 350 ms after the file opens.
+  outline: [],
   checking: false,
 };
 
@@ -121,8 +124,14 @@ function createMibEditorStore() {
     checkTimer = setTimeout(refresh, 350);
   }
 
-  // Validation and the import check both run in Go and touch nothing: no file,
-  // no gosmi state. That is what makes them safe on every keystroke.
+  // Validation and the import check write nothing: no file is touched and no
+  // module is loaded. What they DO take is pkg/mib's exclusive gosmi mutex, to
+  // read the symbol catalogue — which used to be rebuilt from scratch on every
+  // one of these calls. Measured on a 135-module corpus: 122 ms a round, of
+  // which 1.35 ms was the analysis, and all 122 ms held that lock, so every OID
+  // translation in every other tab waited for somebody's typing to pause. The
+  // catalogue is cached now and the round is 1.35 ms; this is safe on every
+  // keystroke BECAUSE of that, not by nature.
   // ONE bridge call, one parse. This used to be two calls that each parsed the
   // file, on every pause in typing, over a MIB that can be 185 KB.
   // Analyses can overlap — the user keeps typing while one runs — and nothing
@@ -146,6 +155,7 @@ function createMibEditorStore() {
           ...s,
           diagnostics: out.diagnostics || [],
           missingImports: out.missing || [],
+          outline: out.outline || [],
         };
       });
     } catch (e) {

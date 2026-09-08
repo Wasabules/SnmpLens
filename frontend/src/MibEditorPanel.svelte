@@ -28,6 +28,8 @@
   let atomicEdit = false;
   let showSnippets = false;
   let showSymbols = false;
+  let outlineFilter = '';
+  let showOutline = true;
   let symbolFilter = '';
   let catalogue = { modules: [], symbols: [] };
   let textarea;
@@ -575,6 +577,31 @@
     syncScroll();
   }
 
+  // What the buffer defines. Derived in a reactive statement rather than in the
+  // markup: Svelte 5 tracks what the EXPRESSION reads, and a store read inside
+  // a callee is not a dependency it can see — reactive.test.mjs exists for
+  // exactly that.
+  $: outline = $mibEditorStore.outline || [];
+  $: shownOutline = filterOutline(outline, outlineFilter);
+
+  // Takes what it reads as arguments, for the same reason.
+  function filterOutline(items, needle) {
+    const q = needle.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((it) =>
+      it.name.toLowerCase().includes(q) || (it.syntax || '').toLowerCase().includes(q));
+  }
+
+  // A one-character badge, because the list is narrow and the kind is the thing
+  // that tells a table from the row inside it from the columns inside that —
+  // three definitions that read almost identically in the source.
+  const OUTLINE_BADGE = {
+    module: 'M', object: 'o', table: 'T', row: 'R', identity: 'i',
+    notification: 'N', group: 'G', compliance: 'C', capabilities: 'A',
+    trap: 'N', node: '·', type: 't', macro: 'm',
+  };
+  const badgeOf = (kind) => OUTLINE_BADGE[kind] || '·';
+
   // Hover: the word under the pointer, looked up in the loaded tree.
   let hoverTimer;
   function onMouseMove(e) {
@@ -787,6 +814,44 @@
         <li class="empty">{$_('mibEditor.noFiles')}</li>
       {/if}
     </ul>
+
+    <!-- The outline. A MIB has no indentation to navigate by and no folding to
+         collapse, so scrolling is the only tool and a 185 KB file is a lot of
+         scrolling. It costs nothing: every field comes off the parse the
+         analysis already makes on every pause in typing. -->
+    {#if source}
+      <div class="outline">
+        <button class="outline-head" on:click={() => (showOutline = !showOutline)}
+          aria-expanded={showOutline}>
+          <Icon name={showOutline ? 'chevron-down' : 'chevron-right'} size={12} />
+          {$_('mibEditor.outline')}
+          <span class="count">{outline.length}</span>
+        </button>
+
+        {#if showOutline}
+          <input type="search" class="outline-filter" bind:value={outlineFilter}
+            placeholder={$_('mibEditor.outlineFilter')} />
+
+          <ul class="outline-list">
+            {#each shownOutline as item (item.kind + item.name + item.line)}
+              <li>
+                <button class="outline-item" on:click={() => jumpTo(item)}
+                  title={item.description || item.name}>
+                  <span class="badge kind-{item.kind}">{badgeOf(item.kind)}</span>
+                  <span class="oname">{item.name}</span>
+                  {#if item.syntax}<span class="osyntax">{item.syntax}</span>{/if}
+                </button>
+              </li>
+            {/each}
+            {#if outline.length === 0}
+              <li class="empty">{$_('mibEditor.outlineEmpty')}</li>
+            {:else if shownOutline.length === 0}
+              <li class="empty">{$_('mibEditor.outlineNoMatch')}</li>
+            {/if}
+          </ul>
+        {/if}
+      </div>
+    {/if}
   </aside>
 
   <!-- ---------------- editor ---------------- -->
@@ -1052,6 +1117,102 @@
     gap: var(--space-sm);
     height: 100%;
     min-height: 0;
+  }
+
+  .outline {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border-top: 1px solid var(--border-color);
+    padding-top: 0.35rem;
+  }
+
+  .outline-head {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.3rem;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+  }
+
+  .outline-head .count {
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .outline-filter {
+    margin: 0.2rem 0.3rem 0.3rem;
+    font-size: 0.75rem;
+  }
+
+  .outline-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    min-height: 0;
+  }
+
+  .outline-item {
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    width: 100%;
+    padding: 0.12rem 0.3rem;
+    background: none;
+    border: none;
+    color: inherit;
+    font: inherit;
+    font-size: 0.76rem;
+    text-align: left;
+    cursor: pointer;
+    min-width: 0;
+  }
+
+  .outline-item:hover {
+    background-color: var(--bg-tertiary);
+  }
+
+  .outline-item .badge {
+    flex: 0 0 auto;
+    width: 1.05em;
+    text-align: center;
+    border-radius: 2px;
+    background-color: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-size: 0.66rem;
+    font-family: var(--font-mono, monospace);
+  }
+
+  /* A table, the row inside it and the columns inside that read almost
+     identically in the source, so the badge is where they differ. */
+  .outline-item .kind-table,
+  .outline-item .kind-row {
+    background-color: var(--accent-subtle, var(--bg-tertiary));
+    color: var(--accent-color, var(--text-primary));
+  }
+
+  .outline-item .oname {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .outline-item .osyntax {
+    margin-left: auto;
+    flex: 0 1 auto;
+    color: var(--text-secondary);
+    font-size: 0.68rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .rail {

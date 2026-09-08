@@ -1089,7 +1089,11 @@
     "undo": "Undo",
     "redo": "Redo",
     "matchCase": "Match case",
-    "matchesCapped": "Only the first {max} matches are listed; there are more."
+    "matchesCapped": "Only the first {max} matches are listed; there are more.",
+    "outline": "Outline",
+    "outlineFilter": "Filter definitions",
+    "outlineEmpty": "Nothing defined yet.",
+    "outlineNoMatch": "No definition matches."
   },
   "preset": {
     "title": "Dashboard presets",

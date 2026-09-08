@@ -31,14 +31,59 @@ type Catalogue struct {
 	Symbols []Symbol `json:"symbols"`
 }
 
+// catalogue caches what symbolsLocked builds, until something changes the
+// loaded set.
+//
+// This is not an optimisation looking for a problem. MEASURED, by copying the
+// bundled MIBs under new module names to build a corpus the size a vendor
+// folder really is:
+//
+//	 15 modules,   767 symbols   1.36 ms
+//	 35 modules,  4677 symbols   8.77 ms
+//	 75 modules, 12497 symbols  32.73 ms
+//	135 modules, 24227 symbols 113.32 ms
+//
+// Superlinear, and every millisecond of it is spent holding the EXCLUSIVE gosmi
+// mutex — so every OID translation in every other tab waits. The editor calls
+// AnalyseAll(content, Symbols()) 350 ms after every pause in typing: at 135
+// modules that round cost 122.30 ms, of which 1.35 ms was the analysis and the
+// rest was rebuilding a catalogue that had not changed since the last keystroke.
+// With the catalogue cached, the same round is 1.35 ms.
+//
+// Guarded by gosmiMu, which every mutation of the loaded set already holds, so
+// the cache cannot be read while it is being invalidated.
+var catalogue *Catalogue
+
+// invalidateCatalogue drops the cache. The caller MUST hold gosmiMu.
+//
+// Called from every place that changes what gosmi has loaded. A load that does
+// not call it leaves the editor offering names from before the load and, worse,
+// reporting an import as missing that has just been satisfied — which reads as
+// a broken file rather than as a stale cache.
+func invalidateCatalogue() {
+	catalogue = nil
+}
+
 // Symbols lists every name in the loaded tree.
 //
-// Read-locked: the editor asks for this while other tabs resolve OIDs, and a
-// reload can be rebuilding the world at the same time.
+// Locked with the EXCLUSIVE gosmi mutex — this comment used to say "read
+// locked", which pkg/mib has none of: gosmi memoises inside its getters, so
+// there is no read-only operation to hold a shared lock for.
 func Symbols() Catalogue {
 	gosmiMu.Lock()
 	defer gosmiMu.Unlock()
-	return symbolsLocked()
+	if catalogue == nil {
+		built := symbolsLocked()
+		catalogue = &built
+	}
+	// The slices are shared, deliberately: copying twenty-four thousand symbols
+	// on every call would give back most of what the cache saves. What is
+	// returned is capped with a full-slice expression, so a caller that appends
+	// allocates its own array instead of writing into the cache.
+	c := *catalogue
+	c.Modules = c.Modules[:len(c.Modules):len(c.Modules)]
+	c.Symbols = c.Symbols[:len(c.Symbols):len(c.Symbols)]
+	return c
 }
 
 // symbolsLocked is Symbols for callers that already hold gosmiMu. Separate

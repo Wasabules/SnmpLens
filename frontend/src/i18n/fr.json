@@ -1089,7 +1089,11 @@
     "undo": "Annuler",
     "redo": "Rétablir",
     "matchCase": "Respecter la casse",
-    "matchesCapped": "Seules les {max} premières correspondances sont listées ; il y en a d'autres."
+    "matchesCapped": "Seules les {max} premières correspondances sont listées ; il y en a d'autres.",
+    "outline": "Plan",
+    "outlineFilter": "Filtrer les définitions",
+    "outlineEmpty": "Rien de défini pour l'instant.",
+    "outlineNoMatch": "Aucune définition ne correspond."
   },
   "preset": {
     "title": "Presets de tableau de bord",
