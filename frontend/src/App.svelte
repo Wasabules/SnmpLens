@@ -10,6 +10,7 @@
   import TrapPanel from './TrapPanel.svelte';
   import HistoryPanel from './HistoryPanel.svelte';
   import MonitorPanel from './MonitorPanel.svelte';
+  import DashboardPanel from './DashboardPanel.svelte';
   import DiscoveryPanel from './DiscoveryPanel.svelte';
   import EventsPanel from './EventsPanel.svelte';
   import Notifications from './Notifications.svelte';
@@ -405,6 +406,9 @@
       } else if (event.key === '7') {
         event.preventDefault();
         activeTab = 'mibeditor';
+      } else if (event.key === '8') {
+        event.preventDefault();
+        activeTab = 'dashboard';
       } else if (event.key === 'b') {
         // The conventional shortcut for a sidebar, and it was free.
         event.preventDefault();
@@ -604,6 +608,10 @@
           {/if}
           <span class="shortcut-hint">4</span>
         </button>
+        <button class="tab-btn" class:active={activeTab === 'dashboard'} on:click={() => activeTab = 'dashboard'} title="Ctrl+8">
+          {$_('app.tabs.dashboard')}
+          <span class="shortcut-hint">8</span>
+        </button>
         <button class="tab-btn" class:active={activeTab === 'discovery'} on:click={() => activeTab = 'discovery'} title="Ctrl+5">
           {$_('app.tabs.network')}
           <span class="shortcut-hint">5</span>
@@ -651,6 +659,10 @@
 
       {#if activeTab === 'monitor'}
         <MonitorPanel />
+      {/if}
+
+      {#if activeTab === 'dashboard'}
+        <DashboardPanel />
       {/if}
 
       {#if activeTab === 'discovery'}
