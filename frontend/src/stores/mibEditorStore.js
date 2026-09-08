@@ -24,6 +24,9 @@ const EMPTY = {
   buffer: '',         // what the user is editing
   diagnostics: [],
   missingImports: [],
+  // What the buffer defines, from the same parse as the diagnostics. Empty
+  // until the first analysis answers, which is 350 ms after the file opens.
+  outline: [],
   checking: false,
 };
 
@@ -152,6 +155,7 @@ function createMibEditorStore() {
           ...s,
           diagnostics: out.diagnostics || [],
           missingImports: out.missing || [],
+          outline: out.outline || [],
         };
       });
     } catch (e) {

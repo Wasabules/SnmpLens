@@ -1089,7 +1089,11 @@
     "undo": "Deshacer",
     "redo": "Rehacer",
     "matchCase": "Distinguir mayúsculas",
-    "matchesCapped": "Solo se listan las primeras {max} coincidencias; hay más."
+    "matchesCapped": "Solo se listan las primeras {max} coincidencias; hay más.",
+    "outline": "Esquema",
+    "outlineFilter": "Filtrar definiciones",
+    "outlineEmpty": "Aún no hay nada definido.",
+    "outlineNoMatch": "Ninguna definición coincide."
   },
   "preset": {
     "title": "Presets de panel",

@@ -1089,7 +1089,11 @@
     "undo": "Rückgängig",
     "redo": "Wiederholen",
     "matchCase": "Groß-/Kleinschreibung",
-    "matchesCapped": "Nur die ersten {max} Treffer werden aufgeführt; es gibt weitere."
+    "matchesCapped": "Nur die ersten {max} Treffer werden aufgeführt; es gibt weitere.",
+    "outline": "Gliederung",
+    "outlineFilter": "Definitionen filtern",
+    "outlineEmpty": "Noch nichts definiert.",
+    "outlineNoMatch": "Keine Definition passt."
   },
   "preset": {
     "title": "Dashboard-Vorlagen",
