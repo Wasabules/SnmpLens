@@ -62,7 +62,11 @@ Go unit tests live beside the code they cover (`go test ./...`, run in CI). They
 the logic that is subtle and easy to break silently — storage pragmas/migrations, aggregation, threshold
 semantics, the poll clock, counter-wrap maths — not coverage for its own sake.
 
-The frontend tests are `cd frontend && npm test`. The first runs the real `pollingStore` against a stubbed Wails
+The frontend tests are `cd frontend && npm test`. Three of them check a contract that crosses a language
+boundary and has no other symptom: `presetkeys.test.mjs` (every `errf` message and widget kind `pkg/preset` emits
+has an `en.json` key, with the placeholders the `Args` map supplies), `dashboard.test.mjs` (the widget dispatch
+names every kind Go serves — one it does not renders as nothing at all), and `series.test.mjs` (one plan decides
+every chart colour; there were four rules and they disagreed whenever OIDs had uneven target counts). The first runs the real `pollingStore` against a stubbed Wails
 bridge under node — it exists because a `ReferenceError` on that path once disabled all monitoring silently (the
 outer `try/catch` swallowed it) and neither the Vite build nor `go vet` can see that class of bug. The second
 checks that the five locale files carry the same keys and the same placeholders; svelte-i18n falls back silently,
@@ -130,6 +134,9 @@ The frontend calls Go through auto-generated bindings in `frontend/wailsjs/`, wh
   debug panel shows), `operations.go` (GET/SET/GETNEXT/GETBULK/WALK), `trap.go` (listener + sender, traps and acknowledged INFORMs — v1 is refused rather than downgraded, since RFC 1157 has no InformRequest PDU), `discovery.go` (CIDR scan, capped at `MaxDiscoveryHosts` — the prefix sizes the allocation before a packet is
   sent, so `10.0.0.0/8` was 16.7M strings and an IPv6 `/64` never finished expanding), `params.go` (bridge request structs).
 - `pkg/monitor/` — the poll clock and the alerting engine. `scheduler.go` owns one goroutine per monitoring session (this is what makes background mode real — the clock used to be a `setInterval` in the renderer, so closing the window silently stopped every session and every alert with it); `breach.go` turns samples into threshold/reachability episodes; `counters.go` corrects counter wraps and derives rates from the time that actually elapsed.
+- `pkg/preset/` — the dashboard preset format: `preset.go` (the frozen widget vocabulary, `Validate`,
+  `Estimate`, `PollOIDs`), `load.go` (reading a file off disk, listing a directory, matching a device). Pure: it
+  touches no network, no database and no gosmi. See **Dashboard presets**.
 - `app_router.go` — the event router: routing runs on its own goroutine in bounded batches, with a durable watermark so a crash replays rather than loses. See **The trap path**.
 - `pkg/events/`, `pkg/notify/`, `pkg/secrets/`, `pkg/service/`, `pkg/tray/`, `pkg/autostart/` — the event journal vocabulary, notification routing (syslog over UDP/TCP/**TLS per RFC5425**, webhook, email, with a durable outbox), OS-protected credential storage, the pre-GUI preference file, the fail-soft system-tray icon, and the per-user login entry (HKCU Run key / LaunchAgent / XDG autostart — never machine-wide, so it never needs elevation).
 - `pkg/netaddr/address.go` — address handling shared by `pkg/snmp` and `pkg/network`. `NormaliseTarget` strips
@@ -157,12 +164,13 @@ Persistent data location (`os.UserConfigDir()` + `SnmpLens/`):
 | Windows | `%APPDATA%\SnmpLens\` |
 | macOS / Linux | `~/.config/SnmpLens/` |
 
-Contains `mibs/` (extracted + user MIBs) and `monitoring.db`.
+Contains `mibs/` (extracted + user MIBs), `presets/` (dashboard presets — a SIBLING of `mibs/`, never inside
+it) and `monitoring.db`.
 
 ## Frontend layout (`frontend/src/`)
 
-- `App.svelte` — top-level tabbed shell (Operations / Traps / History / Monitor / Discovery), global keyboard shortcuts, resizable MIB panel, file-drop wiring.
-- One `*Panel.svelte` per tab; smaller pieces grouped under `operations/`, `mib/`, `settings/`.
+- `App.svelte` — top-level tabbed shell (Operations / Traps / History / Monitor / Dashboard / Discovery), global keyboard shortcuts, resizable MIB panel, file-drop wiring.
+- One `*Panel.svelte` per tab; smaller pieces grouped under `operations/`, `mib/`, `settings/`. `DashboardPanel.svelte` is the eighth tab (Ctrl+8) and draws a bound preset — see **Dashboard presets**.
 - `stores/` — Svelte writable stores are the state layer. Most persist to `localStorage` (settings, history, favorites, saved queries, polling sessions, MIB paths).
 - `utils/` — `crypto.js` (AES-256-GCM encryption of credentials in localStorage; key stored as JWK), `anonymize.js` (Anonymous Mode masking), `formatting.js`, `csv.js`, `nativeNotify.js`, `snmpParams.js` (mirrors Go request structs).
 - `i18n/` — svelte-i18n with 5 locales (`en`, `fr`, `de`, `es`, `zh`); locale auto-detected, overridable in settings. `setupI18n()` must resolve before the app mounts (`main.js`).
@@ -325,6 +333,21 @@ way to write into a textarea AS AN EDIT, which is what the native undo stack rec
 used without being imported, and which module it comes from. Only names the loaded tree knows are reported, which
 keeps false positives near zero, and the fix edits the IMPORTS clause as TEXT — a MIB carries comments and
 alignment no AST printer would preserve.
+
+`AnalyseAll` also returns an **outline** — what the buffer defines, with a position, a kind, a syntax, an access
+and a status each (`pkg/mib/outline.go`). It comes off the parse that already happens, so it costs nothing and,
+in particular, takes no gosmi lock; an outline built from the LOADED tree would describe the file as it was when
+it was last loaded, which for the file being edited is the one description that is wrong. A file with a syntax
+error still has an outline of everything above the error, which is when it is most useful.
+
+The **symbol catalogue is cached** (`Symbols()`), and that is a measurement rather than a precaution. Building it
+over a corpus the size a vendor folder really is — 135 modules, 24 227 symbols, built by copying the bundled MIBs
+under new module names — cost 113 ms, superlinear in the symbol count, all of it holding the exclusive lock. The
+editor asks for it through `AnalyseAll` 350 ms after every pause in typing: that round cost 122 ms, of which
+1.35 ms was the analysis. Cached, 1.35 ms. `invalidateCatalogue` is called from every path that changes what
+gosmi has loaded — a stale catalogue reports an import as MISSING that has just been satisfied, which reads as a
+broken file — and `mib.InitPath`/`mib.LoadCore` exist so that the startup path goes through the lock too rather
+than calling gosmi directly.
 
 `pkg/mib` takes a package-level **exclusive** `Mutex` around gosmi — not an RWMutex, because gosmi has no read-only
 operations: `internal.(*Object).GetSmiNode` is a getter that MEMOISES, writing `x.Oid` and `x.OidLen` on first
@@ -501,6 +524,134 @@ SMTP password, the webhook bearer token, or the mutual-TLS **client private key*
 certificate is public and stays in the config.
 
 Session credentials follow the same rule as sink credentials: `storage.SessionConn` holds only what is safe to read in a copied `monitoring.db`, and the community and v3 passphrases go to `pkg/secrets` under `SessionRef(id)`.
+
+
+## Dashboard presets
+
+A **preset** is a JSON file somebody else wrote, bound to one equipment when that equipment is added. It says
+three things: what to poll (numeric OIDs), how often, and how to show it. The first is why the format is careful
+at all — a preset makes this application emit SNMP traffic to the operator's own devices, at OIDs the preset
+chose.
+
+The answer to "how do we read a stranger's description safely" is not new here. `pkg/notify/template.go` faced it
+for message templates and answered with a **frozen vocabulary** rather than a language, and `pkg/preset` does the
+same: a preset PICKS a widget kind from a list the package owns and cannot describe one. `WidgetKinds()` serves
+that list to the UI as **i18n key suffixes** (`preset.widget.<kind>`) rather than prose, the way
+`notify.VariableDoc` does — and `frontend/tests/presetkeys.test.mjs` reads the Go source and requires `en.json`
+to answer for every kind and every `errf` message, with the same placeholders the `Args` map supplies. Without it
+a message Go emits and no locale defines renders as the literal string `preset.err.oidTooDeep` in a dialog, under
+a field path, next to real sentences: svelte-i18n falls back silently.
+
+**OIDs are numeric, never names.** A name would have to be resolved, which means taking `pkg/mib`'s exclusive
+gosmi lock to validate a FILE, and would make what a preset polls depend on which MIBs happen to be loaded.
+
+**There is no `table` kind, and that is a correction rather than a gap.** A conceptual table is a WALK, and the
+poll path a preset feeds is GET-only — `PollOIDs` → `snmp.GetMany` → `g.Get`, and a table's OID GET'd answers
+`noSuchObject`. `grid` is what that want reduces to here: one widget, one cell per OID, one label map — a
+switch's port panel, with the instances named explicitly, which is also what keeps the cost knowable.
+
+**The cost is stated over a DAY.** `MaxIntervalSec` is 86400, so an hourly base is integer-divided to zero for
+every cadence past 3600 s — a third of the legal range reported "0 requests, 0 varbinds" on the one screen whose
+job is to say what a preset will cost. There is no request count in `preset.Cost`: how many requests a round
+takes depends on `snmp.MaxVarbindsPerGet`, which is `pkg/snmp`'s to know, so `app_preset.go` computes it where
+both packages are in scope.
+
+**The bounds in `pkg/preset` are sanity bounds against a malformed file, not the guardrail.** Sixty OIDs against
+a chassis on the same switch cost less than five over a satellite link, so no count predicts the cost. The
+guardrail is the measured cycle time and lives in `pkg/monitor/overrun.go` — see below.
+
+### The library, and what is allowed into it
+
+Presets live in a **sibling** of `mibs/`, never inside it: `ListMibFiles` enumerates the MIB directory and feeds
+what it finds to gosmi, so a JSON file in there would be loaded as a module and reported as a broken MIB.
+`mib-backups/`, `mib-drafts/` and `mib-temp/` are siblings for the same reason.
+
+`ImportPresetFiles` reads any absolute path the renderer names and `ReadPreset` hands back the content of
+anything in the destination, so the two together are an **arbitrary-file-read primitive over the bridge** — the
+same pair the MIB import gate is written about. The gate is POSITIVE rather than a blacklist: a file gets in only
+if it parses as JSON and declares a `formatVersion`. A preset that fails VALIDATION still imports, with its
+problem count, exactly as a MIB with a syntax error does — the error list with its field paths is what the
+library is for, and you cannot fix a file you were not allowed to keep. What it cannot do is bind.
+
+`ListPresets`, not `PresetList`: `tools/genbridge.mjs` gives anything matching `/^(List|Load|…)/` an empty ARRAY
+as its screenshot fixture and everything else `null`, and `null` throws on the first `.map` in a generated file
+nobody reads. For the same class of reason `Validate` returning `nil` on success is normalised to `[]` before it
+crosses — otherwise the VALID path is the one that breaks.
+
+### Binding, and the snapshot rule
+
+`PresetBind` creates **one session per target**, never one session across several: the cost was stated per
+equipment, the credentials are per equipment, and the overrun guardrail is per session, so one slow device must
+not back off the healthy ones with it. The connection comes from that target's EFFECTIVE settings
+(`getEffectiveSettings`), not the global ones — `startPolling` uses the global ones because a session can span
+several equipments and there is no single answer; a preset is bound to exactly one, so there is.
+
+What to poll is **materialised into the session's own columns** (`oid`, `interval_ms`), which is what `specFor`
+reads; the poll clock never opens the snapshot. A session whose layout cannot be decoded keeps polling and loses
+only its dashboard — the other way round it would keep its dashboard and poll nothing, which looks correct and is
+not.
+
+`storage.SessionPreset` is a **SNAPSHOT, not a reference**. Editing a preset afterwards changes nothing already
+bound, deleting it stops nothing, and rebinding is how an edit is adopted. The dashboard says so in a footnote,
+because the opposite is what a reader assumes. This is `notify_outbox`'s rule — self-contained, never joining
+back to what produced it — applied to the other place a stranger's file reaches durable state.
+
+The `preset` column is added by `ensureColumn`, which logs and continues when an ALTER fails. That is right for
+an optional column and fatal for a SELECT that names it anyway, so `Init` records whether the column is really
+there and both the INSERT and the SELECT are built from that answer: without it a session is still created, still
+listed and still polling, and simply has no layout.
+
+### The guardrail (`pkg/monitor/overrun.go`)
+
+A session that cannot finish a round inside its own period is not polling at the period it promises: Go's ticker
+COALESCES the ticks it missed, so the loop is never idle — it finishes a round and the next is already due. The
+device is asked continuously and nothing says a word.
+
+Three rules carry it, and each is a defect in the version without it:
+
+- **The measurement is the CYCLE**, end to end (fetch, persist, evaluate, emit), not any count declared in a file.
+- **A cycle spent waiting for a device that is down is not evidence of load.** Measured against a silent agent:
+  30 OIDs cost 4.0 s and 60 cost 8.0 s at the default two-second timeout with one retry — past any cadence a
+  preset may declare. Backing off there would slow reachability detection at the exact moment monitoring matters,
+  so a round where half the readings or more are ERRORS counts neither way. An error, not a nil value: a string
+  OID answers with no number and no error at all.
+- **Recovery is judged against the REQUESTED interval, never the effective one.** Once backed off every cycle
+  fits the widened period trivially; judging against it recovers on the next round, overruns again, and flaps
+  forever at one report per tick. Hysteresis is the other half.
+
+The default is to widen to twice the cycle, capped at eight times the interval, and to report the edge ONCE per
+episode — the same edge-triggering the pool-contention sampler in `app_router.go` uses. `MonitorAcceptSlow` is
+the operator saying "keep the cadence I chose": it reaches the RUNNING session rather than restarting it, because
+a restart throws away the samples every delta and rate is derived from. It is deliberately not persisted.
+
+The poll's context now reaches the wire (`snmp.GetMany` takes one and checks it between chunks, and sets gosnmp's
+own `Context`). Measured: 90 OIDs against a silent device took **12.0 s** to stop and now returns in **1.0 s**,
+bounded by one request timeout. That fix creates a defect of its own, fixed with it: what a cancelled round
+returns is one error per OID, and persisting those breaks every series while the evaluator reads them as a device
+that stopped answering — pressing Stop would have raised an unreachability alert on a healthy switch. A cancelled
+round is not a measurement and is not stored.
+
+### The dashboard tab
+
+`DashboardPanel.svelte` draws the SNAPSHOT the session carries, never the file. Its state lives in
+`stores/dashboardStore.js` and not in the component, because `{#if activeTab === …}` destroys the panel on every
+tab switch — the same shell `mibEditorStore` exists because of.
+
+Three of the five kinds are drawn by what already existed (`MetricTiles` for `value` and `rate`, `MonitorChart`
+for `chart`, one sync group per session). `StatusTile` is the one new renderer, and it takes the label map from
+the PRESET rather than from the MIB tree: it names the states in the author's words and works on a device whose
+MIB is not loaded. A cell shows the INSTANCE, because the name is identical on every cell of a grid by
+construction and was the part that survived the ellipsis. A kind this version cannot draw is SAID rather than
+skipped, and `frontend/tests/dashboard.test.mjs` reads the kinds out of `pkg/preset` and requires the dispatch to
+name every one — that failure has no other symptom at all.
+
+`preset.Match` had no data source until `IdentifyDevice`: nothing in the application read `sysObjectID`. It
+matches on that and not on `sysDescr`, which is prose that differs between two firmware revisions of the same
+switch. Matching ORDERS the library and never filters it — `Match` is advice to the person binding, and hiding
+the rest would turn advice into a decision. `preset.MatchDepth` compares arc by arc, never as text:
+`1.3.6.1.4.1.9` is Cisco and `1.3.6.1.4.1.911` is somebody else, and `strings.HasPrefix` says they are the same
+vendor.
+
 
 ## Releases
 
