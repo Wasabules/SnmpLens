@@ -34,6 +34,7 @@ import (
 type App struct {
 	ctx              context.Context
 	mibs             embed.FS
+	presets          embed.FS
 	persistentMibDir string
 	mibService       *mib.Service
 	snmpClient       *snmp.Client
@@ -64,9 +65,10 @@ type App struct {
 }
 
 // NewApp creates a new App application struct.
-func NewApp(mibs embed.FS) *App {
+func NewApp(mibs, presets embed.FS) *App {
 	return &App{
 		mibs:    mibs,
+		presets: presets,
 		updater: updater.NewService("Wasabules", "SnmpLens"),
 	}
 }
@@ -94,6 +96,7 @@ func (a *App) startup(ctx context.Context) {
 	// this on every startup (not just first run) self-heals an empty or
 	// partially-populated MIB directory.
 	a.ensureStandardMibs()
+	a.ensureBundledPresets()
 
 	// 2. Initialize gosmi and our MIB service
 	log.Printf("Setting MIB search path to: %s", a.persistentMibDir)

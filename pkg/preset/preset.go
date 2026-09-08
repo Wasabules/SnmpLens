@@ -61,10 +61,23 @@ const (
 	MinIntervalSec = 5
 	// MaxIntervalSec is a day: past that, a dashboard is a report.
 	MaxIntervalSec = 86400
-	// MaxTextLen caps every author-supplied string. A preset's title lands in
-	// a panel, and a title the length of a novel is a layout attack whatever
-	// the intent.
+	// MaxTextLen caps author-supplied LABELS: the preset's name, a widget
+	// title, a unit, a state's word. Each of those lands in a panel, and one
+	// the length of a novel is a layout attack whatever the intent.
 	MaxTextLen = 120
+	// MaxDescriptionLen caps the one field that is PROSE rather than a label.
+	//
+	// It exists because 120 was applied to it and should not have been: the
+	// reasoning above is about a title in a panel, and a description is a
+	// paragraph in the library's detail view, where explaining that the
+	// storage indexes are per device takes more than a dozen words. Every
+	// example preset that ships was refused by the label bound before this
+	// existed, which is the clearest possible evidence that the bound was
+	// being asked to do two jobs.
+	//
+	// The control-character rule is unchanged and applies to both: that half is
+	// about what travels into a log line and a syslog collector, not layout.
+	MaxDescriptionLen = 600
 )
 
 // Widget kinds. This IS the vocabulary: a preset chooses from here and cannot
@@ -277,7 +290,7 @@ func Validate(p Preset) []Error {
 	}
 	errs = append(errs, checkText("name", p.Name)...)
 	errs = append(errs, checkText("author", p.Author)...)
-	errs = append(errs, checkText("description", p.Description)...)
+	errs = append(errs, checkProse("description", p.Description)...)
 	errs = append(errs, checkText("match.vendor", p.Match.Vendor)...)
 
 	if p.IntervalSec == 0 {
@@ -429,7 +442,14 @@ func PollOIDs(p Preset) []string {
 	return out
 }
 
-func checkText(field, s string) []Error {
+// checkText bounds a LABEL. checkProse bounds the one field that is a
+// paragraph; both refuse control characters, which is the half that is about
+// what travels rather than what fits.
+func checkText(field, s string) []Error { return checkBounded(field, s, MaxTextLen) }
+
+func checkProse(field, s string) []Error { return checkBounded(field, s, MaxDescriptionLen) }
+
+func checkBounded(field, s string, max int) []Error {
 	if s == "" {
 		return nil
 	}
@@ -438,9 +458,9 @@ func checkText(field, s string) []Error {
 	// is displayed — and this application ships a zh locale, where a
 	// forty-character title is a hundred and twenty bytes and would be refused
 	// for being too long to fit in a panel it fits in comfortably.
-	if n := utf8.RuneCountInString(s); n > MaxTextLen {
+	if n := utf8.RuneCountInString(s); n > max {
 		errs = append(errs, errf(field, "tooLong", map[string]string{
-			"found": fmt.Sprint(n), "max": fmt.Sprint(MaxTextLen),
+			"found": fmt.Sprint(n), "max": fmt.Sprint(max),
 		}))
 	}
 	// A control character in a title reaches a panel, a log line and — through

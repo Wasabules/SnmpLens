@@ -419,3 +419,35 @@ func TestTheSanityBoundsDoNotBiteARealPreset(t *testing.T) {
 		}
 	}
 }
+
+// A description is prose, not a label, and one bound cannot serve both.
+//
+// MaxTextLen's reasoning is about a title in a panel. Applied to a description
+// it refused every example preset this application ships — which is the
+// clearest evidence a bound is doing two jobs.
+func TestADescriptionIsBoundedAsProseNotAsALabel(t *testing.T) {
+	p := valid()
+	p.Description = strings.Repeat("x", MaxTextLen+50)
+	if errs := Validate(p); has(errs, "description") {
+		t.Errorf("a %d-character description was refused: %s", len(p.Description), fieldsOf(errs))
+	}
+
+	p.Description = strings.Repeat("x", MaxDescriptionLen+1)
+	if errs := Validate(p); !has(errs, "description") {
+		t.Error("a description past its own bound was accepted")
+	}
+
+	// The label bound is unchanged: a name is still a label.
+	p2 := valid()
+	p2.Name = strings.Repeat("x", MaxTextLen+1)
+	if errs := Validate(p2); !has(errs, "name") {
+		t.Error("the label bound was widened along with the prose one")
+	}
+
+	// And the half that is about what TRAVELS applies to both.
+	p3 := valid()
+	p3.Description = "a paragraph\nwith a newline"
+	if errs := Validate(p3); !has(errs, "description") {
+		t.Error("a control character in a description was accepted")
+	}
+}
