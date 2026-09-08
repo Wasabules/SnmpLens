@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,6 +9,7 @@ import (
 
 	"SnmpLens/pkg/monitor"
 	"SnmpLens/pkg/secrets"
+	"SnmpLens/pkg/snmp"
 	"SnmpLens/pkg/storage"
 )
 
@@ -34,6 +36,12 @@ func newBindApp(t *testing.T) (*App, string) {
 	}
 
 	a := &App{storage: st, secrets: sec, persistentMibDir: mibDir}
+	// A real client, because PresetBind STARTS the session: without one the
+	// poll goroutine dereferenced nil inside newGoSNMP and killed the test
+	// binary — on macOS only, because the other platforms finished before the
+	// first tick landed. The targets below are addresses nothing answers on, so
+	// no packet ever reaches anything.
+	a.snmpClient = snmp.NewClient(context.Background())
 	a.scheduler = monitor.NewScheduler()
 	// The clock must not actually reach a network in a unit test, and Persist
 	// is required by the scheduler.

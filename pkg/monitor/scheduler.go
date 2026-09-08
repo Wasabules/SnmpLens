@@ -2,6 +2,9 @@ package monitor
 
 import (
 	"context"
+	"fmt"
+	"log"
+	"runtime/debug"
 	"sync"
 	"time"
 )
@@ -91,6 +94,10 @@ type Scheduler struct {
 	Emit func(sessionID string, points []Point)
 	// OnStateChange fires when a session starts or stops, for the tray read-out.
 	OnStateChange func()
+	// OnPanic reports a poll round that panicked, after the loop has recovered
+	// from it. Optional: with nothing wired the panic is still contained and
+	// still logged, and only the journal entry is missing.
+	OnPanic func(sessionID, name string, recovered string, stack string)
 	// OnOverrun reports that a session cannot poll as fast as it promised, and
 	// what the scheduler did about it. Edge-triggered: once when a session
 	// stops keeping up, once when it starts again. Called on the poll
@@ -234,7 +241,7 @@ func (s *Scheduler) loop(ctx context.Context, h *handle, spec SessionSpec) {
 		case <-timer.C:
 		}
 	}
-	report(guard.observe(s.tick(ctx, spec, last)))
+	report(guard.observe(s.safeTick(ctx, spec, last)))
 	recadence()
 
 	for {
@@ -252,10 +259,39 @@ func (s *Scheduler) loop(ctx context.Context, h *handle, spec SessionSpec) {
 			// pile up overlapping rounds against itself — and that coalescing
 			// is exactly why the guardrail is needed: the loop stops being
 			// idle and nothing about it looks wrong.
-			report(guard.observe(s.tick(ctx, spec, last)))
+			report(guard.observe(s.safeTick(ctx, spec, last)))
 			recadence()
 		}
 	}
+}
+
+// safeTick is tick, with the process's life not depending on it.
+//
+// A poll round runs on its own goroutine and calls out to a Fetch the scheduler
+// did not write, then to Persist, Evaluate and Emit — four callbacks, each of
+// which is somebody else's code. An unrecovered panic in any of them does not
+// end the session: it ends the PROCESS, taking every other session, the trap
+// listener and the notification outbox with it. pkg/notify recovers around
+// each delivery for exactly this reason, and this loop has the same shape.
+//
+// Recovered per ROUND rather than per session, so a session that panics once —
+// a nil map from a half-configured target, say — keeps polling on the next
+// tick instead of stopping silently.
+func (s *Scheduler) safeTick(ctx context.Context, spec SessionSpec, last map[string]lastSample) (stat cycleStat) {
+	defer func() {
+		if r := recover(); r != nil {
+			trace := string(debug.Stack())
+			log.Printf("monitor: session %s panicked during a poll and was recovered: %v; %s",
+				spec.ID, r, trace)
+			if s.OnPanic != nil {
+				s.OnPanic(spec.ID, spec.Name, fmt.Sprint(r), trace)
+			}
+			// A round that panicked measured nothing, so the guardrail must not
+			// read it as a fast cycle and conclude the session is keeping up.
+			stat = cycleStat{}
+		}
+	}()
+	return s.tick(ctx, spec, last)
 }
 
 // tick runs one poll round and returns what it cost.
