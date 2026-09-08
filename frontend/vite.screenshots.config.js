@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
-import { buildScenes } from './screenshots/scenes.js';
+import { buildScenes, TABS } from './screenshots/scenes.js';
 
 /**
  * The build used to take screenshots of the application for the project site.
@@ -60,8 +60,22 @@ function injectScene() {
 
   const TAB_KEY = {
     operations: '1', traps: '2', history: '3', monitor: '4',
-    discovery: '5', events: '6', mibeditor: '7',
+    dashboard: '8', discovery: '5', events: '6', mibeditor: '7',
   };
+
+  // A tab with no shortcut here fell back to '1' and captured Operations, under
+  // the scene's own name and reporting success — which is exactly how the
+  // dashboard scene was born showing the wrong panel. The map and TABS are two
+  // lists of the same thing, so they are checked against each other rather than
+  // trusted to stay in step.
+  for (const name of Object.values(TABS)) {
+    if (!TAB_KEY[name]) {
+      throw new Error(
+        `screenshots: the "${name}" tab has no keyboard shortcut in TAB_KEY, so every scene `
+        + 'on it would silently capture the Operations tab instead.',
+      );
+    }
+  }
 
   /**
    * Read the director and substitute the two placeholders.

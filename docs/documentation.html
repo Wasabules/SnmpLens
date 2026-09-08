@@ -179,6 +179,7 @@ try {
     <strong>Watching</strong>
     <a href="#traps">Traps and informs</a>
     <a href="#monitoring">Monitoring</a>
+    <a href="#dashboards">Dashboards and presets</a>
     <a href="#background">Running in the background</a>
 
     <strong>Alerting</strong>
@@ -711,6 +712,72 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
              loading="lazy" decoding="async" />
         <figcaption>Polling sessions charted over six hours, with the value that left its range marked where it did.</figcaption>
       </figure>
+    </section>
+
+
+    <!-- ---------------------------------------------------------------- -->
+    <section id="dashboards">
+      <h2>Dashboards and presets</h2>
+      <p>
+        A <strong>preset</strong> is a small JSON file describing what to poll on one kind of
+        equipment and how to show it: a list of numeric OIDs, a cadence, and a handful of
+        widgets. Add one to your library, bind it to a target when you add that target, and
+        the dashboard draws itself.
+      </p>
+      <p>
+        Presets are meant to be shared. Nothing in one can execute, reach a field the format
+        does not define, or name anything but a numeric OID — a preset chooses a widget from a
+        fixed vocabulary rather than describing one, which is what makes a file from a
+        stranger safe to open.
+      </p>
+
+      <h3>What it costs, before it runs</h3>
+      <p>
+        Binding a preset makes SnmpLens send SNMP traffic to your equipment, so the library
+        states the cost first: how many OIDs, at what cadence, and how many requests and
+        values a day that comes to. Those are counts and not a duration — how long a round
+        takes depends on the device and the link, and that is measured rather than guessed.
+      </p>
+      <p>
+        If a round stops fitting inside the cadence the preset asked for, the poll clock
+        <strong>widens the period and says so</strong>, rather than running flat out against
+        the device. Accepting the slowdown keeps the cadence you chose; the decision is yours
+        and it is asked once, not on every poll.
+      </p>
+
+      <h3>The widgets</h3>
+      <p>
+        Five kinds, and no sixth: the latest reading, a per-second rate, a chart over time, a
+        state tile, and a grid of states — the last being a switch's port panel, where
+        forty-eight readings are one thing to look at rather than forty-eight things.
+      </p>
+      <figure class="shot" style="margin-top:1.5rem">
+        <img class="shot-light" src="assets/img/dashboard-preset-light-1200.webp"
+             srcset="assets/img/dashboard-preset-light-1200.webp 1200w, assets/img/dashboard-preset-light-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="A SnmpLens dashboard drawn from a community preset bound to one switch: uptime, uplink rate, a traffic chart and a grid of port states with one port down." width="1600" height="1200"
+             loading="lazy" decoding="async" />
+        <img class="shot-dark" src="assets/img/dashboard-preset-dark-1200.webp"
+             srcset="assets/img/dashboard-preset-dark-1200.webp 1200w, assets/img/dashboard-preset-dark-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="A SnmpLens dashboard drawn from a community preset bound to one switch: uptime, uplink rate, a traffic chart and a grid of port states with one port down." width="1600" height="1200"
+             loading="lazy" decoding="async" />
+        <figcaption>A dashboard drawn from a preset bound to one switch — and the port that is down.</figcaption>
+      </figure>
+
+      <h3>A snapshot, not a link</h3>
+      <p>
+        What a bound dashboard draws is the preset <em>as it was when you bound it</em>.
+        Editing the file afterwards changes nothing already bound and deleting it stops
+        nothing; binding the equipment again is how a new version is adopted. The page says so
+        underneath itself, because the opposite is what most people would assume.
+      </p>
+      <p class="muted small">
+        Presets live beside your MIBs, in <code>%APPDATA%\SnmpLens\presets\</code> on Windows
+        and <code>~/.config/SnmpLens/presets/</code> elsewhere. A preset with problems is kept
+        and listed with them rather than refused — you cannot fix a file you were not allowed
+        to keep — but it cannot be bound until they are fixed.
+      </p>
     </section>
 
     <!-- ---------------------------------------------------------------- -->

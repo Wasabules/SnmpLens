@@ -45,6 +45,13 @@
   // and a preset carries numeric OIDs only: ifInOctets would render as "1.2 G"
   // where the monitor tab renders "9.8 Gbit/s".
   const unitOf = (widget) => widget.unit || '';
+
+  // Whether a widget has anything to draw yet. Takes both its inputs as
+  // arguments, like everything else called from the markup here.
+  const hasData = (s, widget) => {
+    const wanted = new Set(widget.oids || []);
+    return (s.results || []).some((r) => wanted.has(r.oid));
+  };
 </script>
 
 <div class="dashboard-panel">
@@ -122,7 +129,12 @@
               {#if widget.unit}<span class="unit">{widget.unit}</span>{/if}
             </header>
 
-            {#if widget.kind === 'value'}
+            {#if !hasData(session, widget)}
+              <!-- Before the first sample there is nothing to draw, and an
+                   empty card with a title on it reads as a broken widget. Said
+                   once per widget rather than left blank. -->
+              <p class="waiting">{$_('dashboard.waiting')}</p>
+            {:else if widget.kind === 'value'}
               <MetricTiles
                 {session}
                 oids={widget.oids}
@@ -139,15 +151,13 @@
                 stats={['last', 'avg', 'max']}
               />
             {:else if widget.kind === 'chart'}
-              <div class="chart-box">
-                <MonitorChart
-                  {session}
-                  oids={widget.oids}
-                  mode="raw"
-                  {theme}
-                  {syncGroup}
-                />
-              </div>
+              <MonitorChart
+                {session}
+                oids={widget.oids}
+                mode="raw"
+                {theme}
+                {syncGroup}
+              />
             {:else if widget.kind === 'status' || widget.kind === 'grid'}
               <StatusTile
                 oids={widget.oids}
@@ -251,7 +261,10 @@
 
   .widgets {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    /* 340, not 280: a value tile carries an address, a figure, a sparkline and
+       a trend, and at 280 the first capture showed it spilling past the card's
+       own border. */
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
     gap: 0.6rem;
     align-items: start;
   }
@@ -270,6 +283,10 @@
     border-radius: 5px;
     background-color: var(--bg-primary);
     min-width: 0;
+    /* Wide content scrolls inside its own widget rather than out of it. A tile
+       with a long address, or a chart on a narrow window, must not draw over
+       the widget beside it. */
+    overflow-x: auto;
   }
 
   .widget-head {
@@ -290,12 +307,13 @@
     font-size: 0.72rem;
   }
 
-  .chart-box {
-    height: 240px;
-    min-width: 0;
+  .unknown-kind {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
   }
 
-  .unknown-kind {
+  .waiting {
     margin: 0;
     color: var(--text-secondary);
     font-size: 0.78rem;

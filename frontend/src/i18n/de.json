@@ -1152,6 +1152,7 @@
     "summary": "{preset} · {oids} OID · alle {cadence}",
     "noReading": "Nichts anzuzeigen.",
     "unknownWidget": "Diese Vorlage verlangt ein Widget „{kind}“, das diese Version nicht zeichnet.",
-    "snapshotNote": "Gezeichnet nach {file} im Zustand der Bindung von {target}. Das Bearbeiten oder Löschen der Datei ändert dieses Dashboard nicht; binden Sie das Gerät erneut, um eine neue Fassung zu übernehmen."
+    "snapshotNote": "Gezeichnet nach {file} im Zustand der Bindung von {target}. Das Bearbeiten oder Löschen der Datei ändert dieses Dashboard nicht; binden Sie das Gerät erneut, um eine neue Fassung zu übernehmen.",
+    "waiting": "Warten auf den ersten Messwert."
   }
 }
