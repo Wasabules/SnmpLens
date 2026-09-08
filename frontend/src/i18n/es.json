@@ -626,7 +626,8 @@
       "mibs": "MIBs",
       "snmp": "SNMP",
       "notify": "Notificaciones",
-      "service": "Servicio"
+      "service": "Servicio",
+      "presets": "Presets"
     },
     "general": {
       "updatesTitle": "Actualizaciones",
@@ -1084,5 +1085,54 @@
     "redo": "Rehacer",
     "matchCase": "Distinguir mayúsculas",
     "matchesCapped": "Solo se listan las primeras {max} coincidencias; hay más."
+  },
+  "preset": {
+    "title": "Presets de panel",
+    "intro": "Un preset es un archivo que describe qué consultar en un tipo de equipo y cómo mostrarlo. Añadirlo aquí no inicia nada: se vincula al añadir un objetivo.",
+    "add": "Añadir un preset",
+    "empty": "Aún no hay ningún preset.",
+    "emptyHint": "Añada un archivo de preset o suelte uno sobre la ventana.",
+    "remove": "Eliminar este preset",
+    "summaryLine": "{widgets} widget(s) · {oids} OID · cada {cadence}",
+    "imported": "{file} se ha añadido.",
+    "importedWithProblems": "{file} se ha añadido, con {count} problema(s) que corregir antes de poder vincularlo.",
+    "problems": "{count} problema(s)",
+    "problemsHint": "Este preset tiene problemas y no puede vincularse hasta que se corrijan.",
+    "noProblems": "Ningún problema.",
+    "costOids": "OID consultados",
+    "costCadence": "Cadencia solicitada",
+    "costRequests": "Peticiones al día",
+    "costVarbinds": "Valores al día",
+    "costPerTarget": "Por equipo. Una petición transporta hasta {chunk} valores, así que el número de peticiones es el de rondas multiplicado por las peticiones que ocupa cada ronda.",
+    "costNotAPrediction": "Son recuentos, no una duración: lo que tarda una ronda depende del equipo y del enlace. Si una ronda deja de caber en la cadencia, el reloj de sondeo la amplía y lo indica.",
+    "widgetTitle": "Título",
+    "widgetKind": "Mostrado como",
+    "widgetOids": "OID",
+    "widget": {
+      "value": "Última lectura",
+      "rate": "Tasa por segundo",
+      "chart": "Gráfica en el tiempo",
+      "status": "Indicador de estado",
+      "grid": "Rejilla de estados"
+    },
+    "err": {
+      "missing": "Obligatorio.",
+      "empty": "No puede estar vacío.",
+      "tooNew": "Escrito para la versión de formato {found}; esta versión entiende la {supported}.",
+      "outOfRange": "Debe estar entre {min} y {max}.",
+      "tooLong": "{found} caracteres; {max} como máximo.",
+      "tooMany": "{found}; {max} como máximo.",
+      "tooManyOids": "{found} OID en total; {max} como máximo.",
+      "tooManyForKind": "Un widget «{kind}» muestra {max} lectura(s) como máximo; este tiene {found}.",
+      "unknownKind": "«{kind}» no es un tipo de widget que esta versión conozca.",
+      "labelsOnlyForStatus": "Las etiquetas asocian un número a un estado, así que pertenecen a un indicador de estado o a una rejilla, no a un widget «{kind}».",
+      "labelKey": "«{key}» no es un número de estado.",
+      "controlCharacter": "Contiene un carácter de control.",
+      "notAnOid": "«{value}» no es un OID numérico.",
+      "oidTooDeep": "{found} subidentificadores; un OID lleva {max} como máximo.",
+      "oidOutOfRange": "«{value}» tiene un subidentificador que no cabe en la red.",
+      "notJson": "Este archivo no es JSON ({detail}).",
+      "tooBig": "Este archivo ocupa {found} bytes; {max} como máximo."
+    }
   }
 }

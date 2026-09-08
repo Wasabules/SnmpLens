@@ -626,7 +626,8 @@
       "mibs": "MIBs",
       "snmp": "SNMP",
       "notify": "Notifications",
-      "service": "Service"
+      "service": "Service",
+      "presets": "Presets"
     },
     "general": {
       "updatesTitle": "Mises à jour",
@@ -1084,5 +1085,54 @@
     "redo": "Rétablir",
     "matchCase": "Respecter la casse",
     "matchesCapped": "Seules les {max} premières correspondances sont listées ; il y en a d'autres."
+  },
+  "preset": {
+    "title": "Presets de tableau de bord",
+    "intro": "Un preset est un fichier qui décrit quoi interroger sur un type d'équipement et comment l'afficher. L'ajouter ici ne démarre rien : il est lié au moment où vous ajoutez une cible.",
+    "add": "Ajouter un preset",
+    "empty": "Aucun preset pour l'instant.",
+    "emptyHint": "Ajoutez un fichier de preset, ou déposez-en un sur la fenêtre.",
+    "remove": "Supprimer ce preset",
+    "summaryLine": "{widgets} widget(s) · {oids} OID · toutes les {cadence}",
+    "imported": "{file} a été ajouté.",
+    "importedWithProblems": "{file} a été ajouté, avec {count} problème(s) à corriger avant de pouvoir le lier.",
+    "problems": "{count} problème(s)",
+    "problemsHint": "Ce preset comporte des problèmes et ne peut pas être lié tant qu'ils ne sont pas corrigés.",
+    "noProblems": "Aucun problème.",
+    "costOids": "OID interrogés",
+    "costCadence": "Cadence demandée",
+    "costRequests": "Requêtes par jour",
+    "costVarbinds": "Valeurs par jour",
+    "costPerTarget": "Par équipement. Une requête transporte jusqu'à {chunk} valeurs : le nombre de requêtes est donc celui des tours multiplié par le nombre de requêtes que prend chaque tour.",
+    "costNotAPrediction": "Ce sont des comptes, pas une durée : le temps d'un tour dépend de l'équipement et du lien. Si un tour ne tient plus dans la cadence, l'horloge de scrutation l'élargit et le signale.",
+    "widgetTitle": "Titre",
+    "widgetKind": "Affiché en",
+    "widgetOids": "OID",
+    "widget": {
+      "value": "Dernière valeur",
+      "rate": "Débit par seconde",
+      "chart": "Courbe dans le temps",
+      "status": "Pastille d'état",
+      "grid": "Grille d'états"
+    },
+    "err": {
+      "missing": "Obligatoire.",
+      "empty": "Ne peut pas être vide.",
+      "tooNew": "Écrit pour la version de format {found} ; cette version comprend la {supported}.",
+      "outOfRange": "Doit être compris entre {min} et {max}.",
+      "tooLong": "{found} caractères ; {max} au maximum.",
+      "tooMany": "{found} ; {max} au maximum.",
+      "tooManyOids": "{found} OID au total ; {max} au maximum.",
+      "tooManyForKind": "Un widget « {kind} » affiche au plus {max} valeur(s) ; celui-ci en a {found}.",
+      "unknownKind": "« {kind} » n'est pas un type de widget connu de cette version.",
+      "labelsOnlyForStatus": "Les libellés associent un nombre à un état : ils appartiennent à une pastille d'état ou à une grille, pas à un widget « {kind} ».",
+      "labelKey": "« {key} » n'est pas un numéro d'état.",
+      "controlCharacter": "Contient un caractère de contrôle.",
+      "notAnOid": "« {value} » n'est pas un OID numérique.",
+      "oidTooDeep": "{found} sous-identifiants ; un OID en porte {max} au maximum.",
+      "oidOutOfRange": "« {value} » contient un sous-identifiant qui ne tient pas sur le réseau.",
+      "notJson": "Ce fichier n'est pas du JSON ({detail}).",
+      "tooBig": "Ce fichier fait {found} octets ; {max} au maximum."
+    }
   }
 }

@@ -626,7 +626,8 @@
       "mibs": "MIB",
       "snmp": "SNMP",
       "notify": "通知",
-      "service": "服务"
+      "service": "服务",
+      "presets": "预设"
     },
     "general": {
       "updatesTitle": "更新",
@@ -1084,5 +1085,54 @@
     "redo": "重做",
     "matchCase": "区分大小写",
     "matchesCapped": "仅列出前 {max} 个匹配项，还有更多。"
+  },
+  "preset": {
+    "title": "仪表板预设",
+    "intro": "预设是一个文件，描述在某类设备上采集什么、以及如何展示。在此添加不会启动任何采集：它在您添加目标时才被绑定。",
+    "add": "添加预设",
+    "empty": "尚无预设。",
+    "emptyHint": "添加一个预设文件，或将其拖放到窗口上。",
+    "remove": "删除此预设",
+    "summaryLine": "{widgets} 个部件 · {oids} 个 OID · 每 {cadence}",
+    "imported": "已添加 {file}。",
+    "importedWithProblems": "已添加 {file}，但有 {count} 个问题需在绑定前修正。",
+    "problems": "{count} 个问题",
+    "problemsHint": "该预设存在问题，修正之前无法绑定。",
+    "noProblems": "没有问题。",
+    "costOids": "采集的 OID",
+    "costCadence": "请求的频率",
+    "costRequests": "每天请求数",
+    "costVarbinds": "每天取值数",
+    "costPerTarget": "按设备计。一个请求最多携带 {chunk} 个取值，因此请求数等于轮次数乘以每轮所需的请求数。",
+    "costNotAPrediction": "这些是数量，不是时长：一轮需要多久取决于设备与链路。若一轮已容不进该频率，轮询时钟会将其放宽并予以告知。",
+    "widgetTitle": "标题",
+    "widgetKind": "展示方式",
+    "widgetOids": "OID",
+    "widget": {
+      "value": "最新读数",
+      "rate": "每秒速率",
+      "chart": "时间曲线",
+      "status": "状态块",
+      "grid": "状态网格"
+    },
+    "err": {
+      "missing": "必填。",
+      "empty": "不能为空。",
+      "tooNew": "为格式版本 {found} 编写；本版本支持 {supported}。",
+      "outOfRange": "必须介于 {min} 与 {max} 之间。",
+      "tooLong": "{found} 个字符；最多 {max} 个。",
+      "tooMany": "{found}；最多 {max}。",
+      "tooManyOids": "共 {found} 个 OID；最多 {max} 个。",
+      "tooManyForKind": "“{kind}”部件最多显示 {max} 个读数；此处有 {found} 个。",
+      "unknownKind": "“{kind}”不是本版本认识的部件类型。",
+      "labelsOnlyForStatus": "标签把数字映射为状态，因此属于状态块或状态网格，而不属于“{kind}”部件。",
+      "labelKey": "“{key}”不是状态编号。",
+      "controlCharacter": "包含控制字符。",
+      "notAnOid": "“{value}”不是数字 OID。",
+      "oidTooDeep": "{found} 个子标识；一个 OID 最多 {max} 个。",
+      "oidOutOfRange": "“{value}”中的子标识超出了传输范围。",
+      "notJson": "此文件不是 JSON（{detail}）。",
+      "tooBig": "此文件为 {found} 字节；最多 {max}。"
+    }
   }
 }
