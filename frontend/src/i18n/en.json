@@ -610,7 +610,12 @@
     "presetPick": "No preset",
     "presetNone": "No preset available",
     "presetHint": "Bind a dashboard preset to this equipment. It starts polling straight away; what it costs is in Settings > Presets.",
-    "presetBound": "{address} is now polling its preset."
+    "presetBound": "{address} is now polling its preset.",
+    "presetDetect": "Detect",
+    "presetDetectHint": "Ask this equipment what it is, and put the presets that match it first.",
+    "presetMatched": "{count} preset(s) match this equipment.",
+    "presetNoMatch": "No preset names this equipment.",
+    "presetDeviceMasked": "Equipment identified"
   },
   "update": {
     "available": "SnmpLens {version} is available",

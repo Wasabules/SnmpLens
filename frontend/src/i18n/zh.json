@@ -610,7 +610,12 @@
     "presetPick": "不使用预设",
     "presetNone": "暂无可用预设",
     "presetHint": "将仪表板预设绑定到此设备。绑定后立即开始轮询；其开销见「设置 > 预设」。",
-    "presetBound": "{address} 现已按其预设进行轮询。"
+    "presetBound": "{address} 现已按其预设进行轮询。",
+    "presetDetect": "识别",
+    "presetDetectHint": "询问该设备的型号，并把匹配的预设排在前面。",
+    "presetMatched": "有 {count} 个预设匹配此设备。",
+    "presetNoMatch": "没有预设指明此设备。",
+    "presetDeviceMasked": "设备已识别"
   },
   "update": {
     "available": "SnmpLens {version} 可用",

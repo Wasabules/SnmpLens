@@ -112,7 +112,12 @@ const point = (target, oid) => ({ target, oid, timestamp: '2026-01-01T00:00:00Z'
 
   // Comments are stripped first: this file explains the defects it replaced, so
   // a check that scanned the prose would fail on its own description of them.
-  const code = (src) => src.split('\n').map((line) => line.replace(/\/\/.*$/, '')).join('\n');
+  // `[^\r\n]` rather than `.` and `$`: the working tree is CRLF on Windows and
+  // LF in git, so splitting on \n leaves a \r that `.` will not cross and `$`
+  // sits after — the strip silently did nothing on one platform and everything
+  // on the other, which is a check that passes in CI and fails on the machine
+  // that wrote it.
+  const code = (src) => src.replace(/\/\/[^\r\n]*/g, '');
 
   for (const [name, src] of [['MonitorChart', chart], ['MetricTiles', tiles], ['ChannelsModal', modal]]) {
     check(`${name} takes its colours from the plan`, /seriesPlan\(/.test(code(src)));

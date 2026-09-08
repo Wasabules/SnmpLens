@@ -13,8 +13,12 @@ import (
 
 // DiscoveryResult represents the outcome of scanning a single IP.
 type DiscoveryResult struct {
-	IP           string `json:"ip"`
-	SysName      string `json:"sysName"`
+	IP      string `json:"ip"`
+	SysName string `json:"sysName"`
+	// SysObjectID is the vendor and model, as an OID. It is what a dashboard
+	// preset matches on: sysDescr is prose that differs between two firmware
+	// revisions of the same switch, and this does not.
+	SysObjectID  string `json:"sysObjectId,omitempty"`
 	SysDescr     string `json:"sysDescr"`
 	SysUpTime    string `json:"sysUpTime"`
 	ResponseTime int64  `json:"responseTime"`
@@ -65,6 +69,7 @@ func (c *Client) Discover(cidr, community, version string, port, timeoutSec int,
 				".1.3.6.1.2.1.1.1.0", // sysDescr
 				".1.3.6.1.2.1.1.5.0", // sysName
 				".1.3.6.1.2.1.1.3.0", // sysUpTime
+				".1.3.6.1.2.1.1.2.0", // sysObjectID
 			}
 			packet, err := g.Get(oids)
 			result.ResponseTime = time.Since(start).Milliseconds()
@@ -86,6 +91,8 @@ func (c *Client) Discover(cidr, community, version string, port, timeoutSec int,
 					result.SysName = fmt.Sprintf("%v", val)
 				case ".1.3.6.1.2.1.1.3.0":
 					result.SysUpTime = fmt.Sprintf("%v", val)
+				case ".1.3.6.1.2.1.1.2.0":
+					result.SysObjectID = fmt.Sprintf("%v", val)
 				}
 			}
 			resultsChan <- result

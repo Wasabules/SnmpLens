@@ -610,7 +610,12 @@
     "presetPick": "Aucun preset",
     "presetNone": "Aucun preset disponible",
     "presetHint": "Lier un preset de tableau de bord à cet équipement. L'interrogation démarre aussitôt ; le coût est indiqué dans Paramètres > Presets.",
-    "presetBound": "{address} interroge désormais son preset."
+    "presetBound": "{address} interroge désormais son preset.",
+    "presetDetect": "Détecter",
+    "presetDetectHint": "Demander à cet équipement ce qu'il est, et placer en tête les presets qui lui correspondent.",
+    "presetMatched": "{count} preset(s) correspondent à cet équipement.",
+    "presetNoMatch": "Aucun preset ne désigne cet équipement.",
+    "presetDeviceMasked": "Équipement identifié"
   },
   "update": {
     "available": "SnmpLens {version} est disponible",
