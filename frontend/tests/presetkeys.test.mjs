@@ -37,17 +37,43 @@ const goSource = readdirSync(presetDir)
 
 // errf(field, "message", args) — the second argument is the key suffix, and the
 // args map keys are the placeholders the message may use.
+//
+// Split by SCANNING, not by regular expression. The first argument can be a
+// call of its own — errf(fmt.Sprintf("%s.oids[%d]", at, j), …) — so a pattern
+// has to allow nested parentheses inside it, and the obvious way to write that
+// (an alternation of "not a comma" and "a bracketed group", repeated) is
+// exponential on the wrong input. CodeQL caught it here; a scanner that tracks
+// depth and string state is linear and says what it does.
+function callArgs(source, from) {
+  const args = [];
+  let depth = 0, start = from, inString = false, escaped = false;
+  for (let i = from; i < source.length; i++) {
+    const c = source[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (c === '\\') escaped = true;
+      else if (c === '"') inString = false;
+      continue;
+    }
+    if (c === '"') { inString = true; continue; }
+    if (c === '(' || c === '[' || c === '{') depth++;
+    else if (c === ')' && depth === 0) { args.push(source.slice(start, i).trim()); return args; }
+    else if (c === ')' || c === ']' || c === '}') depth--;
+    else if (c === ',' && depth === 0) { args.push(source.slice(start, i).trim()); start = i + 1; }
+  }
+  return args;
+}
+
 const messages = new Map(); // message -> Set(placeholder)
-for (const m of goSource.matchAll(/errf\((?:[^,]|\([^)]*\))+,\s*"([a-zA-Z]+)"\s*,\s*(nil|map\[string\]string\{)/g)) {
-  const [, name, tail] = m;
+for (let i = goSource.indexOf('errf('); i >= 0; i = goSource.indexOf('errf(', i + 1)) {
+  const args = callArgs(goSource, i + 'errf('.length);
+  if (args.length < 3) continue;
+  const name = /^"([a-zA-Z]+)"$/.exec(args[1])?.[1];
+  if (!name) continue;
   if (!messages.has(name)) messages.set(name, new Set());
-  if (tail === 'nil') continue;
-  // The arg map is on the same line or the next few; take what follows up to
-  // the closing brace of the literal.
-  const from = m.index + m[0].length;
-  const chunk = goSource.slice(from, from + 400);
-  const end = chunk.indexOf('}');
-  for (const a of chunk.slice(0, end < 0 ? 400 : end).matchAll(/"([a-zA-Z]+)":/g)) {
+  // The third argument is nil, or a map literal whose keys are the
+  // placeholders the message may use.
+  for (const a of args[2].matchAll(/"([a-zA-Z]+)":/g)) {
     messages.get(name).add(a[1]);
   }
 }
