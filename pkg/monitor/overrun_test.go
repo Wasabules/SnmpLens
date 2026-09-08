@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -367,5 +368,65 @@ func TestAcceptSlowRestoresTheCadenceOfARunningSession(t *testing.T) {
 	// Back to running flat out, which is what accepting the slowdown means.
 	if gap := after[1].Sub(after[0]); gap > round+120*time.Millisecond {
 		t.Errorf("gap after accepting is %v; the cadence was not restored", gap.Round(time.Millisecond))
+	}
+}
+
+// A poll round must not be able to end the process.
+//
+// The round runs on its own goroutine and calls out to four callbacks the
+// scheduler did not write — Fetch, Persist, Evaluate, Emit. An unrecovered
+// panic in any of them does not end the session: it ends the PROCESS, taking
+// every other session, the trap listener and the notification outbox with it.
+//
+// Found for real: a session started with no SNMP client dereferenced nil inside
+// newGoSNMP, on the poll goroutine, and killed the test binary — on macOS only,
+// because the other two platforms finished before the first tick landed.
+func TestAPanicInAPollDoesNotEndTheProcess(t *testing.T) {
+	var mu sync.Mutex
+	rounds := 0
+	var reported []string
+
+	s := NewScheduler()
+	s.Persist = func([]Point) {}
+	s.OnPanic = func(sessionID, name, recovered, stack string) {
+		mu.Lock()
+		reported = append(reported, sessionID+": "+recovered)
+		mu.Unlock()
+	}
+
+	s.Start(SessionSpec{
+		ID: "explodes", Name: "boom", OIDs: []string{"1.1"}, Targets: []string{"a"},
+		Interval: minInterval,
+		Fetch: func(_ context.Context, oids, targets []string) []Reading {
+			mu.Lock()
+			rounds++
+			n := rounds
+			mu.Unlock()
+			if n == 1 {
+				var nilMap map[string]int
+				//lint:ignore SA5000 the panic is the subject of this test
+				nilMap["boom"] = 1
+			}
+			v := 1.0
+			return []Reading{{Target: targets[0], OID: oids[0], Value: &v, SnmpType: "Counter32"}}
+		},
+	})
+
+	time.Sleep(minInterval*3 + 400*time.Millisecond)
+	s.StopAll()
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(reported) == 0 {
+		t.Fatal("the panic was swallowed with nothing said about it")
+	}
+	if !strings.Contains(reported[0], "explodes") {
+		t.Errorf("the report does not name the session: %q", reported[0])
+	}
+
+	// Recovered per ROUND, not per session: the next tick must still poll, or a
+	// single transient panic stops a monitoring for good and silently.
+	if rounds < 2 {
+		t.Errorf("%d round(s); the session stopped polling after the panic", rounds)
 	}
 }

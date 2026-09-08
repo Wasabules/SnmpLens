@@ -150,6 +150,22 @@ func (a *App) initScheduler() {
 		})
 	}
 
+	// A poll round that panicked is contained by the scheduler; this is what
+	// makes it VISIBLE. A recovered panic that nobody records is a session
+	// quietly returning nothing, which reads as a device that stopped
+	// answering — the one explanation that is wrong.
+	s.OnPanic = func(sessionID, name, recovered, stack string) {
+		detail := fmt.Sprintf("the poll of %q panicked and was recovered: %s", name, recovered)
+		_ = a.recordEvent(events.Event{
+			Category: events.CategorySystem,
+			Kind:     events.KindSystemPollFailed,
+			Severity: events.SevMajor.String(),
+			TitleKey: "events.kind." + events.KindSystemPollFailed,
+			Params:   map[string]any{"detail": detail, "sessionId": sessionID},
+			Summary:  detail,
+		}, stack)
+	}
+
 	s.OnStateChange = a.refreshTrayStatus
 
 	// The guardrail's report. Two destinations, because the two questions are
@@ -235,6 +251,21 @@ func (a *App) buildFetch(sess storage.Session) monitor.FetchFunc {
 	// window closed, and the scheduler could only check for a stop between
 	// OIDs, so it could not be interrupted.
 	return func(ctx context.Context, oids []string, targets []string) []monitor.Reading {
+		// A session cannot poll without a client, and reaching through a nil one
+		// panics inside newGoSNMP — on the poll goroutine, which used to end the
+		// process. Reported as a failed reading per pair instead, which is the
+		// shape every other failure on this path takes.
+		if a.snmpClient == nil {
+			readings := make([]monitor.Reading, 0, len(targets)*len(oids))
+			for _, t := range targets {
+				for _, oid := range oids {
+					readings = append(readings, monitor.Reading{
+						Target: t, OID: oid, Error: "no SNMP client",
+					})
+				}
+			}
+			return readings
+		}
 		// The poll's context reaches the wire. Chunking is serial within a
 		// target, so without it a stop waited for every remaining chunk's
 		// timeout — measured at 12.0 s for 90 OIDs against a silent device.
