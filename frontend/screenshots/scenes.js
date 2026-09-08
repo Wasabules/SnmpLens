@@ -28,6 +28,7 @@ export const TABS = {
   discovery: 'discovery',
   events: 'events',
   mibeditor: 'mibeditor',
+  dashboard: 'dashboard',
 };
 
 /** The two themes every scene is captured in. */
@@ -136,6 +137,18 @@ const CATALOGUE = [
     // was sliced through its legend, which reads as a broken layout.
     height: 1320,
     describe: 'Polling sessions charted over several hours, with a threshold crossed.',
+  },
+  {
+    base: 'dashboard-preset',
+    tab: TABS.dashboard,
+    // The same feed the monitor scene uses. A dashboard with no samples in it
+    // renders every tile as an em dash and every chart as an empty grid, which
+    // is a picture of the empty state rather than of the feature.
+    feed: { from: 'monitorSamples', everyMs: 420 },
+    // Tall enough for the eight-port grid under the chart; the widgets stack
+    // into one column below roughly 1100.
+    height: 1200,
+    describe: 'A dashboard drawn from a community preset bound to one switch.',
   },
   {
     base: 'trap-listener',

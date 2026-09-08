@@ -1156,6 +1156,7 @@
     "summary": "{preset} · {oids} OID(s) · every {cadence}",
     "noReading": "Nothing to show.",
     "unknownWidget": "This preset asks for a \"{kind}\" widget, which this version does not draw.",
-    "snapshotNote": "Drawn from {file} as it was when {target} was bound. Editing or removing the file does not change this dashboard; bind the equipment again to adopt a new version."
+    "snapshotNote": "Drawn from {file} as it was when {target} was bound. Editing or removing the file does not change this dashboard; bind the equipment again to adopt a new version.",
+    "waiting": "Waiting for the first reading."
   }
 }

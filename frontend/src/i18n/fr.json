@@ -1156,6 +1156,7 @@
     "summary": "{preset} · {oids} OID · toutes les {cadence}",
     "noReading": "Rien à afficher.",
     "unknownWidget": "Ce preset demande un widget « {kind} » que cette version ne sait pas dessiner.",
-    "snapshotNote": "Dessiné d'après {file} tel qu'il était lors de la liaison de {target}. Modifier ou supprimer le fichier ne change pas ce tableau de bord ; reliez l'équipement pour en adopter une nouvelle version."
+    "snapshotNote": "Dessiné d'après {file} tel qu'il était lors de la liaison de {target}. Modifier ou supprimer le fichier ne change pas ce tableau de bord ; reliez l'équipement pour en adopter une nouvelle version.",
+    "waiting": "En attente de la première mesure."
   }
 }

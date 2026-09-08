@@ -136,6 +136,89 @@ export function series({ sessionId, oid, hours = 6, intervalMs = 60000, targets 
 }
 
 /** The session the site's monitoring screenshot shows. */
+/**
+ * The session bound from a dashboard preset.
+ *
+ * One target and eleven OIDs, where CPU_SESSION is one OID across five targets
+ * — which is the difference between the two screens: the monitor tab compares
+ * devices, a dashboard describes ONE. It is a separate shape rather than a
+ * parameterisation of the other because everything about it differs, including
+ * what makes it a good picture.
+ *
+ * The port states are chosen, not random: seven up and one down, because a wall
+ * of forty-eight identical cells shows the layout and a wall with one fault in
+ * it shows what the layout is FOR.
+ */
+export const PRESET_SESSION = {
+  sessionId: '5f2ad9c8-41b6-4a70-b8e1-9c3d7e40a112',
+  address: '10.12.4.1',
+  hours: 6,
+  intervalMs: 30000,
+  // sysUpTime, then the uplink counters, then eight ifOperStatus instances.
+  uptimeOid: '1.3.6.1.2.1.1.3.0',
+  counterOids: ['1.3.6.1.2.1.2.2.1.10.1', '1.3.6.1.2.1.2.2.1.16.1'],
+  portOids: Array.from({ length: 8 }, (_, i) => `1.3.6.1.2.1.2.2.1.8.${i + 1}`),
+  portStates: [1, 1, 1, 2, 1, 1, 1, 1],
+};
+
+/**
+ * Points for that session: a rising uptime, two traffic counters, and a state
+ * per port.
+ *
+ * Only the last hour, at the session's own cadence: a dashboard shows what a
+ * device is doing now, and six hours of thirty-second samples across eleven
+ * series is 8 000 points for a picture that shows the last few.
+ */
+export function presetSeries(s = PRESET_SESSION) {
+  const end = ANCHOR;
+  const start = end - 3600 * 1000;
+  const rand = rng(7331);
+  const points = [];
+
+  const push = (oid, at, value, previous) => {
+    points.push({
+      sessionId: s.sessionId,
+      target: s.address,
+      oid,
+      timestamp: new Date(at).toISOString(),
+      value,
+      delta: previous === null ? 0 : Math.round((value - previous) * 1000) / 1000,
+      rate: previous === null ? 0
+        : Math.round(((value - previous) / (s.intervalMs / 1000)) * 1000) / 1000,
+      responseTimeMs: 3 + Math.round(rand() * 6),
+      error: null,
+      snmpType: 'Counter32',
+    });
+  };
+
+  const lastOf = new Map();
+  for (let at = start; at <= end; at += s.intervalMs) {
+    const progress = (at - start) / (end - start);
+
+    // Uptime in hundredths of a second, climbing exactly as a device's does.
+    const uptime = 106238300 + Math.round((at - start) / 10);
+    push(s.uptimeOid, at, uptime, lastOf.get(s.uptimeOid) ?? null);
+    lastOf.set(s.uptimeOid, uptime);
+
+    // Two counters out of phase, so the in and out curves separate.
+    s.counterOids.forEach((oid, i) => {
+      const swing = Math.sin(progress * Math.PI * 3 + i * 1.7) * 0.35 + 1;
+      const step = (18_000_000 + i * 4_000_000) * swing * (0.9 + rand() * 0.2);
+      const value = Math.round((lastOf.get(oid) ?? (900_000_000 + i * 130_000_000)) + step);
+      push(oid, at, value, lastOf.get(oid) ?? null);
+      lastOf.set(oid, value);
+    });
+
+    // A port state changes rarely; only the last sample is ever read.
+    s.portOids.forEach((oid, i) => {
+      const state = s.portStates[i];
+      push(oid, at, state, lastOf.get(oid) ?? null);
+      lastOf.set(oid, state);
+    });
+  }
+  return points;
+}
+
 export const CPU_SESSION = {
   sessionId: '7c1f9a24-3d5e-4b81-9f02-6ab3c1de5f40',
   oid: '1.3.6.1.2.1.25.3.3.1.2.1',

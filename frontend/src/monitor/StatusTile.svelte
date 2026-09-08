@@ -56,18 +56,25 @@
     return 'value';
   };
 
-  const shortName = (oid, tree) => {
+  // The INSTANCE, and only the instance.
+  //
+  // The first capture of a port grid showed eight cells all reading
+  // "ifOperStatu…" — the name is the same on every cell of a grid by
+  // construction, so it is the one part that carries no information, and it was
+  // the part that survived the ellipsis while the instance was cut. The name
+  // belongs on the widget's title and in the tooltip; the cell shows what tells
+  // two ports apart.
+  const instanceOf = (oid) => String(oid).split('.').pop();
+  const fullName = (oid, tree) => {
     const name = oidName(oid, tree);
-    // The instance is what tells two ports apart, so it is what a cell shows.
-    const last = String(oid).split('.').pop();
-    return name && name !== oid ? `${name}.${last}` : last;
+    return name && name !== oid ? `${name}.${instanceOf(oid)}` : oid;
   };
 </script>
 
 <div class="states" class:dense>
   {#each oids as oid (oid)}
-    <div class="cell {cellKind(latest(oid, points), labels)}" title={oid}>
-      <span class="cell-name">{shortName(oid, mibTree)}</span>
+    <div class="cell {cellKind(latest(oid, points), labels)}" title={fullName(oid, mibTree)}>
+      <span class="cell-name">{instanceOf(oid)}</span>
       <span class="cell-state">{cellText(latest(oid, points), labels)}</span>
     </div>
   {/each}
@@ -83,8 +90,10 @@
     gap: 4px;
   }
 
+  /* Narrower, because a cell now holds an instance number and a word rather
+     than a truncated OID name. Forty-eight of them fit across a panel. */
   .states.dense {
-    grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(62px, 1fr));
   }
 
   .cell {

@@ -1156,6 +1156,7 @@
     "summary": "{preset} · {oids} 个 OID · 每 {cadence}",
     "noReading": "无内容可显示。",
     "unknownWidget": "此预设要求一个“{kind}”部件，本版本无法绘制。",
-    "snapshotNote": "依据绑定 {target} 时的 {file} 绘制。编辑或删除该文件不会改变此仪表板；重新绑定设备即可采用新版本。"
+    "snapshotNote": "依据绑定 {target} 时的 {file} 绘制。编辑或删除该文件不会改变此仪表板；重新绑定设备即可采用新版本。",
+    "waiting": "等待首次采集。"
   }
 }

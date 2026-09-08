@@ -6,7 +6,7 @@
  * the present without six hours of JSON in the repository.
  */
 
-import { series, CPU_SESSION } from './series.js';
+import { series, presetSeries, CPU_SESSION, PRESET_SESSION } from './series.js';
 
 /**
  * The generated fixture table, handed over by App.js at module init.
@@ -22,11 +22,20 @@ export function setFixtures(table) {
 }
 
 let cpu = null;
+let bound = null;
 
 export const dynamic = {
   // Generated once per page load, so every chart on the page agrees with itself
   // and with the statistics computed from it.
-  MonitorLoadSessionData() {
+  // The ARGUMENT matters here, and it used to be ignored: every session was
+  // handed the CPU session's points, under its own OID and its own targets. A
+  // dashboard bound to one switch then found nothing that matched its eleven
+  // OIDs and drew eleven empty widgets — a picture of the waiting state.
+  MonitorLoadSessionData(sessionId) {
+    if (sessionId === PRESET_SESSION.sessionId) {
+      if (!bound) bound = presetSeries();
+      return bound;
+    }
     if (!cpu) cpu = series(CPU_SESSION);
     return cpu;
   },
