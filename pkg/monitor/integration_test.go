@@ -52,9 +52,9 @@ func TestIntegrationSchedulerPollsARealAgent(t *testing.T) {
 	client := snmp.NewClient(context.Background())
 	// GetMany, which is what the scheduler drives in production: one
 	// connection per target with every OID in one PDU, against a real agent.
-	fetch := func(_ context.Context, oids []string, targets []string) []monitor.Reading {
+	fetch := func(ctx context.Context, oids []string, targets []string) []monitor.Reading {
 		out := []monitor.Reading{}
-		for _, m := range client.GetMany(targets, oids, "public", "v2c", port, 2, 1, snmp.V3Params{}) {
+		for _, m := range client.GetMany(ctx, targets, oids, "public", "v2c", port, 2, 1, snmp.V3Params{}) {
 			for _, oid := range oids {
 				reading := monitor.Reading{
 					Target: m.Target, OID: oid,
@@ -146,9 +146,9 @@ func TestIntegrationUnreachableTargetIsRecorded(t *testing.T) {
 	_, port := agentAddr(t)
 
 	client := snmp.NewClient(context.Background())
-	fetch := func(_ context.Context, oids []string, targets []string) []monitor.Reading {
+	fetch := func(ctx context.Context, oids []string, targets []string) []monitor.Reading {
 		out := []monitor.Reading{}
-		for _, m := range client.GetMany(targets, oids, "public", "v2c", port, 1, 0, snmp.V3Params{}) {
+		for _, m := range client.GetMany(ctx, targets, oids, "public", "v2c", port, 1, 0, snmp.V3Params{}) {
 			for _, oid := range oids {
 				out = append(out, monitor.Reading{Target: m.Target, OID: oid, Error: m.Errors[oid]})
 			}

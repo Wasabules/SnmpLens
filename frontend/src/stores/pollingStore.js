@@ -9,6 +9,7 @@ import {
   MonitorLoadSessions,
   MonitorLoadSessionData,
   MonitorDeleteSession,
+  MonitorAcceptSlow,
 } from '../../wailsjs/go/main/App';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
 import { settingsStore } from './settingsStore';
@@ -85,6 +86,20 @@ function createPollingStore() {
       if (results.length > cap) results = results.slice(-cap);
       return { ...s, results, running: true };
     }));
+  });
+
+  // The poll clock reporting that a session cannot run as fast as it says.
+  //
+  // Edge-triggered in Go: one message when a session stops keeping up and one
+  // when it starts again, never one per tick. The decision is the operator's,
+  // so this is kept ON THE SESSION and rendered as a banner rather than raised
+  // as a toast — a toast is gone by the time anyone reads it, and what is being
+  // asked is a choice, not a notice.
+  EventsOn('monitor:overrun', (o) => {
+    if (!o || !o.sessionId) return;
+    update((sessions) => sessions.map((s) => (
+      s.id === o.sessionId ? { ...s, overrun: o.recovered ? null : o } : s
+    )));
   });
 
   // A point with neither a value nor an error came back as a type that cannot
@@ -327,8 +342,25 @@ function createPollingStore() {
   // Deferred initialization
   setTimeout(initFromBackend, 300);
 
+  // The operator's answer: keep the cadence I chose. Applied optimistically so
+  // the banner changes the moment it is clicked — Go has already decided, and
+  // the call cannot be refused.
+  async function acceptSlow(sessionId) {
+    update((sessions) => sessions.map((s) => (
+      s.id === sessionId && s.overrun
+        ? { ...s, overrun: { ...s.overrun, accepted: true, effectiveMs: s.overrun.intervalMs } }
+        : s
+    )));
+    try {
+      await MonitorAcceptSlow(sessionId);
+    } catch (e) {
+      console.error('MonitorAcceptSlow failed', e);
+    }
+  }
+
   return {
     subscribe,
+    acceptSlow,
     startPolling,
     resumeSession,
     stopPolling,

@@ -149,7 +149,59 @@ func (a *App) initScheduler() {
 	}
 
 	s.OnStateChange = a.refreshTrayStatus
+
+	// The guardrail's report. Two destinations, because the two questions are
+	// different: the journal answers "what happened while I was away" for an
+	// operator running with no window open, and the renderer is what actually
+	// ASKS — a slowdown the user is expected to accept explicitly has to be put
+	// in front of them.
+	s.OnOverrun = func(o monitor.Overrun) {
+		sev, detail := events.SevWarning, fmt.Sprintf(
+			"%q asks for a reading every %s but a round costs %s, so it now polls every %s "+
+				"(%d OIDs across %d target(s))",
+			o.Name, msText(o.IntervalMs), msText(o.CycleMs), msText(o.EffectiveMs), o.OIDs, o.Targets)
+		switch {
+		case o.Recovered:
+			sev = events.SevInfo
+			detail = fmt.Sprintf("%q is keeping up again and is back to a reading every %s",
+				o.Name, msText(o.IntervalMs))
+		case o.Accepted:
+			detail = fmt.Sprintf(
+				"%q asks for a reading every %s but a round costs %s; the slowdown has been "+
+					"accepted, so the cadence is unchanged", o.Name, msText(o.IntervalMs), msText(o.CycleMs))
+		}
+		_ = a.recordEvent(events.Event{
+			Category: events.CategorySystem,
+			Kind:     events.KindSystemInfo,
+			Severity: sev.String(),
+			TitleKey: "events.kind." + events.KindSystemInfo,
+			Params:   map[string]any{"detail": detail},
+			Summary:  detail,
+		}, "")
+		if a.ctx != nil {
+			runtime.EventsEmit(a.ctx, "monitor:overrun", o)
+		}
+	}
+
 	a.scheduler = s
+}
+
+// msText renders a millisecond count the way an operator reads a cadence.
+func msText(ms int) string {
+	return (time.Duration(ms) * time.Millisecond).Round(100 * time.Millisecond).String()
+}
+
+// MonitorAcceptSlow is the operator answering the overrun report: keep the
+// cadence I chose, I accept that it slows things down.
+//
+// It applies to the running session only. Nothing persists it, on purpose — a
+// decision about how hard to work THIS machine is not one to inherit silently
+// after a restart on another one.
+func (a *App) MonitorAcceptSlow(sessionID string) {
+	if a.scheduler == nil {
+		return
+	}
+	a.scheduler.AcceptSlow(sessionID)
 }
 
 // buildFetch closes over the connection so the scheduler never sees a
@@ -180,8 +232,11 @@ func (a *App) buildFetch(sess storage.Session) monitor.FetchFunc {
 	// five seconds was a fifty-second tick on the clock that runs with the
 	// window closed, and the scheduler could only check for a stop between
 	// OIDs, so it could not be interrupted.
-	return func(_ context.Context, oids []string, targets []string) []monitor.Reading {
-		results := a.snmpClient.GetMany(targets, oids, community, version, port, timeout, retries, v3)
+	return func(ctx context.Context, oids []string, targets []string) []monitor.Reading {
+		// The poll's context reaches the wire. Chunking is serial within a
+		// target, so without it a stop waited for every remaining chunk's
+		// timeout — measured at 12.0 s for 90 OIDs against a silent device.
+		results := a.snmpClient.GetMany(ctx, targets, oids, community, version, port, timeout, retries, v3)
 		readings := make([]monitor.Reading, 0, len(results)*len(oids))
 		for _, m := range results {
 			for _, oid := range oids {

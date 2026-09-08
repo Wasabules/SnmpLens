@@ -1,6 +1,7 @@
 package snmp
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -260,7 +261,16 @@ const maxVarbindsPerGet = 30
 // that produced no per-OID entries would leave every series looking as though
 // nothing had been polled at all — which is indistinguishable from a paused
 // session.
-func (c *Client) GetMany(targets []string, oids []string, community, version string, port, timeoutSec, retries int, v3 V3Params) []*MultiResult {
+//
+// The context is the poll's, and it is what makes a session STOPPABLE while it
+// is on the wire. Chunking is serial within one target, so without it a stop
+// waited for every remaining chunk: measured against a silent device, 90 OIDs
+// (three chunks) took 12.0 s to stop, and a preset at pkg/preset's sanity bound
+// of 500 OIDs would be seventeen chunks — over a minute of an application that
+// will not close. gosnmp consults the context between retries and for the dial,
+// so the wait is now bounded by ONE request timeout rather than by the whole
+// round.
+func (c *Client) GetMany(ctx context.Context, targets []string, oids []string, community, version string, port, timeoutSec, retries int, v3 V3Params) []*MultiResult {
 	out := make([]*MultiResult, 0, len(targets))
 	if len(oids) == 0 {
 		return out
@@ -272,7 +282,7 @@ func (c *Client) GetMany(targets []string, oids []string, community, version str
 		wg.Add(1)
 		go func(t string) {
 			defer wg.Done()
-			m := c.getManyOne(t, oids, community, version, port, timeoutSec, retries, v3)
+			m := c.getManyOne(ctx, t, oids, community, version, port, timeoutSec, retries, v3)
 			mu.Lock()
 			out = append(out, m)
 			mu.Unlock()
@@ -296,7 +306,7 @@ func (c *Client) GetMany(targets []string, oids []string, community, version str
 	return ordered
 }
 
-func (c *Client) getManyOne(target string, oids []string, community, version string, port, timeoutSec, retries int, v3 V3Params) *MultiResult {
+func (c *Client) getManyOne(ctx context.Context, target string, oids []string, community, version string, port, timeoutSec, retries int, v3 V3Params) *MultiResult {
 	start := time.Now()
 	m := &MultiResult{
 		Target:  target,
@@ -315,6 +325,11 @@ func (c *Client) getManyOne(target string, oids []string, community, version str
 	if err != nil {
 		return failAll(err)
 	}
+	// Before Connect: gosnmp dials with DialContext and defaults the field to
+	// context.Background() inside connect() if it is still nil.
+	if ctx != nil {
+		g.Context = ctx
+	}
 	if err := g.Connect(); err != nil {
 		return failAll(fmt.Errorf("connect failed: %v", err))
 	}
@@ -326,6 +341,16 @@ func (c *Client) getManyOne(target string, oids []string, community, version str
 			to = len(oids)
 		}
 		chunk := oids[from:to]
+
+		// Between chunks, because that is the granularity a serial loop can
+		// offer: a cancelled poll stops here instead of paying every remaining
+		// timeout.
+		if ctx != nil && ctx.Err() != nil {
+			for _, oid := range oids[from:] {
+				m.Errors[oid] = ctx.Err().Error()
+			}
+			break
+		}
 
 		packet, err := g.Get(chunk)
 		if err != nil {

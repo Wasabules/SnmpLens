@@ -35,6 +35,26 @@ export function formatDuration(ms) {
 }
 
 /**
+ * A poll PERIOD, as an operator reads one.
+ *
+ * Not formatDuration: that is for a measurement and answers "600.00s" where a
+ * cadence is read as "10 min". The unit is chosen from the size, and the
+ * decimal is dropped once it stops carrying information.
+ * @param {number} ms
+ * @returns {string}
+ */
+export function formatCadence(ms) {
+  const n = Number(ms);
+  if (!isFinite(n)) return '—';
+  if (n < 1000) return `${Math.round(n)} ms`;
+  const s = n / 1000;
+  if (s < 60) return `${Number(s.toFixed(s < 10 ? 1 : 0))} s`;
+  const m = s / 60;
+  if (m < 60) return `${Number(m.toFixed(m < 10 ? 1 : 0))} min`;
+  return `${Number((m / 60).toFixed(1))} h`;
+}
+
+/**
  * Format SNMP TimeTicks (hundredths of a second) to human-readable duration.
  * e.g. 1099992310 → "127d 3h 46m 23s"
  * @param {number} centiseconds

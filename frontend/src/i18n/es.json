@@ -403,6 +403,11 @@
     "informNoAck": "sin respuesta del receptor"
   },
   "monitor": {
+    "overrunTitle": "Cadencia insostenible.",
+    "overrunBody": "Esta sesión pide una lectura cada {interval}, pero una ronda cuesta {cycle}. Ahora consulta cada {effective}, para que la aplicación no trabaje sin parar.",
+    "overrunAccepted": "Esta sesión pide una lectura cada {interval} y una ronda cuesta {cycle}. Ha aceptado la ralentización, así que la cadencia no cambia.",
+    "overrunAccept": "Mantener mi cadencia",
+    "overrunAcceptHint": "Consultar de todos modos con la cadencia elegida. La aplicación trabajará entonces de forma continua y se interrogará al equipo sin pausa.",
     "live": "LIVE",
     "liveHint": "Volver a seguir las últimas muestras (ampliar o desplazar pausa el seguimiento)",
     "timebaseAll": "Todo",

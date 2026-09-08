@@ -403,6 +403,11 @@
     "informNoAck": "接收方无响应"
   },
   "monitor": {
+    "overrunTitle": "无法保持该频率。",
+    "overrunBody": "此会话要求每 {interval} 采集一次，但一轮需要 {cycle}。现已改为每 {effective} 轮询一次，以免应用持续满负荷运行。",
+    "overrunAccepted": "此会话要求每 {interval} 采集一次，而一轮需要 {cycle}。您已接受由此带来的变慢，频率保持不变。",
+    "overrunAccept": "保持我的频率",
+    "overrunAcceptHint": "仍按所选频率轮询。应用将持续工作，设备也会被不间断地查询。",
     "live": "实时",
     "liveHint": "重新跟随最新采样（缩放或平移会暂停跟随）",
     "timebaseAll": "全部",
