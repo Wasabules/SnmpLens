@@ -10,7 +10,8 @@
       "monitor": "Überwachung",
       "network": "Netzwerk",
       "events": "Ereignisse",
-      "mibEditor": "MIB-Editor"
+      "mibEditor": "MIB-Editor",
+      "dashboard": "Dashboard"
     },
     "status": {
       "targetsTitle": "Anzahl konfigurierter Ziele",
@@ -605,7 +606,11 @@
       "useDefault": "Standard verwenden",
       "clear": "Überschreibungen löschen",
       "badge": "Benutzerdefinierte SNMP-Einstellungen"
-    }
+    },
+    "presetPick": "Keine Vorlage",
+    "presetNone": "Keine Vorlage verfügbar",
+    "presetHint": "Eine Dashboard-Vorlage an dieses Gerät binden. Die Abfrage beginnt sofort; was sie kostet, steht unter Einstellungen > Vorlagen.",
+    "presetBound": "{address} fragt jetzt seine Vorlage ab."
   },
   "update": {
     "available": "SnmpLens {version} ist verfügbar",
@@ -1134,5 +1139,14 @@
       "notJson": "Diese Datei ist kein JSON ({detail}).",
       "tooBig": "Diese Datei hat {found} Bytes; höchstens {max}."
     }
+  },
+  "dashboard": {
+    "empty": "Noch kein Dashboard.",
+    "emptyHint": "Ein Dashboard entsteht aus einer Vorlage, die an ein Gerät gebunden ist. Legen Sie ein Ziel an und wählen Sie eine Vorlage, oder fügen Sie zuerst eine unter Einstellungen > Vorlagen hinzu.",
+    "equipment": "Gerät",
+    "summary": "{preset} · {oids} OID · alle {cadence}",
+    "noReading": "Nichts anzuzeigen.",
+    "unknownWidget": "Diese Vorlage verlangt ein Widget „{kind}“, das diese Version nicht zeichnet.",
+    "snapshotNote": "Gezeichnet nach {file} im Zustand der Bindung von {target}. Das Bearbeiten oder Löschen der Datei ändert dieses Dashboard nicht; binden Sie das Gerät erneut, um eine neue Fassung zu übernehmen."
   }
 }

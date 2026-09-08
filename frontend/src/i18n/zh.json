@@ -10,7 +10,8 @@
       "monitor": "监控",
       "network": "网络",
       "events": "事件",
-      "mibEditor": "MIB 编辑器"
+      "mibEditor": "MIB 编辑器",
+      "dashboard": "仪表板"
     },
     "status": {
       "targetsTitle": "已配置的目标数量",
@@ -605,7 +606,11 @@
       "useDefault": "使用默认值",
       "clear": "清除覆盖",
       "badge": "已自定义 SNMP 参数"
-    }
+    },
+    "presetPick": "不使用预设",
+    "presetNone": "暂无可用预设",
+    "presetHint": "将仪表板预设绑定到此设备。绑定后立即开始轮询；其开销见「设置 > 预设」。",
+    "presetBound": "{address} 现已按其预设进行轮询。"
   },
   "update": {
     "available": "SnmpLens {version} 可用",
@@ -1134,5 +1139,14 @@
       "notJson": "此文件不是 JSON（{detail}）。",
       "tooBig": "此文件为 {found} 字节；最多 {max}。"
     }
+  },
+  "dashboard": {
+    "empty": "尚无仪表板。",
+    "emptyHint": "仪表板由绑定到设备的预设绘制。请添加目标并选择预设，或先在「设置 > 预设」中添加一个。",
+    "equipment": "设备",
+    "summary": "{preset} · {oids} 个 OID · 每 {cadence}",
+    "noReading": "无内容可显示。",
+    "unknownWidget": "此预设要求一个“{kind}”部件，本版本无法绘制。",
+    "snapshotNote": "依据绑定 {target} 时的 {file} 绘制。编辑或删除该文件不会改变此仪表板；重新绑定设备即可采用新版本。"
   }
 }

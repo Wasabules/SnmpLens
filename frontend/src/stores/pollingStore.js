@@ -10,11 +10,13 @@ import {
   MonitorLoadSessionData,
   MonitorDeleteSession,
   MonitorAcceptSlow,
+  PresetBind,
 } from '../../wailsjs/go/main/App';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
 import { settingsStore } from './settingsStore';
 import { notificationStore } from './notifications';
 import { buildMonitorConnection } from '../utils/snmpParams';
+import { getEffectiveSettings } from '../utils/targets';
 
 // In-memory scope buffer, per (target x OID) series. The chart draws a sliding
 // window over this buffer and lets you travel back through it, so it has to be
@@ -404,10 +406,30 @@ function createPollingStore() {
     return shaped;
   }
 
+  /**
+   * Bind a preset to one equipment: Go creates the session, stores it and
+   * starts it, and this takes the result into the store.
+   *
+   * The connection comes from THAT TARGET's effective settings, not from the
+   * global ones. startPolling uses the global settings because one session can
+   * span several equipments and there is no single answer; a preset is bound to
+   * exactly one, so there is — and using the global community against a device
+   * that has an override means every reading is an error, reported far from the
+   * cause and looking like an unreachable device.
+   */
+  async function bindPreset(file, address, settings) {
+    const effective = getEffectiveSettings(settings, address);
+    const snmpVersion = effective.snmpVersion || 'v2c';
+    const conn = buildMonitorConnection({ ...effective, snmpVersion });
+    const session = await PresetBind(file, address, snmpVersion, conn);
+    return adoptSession(session);
+  }
+
   return {
     subscribe,
     acceptSlow,
     adoptSession,
+    bindPreset,
     startPolling,
     resumeSession,
     stopPolling,

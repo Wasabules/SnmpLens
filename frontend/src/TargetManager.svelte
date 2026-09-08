@@ -5,7 +5,10 @@
   import { createEventDispatcher } from 'svelte';
   import { settingsStore } from './stores/settingsStore';
   import { notificationStore } from './stores/notifications';
-  import { TestConnection } from '../wailsjs/go/main/App';
+  import { onMount } from 'svelte';
+  import { TestConnection, ListPresets } from '../wailsjs/go/main/App';
+  import { pollingStore } from './stores/pollingStore';
+  import { requestTab } from './stores/tabRequest';
   import { buildTestRequest } from './utils/snmpParams';
   import { getEffectiveSettings } from './utils/targets';
   import TargetOverrideForm from './TargetOverrideForm.svelte';
@@ -91,19 +94,60 @@
     settingsStore.save({ ...$settingsStore, targets: serializeTargets(targets) });
   }
 
-  function addTarget() {
+  // The preset library, for the selector on the add form. Loaded once: this
+  // modal is opened to add an equipment, and a list that refetched on every
+  // keystroke would be a bridge call per character.
+  let presets = [];
+  let newPreset = '';
+  let binding = false;
+
+  onMount(async () => {
+    try {
+      presets = await ListPresets();
+    } catch (e) {
+      console.error('ListPresets failed', e);
+      presets = [];
+    }
+  });
+
+  // A preset with problems is in the library and cannot be bound, so it is not
+  // offered — the reason is in Settings, next to the error list that explains
+  // it, rather than as a disabled row here with nothing saying why.
+  $: bindablePresets = presets.filter((p) => p.problems === 0);
+
+  async function addTarget() {
     if (!newAddress.trim()) return;
+    const address = newAddress.trim();
+    const file = newPreset;
     targets = [...targets, {
-      id: Date.now(), address: newAddress.trim(), label: newLabel.trim(),
+      id: Date.now(), address, label: newLabel.trim(),
       enabled: true, testing: false, status: null
     }];
     // Assign to current group (or default)
     const groupId = selectedGroupId === 'all' ? 'default' : selectedGroupId;
-    const newAssignments = { ...($settingsStore.targetGroupAssignments || {}), [newAddress.trim()]: groupId };
+    const newAssignments = { ...($settingsStore.targetGroupAssignments || {}), [address]: groupId };
     newAddress = '';
     newLabel = '';
+    newPreset = '';
     showAddForm = false;
     settingsStore.save({ ...$settingsStore, targets: serializeTargets(targets), targetGroupAssignments: newAssignments });
+
+    // The target is saved FIRST, and the binding is attempted afterwards. A
+    // bind that fails must not cost the operator the equipment they just
+    // typed in — and the session, if it is created, is durable Go-side state
+    // that outlives this modal either way.
+    if (!file) return;
+    binding = true;
+    try {
+      await pollingStore.bindPreset(file, address, get(settingsStore));
+      notificationStore.add($_('targets.presetBound', { values: { address } }), 'success');
+      requestTab('dashboard');
+      dispatch('close');
+    } catch (e) {
+      notificationStore.add(String(e), 'error');
+    } finally {
+      binding = false;
+    }
   }
 
   function removeTarget(id) {
@@ -366,7 +410,17 @@
     <div class="add-form">
       <input type="text" bind:value={newAddress} placeholder={$_('targets.addressPlaceholder')} on:keydown={(e) => e.key === 'Enter' && addTarget()} />
       <input type="text" bind:value={newLabel} placeholder={$_('targets.labelPlaceholder')} on:keydown={(e) => e.key === 'Enter' && addTarget()} />
-      <button class="btn-sm primary" on:click={addTarget} disabled={!newAddress.trim()}>{$_('common.add')}</button>
+      <!-- The preset is chosen HERE, when the equipment is added, because that
+           is the only moment somebody knows what the equipment is. -->
+      <select bind:value={newPreset} title={$_('targets.presetHint')} disabled={bindablePresets.length === 0}>
+        <option value="">{bindablePresets.length === 0 ? $_('targets.presetNone') : $_('targets.presetPick')}</option>
+        {#each bindablePresets as p (p.file)}
+          <option value={p.file}>{p.name || p.file}</option>
+        {/each}
+      </select>
+      <button class="btn-sm primary" on:click={addTarget} disabled={!newAddress.trim() || binding}>
+        {binding ? $_('common.working') : $_('common.add')}
+      </button>
     </div>
   {/if}
 

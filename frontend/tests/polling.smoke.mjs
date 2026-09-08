@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const calls = { created: [], started: [], stopped: [], saved: [], accepted: [] };
+const calls = { created: [], started: [], stopped: [], saved: [], accepted: [], bound: [] };
 const handlers = {};
 
 globalThis.__stub = {
@@ -24,6 +24,16 @@ globalThis.__stub = {
   MonitorLoadSessionData: async () => [],
   MonitorDeleteSession: async () => {},
   MonitorAcceptSlow: async (id) => { calls.accepted.push(id); },
+  PresetBind: async (file, target, snmpVersion, conn) => {
+    calls.bound.push({ file, target, snmpVersion, conn });
+    return {
+      id: 'preset-sess-1', name: 'Cisco Catalyst',
+      oid: '1.3.6.1.2.1.1.3.0,1.3.6.1.2.1.2.2.1.10.1',
+      targets: [target], intervalMs: 45000, snmpVersion,
+      startedAt: '2026-01-01T00:00:00Z', conn,
+      preset: { file, formatVersion: 1, widgets: [{ kind: 'value', title: 'Uptime', oids: ['1.3.6.1.2.1.1.3.0'] }] },
+    };
+  },
   EventsOn: (name, fn) => { handlers[name] = fn; },
   // The settings store now seals its credentials through the bridge, and
   // pollingStore imports it. A store that is present and empty is the shape
@@ -45,6 +55,7 @@ export const MonitorLoadSessions = (...a) => s.MonitorLoadSessions(...a);
 export const MonitorLoadSessionData = (...a) => s.MonitorLoadSessionData(...a);
 export const MonitorDeleteSession = (...a) => s.MonitorDeleteSession(...a);
 export const MonitorAcceptSlow = (...a) => s.MonitorAcceptSlow(...a);
+export const PresetBind = (...a) => s.PresetBind(...a);
 export const EventsOn = (...a) => s.EventsOn(...a);
 export const ListMibFiles = async () => [];
 export const SettingsKeyStatus = (...a) => s.SettingsKeyStatus(...a);
@@ -268,6 +279,40 @@ check('the session reads as stopped', !!s && s.running === false);
 
   check('a session with no connection asks to be re-armed',
     pollingStore.adoptSession({ id: 'legacy-1', oid: '1.1', targets: ['x'], intervalMs: 1000 }).needsConnection === true);
+}
+
+// Binding a preset uses THAT TARGET's settings, not the global ones.
+//
+// startPolling uses the global settings because one session can span several
+// equipments and there is no single answer. A preset is bound to exactly one,
+// so there is — and polling a device that has an override with the global
+// community makes every reading an error, reported far from the cause and
+// looking exactly like an unreachable device.
+{
+  const withOverride = {
+    community: 'global-community',
+    port: 161,
+    targetOverrides: { '10.0.0.9': { community: 'per-target-community', port: 1161, snmpVersion: 'v1' } },
+  };
+
+  const bound = await pollingStore.bindPreset('cisco.json', '10.0.0.9', withOverride);
+  const call = calls.bound[0];
+
+  check('the preset file and the target reached Go', call?.file === 'cisco.json' && call?.target === '10.0.0.9',
+    JSON.stringify(call && { file: call.file, target: call.target }));
+  check("the target's own community was used, not the global one",
+    call?.conn?.community === 'per-target-community', call?.conn?.community);
+  check("and its own port", call?.conn?.port === 1161, String(call?.conn?.port));
+  check("and its own SNMP version", call?.snmpVersion === 'v1', call?.snmpVersion);
+  check('the bound session reached the store',
+    !!bound && get(pollingStore).some((x) => x.id === 'preset-sess-1'));
+  check('it is running, because Go started it before answering', bound?.running === true);
+
+  // A target with no override falls back to the global settings rather than to
+  // nothing at all.
+  await pollingStore.bindPreset('cisco.json', '10.0.0.8', withOverride);
+  check('a target with no override uses the global settings',
+    calls.bound[1]?.conn?.community === 'global-community', calls.bound[1]?.conn?.community);
 }
 
 process.exit(failures ? 1 : 0);

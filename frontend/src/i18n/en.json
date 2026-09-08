@@ -10,7 +10,8 @@
       "monitor": "Monitor",
       "network": "Network",
       "events": "Events",
-      "mibEditor": "MIB editor"
+      "mibEditor": "MIB editor",
+      "dashboard": "Dashboard"
     },
     "status": {
       "targetsTitle": "Number of configured targets",
@@ -605,7 +606,11 @@
       "useDefault": "Use default",
       "clear": "Clear overrides",
       "badge": "Has custom SNMP settings"
-    }
+    },
+    "presetPick": "No preset",
+    "presetNone": "No preset available",
+    "presetHint": "Bind a dashboard preset to this equipment. It starts polling straight away; what it costs is in Settings > Presets.",
+    "presetBound": "{address} is now polling its preset."
   },
   "update": {
     "available": "SnmpLens {version} is available",
@@ -1134,5 +1139,14 @@
       "notJson": "This file is not JSON ({detail}).",
       "tooBig": "This file is {found} bytes; at most {max}."
     }
+  },
+  "dashboard": {
+    "empty": "No dashboard yet.",
+    "emptyHint": "A dashboard is drawn from a preset bound to an equipment. Add a target and choose a preset, or add one in Settings > Presets first.",
+    "equipment": "Equipment",
+    "summary": "{preset} · {oids} OID(s) · every {cadence}",
+    "noReading": "Nothing to show.",
+    "unknownWidget": "This preset asks for a \"{kind}\" widget, which this version does not draw.",
+    "snapshotNote": "Drawn from {file} as it was when {target} was bound. Editing or removing the file does not change this dashboard; bind the equipment again to adopt a new version."
   }
 }

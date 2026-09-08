@@ -10,7 +10,8 @@
       "monitor": "Monitor",
       "network": "Red",
       "events": "Eventos",
-      "mibEditor": "Editor de MIB"
+      "mibEditor": "Editor de MIB",
+      "dashboard": "Panel"
     },
     "status": {
       "targetsTitle": "Número de objetivos configurados",
@@ -605,7 +606,11 @@
       "useDefault": "Usar valor predeterminado",
       "clear": "Borrar configuración",
       "badge": "Configuración SNMP personalizada"
-    }
+    },
+    "presetPick": "Sin preset",
+    "presetNone": "Ningún preset disponible",
+    "presetHint": "Vincular un preset de panel a este equipo. La consulta empieza de inmediato; su coste está en Ajustes > Presets.",
+    "presetBound": "{address} ya consulta su preset."
   },
   "update": {
     "available": "SnmpLens {version} está disponible",
@@ -1134,5 +1139,14 @@
       "notJson": "Este archivo no es JSON ({detail}).",
       "tooBig": "Este archivo ocupa {found} bytes; {max} como máximo."
     }
+  },
+  "dashboard": {
+    "empty": "Aún no hay panel.",
+    "emptyHint": "Un panel se dibuja a partir de un preset vinculado a un equipo. Añada un objetivo y elija un preset, o añada uno antes en Ajustes > Presets.",
+    "equipment": "Equipo",
+    "summary": "{preset} · {oids} OID · cada {cadence}",
+    "noReading": "Nada que mostrar.",
+    "unknownWidget": "Este preset pide un widget «{kind}» que esta versión no dibuja.",
+    "snapshotNote": "Dibujado a partir de {file} tal como estaba al vincular {target}. Editar o eliminar el archivo no cambia este panel; vuelva a vincular el equipo para adoptar una versión nueva."
   }
 }

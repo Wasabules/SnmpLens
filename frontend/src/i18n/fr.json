@@ -10,7 +10,8 @@
       "monitor": "Monitoring",
       "network": "Réseau",
       "events": "Événements",
-      "mibEditor": "Éditeur de MIB"
+      "mibEditor": "Éditeur de MIB",
+      "dashboard": "Tableau de bord"
     },
     "status": {
       "targetsTitle": "Nombre de cibles configurées",
@@ -605,7 +606,11 @@
       "useDefault": "Par défaut",
       "clear": "Réinitialiser",
       "badge": "Paramètres SNMP personnalisés"
-    }
+    },
+    "presetPick": "Aucun preset",
+    "presetNone": "Aucun preset disponible",
+    "presetHint": "Lier un preset de tableau de bord à cet équipement. L'interrogation démarre aussitôt ; le coût est indiqué dans Paramètres > Presets.",
+    "presetBound": "{address} interroge désormais son preset."
   },
   "update": {
     "available": "SnmpLens {version} est disponible",
@@ -1134,5 +1139,14 @@
       "notJson": "Ce fichier n'est pas du JSON ({detail}).",
       "tooBig": "Ce fichier fait {found} octets ; {max} au maximum."
     }
+  },
+  "dashboard": {
+    "empty": "Aucun tableau de bord pour l'instant.",
+    "emptyHint": "Un tableau de bord se dessine à partir d'un preset lié à un équipement. Ajoutez une cible et choisissez un preset, ou ajoutez-en un d'abord dans Paramètres > Presets.",
+    "equipment": "Équipement",
+    "summary": "{preset} · {oids} OID · toutes les {cadence}",
+    "noReading": "Rien à afficher.",
+    "unknownWidget": "Ce preset demande un widget « {kind} » que cette version ne sait pas dessiner.",
+    "snapshotNote": "Dessiné d'après {file} tel qu'il était lors de la liaison de {target}. Modifier ou supprimer le fichier ne change pas ce tableau de bord ; reliez l'équipement pour en adopter une nouvelle version."
   }
 }
