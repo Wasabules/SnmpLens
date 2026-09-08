@@ -3,7 +3,7 @@
   import { onBackdrop } from '../utils/modal';
   import { _ } from 'svelte-i18n';
   import Icon from '../Icon.svelte';
-  import { seriesColor, MAX_SERIES } from '../utils/chartPalette';
+  import { seriesColor, seriesPlan } from '../utils/chartPalette';
   import { anonMode, anonymizeIp } from '../utils/anonymize';
   import { targetLabels } from '../stores/targetLabels';
   import { mibStore } from '../stores/mibStore';
@@ -29,29 +29,17 @@
     ...new Set((session?.oids && session.oids.length ? session.oids : [session?.oid]).filter(Boolean)),
   ];
 
-  // Mirror exactly how the chart orders targets (first appearance in the data),
-  // so a swatch here is the colour actually drawn there.
-  function targetsFor(oid) {
-    const scoped = (session?.results || []).filter((r) => (r.oid || session?.oid) === oid);
-    const seen = [...new Set(scoped.map((r) => r.target))];
-    return seen.length ? seen : [...new Set(session?.targets || [])];
-  }
-
-  // Colour assignment differs per layout: per-OID in separate mode, one running
-  // counter across every (OID, target) pair when stacked.
+  // The same plan the chart draws from. This used to build its own target list
+  // and run its own counter, and the two rules differed for an OID with no data
+  // yet: this one fell back to the session's configured targets while the chart
+  // skipped the OID entirely, which shifted the colour of every series after it.
   function buildChannels(s, l, dark) {
-    const out = [];
-    let running = 0;
-    for (const oid of oidList) {
-      const targets = targetsFor(oid);
-      targets.forEach((target, idx) => {
-        const color = l === 'stacked' ? seriesColor(running, dark) : seriesColor(idx, dark);
-        const capped = l === 'stacked' ? running >= MAX_SERIES : idx >= MAX_SERIES;
-        running++;
-        out.push({ oid, target, color, capped });
-      });
-    }
-    return out;
+    return seriesPlan(s, { layout: l, oids: oidList }).series.map((it) => ({
+      oid: it.oid,
+      target: it.target,
+      color: seriesColor(it.colorIndex, dark),
+      capped: it.capped,
+    }));
   }
 
   $: channels = buildChannels(session, layout, theme !== 'light');

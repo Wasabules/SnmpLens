@@ -1,7 +1,7 @@
 <script>
   import { _ } from 'svelte-i18n';
   import Icon from '../Icon.svelte';
-  import { seriesColor, MAX_SERIES } from '../utils/chartPalette';
+  import { seriesColor, seriesPlan } from '../utils/chartPalette';
   import { inferUnit } from '../utils/snmpUnits';
   import { anonMode, anonymizeIp } from '../utils/anonymize';
   import { targetLabels } from '../stores/targetLabels';
@@ -59,18 +59,20 @@
 
     const allTargets = [...new Set(source.map((r) => r.target))];
 
+    // The same plan the chart draws from, so a swatch here IS the colour drawn
+    // there. It used to be `oidIdx * targets.length + tIdx`, which equals the
+    // chart's counter only when every OID has the same number of targets.
+    const plan = seriesPlan(s, { layout, oids: oidList });
+    const planned = new Map(plan.series.map((it) => [it.key, it]));
+
     return allTargets
       .map((target) => {
         const rows = [];
-        oidList.forEach((o, oidIdx) => {
-          const targets = targetsByOid.get(o) || [];
-          const tIdx = targets.indexOf(target);
-          if (tIdx < 0) return;
-          if (hiddenSet.has(target + '|' + o)) return;
-
-          // Same counter the chart uses, so a swatch here is the colour drawn there.
-          const colorIdx = layout === 'stacked' ? oidIdx * targets.length + tIdx : tIdx;
-          if (colorIdx >= MAX_SERIES) return;
+        oidList.forEach((o) => {
+          const item = planned.get(target + '|' + o);
+          if (!item || item.capped) return;
+          if (hiddenSet.has(item.key)) return;
+          const colorIdx = item.colorIndex;
 
           const series = source.filter((r) => r.target === target && (r.oid || s?.oid) === o);
           if (!series.length) return;

@@ -42,6 +42,72 @@ export function palette(dark = isDarkTheme()) {
   return dark ? [...DARK] : [...LIGHT];
 }
 
+/** The key a series is identified by, everywhere. */
+export function seriesKey(target, oid) {
+  return target + '|' + oid;
+}
+
+/**
+ * The ordered series of a session, with the colour each one gets.
+ *
+ * ONE function because there were four, and they disagreed.
+ *
+ * `MonitorChart.buildStacked` ran a counter over the (OID, target) pairs it
+ * actually plotted; `MonitorChart.buildDatasets` indexed targets within one
+ * OID; `MetricTiles` computed `oidIdx * targets.length + tIdx`, which equals
+ * the chart's counter only when every OID has the SAME number of targets; and
+ * `ChannelsModal` ran a fourth counter over a target list built by a different
+ * rule — it falls back to the session's configured targets for an OID with no
+ * data yet, where the chart skipped that OID entirely. So a swatch in the
+ * channel picker, a swatch on a tile and the line on the chart could each be a
+ * different colour for the same series, and the disagreement appeared only with
+ * an uneven number of targets per OID or before the first sample of one OID
+ * arrived — which is to say, in normal use, intermittently.
+ *
+ * Colour is POSITIONAL and never depends on what is drawn: hiding a series
+ * cannot recolour the others, and a series keeps its colour when data for
+ * another OID starts arriving. The palette has eight slots and never cycles, so
+ * position past the eighth is `capped` — reported rather than silently dropped.
+ *
+ * @param {object} session   a pollingStore session
+ * @param {object} opts      {layout: 'separate'|'stacked', oids: string[]|null}
+ * @returns {{series: Array, dropped: number}}
+ */
+export function seriesPlan(session, { layout = 'separate', oids = null } = {}) {
+  const results = session?.results || [];
+  const list = (oids && oids.length ? oids : (session?.oids?.length ? session.oids : [session?.oid]))
+    .filter(Boolean);
+  const wanted = [...new Set(list)];
+
+  // ONE rule for a target list, so every consumer sees the same one: the order
+  // the targets first appear in the data, falling back to the session's
+  // configured targets while an OID has none yet.
+  const configured = [...new Set(session?.targets || [])];
+  const targetsFor = (oid) => {
+    const seen = [...new Set(results.filter((r) => (r.oid || session?.oid) === oid).map((r) => r.target))];
+    return seen.length ? seen : configured;
+  };
+
+  const series = [];
+  let running = 0;
+  for (const oid of wanted) {
+    const targets = targetsFor(oid);
+    targets.forEach((target, idx) => {
+      const colorIndex = layout === 'stacked' ? running : idx;
+      series.push({
+        oid,
+        target,
+        key: seriesKey(target, oid),
+        colorIndex,
+        capped: colorIndex >= MAX_SERIES,
+      });
+      running++;
+    });
+  }
+
+  return { series, dropped: series.filter((s) => s.capped).length };
+}
+
 /** Chart chrome (axes, grid, ink) pulled from the app's theme tokens. */
 export function chartChrome() {
   const css = (name, fallback) =>
