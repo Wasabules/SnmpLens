@@ -403,6 +403,11 @@
     "informNoAck": "keine Antwort vom Empfänger"
   },
   "monitor": {
+    "overrunTitle": "Takt nicht einhaltbar.",
+    "overrunBody": "Diese Sitzung verlangt alle {interval} einen Messwert, doch ein Durchlauf kostet {cycle}. Sie fragt jetzt alle {effective} ab, damit die Anwendung nicht durchgehend arbeitet.",
+    "overrunAccepted": "Diese Sitzung verlangt alle {interval} einen Messwert, und ein Durchlauf kostet {cycle}. Sie haben die Verlangsamung akzeptiert, der Takt bleibt unverändert.",
+    "overrunAccept": "Meinen Takt behalten",
+    "overrunAcceptHint": "Trotzdem im gewählten Takt abfragen. Die Anwendung arbeitet dann ununterbrochen und das Gerät wird ohne Pause befragt.",
     "live": "LIVE",
     "liveHint": "Wieder den neuesten Messwerten folgen (Zoomen oder Verschieben pausiert die Verfolgung)",
     "timebaseAll": "Alles",

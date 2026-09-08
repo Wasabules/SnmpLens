@@ -6,7 +6,7 @@
   import { settingsStore } from './stores/settingsStore';
   import { notificationStore } from './stores/notifications';
   import { getTargetsAsArray } from './utils/targets';
-  import { formatTimeShort } from './utils/formatting';
+  import { formatTimeShort, formatCadence } from './utils/formatting';
   import { anonMode, anonymizeIp } from './utils/anonymize';
   import { targetLabels } from './stores/targetLabels';
   import { mibStore } from './stores/mibStore';
@@ -617,6 +617,34 @@
             </div>
           </div>
 
+          {#if session.overrun}
+            <div class="overrun-banner" role="status">
+              <Icon name="triangle-alert" size={14} />
+              <div class="overrun-text">
+                <strong>{$_('monitor.overrunTitle')}</strong>
+                {#if session.overrun.accepted}
+                  {$_('monitor.overrunAccepted', { values: {
+                    interval: formatCadence(session.overrun.intervalMs),
+                    cycle: formatCadence(session.overrun.cycleMs),
+                  } })}
+                {:else}
+                  {$_('monitor.overrunBody', { values: {
+                    interval: formatCadence(session.overrun.intervalMs),
+                    cycle: formatCadence(session.overrun.cycleMs),
+                    effective: formatCadence(session.overrun.effectiveMs),
+                  } })}
+                {/if}
+              </div>
+              {#if !session.overrun.accepted}
+                <button
+                  class="btn btn-small"
+                  title={$_('monitor.overrunAcceptHint')}
+                  on:click={() => pollingStore.acceptSlow(session.id)}
+                >{$_('monitor.overrunAccept')}</button>
+              {/if}
+            </div>
+          {/if}
+
           {#if !collapsed[session.id]}
           {#if showStats[session.id] && sessionStats[session.id]}
             <div class="stats-panel">
@@ -905,6 +933,24 @@
     border-radius: 6px;
     overflow: hidden;
     background-color: var(--bg-lighter-color);
+  }
+
+  /* The one thing on this card that asks a question rather than showing a
+     number, so it is the one thing that is not the card's own colour. */
+  .overrun-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem 0.75rem;
+    border-top: 1px solid var(--border-color);
+    background-color: var(--warning-subtle);
+    color: var(--warning-color);
+    font-size: 0.82rem;
+  }
+
+  .overrun-text {
+    flex: 1;
+    min-width: 0;
   }
 
   .session-header {

@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const calls = { created: [], started: [], stopped: [], saved: [] };
+const calls = { created: [], started: [], stopped: [], saved: [], accepted: [] };
 const handlers = {};
 
 globalThis.__stub = {
@@ -23,6 +23,7 @@ globalThis.__stub = {
   MonitorLoadSessions: async () => [],
   MonitorLoadSessionData: async () => [],
   MonitorDeleteSession: async () => {},
+  MonitorAcceptSlow: async (id) => { calls.accepted.push(id); },
   EventsOn: (name, fn) => { handlers[name] = fn; },
   // The settings store now seals its credentials through the bridge, and
   // pollingStore imports it. A store that is present and empty is the shape
@@ -43,6 +44,7 @@ export const MonitorSaveDataPoints = (...a) => s.MonitorSaveDataPoints(...a);
 export const MonitorLoadSessions = (...a) => s.MonitorLoadSessions(...a);
 export const MonitorLoadSessionData = (...a) => s.MonitorLoadSessionData(...a);
 export const MonitorDeleteSession = (...a) => s.MonitorDeleteSession(...a);
+export const MonitorAcceptSlow = (...a) => s.MonitorAcceptSlow(...a);
 export const EventsOn = (...a) => s.EventsOn(...a);
 export const ListMibFiles = async () => [];
 export const SettingsKeyStatus = (...a) => s.SettingsKeyStatus(...a);
@@ -188,6 +190,38 @@ check('the session reads as stopped', !!s && s.running === false);
   const source = readFileSync(new URL('../src/stores/pollingStore.js', import.meta.url), 'utf8');
   const uses = (source.match(/map\(normalisePoint\)/g) || []).length;
   check('both the live and the restored path go through it', uses === 2, String(uses));
+}
+
+// The guardrail's report, and the operator's answer to it.
+//
+// Go widens a session that cannot poll as fast as it promised and says so once.
+// That message has to reach the SESSION and stay there: it asks a question, and
+// a toast is gone before anyone reads it.
+{
+  check('the store subscribed to the overrun report', typeof handlers['monitor:overrun'] === 'function');
+
+  handlers['monitor:overrun']({
+    sessionId: id, name: 'smoke', intervalMs: 5000, cycleMs: 7400,
+    effectiveMs: 14800, oids: 2, targets: 2, accepted: false, recovered: false,
+  });
+  let o = get(pollingStore).find((x) => x.id === id).overrun;
+  check('the report landed on the session', !!o && o.cycleMs === 7400, JSON.stringify(o));
+
+  // Another session's report must not appear on this one.
+  handlers['monitor:overrun']({ sessionId: 'other', cycleMs: 1, effectiveMs: 2, intervalMs: 3 });
+  o = get(pollingStore).find((x) => x.id === id).overrun;
+  check('reports are routed by session id', o.cycleMs === 7400);
+
+  await pollingStore.acceptSlow(id);
+  o = get(pollingStore).find((x) => x.id === id).overrun;
+  check('accepting reached Go', calls.accepted.includes(id), JSON.stringify(calls.accepted));
+  check('and the banner says so at once rather than after the next round',
+    o.accepted === true && o.effectiveMs === o.intervalMs, JSON.stringify(o));
+
+  // Recovery clears it: the question has stopped being asked.
+  handlers['monitor:overrun']({ sessionId: id, intervalMs: 5000, cycleMs: 900, effectiveMs: 5000, recovered: true });
+  o = get(pollingStore).find((x) => x.id === id).overrun;
+  check('recovering takes the banner away', o === null, JSON.stringify(o));
 }
 
 process.exit(failures ? 1 : 0);

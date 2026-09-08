@@ -403,6 +403,11 @@
     "informNoAck": "aucune réponse du récepteur"
   },
   "monitor": {
+    "overrunTitle": "Cadence intenable.",
+    "overrunBody": "Cette session demande une lecture toutes les {interval}, mais un tour coûte {cycle}. Elle interroge désormais toutes les {effective}, pour que l'application ne travaille pas en permanence.",
+    "overrunAccepted": "Cette session demande une lecture toutes les {interval} et un tour coûte {cycle}. Vous avez accepté le ralentissement : la cadence reste inchangée.",
+    "overrunAccept": "Garder ma cadence",
+    "overrunAcceptHint": "Interroger malgré tout à la cadence choisie. L'application travaillera alors en continu et l'équipement sera sollicité sans pause.",
     "live": "LIVE",
     "liveHint": "Suivre à nouveau les dernières mesures (zoomer ou déplacer met le suivi en pause)",
     "timebaseAll": "Tout",

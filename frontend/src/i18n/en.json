@@ -403,6 +403,11 @@
     "informNoAck": "no response from the receiver"
   },
   "monitor": {
+    "overrunTitle": "Cannot keep up.",
+    "overrunBody": "This session asks for a reading every {interval}, but one round costs {cycle}. It now polls every {effective}, so the application is not working the whole time.",
+    "overrunAccepted": "This session asks for a reading every {interval} and one round costs {cycle}. You accepted the slowdown, so the cadence is unchanged.",
+    "overrunAccept": "Keep my cadence",
+    "overrunAcceptHint": "Poll at the cadence you chose anyway. The application will then be working continuously and the device asked without pause.",
     "live": "LIVE",
     "liveHint": "Follow the newest samples again (zooming or panning pauses tracking)",
     "timebaseAll": "All",
