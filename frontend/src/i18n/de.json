@@ -626,7 +626,8 @@
       "mibs": "MIBs",
       "snmp": "SNMP",
       "notify": "Benachrichtigungen",
-      "service": "Dienst"
+      "service": "Dienst",
+      "presets": "Vorlagen"
     },
     "general": {
       "updatesTitle": "Updates",
@@ -1084,5 +1085,54 @@
     "redo": "Wiederholen",
     "matchCase": "Groß-/Kleinschreibung",
     "matchesCapped": "Nur die ersten {max} Treffer werden aufgeführt; es gibt weitere."
+  },
+  "preset": {
+    "title": "Dashboard-Vorlagen",
+    "intro": "Eine Vorlage ist eine Datei, die beschreibt, was auf einem Gerätetyp abgefragt und wie es dargestellt wird. Das Hinzufügen startet nichts: gebunden wird sie, wenn Sie ein Ziel anlegen.",
+    "add": "Vorlage hinzufügen",
+    "empty": "Noch keine Vorlage.",
+    "emptyHint": "Fügen Sie eine Vorlagendatei hinzu oder ziehen Sie eine auf das Fenster.",
+    "remove": "Diese Vorlage entfernen",
+    "summaryLine": "{widgets} Widget(s) · {oids} OID · alle {cadence}",
+    "imported": "{file} wurde hinzugefügt.",
+    "importedWithProblems": "{file} wurde hinzugefügt, mit {count} Problem(en), die vor dem Binden zu beheben sind.",
+    "problems": "{count} Problem(e)",
+    "problemsHint": "Diese Vorlage hat Probleme und kann erst nach deren Behebung gebunden werden.",
+    "noProblems": "Kein Problem.",
+    "costOids": "Abgefragte OIDs",
+    "costCadence": "Geforderter Takt",
+    "costRequests": "Anfragen pro Tag",
+    "costVarbinds": "Werte pro Tag",
+    "costPerTarget": "Pro Gerät. Eine Anfrage trägt bis zu {chunk} Werte, die Anzahl der Anfragen ist also die Zahl der Durchläufe mal der Anfragen je Durchlauf.",
+    "costNotAPrediction": "Das sind Anzahlen, keine Dauer: wie lange ein Durchlauf braucht, hängt vom Gerät und der Strecke ab. Passt ein Durchlauf nicht mehr in den Takt, weitet die Abfrageuhr ihn und sagt es.",
+    "widgetTitle": "Titel",
+    "widgetKind": "Dargestellt als",
+    "widgetOids": "OIDs",
+    "widget": {
+      "value": "Letzter Messwert",
+      "rate": "Rate pro Sekunde",
+      "chart": "Verlaufsdiagramm",
+      "status": "Statuskachel",
+      "grid": "Statusraster"
+    },
+    "err": {
+      "missing": "Erforderlich.",
+      "empty": "Darf nicht leer sein.",
+      "tooNew": "Für Formatversion {found} geschrieben; diese Version versteht {supported}.",
+      "outOfRange": "Muss zwischen {min} und {max} liegen.",
+      "tooLong": "{found} Zeichen; höchstens {max}.",
+      "tooMany": "{found}; höchstens {max}.",
+      "tooManyOids": "Insgesamt {found} OIDs; höchstens {max}.",
+      "tooManyForKind": "Ein Widget „{kind}“ zeigt höchstens {max} Wert(e); dieses hat {found}.",
+      "unknownKind": "„{kind}“ ist keine Widget-Art, die diese Version kennt.",
+      "labelsOnlyForStatus": "Beschriftungen ordnen einer Zahl einen Zustand zu und gehören zu einer Statuskachel oder einem Raster, nicht zu einem Widget „{kind}“.",
+      "labelKey": "„{key}“ ist keine Zustandsnummer.",
+      "controlCharacter": "Enthält ein Steuerzeichen.",
+      "notAnOid": "„{value}“ ist keine numerische OID.",
+      "oidTooDeep": "{found} Unterkennungen; eine OID trägt höchstens {max}.",
+      "oidOutOfRange": "„{value}“ enthält eine Unterkennung, die nicht auf die Leitung passt.",
+      "notJson": "Diese Datei ist kein JSON ({detail}).",
+      "tooBig": "Diese Datei hat {found} Bytes; höchstens {max}."
+    }
   }
 }

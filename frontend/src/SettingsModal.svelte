@@ -6,6 +6,7 @@
   import { settingsStore } from './stores/settingsStore';
   import GeneralSettings from './settings/GeneralSettings.svelte';
   import MibSettings from './settings/MibSettings.svelte';
+  import PresetSettings from './settings/PresetSettings.svelte';
   import SnmpSettings from './settings/SnmpSettings.svelte';
   import NotifySettings from './settings/NotifySettings.svelte';
   import ServiceSettings from './settings/ServiceSettings.svelte';
@@ -72,6 +73,13 @@
       </button>
       <button
         class="tab"
+        class:active={activeTab === 'presets'}
+        on:click={() => activeTab = 'presets'}
+      >
+        <Icon name="layers" size={15} /> {$_('settings.tabs.presets')}
+      </button>
+      <button
+        class="tab"
         class:active={activeTab === 'snmp'}
         on:click={() => activeTab = 'snmp'}
       >
@@ -100,6 +108,10 @@
 
       {#if activeTab === 'mibs'}
         <MibSettings {defaultMibPath} />
+      {/if}
+
+      {#if activeTab === 'presets'}
+        <PresetSettings />
       {/if}
 
       {#if activeTab === 'snmp'}

@@ -1201,6 +1201,55 @@
           "--freeze forces animations to their END state (animation-duration:0s + iteration-count:1). That is right for a fade-in or a grow-in, but it HIDES anything whose animation ends invisible (a toast fading out). Check per scene.",
           "--headless, --headless=new and --headless=old all produced byte-identical output in Chrome 152 (20,959 B each). Old headless is gone and '=old' is silently accepted and ignored -- do not rely on it meaning anything."
         ]
+      },
+      {
+        "name": "Preset library (Settings > Presets) — the dashboard presets on this machine, what each polls and what it costs",
+        "files": [
+          "frontend/src/settings/PresetSettings.svelte",
+          "frontend/src/SettingsModal.svelte",
+          "app_preset.go",
+          "pkg/preset/preset.go",
+          "pkg/preset/load.go"
+        ],
+        "bindings": [
+          {
+            "name": "ListPresets",
+            "onMount": true,
+            "go": "app_preset.go (App.ListPresets) -> []preset.Info; consumed by frontend/src/settings/PresetSettings.svelte refresh()",
+            "example": "[{\"file\": \"cisco-catalyst.json\", \"name\": \"Cisco Catalyst uplinks\", \"author\": \"community\", \"vendor\": \"Cisco\", \"description\": \"Uptime, uplink traffic and port states for a Catalyst access switch.\", \"sysObjectIdPrefix\": [\"1.3.6.1.4.1.9\"], \"intervalSec\": 30, \"widgets\": 4, \"oids\": 12, \"problems\": 0}, {\"file\": \"generic-interfaces.json\", \"name\": \"Generic interfaces\", \"author\": \"community\", \"vendor\": \"\", \"description\": \"IF-MIB counters for the first eight interfaces of any agent.\", \"intervalSec\": 60, \"widgets\": 3, \"oids\": 16, \"problems\": 0}, {\"file\": \"juniper-mx.json\", \"name\": \"Juniper MX chassis\", \"author\": \"community\", \"vendor\": \"Juniper\", \"sysObjectIdPrefix\": [\"1.3.6.1.4.1.2636\"], \"intervalSec\": 120, \"widgets\": 5, \"oids\": 21, \"problems\": 2}]",
+            "notes": "Sorted by name in Go. `problems` is a COUNT, not the errors: a preset with problems is listed and cannot be bound."
+          },
+          {
+            "name": "ReadPreset",
+            "go": "app_preset.go (App.ReadPreset) -> PresetDetail{file, preset, errors, cost}; one call per opened row",
+            "example": "{\"file\": \"cisco-catalyst.json\", \"preset\": {\"formatVersion\": 1, \"name\": \"Cisco Catalyst uplinks\", \"author\": \"community\", \"description\": \"Uptime, uplink traffic and port states for a Catalyst access switch.\", \"match\": {\"sysObjectIdPrefix\": [\"1.3.6.1.4.1.9\"], \"vendor\": \"Cisco\"}, \"intervalSec\": 30, \"widgets\": [{\"kind\": \"value\", \"title\": \"Uptime\", \"oids\": [\"1.3.6.1.2.1.1.3.0\"]}, {\"kind\": \"rate\", \"title\": \"Uplink in\", \"oids\": [\"1.3.6.1.2.1.2.2.1.10.1\"], \"unit\": \"bit/s\"}, {\"kind\": \"chart\", \"title\": \"Uplink traffic\", \"oids\": [\"1.3.6.1.2.1.2.2.1.10.1\", \"1.3.6.1.2.1.2.2.1.16.1\"], \"unit\": \"bit/s\"}, {\"kind\": \"grid\", \"title\": \"Access ports\", \"oids\": [\"1.3.6.1.2.1.2.2.1.8.1\", \"1.3.6.1.2.1.2.2.1.8.2\", \"1.3.6.1.2.1.2.2.1.8.3\", \"1.3.6.1.2.1.2.2.1.8.4\", \"1.3.6.1.2.1.2.2.1.8.5\", \"1.3.6.1.2.1.2.2.1.8.6\", \"1.3.6.1.2.1.2.2.1.8.7\", \"1.3.6.1.2.1.2.2.1.8.8\"], \"labels\": {\"1\": \"up\", \"2\": \"down\", \"3\": \"testing\"}}]}, \"errors\": [], \"cost\": {\"oids\": 12, \"widgets\": 4, \"intervalSec\": 30, \"pollsPerDay\": 2880, \"varbindsPerDay\": 34560, \"requestsPerDay\": 2880, \"varbindsPerRequest\": 30}}",
+            "notes": "`errors` is ALWAYS an array, never null: Validate returns nil on success and the panel maps over it. `cost` is arithmetic over the file — never a duration."
+          },
+          {
+            "name": "PresetEstimate",
+            "go": "app_preset.go (App.PresetEstimate) -> PresetCost, for a caller that has not opened the file",
+            "example": "{\"oids\": 12, \"widgets\": 4, \"intervalSec\": 30, \"pollsPerDay\": 2880, \"varbindsPerDay\": 34560, \"requestsPerDay\": 2880, \"varbindsPerRequest\": 30}",
+            "notes": "requestsPerDay is rounds x ceil(oids / varbindsPerRequest); pkg/preset deliberately does not know the chunk size."
+          },
+          {
+            "name": "ListPresetWidgetKinds",
+            "go": "app_preset.go (App.ListPresetWidgetKinds) -> []preset.WidgetDoc",
+            "example": "[{\"kind\": \"value\", \"description\": \"preset.widget.value\", \"maxOids\": 1}, {\"kind\": \"rate\", \"description\": \"preset.widget.rate\", \"maxOids\": 1}, {\"kind\": \"status\", \"description\": \"preset.widget.status\", \"maxOids\": 1}, {\"kind\": \"chart\", \"description\": \"preset.widget.chart\", \"maxOids\": 8}, {\"kind\": \"grid\", \"description\": \"preset.widget.grid\", \"maxOids\": 96}]",
+            "notes": "`description` is an i18n KEY SUFFIX, not prose: the renderer looks up preset.widget.<kind>."
+          },
+          {
+            "name": "ImportPresetFiles / ImportPresetDialog",
+            "go": "app_preset.go -> []PresetImportResult; refused in the browser demo, which cannot write to a configuration directory",
+            "example": "[{\"fileName\": \"cisco-catalyst.json\", \"success\": true, \"problems\": 0}, {\"fileName\": \"notes.json\", \"success\": false, \"error\": \"this file is JSON but not a preset: it declares no formatVersion\", \"problems\": 0}]",
+            "notes": "A preset that FAILS validation still imports, with its problem count — the error list is what the library is for."
+          },
+          {
+            "name": "DeletePreset",
+            "go": "app_preset.go (App.DeletePreset) -> error; removes the file only, never a bound session",
+            "example": "null",
+            "notes": "Sessions bound to a preset snapshot what they poll and draw, so deleting the file cannot stop a monitoring."
+          }
+        ]
       }
     ]
   },

@@ -27,7 +27,7 @@
   import { pollingStore } from './stores/pollingStore';
   import { historyStore } from './stores/historyStore';
   import { eventCounts, eventsStore } from './stores/eventsStore';
-  import { GetPersistentMibDirectory, ListMibFiles, ImportMibFiles, TraySetLabels } from '../wailsjs/go/main/App';
+  import { GetPersistentMibDirectory, ListMibFiles, ImportMibFiles, ImportPresetFiles, TraySetLabels } from '../wailsjs/go/main/App';
   import MibEditorPanel from './MibEditorPanel.svelte';
   import { mibEditorStore } from './stores/mibEditorStore';
   import { tabRequest } from './stores/tabRequest';
@@ -193,11 +193,52 @@
   let importErrors = [];   // [{ fileName, error }]
   let showImportErrors = false;
 
+  // A preset that imports with problems is still imported: the error list with
+  // its field paths is what the library is for, and you cannot fix a file you
+  // were not allowed to keep. So this reports rather than refuses — one line
+  // per file, because a drop is a bulk action nobody reads unless it went
+  // wrong, which is exactly when it has to say which file and why.
+  async function importDroppedPresets(paths, t) {
+    try {
+      const results = await ImportPresetFiles(paths);
+      for (const r of results || []) {
+        if (!r.success) {
+          notificationStore.add(`${r.fileName}: ${r.error}`, 'error');
+        } else if (r.problems > 0) {
+          notificationStore.add(
+            t('preset.importedWithProblems', { values: { file: r.fileName, count: r.problems } }),
+            'warning',
+          );
+        } else if (!r.skipped) {
+          notificationStore.add(t('preset.imported', { values: { file: r.fileName } }), 'success');
+        }
+      }
+    } catch (e) {
+      console.error('ImportPresetFiles failed', e);
+      notificationStore.add(String(e), 'error');
+    }
+  }
+
   async function handleFileDrop(_x, _y, paths) {
     dragOver = false;
     if (!paths || paths.length === 0) return;
 
     const t = get(_);
+
+    // One drop, two destinations.
+    //
+    // There is exactly one OnFileDrop handler for the window, and it used to
+    // send everything to the MIB importer. A dashboard preset is JSON and a MIB
+    // never is, so the extension decides which GATE a file faces — not whether
+    // it is admitted. Both importers decide that by CONTENT, on the Go side,
+    // and both refuse with a sentence naming what the file actually is.
+    const presetPaths = paths.filter((p) => /\.json$/i.test(p));
+    if (presetPaths.length > 0) {
+      await importDroppedPresets(presetPaths, t);
+    }
+    paths = paths.filter((p) => !/\.json$/i.test(p));
+    if (paths.length === 0) return;
+
     const droppedNames = paths.map(p => p.replace(/.*[/\\]/, ''));
 
     try {

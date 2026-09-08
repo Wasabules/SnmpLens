@@ -626,7 +626,8 @@
       "mibs": "MIBs",
       "snmp": "SNMP",
       "notify": "Notifications",
-      "service": "Service"
+      "service": "Service",
+      "presets": "Presets"
     },
     "general": {
       "updatesTitle": "Updates",
@@ -1084,5 +1085,54 @@
     "redo": "Redo",
     "matchCase": "Match case",
     "matchesCapped": "Only the first {max} matches are listed; there are more."
+  },
+  "preset": {
+    "title": "Dashboard presets",
+    "intro": "A preset is a file describing what to poll on one kind of equipment and how to show it. Adding one here does not start anything: it is bound when you add a target.",
+    "add": "Add a preset",
+    "empty": "No preset yet.",
+    "emptyHint": "Add a preset file, or drop one onto the window.",
+    "remove": "Remove this preset",
+    "summaryLine": "{widgets} widget(s) · {oids} OID(s) · every {cadence}",
+    "imported": "{file} was added.",
+    "importedWithProblems": "{file} was added, with {count} problem(s) to fix before it can be bound.",
+    "problems": "{count} problem(s)",
+    "problemsHint": "This preset has problems and cannot be bound until they are fixed.",
+    "noProblems": "No problem.",
+    "costOids": "OIDs polled",
+    "costCadence": "Cadence asked for",
+    "costRequests": "Requests a day",
+    "costVarbinds": "Values a day",
+    "costPerTarget": "Per equipment. A request carries up to {chunk} values, so the request count is the number of rounds multiplied by how many requests each round takes.",
+    "costNotAPrediction": "These are counts, not a duration: how long a round takes depends on the device and the link. If a round stops fitting inside the cadence, the poll clock widens it and says so.",
+    "widgetTitle": "Title",
+    "widgetKind": "Shown as",
+    "widgetOids": "OIDs",
+    "widget": {
+      "value": "Latest reading",
+      "rate": "Per-second rate",
+      "chart": "Chart over time",
+      "status": "State tile",
+      "grid": "Grid of states"
+    },
+    "err": {
+      "missing": "Required.",
+      "empty": "This cannot be empty.",
+      "tooNew": "Written for format version {found}; this version understands {supported}.",
+      "outOfRange": "Must be between {min} and {max}.",
+      "tooLong": "{found} characters; at most {max}.",
+      "tooMany": "{found}; at most {max}.",
+      "tooManyOids": "{found} OIDs in total; at most {max}.",
+      "tooManyForKind": "A \"{kind}\" widget shows at most {max} reading(s); this one has {found}.",
+      "unknownKind": "\"{kind}\" is not a widget kind this version knows.",
+      "labelsOnlyForStatus": "Labels map a number to a state, so they belong to a state tile or a grid — not to a \"{kind}\" widget.",
+      "labelKey": "\"{key}\" is not a state number.",
+      "controlCharacter": "This contains a control character.",
+      "notAnOid": "\"{value}\" is not a numeric OID.",
+      "oidTooDeep": "{found} sub-identifiers; an OID carries at most {max}.",
+      "oidOutOfRange": "\"{value}\" has a sub-identifier that does not fit on the wire.",
+      "notJson": "This file is not JSON ({detail}).",
+      "tooBig": "This file is {found} bytes; at most {max}."
+    }
   }
 }

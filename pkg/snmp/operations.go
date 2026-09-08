@@ -236,13 +236,18 @@ type MultiResult struct {
 	ResponseTimeMs int64              `json:"responseTimeMs"`
 }
 
-// maxVarbindsPerGet bounds one request.
+// MaxVarbindsPerGet bounds one request.
+//
+// Exported because it is the only thing that turns a count of OIDs into a
+// count of REQUESTS, and the screen that states a preset's cost before it runs
+// has to do exactly that. A second copy of the number somewhere else is a copy
+// that stops matching the first time this one is tuned.
 //
 // gosnmp refuses more than its MaxOids (60 by default) and its own comment
 // says a high value "can cause remote devices to fail". 30 is half that: large
 // enough that a realistic dashboard preset is one or two round trips, small
 // enough that the PDU stays well inside any agent's reply buffer.
-const maxVarbindsPerGet = 30
+const MaxVarbindsPerGet = 30
 
 // GetMany reads several OIDs from several targets, one connection per target.
 //
@@ -335,8 +340,8 @@ func (c *Client) getManyOne(ctx context.Context, target string, oids []string, c
 	}
 	defer g.Conn.Close()
 
-	for from := 0; from < len(oids); from += maxVarbindsPerGet {
-		to := from + maxVarbindsPerGet
+	for from := 0; from < len(oids); from += MaxVarbindsPerGet {
+		to := from + MaxVarbindsPerGet
 		if to > len(oids) {
 			to = len(oids)
 		}
