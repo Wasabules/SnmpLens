@@ -60,6 +60,10 @@ type SessionSpec struct {
 	Interval   time.Duration
 	Thresholds map[string]*Threshold
 	Fetch      FetchFunc
+	// AcceptSlow is the operator having been shown that this session cannot
+	// poll as fast as it asks, and having chosen to keep the cadence anyway.
+	// It suppresses the back-off, never the report: see overrun.go.
+	AcceptSlow bool
 }
 
 // minInterval floors the poll period. A zero or negative interval from a
@@ -87,6 +91,12 @@ type Scheduler struct {
 	Emit func(sessionID string, points []Point)
 	// OnStateChange fires when a session starts or stops, for the tray read-out.
 	OnStateChange func()
+	// OnOverrun reports that a session cannot poll as fast as it promised, and
+	// what the scheduler did about it. Edge-triggered: once when a session
+	// stops keeping up, once when it starts again. Called on the poll
+	// goroutine, so a handler that blocks delays that session's next round —
+	// which is why it fires once per episode rather than once per tick.
+	OnOverrun func(o Overrun)
 	// Now is injectable so tests are not at the mercy of the wall clock.
 	Now func() time.Time
 }
@@ -94,6 +104,10 @@ type Scheduler struct {
 type handle struct {
 	cancel context.CancelFunc
 	done   chan struct{}
+	// accept carries the operator's answer to an overrun report into the loop
+	// goroutine. Buffered, and sent to without blocking, because the caller is
+	// a bound method on the Wails thread and must never wait on a poll.
+	accept chan struct{}
 }
 
 // NewScheduler returns an idle scheduler.
@@ -124,7 +138,7 @@ func (s *Scheduler) Start(spec SessionSpec) {
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	h := &handle{cancel: cancel, done: make(chan struct{})}
+	h := &handle{cancel: cancel, done: make(chan struct{}), accept: make(chan struct{}, 1)}
 	s.running[spec.ID] = h
 	s.mu.Unlock()
 
@@ -172,6 +186,29 @@ func (s *Scheduler) loop(ctx context.Context, h *handle, spec SessionSpec) {
 	ticker := time.NewTicker(spec.Interval)
 	defer ticker.Stop()
 
+	// The guardrail. It reads the CYCLE TIME rather than anything declared,
+	// widens the period when a session cannot keep up, and reports the edge so
+	// the operator can accept the slowdown instead of having it chosen for
+	// them. All of the policy is in overrun.go, which holds no clock.
+	guard := newOverrunGuard(spec.Interval, spec.AcceptSlow)
+	effective := spec.Interval
+	recadence := func() {
+		if guard.effective != effective {
+			effective = guard.effective
+			ticker.Reset(effective)
+		}
+	}
+	report := func(o *Overrun) {
+		if o == nil {
+			return
+		}
+		o.SessionID, o.Name = spec.ID, spec.Name
+		o.OIDs, o.Targets = len(spec.OIDs), len(spec.Targets)
+		if s.OnOverrun != nil {
+			s.OnOverrun(*o)
+		}
+	}
+
 	// Spread the first poll, then keep the promise of a prompt first point.
 	//
 	// Measured before this existed: twenty sessions started back to back — which
@@ -197,32 +234,68 @@ func (s *Scheduler) loop(ctx context.Context, h *handle, spec SessionSpec) {
 		case <-timer.C:
 		}
 	}
-	s.tick(ctx, spec, last)
+	report(guard.observe(s.tick(ctx, spec, last)))
+	recadence()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-h.accept:
+			// Answered while backed off, so the cadence is restored now rather
+			// than at the next round — which can be eight periods away.
+			guard.accept()
+			recadence()
 		case <-ticker.C:
 			// A poll slower than the interval simply delays the next tick.
 			// Go coalesces the missed ticks, so a struggling agent can never
-			// pile up overlapping rounds against itself.
-			s.tick(ctx, spec, last)
+			// pile up overlapping rounds against itself — and that coalescing
+			// is exactly why the guardrail is needed: the loop stops being
+			// idle and nothing about it looks wrong.
+			report(guard.observe(s.tick(ctx, spec, last)))
+			recadence()
 		}
 	}
 }
 
-func (s *Scheduler) tick(ctx context.Context, spec SessionSpec, last map[string]lastSample) {
+// tick runs one poll round and returns what it cost.
+//
+// The measurement covers the WHOLE round — the fetch, the persist, the
+// threshold evaluation and the emit — because all four are the load, and the
+// question the guardrail answers is whether a round fits inside the period the
+// session promised.
+func (s *Scheduler) tick(ctx context.Context, spec SessionSpec, last map[string]lastSample) cycleStat {
 	now := s.now()
 	stamp := now.UTC().Format(time.RFC3339Nano)
+	started := time.Now()
+	stat := cycleStat{}
 
 	var points []Point
 	var samples []Sample
 
 	if ctx.Err() != nil {
-		return
+		return stat
 	}
-	for _, r := range spec.Fetch(ctx, spec.OIDs, spec.Targets) {
+	readings := spec.Fetch(ctx, spec.OIDs, spec.Targets)
+	if ctx.Err() != nil {
+		// A CANCELLED round is not a measurement, and must not be stored.
+		//
+		// This became load-bearing the moment the fetch started honouring the
+		// context: what a cancelled poll returns is one error per OID, and
+		// persisting those breaks every series while the evaluator reads them
+		// as a device that stopped answering. Pressing Stop would have raised
+		// an unreachability alert on a healthy switch.
+		return stat
+	}
+	for _, r := range readings {
+		stat.readings++
+		if r.Error != "" {
+			// An ERROR, not a nil value: a string OID answers with no numeric
+			// value and no error at all, and counting that as a failure would
+			// leave a session polling sysDescr with a guardrail that can never
+			// engage.
+			stat.failed++
+		}
 		oid := r.OID
 		key := r.Target + "|" + oid
 		p := Point{
@@ -259,7 +332,7 @@ func (s *Scheduler) tick(ctx context.Context, spec SessionSpec, last map[string]
 	}
 
 	if len(points) == 0 {
-		return
+		return stat
 	}
 	if s.Persist != nil {
 		s.Persist(points)
@@ -270,6 +343,30 @@ func (s *Scheduler) tick(ctx context.Context, spec SessionSpec, last map[string]
 	}
 	if s.Emit != nil {
 		s.Emit(spec.ID, points)
+	}
+	// Wall clock deliberately, not s.Now: this measures how long the round
+	// actually took, and s.Now is injected by tests that move time in jumps.
+	stat.dur = time.Since(started)
+	return stat
+}
+
+// AcceptSlow is the operator answering an overrun report: keep the cadence I
+// chose, I accept that it slows things down. It applies to the running session
+// and takes effect at once.
+//
+// Not persisted here on purpose — the scheduler holds no storage. A session
+// resumed after a restart asks again, which is the right default for a decision
+// about this machine's load.
+func (s *Scheduler) AcceptSlow(sessionID string) {
+	s.mu.Lock()
+	h := s.running[sessionID]
+	s.mu.Unlock()
+	if h == nil {
+		return
+	}
+	select {
+	case h.accept <- struct{}{}:
+	default:
 	}
 }
 

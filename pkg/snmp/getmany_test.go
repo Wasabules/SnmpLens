@@ -1,6 +1,7 @@
 package snmp
 
 import (
+	"context"
 	"net"
 	"testing"
 	"time"
@@ -45,7 +46,7 @@ func TestAnUnreachableDeviceCostsOneTimeoutNotOnePerOid(t *testing.T) {
 	}
 
 	start := time.Now()
-	res := c.GetMany([]string{host}, oids, "public", "v2c", port, timeoutSec, 0, V3Params{})
+	res := c.GetMany(context.Background(), []string{host}, oids, "public", "v2c", port, timeoutSec, 0, V3Params{})
 	elapsed := time.Since(start)
 
 	// One timeout, with generous headroom. The old shape would be at least
@@ -87,7 +88,7 @@ func TestUnreachableTargetsAreStillPolledConcurrently(t *testing.T) {
 	}
 
 	start := time.Now()
-	res := c.GetMany(targets, []string{"1.3.6.1.2.1.1.3.0"}, "public", "v2c", port, 1, 0, V3Params{})
+	res := c.GetMany(context.Background(), targets, []string{"1.3.6.1.2.1.1.3.0"}, "public", "v2c", port, 1, 0, V3Params{})
 	elapsed := time.Since(start)
 
 	if elapsed > 3*time.Second {
@@ -106,7 +107,7 @@ func TestGetManyReturnsTargetsInTheOrderAsked(t *testing.T) {
 	_, port := deadTarget(t)
 	targets := []string{"127.0.0.1", "127.0.0.2", "127.0.0.3"}
 
-	res := c.GetMany(targets, []string{"1.3.6.1.2.1.1.3.0"}, "public", "v2c", port, 1, 0, V3Params{})
+	res := c.GetMany(context.Background(), targets, []string{"1.3.6.1.2.1.1.3.0"}, "public", "v2c", port, 1, 0, V3Params{})
 	if len(res) != len(targets) {
 		t.Fatalf("%d results for %d targets", len(res), len(targets))
 	}
@@ -124,7 +125,7 @@ func TestGetManyWithNoOidsDoesNothing(t *testing.T) {
 	host, port := deadTarget(t)
 
 	start := time.Now()
-	res := c.GetMany([]string{host}, nil, "public", "v2c", port, 5, 3, V3Params{})
+	res := c.GetMany(context.Background(), []string{host}, nil, "public", "v2c", port, 5, 3, V3Params{})
 	if len(res) != 0 {
 		t.Errorf("%d results for no OIDs", len(res))
 	}
