@@ -694,7 +694,14 @@
       "removeConfirm": "¿Eliminar la ruta de MIB: {path}?",
       "openInEditor": "Abrir en el editor",
       "diagnose": "Diagnosticar",
-      "diagnosing": "Analizando…"
+      "diagnosing": "Analizando…",
+      "graphTitle": "Árbol de dependencias",
+      "graphEmpty": "Aún no hay ninguna MIB en el directorio.",
+      "graphSummary": "{modules} módulo(s), {roots} árbol(es), {missing} ausente(s)",
+      "graphMissing": "ausente",
+      "graphNotLoaded": "no cargado",
+      "graphCycle": "ciclo",
+      "graphRepeated": "ya mostrado arriba"
     },
     "snmp": {
       "v1v2cTitle": "SNMP v1/v2c",

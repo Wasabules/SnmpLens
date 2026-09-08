@@ -694,7 +694,14 @@
       "removeConfirm": "移除 MIB 路径：{path}？",
       "openInEditor": "在编辑器中打开",
       "diagnose": "诊断",
-      "diagnosing": "检查中…"
+      "diagnosing": "检查中…",
+      "graphTitle": "依赖树",
+      "graphEmpty": "目录中尚无 MIB。",
+      "graphSummary": "{modules} 个模块 · {roots} 棵树 · 缺失 {missing} 个",
+      "graphMissing": "缺失",
+      "graphNotLoaded": "未加载",
+      "graphCycle": "循环",
+      "graphRepeated": "上文已列出"
     },
     "snmp": {
       "v1v2cTitle": "SNMP v1/v2c",

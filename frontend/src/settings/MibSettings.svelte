@@ -9,8 +9,11 @@
   import { notificationStore } from '../stores/notifications';
   import Icon from '../Icon.svelte';
   import MibDiagnosis from '../mib/MibDiagnosis.svelte';
-  import { MibDiagnose, BrowseDialog, ListMibFiles } from '../../wailsjs/go/main/App';
+  import { MibDiagnose, BrowseDialog, ListMibFiles, MibDependencyGraph } from '../../wailsjs/go/main/App';
   import { dependencyRoll, symbolsWanted, ABSENT, FAILED } from '../utils/mibDependencies';
+  import {
+    rootsOf, treeFrom, flattenTree, graphSummary, MISSING, NOT_LOADED,
+  } from '../utils/mibGraph';
 
   export let defaultMibPath;
 
@@ -24,6 +27,47 @@
   $: roll = dependencyRoll($mibDiagnostics);
 
   let newMibPath = '';
+
+  // The dependency graph: what imports what, rather than what failed.
+  //
+  // The roll above answers "which modules are missing and who wants them",
+  // which is the question after a load goes wrong. This one answers the
+  // question somebody has in front of a folder from a vendor — what does THIS
+  // file need, and what does that need in turn — and it is cheap enough to
+  // offer: the Go side reads the head of each file as text and stops at the
+  // semicolon ending the IMPORTS clause. No parse, no gosmi, no exclusive lock
+  // held across the directory.
+  let graph = [];
+  let graphOpen = false;
+  let graphRoot = '';
+  let graphLoading = false;
+
+  async function loadGraph() {
+    graphLoading = true;
+    try {
+      graph = (await MibDependencyGraph()) || [];
+      if (!graph.some((n) => n.module === graphRoot)) {
+        graphRoot = rootsOf(graph)[0]?.module || '';
+      }
+    } catch (e) {
+      console.error('MibDependencyGraph failed', e);
+      graph = [];
+    } finally {
+      graphLoading = false;
+    }
+  }
+
+  function toggleGraph() {
+    graphOpen = !graphOpen;
+    if (graphOpen && graph.length === 0) loadGraph();
+  }
+
+  // Derived rather than computed in the markup: Svelte 5 tracks what the
+  // EXPRESSION reads, and a call reaching for `graph` inside itself is not a
+  // dependency it can see. reactive.test.mjs exists for exactly that.
+  $: graphRoots = rootsOf(graph);
+  $: graphStats = graphSummary(graph);
+  $: graphRows = graphRoot ? flattenTree(treeFrom(graph, graphRoot)) : [];
 
   onMount(() => {
     mibPathsStore.load();
@@ -254,6 +298,60 @@
     </div>
   {/if}
 
+  <!-- What imports what. Closed by default: it is the question you ask
+       deliberately, not the one the panel should answer unprompted. -->
+  <div class="graph-section">
+    <button class="graph-head" on:click={toggleGraph} aria-expanded={graphOpen}>
+      <Icon name={graphOpen ? 'chevron-down' : 'chevron-right'} size={13} />
+      {$_('settings.mibs.graphTitle')}
+    </button>
+
+    {#if graphOpen}
+      {#if graphLoading}
+        <p class="hint">{$_('common.loading')}</p>
+      {:else if graph.length === 0}
+        <p class="hint">{$_('settings.mibs.graphEmpty')}</p>
+      {:else}
+        <div class="graph-controls">
+          <select bind:value={graphRoot}>
+            {#each graphRoots as r (r.module)}
+              <option value={r.module}>{r.module}</option>
+            {/each}
+          </select>
+          <button class="btn-copy-small" on:click={loadGraph} title={$_('mibEditor.refresh')}>
+            <Icon name="refresh-cw" size={13} />
+          </button>
+          <span class="hint">
+            {$_('settings.mibs.graphSummary', {
+              values: { modules: graphStats.modules, roots: graphStats.roots, missing: graphStats.missing },
+            })}
+          </span>
+        </div>
+
+        <ul class="graph-tree">
+          {#each graphRows as row, i (row.module + ':' + i)}
+            <li class="graph-row status-{row.status}" style="padding-left:{row.depth * 1.1}rem">
+              <span class="graph-module">{row.module}</span>
+              {#if row.status === MISSING}
+                <span class="graph-tag missing">{$_('settings.mibs.graphMissing')}</span>
+              {:else if row.status === NOT_LOADED}
+                <span class="graph-tag">{$_('settings.mibs.graphNotLoaded')}</span>
+              {/if}
+              {#if row.cycle}
+                <span class="graph-tag cycle">{$_('settings.mibs.graphCycle')}</span>
+              {:else if row.repeated}
+                <span class="graph-tag">{$_('settings.mibs.graphRepeated')}</span>
+              {/if}
+              {#if row.file && row.file !== row.module}
+                <span class="graph-file">{row.file}</span>
+              {/if}
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    {/if}
+  </div>
+
   <!-- MIB Diagnostics -->
   {#if $mibDiagnostics.length > 0}
     <div class="diagnostics-section">
@@ -292,6 +390,99 @@
 </fieldset>
 
 <style>
+  .graph-section {
+    margin-top: 1rem;
+    border-top: 1px solid var(--border-color);
+    padding-top: 0.6rem;
+  }
+
+  .graph-head {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+  }
+
+  .graph-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0.4rem 0;
+    flex-wrap: wrap;
+  }
+
+  .graph-tree {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 320px;
+    overflow: auto;
+    font-size: 0.78rem;
+  }
+
+  .graph-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    padding: 0.1rem 0.3rem;
+    /* The indent IS the edge: a MIB has no other structure to show, and a line
+       from parent to child would be a drawing where a margin says the same. */
+    border-left: 2px solid transparent;
+    white-space: nowrap;
+  }
+
+  .graph-row.status-missing {
+    border-left-color: var(--error-color, #f85149);
+  }
+
+  .graph-row.status-notloaded {
+    border-left-color: var(--warning-color, #d29922);
+  }
+
+  .graph-module {
+    font-family: var(--font-mono, monospace);
+  }
+
+  .graph-row.status-missing .graph-module {
+    color: var(--error-color, #f85149);
+  }
+
+  .graph-tag {
+    padding: 0 0.3rem;
+    border-radius: 3px;
+    background-color: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-size: 0.68rem;
+  }
+
+  .graph-tag.missing {
+    background-color: var(--error-subtle, var(--bg-tertiary));
+    color: var(--error-color, var(--text-secondary));
+  }
+
+  .graph-tag.cycle {
+    background-color: var(--warning-subtle, var(--bg-tertiary));
+    color: var(--warning-color, var(--text-secondary));
+  }
+
+  .graph-file {
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+  }
+
+  .hint {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+  }
+
   .dep-row {
     border-left: 2px solid var(--border-color);
     padding: 0.4rem 0 0.4rem 0.6rem;
