@@ -615,7 +615,10 @@
     "presetDetectHint": "Demander à cet équipement ce qu'il est, et placer en tête les presets qui lui correspondent.",
     "presetMatched": "{count} preset(s) correspondent à cet équipement.",
     "presetNoMatch": "Aucun preset ne désigne cet équipement.",
-    "presetDeviceMasked": "Équipement identifié"
+    "presetDeviceMasked": "Équipement identifié",
+    "presetBind": "Lier",
+    "presetBindTooltip": "Lier un preset de tableau de bord à cet équipement",
+    "presetAlreadyBound": "Déjà lié : {names}. En lier un autre ajoute une seconde horloge de scrutation."
   },
   "update": {
     "available": "SnmpLens {version} est disponible",

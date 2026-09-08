@@ -11,6 +11,7 @@
   import { requestTab } from './stores/tabRequest';
   import { buildTestRequest } from './utils/snmpParams';
   import { getEffectiveSettings } from './utils/targets';
+  import { boundPresetsFor } from './utils/presetBindings';
   import TargetOverrideForm from './TargetOverrideForm.svelte';
   import { anonMode, anonymizeIp } from './utils/anonymize';
   import Icon from './Icon.svelte';
@@ -101,6 +102,13 @@
   let newPreset = '';
   let binding = false;
   let identifying = false;
+  // Binding a preset to an equipment that ALREADY exists. The add form covers
+  // the moment somebody knows what the equipment is; this covers every moment
+  // after it, which is most of them — a target added before there were presets
+  // at all had no other way to get one.
+  let expandedPresetId = null;
+  let rowPreset = {};
+  let rowBinding = null;
   // What the device said about itself, or null. Reset whenever the address
   // changes, because it describes an address and not a form.
   let identity = null;
@@ -148,6 +156,28 @@
   // offered — the reason is in Settings, next to the error list that explains
   // it, rather than as a disabled row here with nothing saying why.
   $: bindablePresets = presets.filter((p) => p.problems === 0);
+
+  function togglePresetRow(id) {
+    expandedPresetId = expandedPresetId === id ? null : id;
+  }
+
+  async function bindToExisting(target) {
+    const file = rowPreset[target.id];
+    if (!file) return;
+    rowBinding = target.id;
+    try {
+      await pollingStore.bindPreset(file, target.address, get(settingsStore));
+      notificationStore.add($_('targets.presetBound', { values: { address: target.address } }), 'success');
+      expandedPresetId = null;
+      rowPreset = { ...rowPreset, [target.id]: '' };
+      requestTab('dashboard');
+      dispatch('close');
+    } catch (e) {
+      notificationStore.add(String(e), 'error');
+    } finally {
+      rowBinding = null;
+    }
+  }
 
   async function addTarget() {
     if (!newAddress.trim()) return;
@@ -544,6 +574,10 @@
               {/if}
               <button class="btn-icon" on:click={() => startEditAddress(target)}
                 disabled={editingId === target.id} title={$_('targets.editTooltip')}><Icon name="pencil" size={15} /></button>
+              <button class="btn-icon" class:active={expandedPresetId === target.id}
+                on:click={() => togglePresetRow(target.id)} title={$_('targets.presetBindTooltip')}>
+                <Icon name="layers" size={15} />
+              </button>
               <button class="btn-icon" class:active={expandedOverrideId === target.id}
                 on:click={() => toggleOverrides(target.id)} title={$_('targets.overrides.title')}>
                 <Icon name="settings" size={15} />
@@ -554,6 +588,38 @@
                 title={$_('targets.deleteTooltip')}><Icon name="trash-2" size={15} /></button>
             </div>
           </div>
+          {#if expandedPresetId === target.id}
+            <div class="preset-row">
+              {#if bindablePresets.length === 0}
+                <span class="preset-note">{$_('targets.presetNone')}</span>
+              {:else}
+                <select bind:value={rowPreset[target.id]} title={$_('targets.presetHint')}>
+                  <option value="">{$_('targets.presetPick')}</option>
+                  {#each bindablePresets as p (p.file)}
+                    <option value={p.file}>{p.name || p.file}</option>
+                  {/each}
+                </select>
+                <button class="btn-sm primary" on:click={() => bindToExisting(target)}
+                  disabled={!rowPreset[target.id] || rowBinding === target.id}>
+                  {rowBinding === target.id ? $_('common.working') : $_('targets.presetBind')}
+                </button>
+              {/if}
+              <!-- What is already bound to this equipment, so binding a second
+                   one is a deliberate act rather than an accident: each bind
+                   creates its own session and its own poll clock. -->
+              {#if boundPresetsFor($pollingStore, target.address).length > 0}
+                <span class="preset-note">
+                  {$_('targets.presetAlreadyBound', {
+                    values: {
+                      names: boundPresetsFor($pollingStore, target.address)
+                        .map((s) => s.preset.name || s.preset.file).join(', '),
+                    },
+                  })}
+                </span>
+              {/if}
+            </div>
+          {/if}
+
           {#if expandedOverrideId === target.id}
             <TargetOverrideForm
               overrides={$settingsStore.targetOverrides?.[target.address] || {}}
@@ -720,14 +786,54 @@
   .btn-sm.danger:hover:not(:disabled) { background-color: var(--error-color); border-color: var(--error-color); color: white; }
   .btn-sm:disabled { opacity: 0.5; cursor: not-allowed; }
 
-  .add-form { display: flex; gap: 8px; margin-bottom: 10px; padding: 10px; background-color: var(--bg-color); border-radius: 4px; }
-  .add-form input { flex: 1; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 4px; background-color: var(--bg-lighter-color); color: var(--text-color); font-size: 0.9em; }
-  .add-form input:first-child { flex: 2; }
+  /* Wraps. It held two inputs and a button when it was written; it now holds
+     two inputs, a Detect button, a preset picker and Add, and on one line the
+     picker grew with the longest preset name until the row ran off the modal. */
+  .add-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; padding: 10px; background-color: var(--bg-color); border-radius: 4px; }
+  .add-form input { flex: 1 1 150px; min-width: 0; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 4px; background-color: var(--bg-lighter-color); color: var(--text-color); font-size: 0.9em; }
+  .add-form input:first-child { flex: 2 1 200px; }
+  /* Bounded on BOTH sides: a select sizes itself to its longest option, and a
+     preset called "Cisco Catalyst 9300 uplinks and access ports" is a wide
+     option. */
+  .add-form select { flex: 1 1 160px; max-width: 240px; min-width: 0; padding: 6px 8px; border: 1px solid var(--border-color); border-radius: 4px; background-color: var(--bg-lighter-color); color: var(--text-color); font-size: 0.9em; }
+  .add-form .btn-sm { flex: 0 0 auto; }
+  .identity { flex: 1 1 100%; margin: 0; font-size: 0.8em; color: var(--text-muted); }
+  .identity.failed { color: var(--error-color, #f85149); }
+  .identity .matched { margin-left: 0.4rem; }
 
   .target-list { display: flex; flex-direction: column; gap: 6px; max-height: 400px; overflow-y: auto; }
   .target-entry { display: flex; flex-direction: column; }
   .target-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background-color: var(--bg-color); border-radius: 4px; transition: opacity 0.2s; }
   .target-item.disabled { opacity: 0.5; }
+
+  .preset-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0 0 34px;
+    padding: 8px 10px;
+    background-color: var(--bg-color);
+    border-radius: 4px;
+  }
+
+  .preset-row select {
+    flex: 1 1 160px;
+    max-width: 260px;
+    min-width: 0;
+    padding: 5px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--bg-lighter-color);
+    color: var(--text-color);
+    font-size: 0.85em;
+  }
+
+  .preset-note {
+    flex: 1 1 100%;
+    color: var(--text-muted);
+    font-size: 0.78em;
+  }
 
   .target-checkbox { display: flex; align-items: center; }
   .target-checkbox input { width: 16px; height: 16px; cursor: pointer; }
@@ -785,7 +891,7 @@
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 16px;
-    width: min(520px, 90vw);
+    width: min(720px, 94vw);
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
     display: flex;
     flex-direction: column;

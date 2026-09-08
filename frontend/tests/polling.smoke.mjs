@@ -315,4 +315,30 @@ check('the session reads as stopped', !!s && s.running === false);
     calls.bound[1]?.conn?.community === 'global-community', calls.bound[1]?.conn?.community);
 }
 
+// Which sessions are bound to one equipment, by ADDRESS.
+//
+// Never by index or by label: `targets` is a stored JSON array that can hold
+// addresses no longer in the settings, the list is reordered whenever somebody
+// edits the text field, and two targets can share a label.
+{
+  const { boundPresetsFor } = await import('../src/utils/presetBindings.js');
+
+  const sessions = [
+    { id: 'a', targets: ['10.0.0.1'], preset: { file: 'cisco.json', name: 'Cisco' } },
+    { id: 'b', targets: ['10.0.0.2'], preset: { file: 'ups.json', name: 'UPS' } },
+    { id: 'c', targets: ['10.0.0.1'], preset: null },
+    { id: 'd', targets: ['10.0.0.1', '10.0.0.9'], preset: { file: 'ifaces.json', name: 'Interfaces' } },
+  ];
+
+  const bound = boundPresetsFor(sessions, '10.0.0.1').map((s) => s.id);
+  check('a session bound to this equipment is found', bound.includes('a'));
+  check('and one bound to it among several targets', bound.includes('d'));
+  check('a session with no preset is not a binding', !bound.includes('c'), bound.join(','));
+  check('another equipment is not this one', !bound.includes('b'));
+
+  check('an unknown address has nothing bound', boundPresetsFor(sessions, '10.9.9.9').length === 0);
+  check('and it survives what the store really holds',
+    boundPresetsFor(undefined, '10.0.0.1').length === 0 && boundPresetsFor(sessions, '').length === 0);
+}
+
 process.exit(failures ? 1 : 0);

@@ -87,8 +87,22 @@ func (a *App) ensureBundledPresets() {
 		return
 	}
 	dir := filepath.Join(filepath.Dir(a.persistentMibDir), presetSubdir)
-	if _, err := os.Stat(dir); err == nil {
-		return // this machine has a preset library already
+
+	// A MARKER, not the directory.
+	//
+	// "The directory exists" looked like a good proxy for "this machine has a
+	// library" and is not one: presetDir() creates the directory as a SIDE
+	// EFFECT, and it is called by ListPresets — so opening the preset settings
+	// once, on any earlier version, was enough to make every later startup skip
+	// the extraction. Which is exactly what happened: an installation that had
+	// been running for weeks got no examples at all.
+	//
+	// The marker is written after the extraction and is the only thing consulted
+	// afterwards, so an operator who deletes an example keeps it deleted and one
+	// who deletes the whole directory gets them back.
+	marker := filepath.Join(dir, extractedMarker)
+	if _, err := os.Stat(marker); err == nil {
+		return
 	}
 
 	entries, err := a.presets.ReadDir(presetSubdir)
@@ -98,6 +112,13 @@ func (a *App) ensureBundledPresets() {
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		log.Printf("WARNING: could not create the preset directory: %v", err)
+		return
+	}
+
+	// An existing library that predates the marker: leave it alone but record
+	// that this ran, or the examples would land on top of a curated folder.
+	if existing, err := os.ReadDir(dir); err == nil && len(existing) > 0 {
+		writeMarker(marker)
 		return
 	}
 
@@ -117,7 +138,19 @@ func (a *App) ensureBundledPresets() {
 		}
 		written++
 	}
+	writeMarker(marker)
 	log.Printf("Extracted %d example preset(s) to %s", written, dir)
+}
+
+// extractedMarker records that the examples have been offered once. Dotted, so
+// preset.List skips it the way it skips any dotfile.
+const extractedMarker = ".examples-extracted"
+
+func writeMarker(path string) {
+	if err := os.WriteFile(path, []byte("The example presets have been extracted once.\n"+
+		"Delete this file to have them written again.\n"), 0o600); err != nil {
+		log.Printf("WARNING: could not record that the presets were extracted: %v", err)
+	}
 }
 
 // presetDir returns the preset directory, creating it on first use.
