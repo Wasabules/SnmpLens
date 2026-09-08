@@ -10,8 +10,18 @@
   import Icon from '../Icon.svelte';
   import MibDiagnosis from '../mib/MibDiagnosis.svelte';
   import { MibDiagnose, BrowseDialog, ListMibFiles } from '../../wailsjs/go/main/App';
+  import { dependencyRoll, symbolsWanted, ABSENT, FAILED } from '../utils/mibDependencies';
 
   export let defaultMibPath;
+
+  // Rolled the other way round: one row per MISSING MODULE instead of one per
+  // broken file. A single absent VENDOR-SMI fails twelve files and reads as
+  // twelve unrelated problems in the per-file list below.
+  //
+  // Derived here rather than in the markup: reactive.test.mjs exists because
+  // Svelte 5 tracks what the EXPRESSION reads, and a function reaching for a
+  // store inside itself is not a dependency it can see.
+  $: roll = dependencyRoll($mibDiagnostics);
 
   let newMibPath = '';
 
@@ -207,6 +217,43 @@
     </small>
   </div>
 
+  <!-- What is missing across the whole directory, before the per-file list -->
+  {#if roll.missing.length > 0 || roll.mismatched.length > 0}
+    <div class="diagnostics-section">
+      <h4>{$_('settings.mibs.dependenciesTitle')}</h4>
+
+      {#each roll.missing as m (m.module)}
+        <div class="dep-row" class:dep-absent={m.reason === ABSENT}>
+          <div class="dep-head">
+            <span class="dep-module">{m.module}</span>
+            <span class="dep-reason">
+              {#if m.reason === ABSENT}{$_('settings.mibs.depAbsent')}
+              {:else if m.reason === FAILED}{$_('settings.mibs.depFailed')}
+              {:else}{$_('settings.mibs.depNotLoaded')}{/if}
+            </span>
+            <span class="dep-count">{$_('settings.mibs.depNeededBy', { values: { count: m.neededBy.length } })}</span>
+          </div>
+          {#if symbolsWanted(m).length > 0}
+            <div class="dep-symbols">{$_('settings.mibs.depSymbols', { values: { symbols: symbolsWanted(m).join(', ') } })}</div>
+          {/if}
+          {#if m.cause}
+            <div class="dep-cause">{m.cause}</div>
+          {/if}
+          <div class="dep-files">{m.neededBy.map((n) => n.file).join(', ')}</div>
+        </div>
+      {/each}
+
+      {#each roll.mismatched as f (f.fileName)}
+        <div class="dep-row dep-warn">
+          <div class="dep-head">
+            <span class="dep-module">{f.fileName}</span>
+            <span class="dep-reason">{$_('settings.mibs.depMismatch', { values: { module: f.moduleName } })}</span>
+          </div>
+        </div>
+      {/each}
+    </div>
+  {/if}
+
   <!-- MIB Diagnostics -->
   {#if $mibDiagnostics.length > 0}
     <div class="diagnostics-section">
@@ -245,6 +292,30 @@
 </fieldset>
 
 <style>
+  .dep-row {
+    border-left: 2px solid var(--border-color);
+    padding: 0.4rem 0 0.4rem 0.6rem;
+    margin-bottom: 0.5rem;
+  }
+  .dep-row.dep-absent { border-left-color: var(--error-color, #d2544f); }
+  .dep-row.dep-warn { border-left-color: var(--warning-color, #d9a03a); }
+  .dep-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem;
+  }
+  .dep-module { font-family: var(--font-mono, monospace); font-weight: 600; }
+  .dep-reason { font-size: 0.78rem; opacity: 0.85; }
+  .dep-count { font-size: 0.78rem; opacity: 0.7; margin-left: auto; }
+  .dep-symbols, .dep-cause, .dep-files {
+    font-size: 0.78rem;
+    opacity: 0.75;
+    margin-top: 0.2rem;
+    word-break: break-word;
+  }
+  .dep-files { font-family: var(--font-mono, monospace); opacity: 0.6; }
+
   .diag-open {
     background: none;
     border: 1px solid var(--border-color);
