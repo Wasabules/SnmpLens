@@ -6,7 +6,7 @@
   import 'chartjs-adapter-date-fns';
   import zoomPlugin from 'chartjs-plugin-zoom';
   import Icon from '../Icon.svelte';
-  import { seriesColor, chartChrome, MAX_SERIES, STATUS } from '../utils/chartPalette';
+  import { seriesColor, chartChrome, MAX_SERIES, STATUS, seriesPlan } from '../utils/chartPalette';
   import { inferUnit } from '../utils/snmpUnits';
   import { anonMode, anonymizeIp } from '../utils/anonymize';
   import { targetLabels } from '../stores/targetLabels';
@@ -56,7 +56,7 @@
   const dispatch = createEventDispatcher();
 
   $: hiddenSet = new Set(hidden || []);
-  const seriesKey = (target, o) => target + '|' + o;
+
 
   $: stacked = Array.isArray(oids) && oids.length > 1 ? oids : null;
   /** Charts sharing a syncGroup keep the same x window (small multiples). */
@@ -133,13 +133,24 @@
     const field = FIELD[m] || 'value';
     const datasets = [];
     const axes = [];
-    let colorIdx = 0;
+
+    // The plan decides which series exist and what colour each one is. It used
+    // to be a counter here, a different counter in ChannelsModal and a formula
+    // in MetricTiles, and the three agreed only when every OID had the same
+    // number of targets.
+    const plan = seriesPlan(s, { layout: 'stacked', oids: stacked });
+    const byOid = new Map();
+    for (const item of plan.series) {
+      if (!byOid.has(item.oid)) byOid.set(item.oid, []);
+      byOid.get(item.oid).push(item);
+    }
 
     stacked.forEach((o, i) => {
-      const scoped = source.filter((r) => (r.oid || s?.oid) === o);
-      const targets = [...new Set(scoped.map((r) => r.target))];
-      if (!targets.length || colorIdx >= MAX_SERIES) return;
+      const items = byOid.get(o) || [];
+      const drawable = items.filter((it) => !it.capped);
+      if (!drawable.length) return;
 
+      const scoped = source.filter((r) => (r.oid || s?.oid) === o);
       const axisId = 'y' + i;
       const type = (scoped.find((r) => r.snmpType) || {}).snmpType || '';
       axes.push({
@@ -147,34 +158,33 @@
         index: axes.length,
         oid: o,
         unit: inferUnit(o, type, m),
-        color: seriesColor(colorIdx, dark),
+        color: seriesColor(drawable[0].colorIndex, dark),
       });
 
-      for (const t of targets) {
-        if (colorIdx >= MAX_SERIES) break;
-        if (hiddenSet.has(seriesKey(t, o))) {
-          colorIdx++; // keep the colour reserved for this series
-          continue;
-        }
+      for (const it of drawable) {
+        if (hiddenSet.has(it.key)) continue;
         datasets.push({
-          label: (targets.length > 1 ? label(t) + ' · ' : '') + oidName(o, mibTree),
+          label: (items.length > 1 ? label(it.target) + ' · ' : '') + oidName(o, mibTree),
           yAxisID: axisId,
           data: scoped
-            .filter((r) => r.target === t)
+            .filter((r) => r.target === it.target)
             .map((r) => ({ x: Date.parse(r.timestamp), y: r[field] ?? null })),
-          borderColor: seriesColor(colorIdx, dark),
-          backgroundColor: seriesColor(colorIdx, dark),
+          borderColor: seriesColor(it.colorIndex, dark),
+          backgroundColor: seriesColor(it.colorIndex, dark),
           borderWidth: 2,
           pointRadius: 0,
           pointHoverRadius: 4,
           tension: 0.25,
           spanGaps: false,
         });
-        colorIdx++;
       }
     });
 
-    hiddenSeriesNotice = 0;
+    // What the palette could not take is REPORTED. This line used to be
+    // `hiddenSeriesNotice = 0`, unconditionally, so the footnote saying series
+    // had been dropped could never appear in stacked mode — the one mode where
+    // dropping them is most likely, since the cap is across every OID at once.
+    hiddenSeriesNotice = plan.dropped;
     return { datasets, axes };
   }
 
@@ -208,14 +218,13 @@
     }
 
     const source = forOid(override || s?.results || [], s);
-    const allTargets = [...new Set(source.map((r) => r.target))];
-    const targets = allTargets.slice(0, MAX_SERIES);
-    hiddenSeriesNotice = allTargets.length - targets.length;
-
     const key = oid || s?.oid;
-    return targets
-      .map((target, idx) => ({ target, color: seriesColor(idx, dark) }))
-      .filter(({ target }) => !hiddenSet.has(seriesKey(target, key)))
+    const plan = seriesPlan(s, { layout: 'separate', oids: key ? [key] : null });
+    hiddenSeriesNotice = plan.dropped;
+
+    return plan.series
+      .filter((it) => !it.capped && !hiddenSet.has(it.key))
+      .map((it) => ({ target: it.target, color: seriesColor(it.colorIndex, dark) }))
       .map(({ target, color }) => ({
         label: label(target),
         data: source
@@ -625,7 +634,14 @@
 
   // Re-render when any input shaping the chart changes. Everything read here is
   // referenced explicitly so Svelte actually tracks it.
-  $: if (chart && (session || mode || points || buckets || yScaleType || zeroBased || labels || mibTree)) refresh();
+  // hiddenSet is NAMED here, and that is the whole point of the line.
+  //
+  // Svelte 5 tracks what the EXPRESSION reads, and every dependency of refresh()
+  // is inside a callee — so a dependency this statement does not mention is a
+  // dependency that never fires it. hiddenSet was missing: toggling a channel
+  // updated MetricTiles (whose reactive statement does name it) and left the
+  // chart showing the series until the next sample happened to mutate session.
+  $: if (chart && (session || mode || points || buckets || yScaleType || zeroBased || labels || mibTree || hiddenSet)) refresh();
 
   // Adding or removing an axis changes the chart's structure, which cannot be
   // patched in place — rebuild when the stacked OID set changes.
