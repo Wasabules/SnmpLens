@@ -45,14 +45,16 @@ func f64(v float64) *float64 { return &v }
 func counterFetch(step float64) FetchFunc {
 	var mu sync.Mutex
 	state := map[string]float64{}
-	return func(_ context.Context, oid string, targets []string) []Reading {
+	return func(_ context.Context, oids []string, targets []string) []Reading {
 		mu.Lock()
 		defer mu.Unlock()
-		out := make([]Reading, 0, len(targets))
+		out := make([]Reading, 0, len(targets)*len(oids))
 		for _, t := range targets {
-			key := t + "|" + oid
-			state[key] += step
-			out = append(out, Reading{Target: t, Value: f64(state[key]), SnmpType: "Counter32", ResponseTimeMs: 3})
+			for _, oid := range oids {
+				key := t + "|" + oid
+				state[key] += step
+				out = append(out, Reading{Target: t, OID: oid, Value: f64(state[key]), SnmpType: "Counter32", ResponseTimeMs: 3})
+			}
 		}
 		return out
 	}
@@ -146,17 +148,17 @@ func TestFailedPollBreaksTheSeries(t *testing.T) {
 
 	var n int
 	var mu sync.Mutex
-	fetch := func(context.Context, string, []string) []Reading {
+	fetch := func(context.Context, []string, []string) []Reading {
 		mu.Lock()
 		defer mu.Unlock()
 		n++
 		switch n {
 		case 1:
-			return []Reading{{Target: "a", Value: f64(100), SnmpType: "Counter32"}}
+			return []Reading{{Target: "a", OID: "1.1", Value: f64(100), SnmpType: "Counter32"}}
 		case 2:
-			return []Reading{{Target: "a", Value: nil, Error: "timeout"}}
+			return []Reading{{Target: "a", OID: "1.1", Value: nil, Error: "timeout"}}
 		default:
-			return []Reading{{Target: "a", Value: f64(500), SnmpType: "Counter32"}}
+			return []Reading{{Target: "a", OID: "1.1", Value: f64(500), SnmpType: "Counter32"}}
 		}
 	}
 

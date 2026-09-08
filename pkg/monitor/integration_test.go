@@ -50,28 +50,35 @@ func TestIntegrationSchedulerPollsARealAgent(t *testing.T) {
 	host, port := agentAddr(t)
 
 	client := snmp.NewClient(context.Background())
-	fetch := func(_ context.Context, oid string, targets []string) []monitor.Reading {
+	// GetMany, which is what the scheduler drives in production: one
+	// connection per target with every OID in one PDU, against a real agent.
+	fetch := func(_ context.Context, oids []string, targets []string) []monitor.Reading {
 		out := []monitor.Reading{}
-		for _, r := range client.Get(targets, oid, "public", "v2c", port, 2, 1, snmp.V3Params{}) {
-			reading := monitor.Reading{Target: r.Target, Error: r.Error, ResponseTimeMs: int(r.ResponseTimeMs)}
-			if r.Result != nil {
-				reading.SnmpType = r.Result.Type
-				switch v := r.Result.Value.(type) {
-				case uint32:
-					f := float64(v)
-					reading.Value = &f
-				case int:
-					f := float64(v)
-					reading.Value = &f
-				case int64:
-					f := float64(v)
-					reading.Value = &f
-				case uint64:
-					f := float64(v)
-					reading.Value = &f
+		for _, m := range client.GetMany(targets, oids, "public", "v2c", port, 2, 1, snmp.V3Params{}) {
+			for _, oid := range oids {
+				reading := monitor.Reading{
+					Target: m.Target, OID: oid,
+					Error: m.Errors[oid], ResponseTimeMs: int(m.ResponseTimeMs),
 				}
+				if r := m.Results[oid]; r != nil {
+					reading.SnmpType = r.Type
+					switch v := r.Value.(type) {
+					case uint32:
+						f := float64(v)
+						reading.Value = &f
+					case int:
+						f := float64(v)
+						reading.Value = &f
+					case int64:
+						f := float64(v)
+						reading.Value = &f
+					case uint64:
+						f := float64(v)
+						reading.Value = &f
+					}
+				}
+				out = append(out, reading)
 			}
-			out = append(out, reading)
 		}
 		return out
 	}
@@ -139,10 +146,12 @@ func TestIntegrationUnreachableTargetIsRecorded(t *testing.T) {
 	_, port := agentAddr(t)
 
 	client := snmp.NewClient(context.Background())
-	fetch := func(_ context.Context, oid string, targets []string) []monitor.Reading {
+	fetch := func(_ context.Context, oids []string, targets []string) []monitor.Reading {
 		out := []monitor.Reading{}
-		for _, r := range client.Get(targets, oid, "public", "v2c", port, 1, 0, snmp.V3Params{}) {
-			out = append(out, monitor.Reading{Target: r.Target, Error: r.Error})
+		for _, m := range client.GetMany(targets, oids, "public", "v2c", port, 1, 0, snmp.V3Params{}) {
+			for _, oid := range oids {
+				out = append(out, monitor.Reading{Target: m.Target, OID: oid, Error: m.Errors[oid]})
+			}
 		}
 		return out
 	}

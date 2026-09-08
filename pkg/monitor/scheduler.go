@@ -8,7 +8,12 @@ import (
 
 // Reading is one target's answer to one GET.
 type Reading struct {
-	Target         string   `json:"target"`
+	Target string `json:"target"`
+	// OID says which of the requested OIDs this reading answers. It exists
+	// because one Fetch now returns every OID for every target in one slice,
+	// and a reading that cannot say what it measured cannot be paired with the
+	// previous sample it derives a rate from.
+	OID            string   `json:"oid"`
 	Value          *float64 `json:"value"`
 	SnmpType       string   `json:"snmpType"`
 	ResponseTimeMs int      `json:"responseTimeMs"`
@@ -21,7 +26,16 @@ type Reading struct {
 // v3 passphrases: the caller closes over them when it builds this function.
 // That keeps credentials out of this package entirely and makes the whole
 // scheduler testable without a network.
-type FetchFunc func(ctx context.Context, oid string, targets []string) []Reading
+// FetchFunc reads EVERY oid from EVERY target, in as few round trips as the
+// transport allows, and returns one Reading per (target, oid) pair — including
+// for failures, because a pair with no reading at all is indistinguishable
+// from a session nobody started.
+//
+// It used to take one OID. The scheduler then walked the OIDs serially while
+// only the targets ran concurrently, so a session with ten OIDs against an
+// unreachable device spent ten full timeouts in a row on the poll clock — the
+// one that runs with the window closed.
+type FetchFunc func(ctx context.Context, oids []string, targets []string) []Reading
 
 // Point is one stored sample, with the derived values the charts need.
 type Point struct {
@@ -118,6 +132,39 @@ func (s *Scheduler) Start(spec SessionSpec) {
 	s.notifyStateChange()
 }
 
+// startSpreadWindow bounds how late a first poll can be.
+//
+// Two seconds is enough to break the simultaneity that matters — the burst of
+// inserts against SQLite's single writer, and the burst of sockets — while
+// staying under what anyone notices as a delay when they press Start.
+const startSpreadWindow = 2 * time.Second
+
+// startSpread is where in the window this session's first poll falls.
+//
+// FNV-1a over the id: cheap, dependency-free, and deterministic, which is the
+// property that matters. A random offset would spread just as well and could
+// not be tested, and would reshuffle every restart so a session's slot would
+// never settle.
+func startSpread(id string, interval time.Duration) time.Duration {
+	window := startSpreadWindow
+	if interval < window {
+		// A fast session must not have its first point pushed past its own
+		// period, or the spread would look like a missed poll.
+		window = interval
+	}
+	if window <= 0 {
+		return 0
+	}
+	const offset64 = 14695981039346656037
+	const prime64 = 1099511628211
+	h := uint64(offset64)
+	for i := 0; i < len(id); i++ {
+		h ^= uint64(id[i])
+		h *= prime64
+	}
+	return time.Duration(h % uint64(window))
+}
+
 func (s *Scheduler) loop(ctx context.Context, h *handle, spec SessionSpec) {
 	defer close(h.done)
 
@@ -125,8 +172,31 @@ func (s *Scheduler) loop(ctx context.Context, h *handle, spec SessionSpec) {
 	ticker := time.NewTicker(spec.Interval)
 	defer ticker.Stop()
 
-	// Poll immediately: waiting a full interval for the first point makes a
-	// slow monitoring look broken.
+	// Spread the first poll, then keep the promise of a prompt first point.
+	//
+	// Measured before this existed: twenty sessions started back to back — which
+	// is exactly what resumeActiveSessions does after a reboot — took their
+	// first tick with a spread of 0 ms. Every device asked at once, every insert
+	// arriving at once on a database with one writer and a four-connection pool.
+	//
+	// The offset is DERIVED FROM THE SESSION ID, not drawn at random: a session
+	// lands in the same slot on every restart, so the spread is stable and can
+	// be asserted rather than hoped for. Two sessions can still collide; twenty
+	// cannot all collide.
+	//
+	// Bounded by startSpreadWindow rather than by the interval, because the
+	// comment this replaces was right: waiting a full interval for the first
+	// point makes a slow monitoring look broken, and an hourly session must not
+	// take an hour to show anything.
+	if d := startSpread(spec.ID, spec.Interval); d > 0 {
+		timer := time.NewTimer(d)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+	}
 	s.tick(ctx, spec, last)
 
 	for {
@@ -149,44 +219,43 @@ func (s *Scheduler) tick(ctx context.Context, spec SessionSpec, last map[string]
 	var points []Point
 	var samples []Sample
 
-	for _, oid := range spec.OIDs {
-		if ctx.Err() != nil {
-			return
+	if ctx.Err() != nil {
+		return
+	}
+	for _, r := range spec.Fetch(ctx, spec.OIDs, spec.Targets) {
+		oid := r.OID
+		key := r.Target + "|" + oid
+		p := Point{
+			SessionID: spec.ID, Target: r.Target, OID: oid, Timestamp: stamp,
+			Value: r.Value, ResponseTimeMs: r.ResponseTimeMs, Error: r.Error, SnmpType: r.SnmpType,
 		}
-		for _, r := range spec.Fetch(ctx, oid, spec.Targets) {
-			key := r.Target + "|" + oid
-			p := Point{
-				SessionID: spec.ID, Target: r.Target, OID: oid, Timestamp: stamp,
-				Value: r.Value, ResponseTimeMs: r.ResponseTimeMs, Error: r.Error, SnmpType: r.SnmpType,
-			}
 
-			if r.Value != nil {
-				if prev, ok := last[key]; ok {
-					typ := r.SnmpType
-					if typ == "" {
-						typ = prev.typ
-					}
-					if d, ok := CorrectedDelta(prev.value, *r.Value, typ); ok {
-						delta := d
-						p.Delta = &delta
-						if dt, ok := ElapsedSeconds(prev.at, now); ok {
-							rate := d / dt
-							p.Rate = &rate
-						}
+		if r.Value != nil {
+			if prev, ok := last[key]; ok {
+				typ := r.SnmpType
+				if typ == "" {
+					typ = prev.typ
+				}
+				if d, ok := CorrectedDelta(prev.value, *r.Value, typ); ok {
+					delta := d
+					p.Delta = &delta
+					if dt, ok := ElapsedSeconds(prev.at, now); ok {
+						rate := d / dt
+						p.Rate = &rate
 					}
 				}
-				last[key] = lastSample{value: *r.Value, at: now, typ: r.SnmpType}
-			} else {
-				// A failed poll breaks the series: the next delta must not
-				// span the outage as though nothing happened.
-				delete(last, key)
 			}
-
-			points = append(points, p)
-			samples = append(samples, Sample{
-				Target: r.Target, OID: oid, Timestamp: stamp, Value: r.Value, Error: r.Error,
-			})
+			last[key] = lastSample{value: *r.Value, at: now, typ: r.SnmpType}
+		} else {
+			// A failed poll breaks the series: the next delta must not
+			// span the outage as though nothing happened.
+			delete(last, key)
 		}
+
+		points = append(points, p)
+		samples = append(samples, Sample{
+			Target: r.Target, OID: oid, Timestamp: stamp, Value: r.Value, Error: r.Error,
+		})
 	}
 
 	if len(points) == 0 {
