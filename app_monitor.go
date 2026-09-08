@@ -66,7 +66,9 @@ func (a *App) MonitorCreateSession(oid string, targets []string, intervalMs int,
 		return "", fmt.Errorf("storage not initialized")
 	}
 	sessConn, creds := conn.split()
-	id, err := a.storage.CreateSession(name, oid, targets, intervalMs, snmpVersion, time.Now().UTC().Format(time.RFC3339), thresholds, sessConn)
+	// nil: a session built by hand carries no preset snapshot. PresetBind is
+	// the one caller that passes one.
+	id, err := a.storage.CreateSession(name, oid, targets, intervalMs, snmpVersion, time.Now().UTC().Format(time.RFC3339), thresholds, sessConn, nil)
 	if err != nil {
 		return "", err
 	}

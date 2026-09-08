@@ -8,10 +8,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"SnmpLens/pkg/mib"
 	"SnmpLens/pkg/preset"
 	"SnmpLens/pkg/snmp"
+	"SnmpLens/pkg/storage"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -272,6 +274,85 @@ func (a *App) ImportPresetDialog() ([]PresetImportResult, error) {
 	// Cancelled. An empty ARRAY rather than nil: the caller renders a result
 	// list, and null throws on .map.
 	return a.ImportPresetFiles(paths), nil
+}
+
+// PresetBind is the moment a preset stops being a file and starts being a
+// monitoring: it creates one session for one equipment and starts it.
+//
+// ONE SESSION PER TARGET, never one session across several. The cost was stated
+// per equipment, the credentials are per equipment, and the guardrail in
+// pkg/monitor is per session — so one slow device backing off must not slow the
+// healthy ones down with it.
+//
+// What to poll is materialised into the session's OWN columns: the OID list and
+// the interval are what the poll clock reads, and it never opens the snapshot.
+// A session whose layout cannot be decoded keeps polling and loses its
+// dashboard; the other way round it would keep its dashboard and poll nothing.
+//
+// A preset with problems cannot be bound. It can be imported, listed and read —
+// that is what the error list is for — but binding is the step that puts
+// traffic on somebody's network, and doing that from a file this application
+// has already said it does not understand is not a thing to do quietly.
+func (a *App) PresetBind(fileName, target, snmpVersion string, conn MonitorConnection) (storage.Session, error) {
+	if a.storage == nil || a.scheduler == nil {
+		return storage.Session{}, fmt.Errorf("storage not initialized")
+	}
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return storage.Session{}, fmt.Errorf("a preset is bound to an equipment; no target was given")
+	}
+
+	path, err := a.resolvePresetPath(fileName)
+	if err != nil {
+		return storage.Session{}, err
+	}
+	p, errs, err := preset.LoadFile(path)
+	if err != nil {
+		return storage.Session{}, err
+	}
+	if len(errs) > 0 {
+		return storage.Session{}, fmt.Errorf(
+			"%s has %d problem(s) and cannot be bound until they are fixed", filepath.Base(path), len(errs))
+	}
+
+	oids := preset.PollOIDs(p)
+	if len(oids) == 0 {
+		return storage.Session{}, fmt.Errorf("%s polls nothing", filepath.Base(path))
+	}
+
+	name := strings.TrimSpace(p.Name)
+	if name == "" {
+		name = filepath.Base(path)
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	sessConn, creds := conn.split()
+
+	id, err := a.storage.CreateSession(
+		name, strings.Join(oids, ","), []string{target},
+		p.IntervalSec*1000, snmpVersion, now,
+		// No thresholds: a preset describes what to WATCH, and what counts as
+		// too much is the operator's judgement about their own network.
+		nil, sessConn,
+		&storage.SessionPreset{
+			File:          filepath.Base(path),
+			Name:          p.Name,
+			FormatVersion: p.FormatVersion,
+			BoundAt:       now,
+			Widgets:       p.Widgets,
+		},
+	)
+	if err != nil {
+		return storage.Session{}, err
+	}
+	a.saveSessionCreds(id, creds)
+
+	if err := a.MonitorStart(id); err != nil {
+		// The session exists and is stored; it simply is not polling. Reported
+		// rather than rolled back, because deleting it would throw away the
+		// binding the operator just made and leave nothing to retry from.
+		log.Printf("PresetBind: %s created but not started: %v", id, err)
+	}
+	return a.findSession(id)
 }
 
 // DeletePreset removes one preset from the library.
