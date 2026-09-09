@@ -200,9 +200,17 @@ type Widget struct {
 	// Unit is an i18n key suffix when it names one this application knows, and
 	// is otherwise shown as written.
 	Unit string `json:"unit,omitempty"`
-	// Labels maps an integer reading to a name, for KindStatus. Nothing else
-	// reads it.
+	// Labels maps an integer reading to a name, for KindStatus and KindGrid.
+	// Nothing else reads it.
 	Labels map[string]string `json:"labels,omitempty"`
+	// Discover says where this widget's instances come from, instead of
+	// listing them. See discover.go: the walk happens ONCE, at bind time, and
+	// what is stored afterwards is a plain widget.
+	Discover *Discover `json:"discover,omitempty"`
+	// OIDLabels names each discovered OID with what the walk found — the port's
+	// own name rather than its index. Written by expansion, never by an author:
+	// a hand-written preset titles its own widgets.
+	OIDLabels map[string]string `json:"oidLabels,omitempty"`
 }
 
 // Error is one reason a preset was refused.
@@ -336,9 +344,21 @@ func Validate(p Preset) []Error {
 			}))
 		}
 		for j, oid := range w.OIDs {
-			errs = append(errs, checkOID(fmt.Sprintf("%s.oids[%d]", at, j), oid)...)
+			// A template is checked as the OID it becomes: substituting a
+			// single instance keeps every other rule — the arcs, the depth,
+			// the root — while allowing the one thing that is not a digit.
+			probe := strings.ReplaceAll(oid, InstancePlaceholder, "1")
+			errs = append(errs, checkOID(fmt.Sprintf("%s.oids[%d]", at, j), probe)...)
 		}
-		total += len(w.OIDs)
+		errs = append(errs, checkDiscovery(at, w)...)
+		// A discovering widget contributes its BOUND, not its template count:
+		// the sanity limit has to hold after the walk, and the walk happens on
+		// equipment nobody has seen yet.
+		if w.Discover != nil {
+			total += len(w.OIDs) * discoverInstanceLimit(w)
+		} else {
+			total += len(w.OIDs)
+		}
 
 		if len(w.Labels) > 0 && !kindTakesLabels(w.Kind) {
 			errs = append(errs, errf(at+".labels", "labelsOnlyForStatus", map[string]string{"kind": clip(w.Kind)}))
@@ -385,6 +405,15 @@ type Cost struct {
 	// whose job is to say what it will cost. A day is the coarsest cadence the
 	// format admits, so the count is at least one for every valid preset.
 	PollsPerDay int `json:"pollsPerDay"`
+	// Discovered is how many of the OIDs counted above come from a BOUND rather
+	// than from a list.
+	//
+	// When it is not zero, every figure here is an UPPER BOUND: a discovering
+	// widget's real count is whatever the walk finds on the equipment, and that
+	// is not knowable from the file. The screen showing this says so, because
+	// "at most 3 072 values a day" and "3 072 values a day" are different
+	// statements and only one of them is true here.
+	Discovered int `json:"discovered"`
 	// VarbindsPerDay is the honest measure of what the device is asked for:
 	// one request carries every OID, so counting rounds alone understates what
 	// the agent does work for.
@@ -404,6 +433,24 @@ func Estimate(p Preset) Cost {
 	c := Cost{Widgets: len(p.Widgets), IntervalSec: p.IntervalSec}
 	seen := map[string]bool{}
 	for _, w := range p.Widgets {
+		if w.Discover != nil {
+			// Not yet walked: the ceiling the preset agreed to, counted once
+			// per template. Deduplication cannot apply — the OIDs do not exist
+			// yet — so this is the only figure available before binding.
+			per := discoverInstanceLimit(w)
+			n := 0
+			for _, oid := range w.OIDs {
+				if strings.Contains(oid, InstancePlaceholder) {
+					n += per
+				} else if !seen[strings.TrimPrefix(oid, ".")] {
+					seen[strings.TrimPrefix(oid, ".")] = true
+					c.OIDs++
+				}
+			}
+			c.OIDs += n
+			c.Discovered += n
+			continue
+		}
 		for _, oid := range w.OIDs {
 			// Two widgets showing the same OID are polled once: the scheduler
 			// asks for a set, and counting it twice would overstate the cost
@@ -431,6 +478,13 @@ func PollOIDs(p Preset) []string {
 	out := []string{}
 	for _, w := range p.Widgets {
 		for _, oid := range w.OIDs {
+			// A template is not an OID. Expand() runs before this at bind time,
+			// so reaching one here means somebody polled an unexpanded preset —
+			// and "1.3.6.1.2.1.2.2.1.8.{#}" on the wire is a failure far from
+			// its cause.
+			if strings.Contains(oid, InstancePlaceholder) {
+				continue
+			}
 			key := strings.TrimPrefix(oid, ".")
 			if seen[key] {
 				continue

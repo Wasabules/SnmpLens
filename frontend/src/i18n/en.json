@@ -1156,8 +1156,11 @@
       "oidTooDeep": "{found} sub-identifiers; an OID carries at most {max}.",
       "oidOutOfRange": "\"{value}\" has a sub-identifier that does not fit on the wire.",
       "notJson": "This file is not JSON ({detail}).",
-      "tooBig": "This file is {found} bytes; at most {max}."
-    }
+      "tooBig": "This file is {found} bytes; at most {max}.",
+      "placeholderWithoutDiscover": "This OID carries an instance placeholder, but the widget does not say where to discover its instances.",
+      "discoverWithoutPlaceholder": "This widget discovers its instances but no OID carries {placeholder}, so the walk would be paid for and thrown away."
+    },
+    "costAtMost": "At most — {discovered} of these OIDs are discovered on the equipment when you bind it, so the real figures are known then and can only be lower."
   },
   "dashboard": {
     "empty": "No dashboard yet.",

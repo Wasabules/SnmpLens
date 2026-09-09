@@ -1156,8 +1156,11 @@
       "oidTooDeep": "{found} subidentificadores; un OID lleva {max} como máximo.",
       "oidOutOfRange": "«{value}» tiene un subidentificador que no cabe en la red.",
       "notJson": "Este archivo no es JSON ({detail}).",
-      "tooBig": "Este archivo ocupa {found} bytes; {max} como máximo."
-    }
+      "tooBig": "Este archivo ocupa {found} bytes; {max} como máximo.",
+      "placeholderWithoutDiscover": "Este OID lleva un marcador de instancia, pero el widget no indica dónde descubrir sus instancias.",
+      "discoverWithoutPlaceholder": "Este widget descubre sus instancias pero ningún OID lleva {placeholder}, así que el walk se pagaría en vano."
+    },
+    "costAtMost": "Como máximo — {discovered} de estos OID se descubren en el equipo al vincularlo, así que las cifras reales se conocen entonces y solo pueden ser menores."
   },
   "dashboard": {
     "empty": "Aún no hay panel.",
