@@ -114,6 +114,24 @@ function createEventsStore() {
     refreshCounts();
   }
 
+  /**
+   * One row per event id, first occurrence winning.
+   *
+   * The list feeds a KEYED each, and Svelte throws on a duplicate key rather
+   * than rendering something odd — so a tie here is not a cosmetic problem, it
+   * is the panel disappearing with an exception in the console.
+   */
+  function dedupeById(items) {
+    const seen = new Set();
+    const out = [];
+    for (const e of items) {
+      if (!e || seen.has(e.id)) continue;
+      seen.add(e.id);
+      out.push(e);
+    }
+    return out;
+  }
+
   /** Append the next page. */
   async function loadMore() {
     const state = get({ subscribe });
@@ -123,7 +141,9 @@ function createEventsStore() {
       const page = await EventsQuery({ ...state.filter, beforeSeq: state.nextCursor });
       update((s) => ({
         ...s,
-        items: [...s.items, ...(page.items || [])],
+        // The same tie, from the other side: a live event prepended while this
+        // page was in flight is in both lists.
+        items: dedupeById([...s.items, ...(page.items || [])]),
         total: page.total || s.total,
         nextCursor: page.nextCursor || 0,
         loading: false,
@@ -188,7 +208,24 @@ function createEventsStore() {
    * exists whether or not a window was listening, so a missed emit costs a
    * refresh, never a record.
    */
+  // Registered ONCE, whoever asks.
+  //
+  // Two callers asked: App.svelte at startup, because the badge has to count
+  // with the tab closed, and EventsPanel's onMount. The panel is mounted with
+  // {#if activeTab === …}, so onMount ran again on every visit to the tab —
+  // each registering ANOTHER handler on the same runtime event. Every live
+  // event was then prepended once per handler, and Svelte's keyed each threw
+  // `each_key_duplicate` and took the panel down. Visit the tab five times and
+  // an event arrived six times.
+  //
+  // This is the accumulating-listener shape lifecycle.test.mjs exists for, one
+  // level down: the leak is not in the component, it is in what the component
+  // asks the store to do on every mount.
+  let listening = false;
+
   function listen() {
+    if (listening) return;
+    listening = true;
     EventsOn('event:new', (ev) => {
       announce(ev);
       counts.update((c) => ({
@@ -211,6 +248,14 @@ function createEventsStore() {
         // silently skip them. Setting it to the seq of the last kept item
         // means "load more" continues exactly where the visible list ends,
         // which is what the cursor already meant.
+        // Deduplicated, because one handler is not the only way the same
+        // event can arrive twice: load() awaits EventsQuery, and the row was
+        // persisted BEFORE the emit — so a page fetched while an emit is in
+        // flight can already contain the event the handler is about to
+        // prepend. Nothing orders those two, and a keyed each does not
+        // tolerate the tie.
+        if (s.items.some((e) => e.id === ev.id)) return s;
+
         const items = [ev, ...s.items];
         if (items.length <= MAX_LIVE_ITEMS) {
           return { ...s, items, total: s.total + 1 };
