@@ -1137,7 +1137,8 @@
       "rate": "Débit par seconde",
       "chart": "Courbe dans le temps",
       "status": "Pastille d'état",
-      "grid": "Grille d'états"
+      "grid": "Grille d'états",
+      "map": "Carte"
     },
     "err": {
       "missing": "Obligatoire.",
@@ -1164,9 +1165,20 @@
       "thresholdWithoutBound": "Un seuil a besoin d’un minimum, d’un maximum ou des deux : sans aucun, il ne peut jamais se déclencher.",
       "thresholdInverted": "Le minimum ({min}) est supérieur au maximum ({max}) : aucune valeur ne peut se trouver dans la plage.",
       "thresholdOnRate": "Un seuil est comparé à la valeur brute, et un widget « {kind} » affiche un compteur : la plage serait dépassée dès la première mesure et ne reviendrait jamais.",
-      "thresholdConflict": "Le widget {other} surveille déjà {oid} avec une autre plage, et une valeur ne peut en avoir qu’une."
+      "thresholdConflict": "Le widget {other} surveille déjà {oid} avec une autre plage, et une valeur ne peut en avoir qu’une.",
+      "mapOnlyForMap": "Un dessin appartient à un widget carte, pas à un widget « {kind} ».",
+      "unknownShape": "« {type} » n’est pas une forme que cette version sait dessiner.",
+      "shapeWithoutSize": "Cette forme n’a rien à dessiner : une boîte a besoin d’une largeur et d’une hauteur, une ligne de deux extrémités distinctes.",
+      "shapeOutsideMap": "Ceci dépasse le bord {axis} du dessin.",
+      "shapeOidNotInWidget": "{oid} ne fait pas partie des valeurs de ce widget : rien ne colorerait jamais cette forme.",
+      "assetName": "« {name} » n’est pas un nom de fichier. Un fond est un fichier de votre dossier de fonds, nommé sans chemin."
     },
     "costAtMost": "Au plus — {discovered} de ces OID sont découverts sur l'équipement au moment de la liaison : les chiffres réels sont connus à ce moment-là et ne peuvent qu'être inférieurs.",
+    "backgrounds": "Fonds de carte",
+    "backgroundsIntro": "Les images sur lesquelles un widget carte dessine. Un preset en nomme une ; le fichier est le vôtre et reste sur cette machine. PNG, JPEG ou GIF — vérifié en le décodant, pas d’après son nom.",
+    "addBackground": "Ajouter un fond",
+    "noBackgrounds": "Aucun fond pour l’instant. Une carte sans fond dessine ses formes seules, ce qui reste un dessin tout à fait valable.",
+    "backgroundMeta": "{width}×{height} · {kb} Ko",
     "costWatched": "Seuils",
     "costAlerts": "{alerting} d’entre eux sont évalués et ouvrent un incident en cas de dépassement, que vos règles de notification peuvent ensuite router vers une destination ; les autres ne sont qu’une ligne de repère."
   },
@@ -1180,6 +1192,8 @@
     "snapshotNote": "Dessiné d'après {file} tel qu'il était lors de la liaison de {target}. Modifier ou supprimer le fichier ne change pas ce tableau de bord ; reliez l'équipement pour en adopter une nouvelle version.",
     "allEquipments": "{name} — les {count} équipements",
     "snapshotNoteGroup": "Dessiné d’après {file} tel qu’il était lors de la liaison de chacun de ces {count} équipements. Modifier ou supprimer le fichier ne change rien ici ; reliez un équipement pour adopter une nouvelle version.",
+    "mapBackgroundMissing": "Le fond {name} n’est pas dans votre dossier de fonds : le dessin est affiché seul.",
+    "mapFirstEquipment": "Formes colorées d’après {target}",
     "waiting": "En attente de la première mesure."
   }
 }

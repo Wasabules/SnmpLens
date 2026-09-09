@@ -747,9 +747,24 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
 
       <h3>The widgets</h3>
       <p>
-        Five kinds, and no sixth: the latest reading, a per-second rate, a chart over time, a
-        state tile, and a grid of states — the last being a switch's port panel, where
-        forty-eight readings are one thing to look at rather than forty-eight things.
+        Six kinds, and no seventh: the latest reading, a per-second rate, a chart over time, a
+        state tile, a grid of states — a switch's port panel, where forty-eight readings are
+        one thing to look at rather than forty-eight things — and a <strong>map</strong>.
+      </p>
+      <p>
+        A map is a drawing whose parts are readings: boxes, lines, labels and dots placed as
+        percentages of the widget, each one optionally bound to an OID and coloured by what
+        that reading is actually doing. Drop a photograph of your own rack into
+        <em>Settings &gt; Presets</em> and a preset can draw over it by name — the picture
+        stays on your machine, and the preset never carries one.
+      </p>
+      <p>
+        Deliberately <strong>not SVG</strong>. An <code>&lt;svg&gt;</code> is a document with
+        script in it, and a preset is a file somebody else wrote: there is no version of
+        "mostly safe SVG" worth rendering in an application that talks to your network. The
+        four shapes are a vocabulary SnmpLens owns, so a preset picks from it and cannot
+        describe anything of its own. A background is checked by <em>decoding</em> it rather
+        than by its name, and only PNG, JPEG and GIF get in.
       </p>
       <figure class="shot" style="margin-top:1.5rem">
         <img class="shot-light" src="assets/img/dashboard-preset-light-1200.webp"

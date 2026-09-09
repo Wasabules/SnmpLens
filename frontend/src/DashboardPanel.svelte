@@ -4,6 +4,7 @@
   import MetricTiles from './monitor/MetricTiles.svelte';
   import MonitorChart from './monitor/MonitorChart.svelte';
   import StatusTile from './monitor/StatusTile.svelte';
+  import MapTile from './monitor/MapTile.svelte';
   import { pollingStore } from './stores/pollingStore';
   import { mibStore } from './stores/mibStore';
   import { settingsStore } from './stores/settingsStore';
@@ -156,7 +157,7 @@
                to override. -->
           <section
             class="widget"
-            class:wide={widget.kind === 'chart' || widget.kind === 'grid'}
+            class:wide={widget.kind === 'chart' || widget.kind === 'grid' || widget.kind === 'map'}
             class:placed={!!widget.layout}
             style="{cellStyle(widget)};--order:{orders[i]}"
           >
@@ -204,6 +205,14 @@
                 mibTree={$mibStore.tree}
                 dense={widget.kind === 'grid'}
               />
+            {:else if widget.kind === 'map'}
+              <MapTile
+                drawing={widget.map}
+                labels={widget.labels || {}}
+                points={session.results}
+                targets={session.targets || []}
+                mibTree={$mibStore.tree}
+              />
             {:else}
               <!-- A kind this version does not draw. Said out loud rather than
                    rendered as an empty box: a preset written for a newer
@@ -250,7 +259,7 @@
   }
 
   .hint {
-    color: var(--text-secondary);
+    color: var(--text-muted);
     font-size: 0.8rem;
   }
 
@@ -268,28 +277,28 @@
   }
 
   .picker-label {
-    color: var(--text-secondary);
+    color: var(--text-muted);
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.03em;
   }
 
   .meta {
-    color: var(--text-secondary);
+    color: var(--text-muted);
     font-size: 0.78rem;
   }
 
   .state {
     padding: 0.05rem 0.4rem;
     border-radius: 3px;
-    background-color: var(--bg-tertiary);
-    color: var(--text-secondary);
+    background-color: var(--bg-lighter-color);
+    color: var(--text-muted);
     font-size: 0.72rem;
   }
 
   .state.running {
-    background-color: var(--success-subtle, var(--bg-tertiary));
-    color: var(--success-color, var(--text-primary));
+    background-color: var(--success-subtle, var(--bg-lighter-color));
+    color: var(--success-color, var(--text-color));
   }
 
   .overrun-banner {
@@ -374,7 +383,7 @@
     padding: 0.6rem;
     border: 1px solid var(--border-color);
     border-radius: 5px;
-    background-color: var(--bg-primary);
+    background-color: var(--bg-color);
     min-width: 0;
     /* Wide content scrolls inside its own widget rather than out of it. A tile
        with a long address, or a chart on a narrow window, must not draw over
@@ -396,25 +405,25 @@
   }
 
   .unit {
-    color: var(--text-secondary);
+    color: var(--text-muted);
     font-size: 0.72rem;
   }
 
   .unknown-kind {
     margin: 0;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     font-size: 0.78rem;
   }
 
   .waiting {
     margin: 0;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     font-size: 0.78rem;
   }
 
   .footnote {
     margin: 0;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     font-size: 0.72rem;
   }
 </style>

@@ -403,7 +403,7 @@
     padding: 0.2rem 0;
     background: none;
     border: none;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     font: inherit;
     font-size: 0.78rem;
     text-transform: uppercase;
@@ -458,28 +458,28 @@
   .graph-tag {
     padding: 0 0.3rem;
     border-radius: 3px;
-    background-color: var(--bg-tertiary);
-    color: var(--text-secondary);
+    background-color: var(--bg-lighter-color);
+    color: var(--text-muted);
     font-size: 0.68rem;
   }
 
   .graph-tag.missing {
-    background-color: var(--error-subtle, var(--bg-tertiary));
-    color: var(--error-color, var(--text-secondary));
+    background-color: var(--error-subtle, var(--bg-lighter-color));
+    color: var(--error-color, var(--text-muted));
   }
 
   .graph-tag.cycle {
-    background-color: var(--warning-subtle, var(--bg-tertiary));
-    color: var(--warning-color, var(--text-secondary));
+    background-color: var(--warning-subtle, var(--bg-lighter-color));
+    color: var(--warning-color, var(--text-muted));
   }
 
   .graph-file {
-    color: var(--text-secondary);
+    color: var(--text-muted);
     font-size: 0.7rem;
   }
 
   .hint {
-    color: var(--text-secondary);
+    color: var(--text-muted);
     font-size: 0.75rem;
   }
 

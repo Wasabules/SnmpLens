@@ -1137,7 +1137,8 @@
       "rate": "Rate pro Sekunde",
       "chart": "Verlaufsdiagramm",
       "status": "Statuskachel",
-      "grid": "Statusraster"
+      "grid": "Statusraster",
+      "map": "Karte"
     },
     "err": {
       "missing": "Erforderlich.",
@@ -1164,9 +1165,20 @@
       "thresholdWithoutBound": "Ein Schwellenwert braucht ein Minimum, ein Maximum oder beides — ohne beides kann er nie auslösen.",
       "thresholdInverted": "Das Minimum ({min}) liegt über dem Maximum ({max}); kein Messwert kann im Band liegen.",
       "thresholdOnRate": "Ein Schwellenwert wird mit dem Rohwert verglichen, und ein „{kind}“-Widget zeigt einen Zähler: Das Band wäre schon beim ersten Messwert verletzt und nie wieder eingehalten.",
-      "thresholdConflict": "Widget {other} überwacht {oid} bereits mit einem anderen Band, und ein Messwert kann nur eines haben."
+      "thresholdConflict": "Widget {other} überwacht {oid} bereits mit einem anderen Band, und ein Messwert kann nur eines haben.",
+      "mapOnlyForMap": "Eine Zeichnung gehört zu einem Karten-Widget, nicht zu einem „{kind}“.",
+      "unknownShape": "„{type}“ ist keine Form, die diese Version zeichnen kann.",
+      "shapeWithoutSize": "Diese Form hat nichts zu zeichnen: ein Kasten braucht Breite und Höhe, eine Linie zwei verschiedene Enden.",
+      "shapeOutsideMap": "Dies ragt über den {axis}-Rand der Zeichnung hinaus.",
+      "shapeOidNotInWidget": "{oid} gehört nicht zu den Messwerten dieses Widgets, also würde diese Form nie eingefärbt.",
+      "assetName": "„{name}“ ist kein Dateiname. Ein Hintergrund ist eine Datei in Ihrem eigenen Hintergrundordner, ohne Pfad benannt."
     },
     "costAtMost": "Höchstens — {discovered} dieser OIDs werden beim Binden auf dem Gerät ermittelt; die echten Zahlen stehen dann fest und können nur niedriger sein.",
+    "backgrounds": "Kartenhintergründe",
+    "backgroundsIntro": "Die Bilder, über die ein Karten-Widget zeichnet. Ein Preset nennt eines; die Datei gehört Ihnen und bleibt auf diesem Rechner. PNG, JPEG oder GIF — geprüft durch Dekodieren, nicht am Namen.",
+    "addBackground": "Hintergrund hinzufügen",
+    "noBackgrounds": "Noch keine Hintergründe. Eine Karte ohne einen zeichnet ihre Formen allein, was eine vollwertige Zeichnung ist.",
+    "backgroundMeta": "{width}×{height} · {kb} KB",
     "costWatched": "Schwellenwerte",
     "costAlerts": "{alerting} davon werden ausgewertet und lösen bei Verletzung einen Vorfall aus, den Ihre Benachrichtigungsregeln an ein Ziel weiterleiten können; die übrigen sind nur eine Referenzlinie."
   },
@@ -1180,6 +1192,8 @@
     "snapshotNote": "Gezeichnet nach {file} im Zustand der Bindung von {target}. Das Bearbeiten oder Löschen der Datei ändert dieses Dashboard nicht; binden Sie das Gerät erneut, um eine neue Fassung zu übernehmen.",
     "allEquipments": "{name} — alle {count} Geräte",
     "snapshotNoteGroup": "Gezeichnet aus {file} in dem Stand, in dem jedes dieser {count} Geräte gebunden wurde. Das Bearbeiten oder Löschen der Datei ändert dieses Dashboard nicht; binden Sie ein Gerät erneut, um eine neue Fassung zu übernehmen.",
+    "mapBackgroundMissing": "Der Hintergrund {name} liegt nicht in Ihrem Hintergrundordner; die Zeichnung wird allein angezeigt.",
+    "mapFirstEquipment": "Formen eingefärbt nach {target}",
     "waiting": "Warten auf den ersten Messwert."
   }
 }
