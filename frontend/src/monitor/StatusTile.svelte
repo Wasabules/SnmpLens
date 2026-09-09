@@ -3,6 +3,7 @@
   import { oidName } from '../utils/oidDisplay';
   import { statusBlocks } from '../utils/dashboardGroup';
   import { anonymizeIp } from '../utils/anonymize';
+  import { latestFor, stateText, stateKind } from '../utils/stateColour';
 
   /**
    * A reading shown as a STATE, mapped through the widget's own labels.
@@ -40,41 +41,10 @@
    */
   export let masked = false;
 
-  // Every function called from the markup takes what it reads as an argument.
-  const latest = (oid, all) => {
-    let best = null;
-    for (const p of all) {
-      if (p.oid !== oid) continue;
-      if (!best || p.timestamp > best.timestamp) best = p;
-    }
-    return best;
-  };
-
-  const stateOf = (point) => {
-    if (!point) return { key: '', text: '—', kind: 'unknown' };
-    if (point.error) return { key: '', text: point.error, kind: 'failed' };
-    if (point.value === null || point.value === undefined) return { key: '', text: '—', kind: 'unknown' };
-    return { key: String(Math.round(point.value)), text: '', kind: 'value' };
-  };
-
-  // The label map decides the WORD; the number decides the colour only when the
-  // author gave no word for it. A state nobody named is shown as its number
-  // rather than as a guess.
-  const cellText = (point, map) => {
-    const st = stateOf(point);
-    if (st.kind !== 'value') return st.text;
-    return map[st.key] || st.key;
-  };
-
-  const cellKind = (point, map) => {
-    const st = stateOf(point);
-    if (st.kind !== 'value') return st.kind;
-    const word = (map[st.key] || '').toLowerCase();
-    if (/^(up|ok|on|active|normal|enabled|good|running)$/.test(word)) return 'good';
-    if (/^(down|off|fail|failed|error|critical|inactive|disabled)$/.test(word)) return 'bad';
-    if (/^(testing|unknown|dormant|warning|degraded)$/.test(word)) return 'warn';
-    return 'value';
-  };
+  // The state rules live in utils/stateColour.js, and both widgets that show a
+  // state read them from there: the same port cannot be green on the wall and
+  // grey on the map, which is what two copies of one regular expression produce
+  // the first time either gains a word.
 
   // The INSTANCE, and only the instance.
   //
@@ -97,9 +67,9 @@
   {/if}
   <div class="states" class:dense>
     {#each block.oids as oid (oid)}
-      <div class="cell {cellKind(latest(oid, block.points), labels)}" title={fullName(oid, mibTree)}>
+      <div class="cell {stateKind(latestFor(oid, block.points), labels)}" title={fullName(oid, mibTree)}>
         <span class="cell-name">{instanceOf(oid)}</span>
-        <span class="cell-state">{cellText(latest(oid, block.points), labels)}</span>
+        <span class="cell-state">{stateText(latestFor(oid, block.points), labels)}</span>
       </div>
     {/each}
     {#if block.oids.length === 0}
@@ -114,7 +84,7 @@
      for something that has no alternative. */
   .equipment {
     margin: 0.5rem 0 0.25rem;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     font-size: 0.72rem;
     font-variant-numeric: tabular-nums;
   }
@@ -143,12 +113,12 @@
     border: 1px solid var(--border-color);
     border-left-width: 3px;
     border-radius: 3px;
-    background-color: var(--bg-secondary);
+    background-color: var(--bg-light-color);
     min-width: 0;
   }
 
   .cell-name {
-    color: var(--text-secondary);
+    color: var(--text-muted);
     font-size: 0.68rem;
     white-space: nowrap;
     overflow: hidden;
@@ -193,7 +163,7 @@
 
   .empty {
     margin: 0;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     font-size: 0.78rem;
   }
 </style>

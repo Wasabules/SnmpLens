@@ -1137,7 +1137,8 @@
       "rate": "Per-second rate",
       "chart": "Chart over time",
       "status": "State tile",
-      "grid": "Grid of states"
+      "grid": "Grid of states",
+      "map": "Map"
     },
     "err": {
       "missing": "Required.",
@@ -1164,9 +1165,20 @@
       "thresholdWithoutBound": "A threshold needs a minimum, a maximum, or both — with neither it can never fire.",
       "thresholdInverted": "The minimum ({min}) is above the maximum ({max}), so no reading can be inside the band.",
       "thresholdOnRate": "A threshold is compared against the raw reading, and a \"{kind}\" widget shows a counter: the band would be breached on the first sample and never recover.",
-      "thresholdConflict": "Widget {other} already watches {oid} with a different band, and a reading can only have one."
+      "thresholdConflict": "Widget {other} already watches {oid} with a different band, and a reading can only have one.",
+      "mapOnlyForMap": "A drawing belongs to a map widget, not to a \"{kind}\" one.",
+      "unknownShape": "\"{type}\" is not a shape this version can draw.",
+      "shapeWithoutSize": "This shape has nothing to draw: a box needs a width and a height, a line needs two different ends.",
+      "shapeOutsideMap": "This runs off the {axis} edge of the drawing.",
+      "shapeOidNotInWidget": "{oid} is not one of this widget’s readings, so nothing would ever colour this shape.",
+      "assetName": "\"{name}\" is not a file name. A background is a file in your own backgrounds folder, named without a path."
     },
     "costAtMost": "At most — {discovered} of these OIDs are discovered on the equipment when you bind it, so the real figures are known then and can only be lower.",
+    "backgrounds": "Map backgrounds",
+    "backgroundsIntro": "The pictures a map widget draws over. A preset names one; the file is yours, and stays on this machine. PNG, JPEG or GIF — checked by decoding it, not by its name.",
+    "addBackground": "Add a background",
+    "noBackgrounds": "No backgrounds yet. A map without one draws its shapes on their own, which is a perfectly good drawing.",
+    "backgroundMeta": "{width}×{height} · {kb} KB",
     "costWatched": "Thresholds",
     "costAlerts": "{alerting} of them are evaluated and raise an incident when breached, which your notification rules may then route to a sink; any others are drawn as a reference line only."
   },
@@ -1180,6 +1192,8 @@
     "snapshotNote": "Drawn from {file} as it was when {target} was bound. Editing or removing the file does not change this dashboard; bind the equipment again to adopt a new version.",
     "allEquipments": "{name} — all {count} equipments",
     "snapshotNoteGroup": "Drawn from {file} as it was when each of these {count} equipments was bound. Editing or removing the file does not change this dashboard; bind an equipment again to adopt a new version.",
+    "mapBackgroundMissing": "The background {name} is not in your backgrounds folder, so the drawing is shown on its own.",
+    "mapFirstEquipment": "Shapes are coloured from {target}",
     "waiting": "Waiting for the first reading."
   }
 }

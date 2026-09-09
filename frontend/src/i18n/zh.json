@@ -1137,7 +1137,8 @@
       "rate": "每秒速率",
       "chart": "时间曲线",
       "status": "状态块",
-      "grid": "状态网格"
+      "grid": "状态网格",
+      "map": "地图"
     },
     "err": {
       "missing": "必填。",
@@ -1164,9 +1165,20 @@
       "thresholdWithoutBound": "阈值需要最小值、最大值或两者：都没有时它永远不会触发。",
       "thresholdInverted": "最小值 {min} 大于最大值 {max}，任何读数都无法落在区间内。",
       "thresholdOnRate": "阈值与原始读数比较，而“{kind}”部件显示的是计数器：第一次采样就会越界且永不恢复。",
-      "thresholdConflict": "部件 {other} 已用另一个区间监视 {oid}，而一个读数只能有一个区间。"
+      "thresholdConflict": "部件 {other} 已用另一个区间监视 {oid}，而一个读数只能有一个区间。",
+      "mapOnlyForMap": "绘图属于地图部件，而不是“{kind}”部件。",
+      "unknownShape": "“{type}”不是此版本能绘制的形状。",
+      "shapeWithoutSize": "这个形状没有可绘制的内容：矩形需要宽和高，线段需要两个不同的端点。",
+      "shapeOutsideMap": "这超出了绘图的 {axis} 边缘。",
+      "shapeOidNotInWidget": "{oid} 不是此部件的读数之一，因此这个形状永远不会被着色。",
+      "assetName": "“{name}”不是文件名。背景是您自己背景文件夹中的文件，名称不含路径。"
     },
     "costAtMost": "至多如此 —— 其中 {discovered} 个 OID 在绑定时于设备上发现，实际数字届时确定，且只会更少。",
+    "backgrounds": "地图背景",
+    "backgroundsIntro": "地图部件所绘制的底图。预设只写名称；文件是您的，留在本机。支持 PNG、JPEG 或 GIF——通过解码校验，而不是看文件名。",
+    "addBackground": "添加背景",
+    "noBackgrounds": "暂无背景。没有背景的地图只画自己的形状，这也是完整的绘图。",
+    "backgroundMeta": "{width}×{height} · {kb} KB",
     "costWatched": "阈值",
     "costAlerts": "其中 {alerting} 个会被评估，越界时开启事件，您的通知规则可将其路由到目标；其余仅作为参考线绘制。"
   },
@@ -1180,6 +1192,8 @@
     "snapshotNote": "依据绑定 {target} 时的 {file} 绘制。编辑或删除该文件不会改变此仪表板；重新绑定设备即可采用新版本。",
     "allEquipments": "{name} — 全部 {count} 台设备",
     "snapshotNoteGroup": "依据这 {count} 台设备各自绑定时的 {file} 绘制。编辑或删除该文件不会改变此仪表板；重新绑定设备即可采用新版本。",
+    "mapBackgroundMissing": "背景 {name} 不在您的背景文件夹中，因此仅显示绘图。",
+    "mapFirstEquipment": "形状按 {target} 着色",
     "waiting": "等待首次采集。"
   }
 }

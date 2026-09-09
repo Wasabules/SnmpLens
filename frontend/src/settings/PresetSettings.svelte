@@ -9,6 +9,9 @@
     ReadPreset,
     ImportPresetDialog,
     DeletePreset,
+    ListMapAssets,
+    ImportMapAssetDialog,
+    DeleteMapAsset,
   } from '../../wailsjs/go/main/App';
 
   // The preset library.
@@ -24,6 +27,7 @@
   let loading = false;
 
   onMount(refresh);
+  onMount(refreshBackgrounds);
 
   async function refresh() {
     try {
@@ -90,6 +94,50 @@
         detail = null;
       }
       await refresh();
+    } catch (e) {
+      notificationStore.add(String(e), 'error');
+    }
+  }
+
+  // The backgrounds a map widget draws over.
+  //
+  // Beside the presets rather than in a section of their own, because a
+  // background exists only for a preset: a map names one, and this is the
+  // screen where a preset is read.
+  let backgrounds = [];
+
+  async function refreshBackgrounds() {
+    try {
+      backgrounds = await ListMapAssets();
+    } catch (e) {
+      console.error('ListMapAssets failed', e);
+      backgrounds = [];
+    }
+  }
+
+  async function handleImportBackground() {
+    try {
+      const results = await ImportMapAssetDialog();
+      for (const r of results || []) {
+        if (r.success) {
+          notificationStore.add($_('preset.imported', { values: { file: r.fileName } }), 'success');
+        } else {
+          // Loud about which file and why: the gate is a DECODE, so "it is a
+          // PNG" is not what decided it, and the reason is the only useful
+          // part of the answer.
+          notificationStore.add(`${r.fileName}: ${r.error}`, 'error');
+        }
+      }
+      await refreshBackgrounds();
+    } catch (e) {
+      notificationStore.add(String(e), 'error');
+    }
+  }
+
+  async function handleDeleteBackground(name) {
+    try {
+      await DeleteMapAsset(name);
+      await refreshBackgrounds();
     } catch (e) {
       notificationStore.add(String(e), 'error');
     }
@@ -237,9 +285,85 @@
       {/each}
     </ul>
   {/if}
+
+  <div class="section-head backgrounds-head">
+    <div>
+      <h3>{$_('preset.backgrounds')}</h3>
+      <p class="hint">{$_('preset.backgroundsIntro')}</p>
+    </div>
+    <button class="btn" on:click={handleImportBackground}>
+      <Icon name="image" size={14} /> {$_('preset.addBackground')}
+    </button>
+  </div>
+
+  {#if backgrounds.length === 0}
+    <p class="hint">{$_('preset.noBackgrounds')}</p>
+  {:else}
+    <ul class="asset-list">
+      {#each backgrounds as b (b.name)}
+        <li class="asset-row">
+          <span class="name">{b.name}</span>
+          {#if b.error}
+            <!-- Listed WITH its problem rather than hidden: the operator put
+                 the file there, and needs to know why the map is blank. -->
+            <span class="badge warn" title={b.error}>
+              <Icon name="triangle-alert" size={11} /> {b.error}
+            </span>
+          {:else}
+            <span class="meta">
+              {$_('preset.backgroundMeta', {
+                values: { width: b.width, height: b.height, kb: Math.max(1, Math.round(b.bytes / 1024)) },
+              })}
+            </span>
+          {/if}
+          <button
+            class="btn btn-small btn-danger"
+            title={$_('common.delete')}
+            on:click={() => handleDeleteBackground(b.name)}
+          >
+            <Icon name="trash-2" size={12} />
+          </button>
+        </li>
+      {/each}
+    </ul>
+  {/if}
 </div>
 
 <style>
+  .backgrounds-head {
+    margin-top: 1.2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+  }
+
+  .asset-list {
+    margin: 0.4rem 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .asset-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--bg-color);
+    font-size: 0.82rem;
+  }
+
+  .asset-row .name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .section-head {
     display: flex;
     align-items: flex-start;
@@ -255,14 +379,14 @@
 
   .hint {
     margin: 0.2rem 0 0;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     font-size: 0.78rem;
   }
 
   /* The ceiling notice is the one hint that changes how the figures above it
      are read, so it is not the same grey as the two that merely explain them. */
   .at-most {
-    color: var(--text-primary);
+    color: var(--text-color);
   }
 
   .empty {
@@ -288,7 +412,7 @@
     padding-right: 0.4rem;
     border: 1px solid var(--border-color);
     border-radius: 4px;
-    background-color: var(--bg-secondary);
+    background-color: var(--bg-light-color);
   }
 
   .preset-row.open {
@@ -320,7 +444,7 @@
 
   .meta {
     margin-left: auto;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     font-size: 0.75rem;
     white-space: nowrap;
   }
@@ -328,8 +452,8 @@
   .badge {
     padding: 0.05rem 0.35rem;
     border-radius: 3px;
-    background-color: var(--bg-tertiary);
-    color: var(--text-secondary);
+    background-color: var(--bg-lighter-color);
+    color: var(--text-muted);
     font-size: 0.7rem;
   }
 
@@ -346,7 +470,7 @@
     border: 1px solid var(--border-color);
     border-top: none;
     border-radius: 0 0 4px 4px;
-    background-color: var(--bg-primary);
+    background-color: var(--bg-color);
   }
 
   .description {
@@ -373,7 +497,7 @@
   }
 
   .k {
-    color: var(--text-secondary);
+    color: var(--text-muted);
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.03em;
@@ -416,7 +540,7 @@
   }
 
   .widgets th {
-    color: var(--text-secondary);
+    color: var(--text-muted);
     font-weight: 500;
   }
 

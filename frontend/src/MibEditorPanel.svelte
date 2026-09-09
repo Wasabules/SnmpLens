@@ -1137,7 +1137,7 @@
     padding: 0.2rem 0.3rem;
     background: none;
     border: none;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     font: inherit;
     font-size: 0.72rem;
     text-transform: uppercase;
@@ -1181,7 +1181,7 @@
   }
 
   .outline-item:hover {
-    background-color: var(--bg-tertiary);
+    background-color: var(--bg-lighter-color);
   }
 
   .outline-item .badge {
@@ -1189,8 +1189,8 @@
     width: 1.05em;
     text-align: center;
     border-radius: 2px;
-    background-color: var(--bg-tertiary);
-    color: var(--text-secondary);
+    background-color: var(--bg-lighter-color);
+    color: var(--text-muted);
     font-size: 0.66rem;
     font-family: var(--font-mono, monospace);
   }
@@ -1199,8 +1199,8 @@
      identically in the source, so the badge is where they differ. */
   .outline-item .kind-table,
   .outline-item .kind-row {
-    background-color: var(--accent-subtle, var(--bg-tertiary));
-    color: var(--accent-color, var(--text-primary));
+    background-color: var(--accent-subtle, var(--bg-lighter-color));
+    color: var(--accent-color, var(--text-color));
   }
 
   .outline-item .oname {
@@ -1212,7 +1212,7 @@
   .outline-item .osyntax {
     margin-left: auto;
     flex: 0 1 auto;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     font-size: 0.68rem;
     white-space: nowrap;
     overflow: hidden;

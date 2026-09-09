@@ -96,6 +96,10 @@ const (
 	// the port panel of a switch, where forty-eight readings are one thing to
 	// look at rather than forty-eight things.
 	KindGrid = "grid"
+	// KindMap draws a picture whose parts are readings — a rack elevation, a
+	// site plan — from a frozen shape vocabulary over an optional background
+	// the OPERATOR supplies. See map.go, and in particular why it is not SVG.
+	KindMap = "map"
 )
 
 // There is deliberately no "table" kind.
@@ -128,13 +132,18 @@ var widgetKinds = []WidgetDoc{
 	{Kind: KindStatus, MaxOIDs: 1},
 	{Kind: KindChart, MaxOIDs: 8},
 	{Kind: KindGrid, MaxOIDs: 96},
+	// The same bound as a grid: a map is a wall of readings that happens to be
+	// arranged by hand rather than in rows.
+	{Kind: KindMap, MaxOIDs: 96},
 }
 
 // kindTakesLabels: a label map turns a number into a state, so it belongs to
 // the two kinds that show a state and nowhere else. On any other kind it is a
 // sign the author expected something this vocabulary does not do, and silence
 // would leave them wondering why nothing happened.
-func kindTakesLabels(kind string) bool { return kind == KindStatus || kind == KindGrid }
+func kindTakesLabels(kind string) bool {
+	return kind == KindStatus || kind == KindGrid || kind == KindMap
+}
 
 // WidgetKinds serves the vocabulary to the UI.
 //
@@ -216,6 +225,9 @@ type Widget struct {
 	// by the ordinary evaluator; see threshold.go for what it can and cannot
 	// be put on.
 	Threshold *Threshold `json:"threshold,omitempty"`
+	// Map is the drawing a map widget shows. Only a map widget may carry one,
+	// and every map widget must. See map.go.
+	Map *Map `json:"map,omitempty"`
 	// Layout is where this widget goes on the twelve-column grid. Optional and
 	// per widget: a preset that places nothing keeps the reflowing list of
 	// cards, and one that places some widgets lets the browser find room for
@@ -363,6 +375,7 @@ func Validate(p Preset) []Error {
 		errs = append(errs, checkDiscovery(at, w)...)
 		errs = append(errs, checkLayout(at+".layout", w.Layout)...)
 		errs = append(errs, checkThreshold(at+".threshold", w.Kind, w.Threshold)...)
+		errs = append(errs, checkMap(at, w)...)
 		// A discovering widget contributes its BOUND, not its template count:
 		// the sanity limit has to hold after the walk, and the walk happens on
 		// equipment nobody has seen yet.

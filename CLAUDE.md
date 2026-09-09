@@ -704,6 +704,56 @@ looks like the obvious candidate and is the wrong one: most ports of a real acce
 so a band there opens an episode per unused port the moment the preset is bound — and everything those presets
 chart is a counter.
 
+### The map, and why it is not SVG
+
+The want is Zabbix's: a picture of the rack or of the site, with the ports and the links on it coloured by what
+they are actually doing. SVG is the obvious answer and it is a script-execution vector — an `<svg>` carries
+`<script>`, event-handler attributes, `<foreignObject>` and external references, and sanitising it means shipping
+a sanitiser that has to be right forever against a format designed to be extensible. A preset is a file somebody
+else wrote and this application renders it in a WebView with a bridge to the operating system on the other side.
+
+So the same answer `pkg/notify/template.go` gave for message templates: a **frozen vocabulary**. Four shapes —
+`rect`, `line`, `label`, `dot` — placed in PERCENTAGES of the widget's own box (`pkg/preset/map.go`). A preset
+picks from that list, cannot describe a shape, and there is no path by which what it writes becomes markup. The
+lines are drawn as an `<svg>` that `MapTile.svelte` writes, from numbers Go has already bounded.
+
+`Map.Aspect` is the drawing's width over its height, and it is not decoration: the shapes are percentages of the
+BOX, so the box's shape decides what the drawing looks like. A rack front panel is about eight to one and a site
+plan about four to three, and neither survives being given the other's frame.
+
+A shape may bind only to one of its own WIDGET's OIDs. Without that a map could name any OID it liked and this
+application would look it up against a session that never polls it: a shape permanently grey, with the preset
+looking correct and the cost screen never mentioning the reading it appears to show.
+
+**The background is the operator's, never the preset's.** A preset names a FILE NAME; the file is resolved inside
+a sibling `assets/` directory (`app_assets.go`) and nowhere else. A preset carrying image bytes would be an
+arbitrary blob this application decodes, and one carrying a PATH would be an arbitrary-file-read primitive over
+the bridge — the pair the preset import gate is written about. `pkg/imagegate` is the gate, and it is a DECODE:
+a file gets in only if the standard library reads it as PNG, JPEG or GIF and its dimensions are sane, with the
+four things people download by mistake named rather than reported as "unknown format". `image.DecodeConfig` reads
+the header only, which is what makes refusing a decompression bomb cheap — both bounds are needed, since 30000x4
+passes an area check and 8000x8000 passes a per-side one. The media type served is what the DECODER said, so the
+browser is never asked to sniff a data URI.
+
+### Two rendering rules the captures found
+
+Both were green in every test and wrong on screen, which is why the dashboard work is photographed rather than
+reasoned about.
+
+**A class attribute that is ONLY an expression replaces Svelte's scoping class.** `class={kindOf(...)}` on the
+map's `<line>` compiled to a bare element, and the emitted selector is `line:where(.svelte-xxx)` — so it matched
+nothing and every link was drawn with no stroke at all. `class="link {kindOf(...)}"`, with a static part, passes
+the scope through. Measured in the capture: 577 pixels of stroke with a literal colour, zero with the class
+missing.
+
+**`--bg-primary`, `--bg-secondary`, `--bg-tertiary`, `--text-primary` and `--text-secondary` are defined
+nowhere**, and six components were reading them. An unresolvable `var()` is invalid at computed-value time, so
+the property takes its INHERITED value: a `color` inherits the text around it and a `background-color` stays
+transparent, which is close enough to the intent that nobody looks twice. It stopped being cosmetic on `stroke`,
+whose inherited value is `none`. The real names are in `style.css` (`--bg-color`, `--bg-light-color`,
+`--bg-lighter-color`, `--text-color`, `--text-muted`), and `frontend/tests/themevars.test.mjs` now fails on a
+property nothing defines — a `var()` WITH a fallback is a component saying "this may not exist" and is allowed.
+
 ### Binding, and the snapshot rule
 
 `PresetBind` creates **one session per target**, never one session across several: the cost was stated per
@@ -763,7 +813,7 @@ round is not a measurement and is not stored.
 `stores/dashboardStore.js` and not in the component, because `{#if activeTab === …}` destroys the panel on every
 tab switch — the same shell `mibEditorStore` exists because of.
 
-Three of the five kinds are drawn by what already existed (`MetricTiles` for `value` and `rate`, `MonitorChart`
+Three of the six kinds are drawn by what already existed (`MetricTiles` for `value` and `rate`, `MonitorChart`
 for `chart`, one sync group per session). `StatusTile` is the one new renderer, and it takes the label map from
 the PRESET rather than from the MIB tree: it names the states in the author's words and works on a device whose
 MIB is not loaded. A cell shows the INSTANCE, because the name is identical on every cell of a grid by

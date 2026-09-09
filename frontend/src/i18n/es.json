@@ -1137,7 +1137,8 @@
       "rate": "Tasa por segundo",
       "chart": "Gráfica en el tiempo",
       "status": "Indicador de estado",
-      "grid": "Rejilla de estados"
+      "grid": "Rejilla de estados",
+      "map": "Mapa"
     },
     "err": {
       "missing": "Obligatorio.",
@@ -1164,9 +1165,20 @@
       "thresholdWithoutBound": "Un umbral necesita un mínimo, un máximo o ambos: sin ninguno no puede activarse nunca.",
       "thresholdInverted": "El mínimo ({min}) es mayor que el máximo ({max}), así que ninguna lectura puede estar dentro del rango.",
       "thresholdOnRate": "Un umbral se compara con la lectura en bruto, y un widget «{kind}» muestra un contador: el rango se superaría en la primera muestra y no se recuperaría nunca.",
-      "thresholdConflict": "El widget {other} ya vigila {oid} con otro rango, y una lectura solo puede tener uno."
+      "thresholdConflict": "El widget {other} ya vigila {oid} con otro rango, y una lectura solo puede tener uno.",
+      "mapOnlyForMap": "Un dibujo pertenece a un widget de mapa, no a uno «{kind}».",
+      "unknownShape": "«{type}» no es una forma que esta versión pueda dibujar.",
+      "shapeWithoutSize": "Esta forma no tiene nada que dibujar: una caja necesita ancho y alto, y una línea dos extremos distintos.",
+      "shapeOutsideMap": "Esto se sale del borde {axis} del dibujo.",
+      "shapeOidNotInWidget": "{oid} no es una de las lecturas de este widget, así que nada colorearía nunca esta forma.",
+      "assetName": "«{name}» no es un nombre de archivo. Un fondo es un archivo de su carpeta de fondos, nombrado sin ruta."
     },
     "costAtMost": "Como máximo — {discovered} de estos OID se descubren en el equipo al vincularlo, así que las cifras reales se conocen entonces y solo pueden ser menores.",
+    "backgrounds": "Fondos de mapa",
+    "backgroundsIntro": "Las imágenes sobre las que dibuja un widget de mapa. Un preset nombra una; el archivo es suyo y se queda en esta máquina. PNG, JPEG o GIF, comprobado descodificándolo y no por su nombre.",
+    "addBackground": "Añadir un fondo",
+    "noBackgrounds": "Aún no hay fondos. Un mapa sin ninguno dibuja sus formas solas, que es un dibujo perfectamente válido.",
+    "backgroundMeta": "{width}×{height} · {kb} KB",
     "costWatched": "Umbrales",
     "costAlerts": "{alerting} de ellos se evalúan y abren un incidente al superarse, que sus reglas de notificación pueden enrutar a un destino; los demás son solo una línea de referencia."
   },
@@ -1180,6 +1192,8 @@
     "snapshotNote": "Dibujado a partir de {file} tal como estaba al vincular {target}. Editar o eliminar el archivo no cambia este panel; vuelva a vincular el equipo para adoptar una versión nueva.",
     "allEquipments": "{name} — los {count} equipos",
     "snapshotNoteGroup": "Dibujado a partir de {file} tal como estaba cuando se vinculó cada uno de estos {count} equipos. Editar o eliminar el archivo no cambia este panel; vuelva a vincular un equipo para adoptar una versión nueva.",
+    "mapBackgroundMissing": "El fondo {name} no está en su carpeta de fondos, así que el dibujo se muestra solo.",
+    "mapFirstEquipment": "Formas coloreadas según {target}",
     "waiting": "Esperando la primera lectura."
   }
 }
