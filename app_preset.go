@@ -584,9 +584,18 @@ func (a *App) PresetBind(fileName, target, snmpVersion string, conn MonitorConne
 	id, err := a.storage.CreateSession(
 		name, strings.Join(oids, ","), []string{target},
 		p.IntervalSec*1000, snmpVersion, now,
-		// No thresholds: a preset describes what to WATCH, and what counts as
-		// too much is the operator's judgement about their own network.
-		nil, sessConn,
+		// The bands the preset carries, materialised into the session's OWN
+		// threshold map — the same column MonitorCreateSession fills and the
+		// same one the evaluator reads. Nothing new evaluates anything, and the
+		// operator can edit them afterwards like any other session's.
+		//
+		// This used to be nil, with a comment saying what counts as too much is
+		// the operator's judgement about their own network. That is true of a
+		// percentage on a link the author has never seen and false of what a
+		// preset is mostly written for: a port that is not up(1), a UPS running
+		// on battery. Those are properties of the MIB, and the author knows
+		// them better than whoever binds the file.
+		presetThresholds(p), sessConn,
 		&storage.SessionPreset{
 			File:          filepath.Base(path),
 			Name:          p.Name,
@@ -636,6 +645,29 @@ func presetCost(p preset.Preset) PresetCost {
 	// Ceiling: thirty-one OIDs is two requests, not one and a bit.
 	perRound := (c.OIDs + snmp.MaxVarbindsPerGet - 1) / snmp.MaxVarbindsPerGet
 	out.RequestsPerDay = c.PollsPerDay * perRound
+	return out
+}
+
+// presetThresholds turns the bands a preset carries into the map a session
+// stores, keyed by the full OID exactly as MonitorCreateSession's is.
+//
+// Called AFTER discovery, so a widget that watches its ports watches the ports
+// the equipment turned out to have. nil when the preset carries none, which is
+// the same value the column held before presets could carry any — a session
+// with an empty map and one with no map behave identically, and nil is the one
+// storage already knows.
+func presetThresholds(p preset.Preset) map[string]*storage.Thresholds {
+	bands := preset.ThresholdsFor(p)
+	if len(bands) == 0 {
+		return nil
+	}
+	out := make(map[string]*storage.Thresholds, len(bands))
+	for oid, b := range bands {
+		out[oid] = &storage.Thresholds{
+			Min: b.Min, Max: b.Max,
+			ForSeconds: b.ForSeconds, AlertEnabled: b.Alerts(),
+		}
+	}
 	return out
 }
 

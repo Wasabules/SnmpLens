@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "name": "Server (HOST-RESOURCES-MIB)",
   "author": "SnmpLens",
-  "description": "Processor load and storage of a server or workstation, discovered when you bind it — the indexes differ from one machine to the next, which is exactly what a walk answers and a hand-written list cannot.",
+  "description": "Processor load and storage of a server or workstation, discovered when you bind it — the indexes differ from one machine to the next, which is exactly what a walk answers and a hand-written list cannot. Processor load is watched above 90% held for ten minutes, which is long enough that a build or a backup does not raise anything.",
   "intervalSec": 60,
   "widgets": [
     {
@@ -56,6 +56,10 @@
         "y": 1,
         "w": 6,
         "h": 2
+      },
+      "threshold": {
+        "max": 90,
+        "forSeconds": 600
       }
     },
     {
