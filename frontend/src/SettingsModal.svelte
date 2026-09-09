@@ -16,6 +16,21 @@
 
   export let showDebug = false;
 
+  // The sections, declared once instead of six times.
+  //
+  // They were six hand-written buttons, and the seventh was going to be a
+  // seventh copy of the same eight lines. The label is looked up in the markup
+  // rather than stored here, so the list carries no English at all — the same
+  // reason preset.WidgetKinds serves i18n key suffixes.
+  const SECTIONS = [
+    { id: 'general', icon: 'sliders-horizontal' },
+    { id: 'mibs', icon: 'book-marked' },
+    { id: 'presets', icon: 'layers' },
+    { id: 'snmp', icon: 'globe' },
+    { id: 'notify', icon: 'bell' },
+    { id: 'service', icon: 'server-cog' },
+  ];
+
   let activeTab = 'general';
   let settings;
   let defaultMibPath = '';
@@ -55,76 +70,52 @@
       <button class="close-btn" on:click={handleCancel}>&times;</button>
     </div>
 
-    <!-- Tab Navigation -->
-    <div class="tabs">
-      <button
-        class="tab"
-        class:active={activeTab === 'general'}
-        on:click={() => activeTab = 'general'}
-      >
-        <Icon name="sliders-horizontal" size={15} /> {$_('settings.tabs.general')}
-      </button>
-      <button
-        class="tab"
-        class:active={activeTab === 'mibs'}
-        on:click={() => activeTab = 'mibs'}
-      >
-        <Icon name="book-marked" size={15} /> {$_('settings.tabs.mibs')}
-      </button>
-      <button
-        class="tab"
-        class:active={activeTab === 'presets'}
-        on:click={() => activeTab = 'presets'}
-      >
-        <Icon name="layers" size={15} /> {$_('settings.tabs.presets')}
-      </button>
-      <button
-        class="tab"
-        class:active={activeTab === 'snmp'}
-        on:click={() => activeTab = 'snmp'}
-      >
-        <Icon name="globe" size={15} /> {$_('settings.tabs.snmp')}
-      </button>
-      <button
-        class="tab"
-        class:active={activeTab === 'notify'}
-        on:click={() => activeTab = 'notify'}
-      >
-        <Icon name="bell" size={15} /> {$_('settings.tabs.notify')}
-      </button>
-      <button
-        class="tab"
-        class:active={activeTab === 'service'}
-        on:click={() => activeTab = 'service'}
-      >
-        <Icon name="server-cog" size={15} /> {$_('settings.tabs.service')}
-      </button>
-    </div>
+    <!-- A NAV, not a tablist.
+         `role="tablist"` promises arrow-key navigation between the tabs, and
+         declaring the role without implementing it is worse for a screen
+         reader than not declaring it. A settings sidebar is a list of places
+         to go: `aria-current` says which one you are on, and every browser and
+         reader already knows what to do with it. -->
+    <div class="settings-body">
+      <nav class="nav" aria-label={$_('settings.title')}>
+        {#each SECTIONS as section (section.id)}
+          <button
+            class="nav-item"
+            class:active={activeTab === section.id}
+            aria-current={activeTab === section.id ? 'true' : undefined}
+            on:click={() => (activeTab = section.id)}
+          >
+            <Icon name={section.icon} size={15} />
+            <span>{$_(`settings.tabs.${section.id}`)}</span>
+          </button>
+        {/each}
+      </nav>
 
-    <div class="modal-content">
-      {#if activeTab === 'general'}
-        <GeneralSettings bind:settings />
-      {/if}
+      <div class="modal-content">
+        {#if activeTab === 'general'}
+          <GeneralSettings bind:settings />
+        {/if}
 
-      {#if activeTab === 'mibs'}
-        <MibSettings {defaultMibPath} />
-      {/if}
+        {#if activeTab === 'mibs'}
+          <MibSettings {defaultMibPath} />
+        {/if}
 
-      {#if activeTab === 'presets'}
-        <PresetSettings />
-      {/if}
+        {#if activeTab === 'presets'}
+          <PresetSettings />
+        {/if}
 
-      {#if activeTab === 'snmp'}
-        <SnmpSettings bind:settings />
-      {/if}
+        {#if activeTab === 'snmp'}
+          <SnmpSettings bind:settings />
+        {/if}
 
-      {#if activeTab === 'notify'}
-        <NotifySettings />
-      {/if}
+        {#if activeTab === 'notify'}
+          <NotifySettings />
+        {/if}
 
-      {#if activeTab === 'service'}
-        <ServiceSettings />
-      {/if}
+        {#if activeTab === 'service'}
+          <ServiceSettings />
+        {/if}
+      </div>
     </div>
 
     <div class="modal-actions">
@@ -166,10 +157,13 @@
     padding: 0;
     border-radius: 8px;
     width: 90%;
-    max-width: 650px;
+    max-width: 880px;
     box-shadow: 0 5px 15px var(--shadow-color-strong);
     display: flex;
     flex-direction: column;
+    /* Bounded here rather than on the content, now that two children scroll. */
+    max-height: 88vh;
+    overflow: hidden;
   }
 
   .modal-header {
@@ -192,40 +186,83 @@
     cursor: pointer;
   }
 
-  /* Tabs */
-  .tabs {
+  /* The navigation column, and the row that holds it beside the content. */
+  .settings-body {
     display: flex;
-    background-color: var(--bg-lighter-color);
-    border-bottom: 1px solid var(--border-color);
-  }
-
-  .tab {
+    /* min-height: 0 is what lets the content scroll instead of stretching the
+       dialog past the viewport: a flex item's default min-height is auto,
+       which means "as tall as my content" and defeats every overflow below. */
+    min-height: 0;
     flex: 1;
-    padding: 12px 16px;
-    background: transparent;
-    border: none;
-    border-bottom: 3px solid transparent;
-    color: var(--text-muted);
-    cursor: pointer;
-    font-weight: 500;
-    transition: all 0.2s;
   }
 
-  .tab:hover {
+  .nav {
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 190px;
+    padding: 8px;
+    gap: 2px;
+    background-color: var(--bg-lighter-color);
+    border-right: 1px solid var(--border-color);
+    overflow-y: auto;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 9px 12px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text-muted);
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+    /* No transition. A 150 ms fade on the selection is invisible in use
+       and it made the SITE CAPTURES non-deterministic: three of four
+       showed the accent still on the item being left and not yet on the
+       one being chosen, while the outline — which does not animate —
+       was already correct. A selection should look immediate anyway. */
+  }
+
+  .nav-item:hover {
     background-color: var(--hover-overlay);
     color: var(--text-color);
   }
 
-  .tab.active {
+  .nav-item.active {
     color: var(--accent-color);
-    border-bottom-color: var(--accent-color);
     background-color: var(--accent-subtle-medium);
   }
 
   .modal-content {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
     padding: 20px;
-    max-height: 70vh;
     overflow-y: auto;
+  }
+
+  /* Narrow enough that a 190 px column is a third of the dialog. The sections
+     go back to a row — scrollable rather than squeezed, which is the thing
+     this change exists to stop. */
+  @media (max-width: 760px) {
+    .settings-body {
+      flex-direction: column;
+    }
+
+    .nav {
+      flex: 0 0 auto;
+      flex-direction: row;
+      overflow-x: auto;
+      border-right: none;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .nav-item {
+      flex: 0 0 auto;
+    }
   }
 
   .modal-actions {
