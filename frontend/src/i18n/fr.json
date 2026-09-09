@@ -1156,8 +1156,11 @@
       "oidTooDeep": "{found} sous-identifiants ; un OID en porte {max} au maximum.",
       "oidOutOfRange": "« {value} » contient un sous-identifiant qui ne tient pas sur le réseau.",
       "notJson": "Ce fichier n'est pas du JSON ({detail}).",
-      "tooBig": "Ce fichier fait {found} octets ; {max} au maximum."
-    }
+      "tooBig": "Ce fichier fait {found} octets ; {max} au maximum.",
+      "placeholderWithoutDiscover": "Cet OID porte un marqueur d'instance, mais le widget n'indique pas où découvrir ses instances.",
+      "discoverWithoutPlaceholder": "Ce widget découvre ses instances mais aucun OID ne porte {placeholder} : le walk serait payé pour rien."
+    },
+    "costAtMost": "Au plus — {discovered} de ces OID sont découverts sur l'équipement au moment de la liaison : les chiffres réels sont connus à ce moment-là et ne peuvent qu'être inférieurs."
   },
   "dashboard": {
     "empty": "Aucun tableau de bord pour l'instant.",

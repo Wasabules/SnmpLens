@@ -1156,8 +1156,11 @@
       "oidTooDeep": "{found} Unterkennungen; eine OID trägt höchstens {max}.",
       "oidOutOfRange": "„{value}“ enthält eine Unterkennung, die nicht auf die Leitung passt.",
       "notJson": "Diese Datei ist kein JSON ({detail}).",
-      "tooBig": "Diese Datei hat {found} Bytes; höchstens {max}."
-    }
+      "tooBig": "Diese Datei hat {found} Bytes; höchstens {max}.",
+      "placeholderWithoutDiscover": "Diese OID enthält einen Instanz-Platzhalter, aber das Widget sagt nicht, wo seine Instanzen zu finden sind.",
+      "discoverWithoutPlaceholder": "Dieses Widget ermittelt seine Instanzen, doch keine OID enthält {placeholder} — der Walk wäre umsonst."
+    },
+    "costAtMost": "Höchstens — {discovered} dieser OIDs werden beim Binden auf dem Gerät ermittelt; die echten Zahlen stehen dann fest und können nur niedriger sein."
   },
   "dashboard": {
     "empty": "Noch kein Dashboard.",

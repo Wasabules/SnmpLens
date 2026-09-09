@@ -170,6 +170,16 @@
                   <div><span class="k">{$_('preset.costRequests')}</span><span class="v">{detail.cost.requestsPerDay}</span></div>
                   <div><span class="k">{$_('preset.costVarbinds')}</span><span class="v">{detail.cost.varbindsPerDay}</span></div>
                 </div>
+                {#if detail.cost.discovered > 0}
+                  <!-- A discovering preset does not know how many instances the
+                       equipment has, so every figure above is a CEILING: the
+                       widget bounds, not a count of what will be polled. Saying
+                       so here is the difference between a number that is wrong
+                       and a number that is honest about what it is. -->
+                  <p class="hint at-most">
+                    {$_('preset.costAtMost', { values: { discovered: detail.cost.discovered } })}
+                  </p>
+                {/if}
                 <p class="hint">
                   {$_('preset.costPerTarget', { values: { chunk: detail.cost.varbindsPerRequest } })}
                 </p>
@@ -234,6 +244,12 @@
     margin: 0.2rem 0 0;
     color: var(--text-secondary);
     font-size: 0.78rem;
+  }
+
+  /* The ceiling notice is the one hint that changes how the figures above it
+     are read, so it is not the same grey as the two that merely explain them. */
+  .at-most {
+    color: var(--text-primary);
   }
 
   .empty {

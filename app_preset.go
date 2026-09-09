@@ -448,6 +448,69 @@ func rankForDevice(list []preset.Info, sysObjectID string) ([]preset.Info, int) 
 	return ranked, matched
 }
 
+// discoverFor walks what a preset asks for and expands its templates.
+//
+// One walk per COLUMN, not per widget: a grid of port states and a chart of
+// port counters discover from the same ifDescr, and that is one walk. Then each
+// widget takes the instances of its own column.
+//
+// A walk that fails leaves that widget with NO OIDs, and Validate then refuses
+// the expanded preset — which is the honest outcome. Binding a discovering
+// preset to a device that cannot answer the walk would otherwise produce a
+// dashboard of empty widgets polling nothing, and a session that looks bound.
+func (a *App) discoverFor(p preset.Preset, target, snmpVersion string, conn MonitorConnection) (preset.Preset, error) {
+	walks := preset.DiscoveryWalks(p)
+	if len(walks) == 0 {
+		return p, nil
+	}
+	if a.snmpClient == nil {
+		return p, fmt.Errorf("no SNMP client")
+	}
+	sessConn, creds := conn.split()
+	v3 := snmp.V3Params{
+		User: sessConn.V3User, AuthProto: sessConn.V3AuthProto, PrivProto: sessConn.V3PrivProto,
+		SecLevel: sessConn.V3SecLevel, ContextName: sessConn.V3ContextName,
+		AuthPass: creds.AuthPass, PrivPass: creds.PrivPass,
+	}
+
+	byColumn := map[string][]preset.Instance{}
+	for _, column := range walks {
+		results := a.snmpClient.Walk([]string{target}, column,
+			creds.Community, snmpVersion, sessConn.Port, sessConn.TimeoutSec, sessConn.Retries, v3)
+		if len(results) == 0 || results[0].Error != "" || results[0].Result == nil {
+			why := "no answer"
+			if len(results) > 0 && results[0].Error != "" {
+				why = results[0].Error
+			}
+			return p, fmt.Errorf("discovering %s on %s: %s", column, target, why)
+		}
+
+		rows, ok := results[0].Result.Value.([]*snmp.Result)
+		if !ok {
+			return p, fmt.Errorf("discovering %s on %s: unexpected walk result", column, target)
+		}
+		oids := make([]string, 0, len(rows))
+		values := make(map[string]string, len(rows))
+		for _, r := range rows {
+			if r == nil {
+				continue
+			}
+			oids = append(oids, r.Oid)
+			values[r.Oid] = fmt.Sprintf("%v", r.Value)
+		}
+		byColumn[column] = preset.InstancesFrom(column, oids, func(oid string) string { return values[oid] })
+	}
+
+	found := map[int][]preset.Instance{}
+	for i, w := range p.Widgets {
+		if w.Discover == nil {
+			continue
+		}
+		found[i] = byColumn[strings.TrimPrefix(w.Discover.Walk, ".")]
+	}
+	return preset.Expand(p, found), nil
+}
+
 // PresetBind is the moment a preset stops being a file and starts being a
 // monitoring: it creates one session for one equipment and starts it.
 //
@@ -485,6 +548,25 @@ func (a *App) PresetBind(fileName, target, snmpVersion string, conn MonitorConne
 	if len(errs) > 0 {
 		return storage.Session{}, fmt.Errorf(
 			"%s has %d problem(s) and cannot be bound until they are fixed", filepath.Base(path), len(errs))
+	}
+
+	// The walk happens HERE and only here. What is stored afterwards is a plain
+	// preset with concrete OIDs, so the poll path stays GET-only and the cost is
+	// arithmetic before the first tick.
+	if preset.HasDiscovery(p) {
+		expanded, err := a.discoverFor(p, target, snmpVersion, conn)
+		if err != nil {
+			return storage.Session{}, err
+		}
+		// Validated AGAIN, because the walk decides how many OIDs there are: a
+		// device with four hundred interfaces can push a preset past the sanity
+		// bound its author never came close to.
+		if errs := preset.Validate(expanded); len(errs) > 0 {
+			return storage.Session{}, fmt.Errorf(
+				"%s does not fit this equipment: %s (%d problem(s) after discovery)",
+				filepath.Base(path), errs[0].Field, len(errs))
+		}
+		p = expanded
 	}
 
 	oids := preset.PollOIDs(p)

@@ -63,9 +63,18 @@ func TestEveryBundledPresetIsValid(t *testing.T) {
 		if c.OIDs == 0 || c.VarbindsPerDay == 0 {
 			t.Errorf("%s costs nothing: %+v", e.Name(), c)
 		}
-		// One round in one request keeps the example cheap to reason about.
-		if c.OIDs > snmp.MaxVarbindsPerGet*2 {
-			t.Errorf("%s polls %d OIDs, more than two requests a round", e.Name(), c.OIDs)
+		// A CEILING, not a count: a discovering preset polls whatever the
+		// equipment has, and its estimate is the upper bound it agreed to. The
+		// bar here is that even at that ceiling a shipped example is a
+		// dashboard rather than a stress test — a full 96-port chassis is four
+		// requests a round, and that is fine.
+		const maxRoundsPerPoll = 8
+		rounds := (c.OIDs + snmp.MaxVarbindsPerGet - 1) / snmp.MaxVarbindsPerGet
+		if rounds > maxRoundsPerPoll {
+			t.Errorf("%s polls at most %d OIDs, %d requests a round", e.Name(), c.OIDs, rounds)
+		}
+		if c.Discovered > 0 && !strings.Contains(strings.ToLower(p.Description), "discover") {
+			t.Errorf("%s discovers its instances and its description does not say so", e.Name())
 		}
 	}
 }

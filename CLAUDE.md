@@ -548,7 +548,8 @@ gosmi lock to validate a FILE, and would make what a preset polls depend on whic
 **There is no `table` kind, and that is a correction rather than a gap.** A conceptual table is a WALK, and the
 poll path a preset feeds is GET-only — `PollOIDs` → `snmp.GetMany` → `g.Get`, and a table's OID GET'd answers
 `noSuchObject`. `grid` is what that want reduces to here: one widget, one cell per OID, one label map — a
-switch's port panel, with the instances named explicitly, which is also what keeps the cost knowable.
+switch's port panel. Which instances it has is settled BEFORE the first poll, by hand or by one walk at bind
+time (see **Discovery** below), and that is what keeps the poll path GET-only and the cost knowable.
 
 **The cost is stated over a DAY.** `MaxIntervalSec` is 86400, so an hourly base is integer-divided to zero for
 every cadence past 3600 s — a third of the legal range reported "0 requests, 0 varbinds" on the one screen whose
@@ -577,6 +578,46 @@ library is for, and you cannot fix a file you were not allowed to keep. What it 
 as its screenshot fixture and everything else `null`, and `null` throws on the first `.map` in a generated file
 nobody reads. For the same class of reason `Validate` returning `nil` on success is normalised to `[]` before it
 crosses — otherwise the VALID path is the one that breaks.
+
+### Discovery, and why the walk happens exactly once
+
+The five presets that shipped first enumerated `…2.2.1.8.1` through `.24` BY HAND, and their descriptions said
+"edit the instance numbers if yours does not index from 1". That is an admission rather than a note: a preset
+written for a 24-port switch is a preset for exactly one shape of switch, and a library of those is not
+shareable. So a widget may say WHERE its instances come from instead of listing them — `"discover": {"walk":
+"1.3.6.1.2.1.2.2.1.2"}` — with `{#}` in its OIDs where the instance goes (`preset.InstancePlaceholder`).
+
+**The walk happens at BIND TIME and nowhere else** (`app_preset.go`, `discoverFor`). What is stored afterwards is
+a plain preset with concrete OIDs, so the poll path stays GET-only, the cost is arithmetic before the first tick,
+and `pkg/monitor`'s guardrail sees no difference at all — nothing about discovery survives into polling. One walk
+per COLUMN, not per widget: a grid of port states and a chart of port counters both discover from ifDescr, and
+that is one walk (`DiscoveryWalks` deduplicates).
+
+**The walked column is the LABEL source as well as the instance source**, which is half of why it is worth its
+round trip: walking ifDescr answers "which interfaces exist" and "what the equipment calls them" together, so a
+discovered grid reads `Gi0/1` rather than `8`. That is `Widget.OIDLabels`, filled by `ExpandWidget`.
+
+**A walk that fails refuses the bind.** An empty instance list expands every template to nothing, and the result
+would be a session that looks bound, polls whatever scalars the preset also had, and draws empty widgets — which
+is the one failure mode a monitoring tool must not have. The error names the column, because "bind failed" sends
+the operator to read the preset when the problem is the community or an ACL.
+
+**The expanded preset is validated AGAIN**, which is not belt-and-braces: the walk decides how many OIDs there
+are, so a device with four hundred interfaces pushes a preset past a sanity bound its author never came close to.
+
+**Two bounds meet on each widget and the SMALLER wins** (`discoverInstanceLimit`): the walk bound
+(`MaxDiscoveredPerWidget`, 128, or the preset's own `max`), which stops a forty-thousand-row table from becoming
+a dashboard; and the KIND's `MaxOIDs`, which is what the widget can actually draw. Discovering 128 states for a
+grid that renders 96 is polling 32 readings nobody sees. The consequence worth knowing is that a chart is capped
+at eight series by the colour plan, so a chart discovering an in and an out counter shows FOUR ports — a real
+limitation, stated rather than worked around.
+
+**`preset.Cost` is a CEILING once `Discovered` is non-zero**, and the settings screen says so
+(`preset.costAtMost`). A figure presented as a count that is really an upper bound is worse than no figure.
+
+Templates expand INSTANCE-MAJOR — every OID of instance 1, then every OID of instance 2 — which keeps a port's in
+and out counters beside each other instead of interleaving twenty-four ins with twenty-four outs. Order is the
+walk's, which is the agent's own order for the column: the order the ports are in on the device.
 
 ### Binding, and the snapshot rule
 

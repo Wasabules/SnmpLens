@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "name": "Cisco (IF-MIB)",
   "author": "SnmpLens",
-  "description": "The same interface view, matched to Cisco equipment so it is offered first when you add one. The OIDs are standard IF-MIB rather than CISCO-*: those load only once you have imported the vendor MIB, and this has to work before that.",
+  "description": "The interface view, matched to Cisco equipment so it is offered first when you add one. Ports and traffic are discovered when you bind it. The OIDs are standard IF-MIB rather than CISCO-*: those resolve only once the vendor MIB has been imported, and this has to work before that.",
   "match": {
     "vendor": "Cisco",
     "sysObjectIdPrefix": [
@@ -19,43 +19,10 @@
       ]
     },
     {
-      "kind": "rate",
-      "title": "Gi0/1 in",
-      "oids": [
-        "1.3.6.1.2.1.2.2.1.10.1"
-      ]
-    },
-    {
-      "kind": "rate",
-      "title": "Gi0/1 out",
-      "oids": [
-        "1.3.6.1.2.1.2.2.1.16.1"
-      ]
-    },
-    {
-      "kind": "chart",
-      "title": "Uplink traffic",
-      "oids": [
-        "1.3.6.1.2.1.2.2.1.10.1",
-        "1.3.6.1.2.1.2.2.1.16.1"
-      ]
-    },
-    {
       "kind": "grid",
       "title": "Ports",
       "oids": [
-        "1.3.6.1.2.1.2.2.1.8.1",
-        "1.3.6.1.2.1.2.2.1.8.2",
-        "1.3.6.1.2.1.2.2.1.8.3",
-        "1.3.6.1.2.1.2.2.1.8.4",
-        "1.3.6.1.2.1.2.2.1.8.5",
-        "1.3.6.1.2.1.2.2.1.8.6",
-        "1.3.6.1.2.1.2.2.1.8.7",
-        "1.3.6.1.2.1.2.2.1.8.8",
-        "1.3.6.1.2.1.2.2.1.8.9",
-        "1.3.6.1.2.1.2.2.1.8.10",
-        "1.3.6.1.2.1.2.2.1.8.11",
-        "1.3.6.1.2.1.2.2.1.8.12"
+        "1.3.6.1.2.1.2.2.1.8.{#}"
       ],
       "labels": {
         "1": "up",
@@ -65,6 +32,20 @@
         "5": "dormant",
         "6": "absent",
         "7": "lower layer down"
+      },
+      "discover": {
+        "walk": "1.3.6.1.2.1.2.2.1.2"
+      }
+    },
+    {
+      "kind": "chart",
+      "title": "Traffic",
+      "oids": [
+        "1.3.6.1.2.1.2.2.1.10.{#}",
+        "1.3.6.1.2.1.2.2.1.16.{#}"
+      ],
+      "discover": {
+        "walk": "1.3.6.1.2.1.2.2.1.2"
       }
     }
   ]

@@ -1156,8 +1156,11 @@
       "oidTooDeep": "{found} 个子标识；一个 OID 最多 {max} 个。",
       "oidOutOfRange": "“{value}”中的子标识超出了传输范围。",
       "notJson": "此文件不是 JSON（{detail}）。",
-      "tooBig": "此文件为 {found} 字节；最多 {max}。"
-    }
+      "tooBig": "此文件为 {found} 字节；最多 {max}。",
+      "placeholderWithoutDiscover": "此 OID 含有实例占位符，但该部件未说明到哪里发现其实例。",
+      "discoverWithoutPlaceholder": "此部件会发现实例，但没有 OID 含有 {placeholder}，这次 walk 将白白付出代价。"
+    },
+    "costAtMost": "至多如此 —— 其中 {discovered} 个 OID 在绑定时于设备上发现，实际数字届时确定，且只会更少。"
   },
   "dashboard": {
     "empty": "尚无仪表板。",
