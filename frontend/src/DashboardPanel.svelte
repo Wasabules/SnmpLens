@@ -11,6 +11,7 @@
   import { formatCadence } from './utils/formatting';
   import { anonMode, anonymizeIp } from './utils/anonymize';
   import { hasLayout, cellStyle, readingOrder } from './utils/presetLayout';
+  import { dashboardGroups, dashboardView } from './utils/dashboardGroup';
 
   // The dashboard: one bound preset, drawn.
   //
@@ -24,7 +25,13 @@
   // is not a dependency it can see. reactive.test.mjs exists for that.
 
   $: candidates = dashboardCandidates($pollingStore);
-  $: session = dashboardSession($pollingStore, $dashboardStore.sessionId);
+  // The groups come first because the fallback must not be one: landing on a
+  // merged view of eight switches, unasked, on a machine that has never opened
+  // this tab, is a decision the operator did not make.
+  $: groups = dashboardGroups($pollingStore);
+  $: fallback = dashboardSession($pollingStore, null);
+  $: view = dashboardView($pollingStore, $dashboardStore.selection, fallback);
+  $: session = view.session;
   $: widgets = session?.preset?.widgets || [];
   $: theme = $settingsStore.theme === 'light' ? 'light' : 'dark';
 
@@ -49,6 +56,14 @@
     const shown = masked ? anonymizeIp(address) : address;
     return s.name ? `${s.name} — ${shown}` : shown;
   };
+
+  // A group is named by its preset and its count, never by its addresses: eight
+  // of them do not fit in a select, and the one thing the operator needs to
+  // tell it from the entries below it is that it holds all of them.
+  const groupLabel = (g, t) =>
+    t('dashboard.allEquipments', {
+      values: { name: g.name || g.file, count: g.sessions.length },
+    });
 
   // A preset carries the unit it means, because inferUnit reads the OID NAME
   // and a preset carries numeric OIDs only: ifInOctets would render as "1.2 G"
@@ -77,6 +92,9 @@
           value={session ? session.id : ''}
           on:change={(e) => dashboardStore.select(e.currentTarget.value)}
         >
+          {#each groups as g (g.id)}
+            <option value={g.id}>{groupLabel(g, $_)}</option>
+          {/each}
           {#each candidates as c (c.id)}
             <option value={c.id}>{sessionLabel(c, $anonMode)}</option>
           {/each}
@@ -181,6 +199,8 @@
                 oids={widget.oids}
                 labels={widget.labels || {}}
                 points={session.results}
+                targets={session.targets || []}
+                masked={$anonMode}
                 mibTree={$mibStore.tree}
                 dense={widget.kind === 'grid'}
               />
@@ -195,7 +215,19 @@
       </div>
 
       <p class="footnote">
-        {$_('dashboard.snapshotNote', { values: { file: session.preset.file, target: targetOf(session, $anonMode) } })}
+        {#if session.groupOf > 1}
+          <!-- The snapshot rule holds per session, so a group has as many
+               snapshots as it has equipments. They are known to agree — the
+               grouping key is the widget vocabulary itself — but "as it was
+               when 10.0.0.1 was bound" would name one of eight arbitrarily. -->
+          {$_('dashboard.snapshotNoteGroup', {
+            values: { file: session.preset.file, count: session.groupOf },
+          })}
+        {:else}
+          {$_('dashboard.snapshotNote', {
+            values: { file: session.preset.file, target: targetOf(session, $anonMode) },
+          })}
+        {/if}
       </p>
     {/if}
   {/if}

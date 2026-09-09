@@ -162,6 +162,22 @@ export const PRESET_SESSION = {
 };
 
 /**
+ * A second switch bound from the SAME preset, which is what makes a group.
+ *
+ * Six ports rather than eight, on purpose: two equipments of different sizes
+ * bound from one file is the case discovery exists for, and the case a merge
+ * that keyed on the OID list would get wrong. Its fault is on a different port,
+ * so the wall shows two equipments rather than one twice.
+ */
+export const PRESET_SESSION_2 = {
+  ...PRESET_SESSION,
+  sessionId: '7b41e0da-2c98-4f35-b6d0-51c9a7e4d208',
+  address: '10.12.4.2',
+  portOids: Array.from({ length: 6 }, (_, i) => `1.3.6.1.2.1.2.2.1.8.${i + 1}`),
+  portStates: [1, 1, 2, 1, 1, 1],
+};
+
+/**
  * Points for that session: a rising uptime, two traffic counters, and a state
  * per port.
  *

@@ -771,6 +771,26 @@ construction and was the part that survived the ellipsis. A kind this version ca
 skipped, and `frontend/tests/dashboard.test.mjs` reads the kinds out of `pkg/preset` and requires the dispatch to
 name every one — that failure has no other symptom at all.
 
+**Several equipments are drawn together, and binding is unchanged.** `PresetBind` still creates one session per
+target — the cost is per equipment, the credentials are per equipment, the overrun guardrail is per session — and
+`utils/dashboardGroup.js` is a VIEW over several of them: the picker offers the group, `mergeGroup` builds one
+pseudo-session in the shape every renderer already takes, and nothing about polling knows.
+
+What may be merged is the interesting rule. The file NAME is not enough, because the snapshot rule means a
+session carries the preset as it was when IT was bound: a file edited between two binds leaves two sessions
+naming one file and drawing different things. The key is the file plus a signature of the widget vocabulary —
+kinds, titles, units, label maps, bands, placement — and deliberately NOT the OIDs, because two switches bound
+from one file having different OIDs is the case discovery exists for. A widget's OIDs are then UNIONED across the
+group; a reading a given equipment does not have simply has no points, which is the shape the renderers already
+handle for an OID whose first sample has not landed.
+
+`StatusTile` is the one renderer that had to change, and it is a correctness fix rather than presentation: a cell
+is one OID, and every switch bound from one preset answers `1.3.6.1.2.1.2.2.1.8.1`. Keyed by OID alone the wall
+showed whichever equipment answered most recently, in one cell, with nothing saying so. `statusBlocks` splits by
+target — and scopes to the WIDGET's own OIDs first, which a capture caught and the tests did not: `points` is the
+whole session's results, so an equipment that had answered the uptime scalar and none of the ports counted as
+"has answered", had its wall filtered down to nothing, and drew an empty card beside a full one.
+
 `preset.Match` had no data source until `IdentifyDevice`: nothing in the application read `sysObjectID`. It
 matches on that and not on `sysDescr`, which is prose that differs between two firmware revisions of the same
 switch. Matching ORDERS the library and never filters it — `Match` is advice to the person binding, and hiding

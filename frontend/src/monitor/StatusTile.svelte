@@ -1,6 +1,8 @@
 <script>
   import { _ } from 'svelte-i18n';
   import { oidName } from '../utils/oidDisplay';
+  import { statusBlocks } from '../utils/dashboardGroup';
+  import { anonymizeIp } from '../utils/anonymize';
 
   /**
    * A reading shown as a STATE, mapped through the widget's own labels.
@@ -19,6 +21,24 @@
   export let points = [];
   export let mibTree = null;
   export let dense = false;
+  /**
+   * The equipments these readings come from. One is the ordinary case and
+   * changes nothing; several is a dashboard drawn across a group of them.
+   *
+   * It is REQUIRED for correctness rather than for presentation: a cell is one
+   * OID, and three switches bound from one preset all answer 1.3.6.1.2.1.2.2.1.8.1.
+   * Without knowing the targets apart, the wall shows whichever of the three
+   * answered most recently, in one cell, with nothing saying so.
+   */
+  export let targets = [];
+  /**
+   * Anonymous Mode, passed in rather than read from the store: this
+   * component reads no store at all, which is what keeps it clean under
+   * reactive.test.mjs. The addresses are masked for DISPLAY only — the
+   * blocks are still matched on the real ones, which is what the readings
+   * carry.
+   */
+  export let masked = false;
 
   // Every function called from the markup takes what it reads as an argument.
   const latest = (oid, all) => {
@@ -71,19 +91,38 @@
   };
 </script>
 
-<div class="states" class:dense>
-  {#each oids as oid (oid)}
-    <div class="cell {cellKind(latest(oid, points), labels)}" title={fullName(oid, mibTree)}>
-      <span class="cell-name">{instanceOf(oid)}</span>
-      <span class="cell-state">{cellText(latest(oid, points), labels)}</span>
-    </div>
-  {/each}
-  {#if oids.length === 0}
-    <p class="empty">{$_('dashboard.noReading')}</p>
+{#each statusBlocks(points, targets, oids) as block (block.target)}
+  {#if block.target}
+    <p class="equipment">{masked ? anonymizeIp(block.target) : block.target}</p>
   {/if}
-</div>
+  <div class="states" class:dense>
+    {#each block.oids as oid (oid)}
+      <div class="cell {cellKind(latest(oid, block.points), labels)}" title={fullName(oid, mibTree)}>
+        <span class="cell-name">{instanceOf(oid)}</span>
+        <span class="cell-state">{cellText(latest(oid, block.points), labels)}</span>
+      </div>
+    {/each}
+    {#if block.oids.length === 0}
+      <p class="empty">{$_('dashboard.noReading')}</p>
+    {/if}
+  </div>
+{/each}
 
 <style>
+  /* Only drawn when there is more than one equipment, so it never appears on
+     the ordinary dashboard: an address above a single wall of ports is a label
+     for something that has no alternative. */
+  .equipment {
+    margin: 0.5rem 0 0.25rem;
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .equipment:first-child {
+    margin-top: 0;
+  }
+
   .states {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));

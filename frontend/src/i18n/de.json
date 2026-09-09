@@ -1178,6 +1178,8 @@
     "noReading": "Nichts anzuzeigen.",
     "unknownWidget": "Diese Vorlage verlangt ein Widget „{kind}“, das diese Version nicht zeichnet.",
     "snapshotNote": "Gezeichnet nach {file} im Zustand der Bindung von {target}. Das Bearbeiten oder Löschen der Datei ändert dieses Dashboard nicht; binden Sie das Gerät erneut, um eine neue Fassung zu übernehmen.",
+    "allEquipments": "{name} — alle {count} Geräte",
+    "snapshotNoteGroup": "Gezeichnet aus {file} in dem Stand, in dem jedes dieser {count} Geräte gebunden wurde. Das Bearbeiten oder Löschen der Datei ändert dieses Dashboard nicht; binden Sie ein Gerät erneut, um eine neue Fassung zu übernehmen.",
     "waiting": "Warten auf den ersten Messwert."
   }
 }

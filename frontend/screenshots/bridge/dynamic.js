@@ -6,7 +6,7 @@
  * the present without six hours of JSON in the repository.
  */
 
-import { series, presetSeries, CPU_SESSION, PRESET_SESSION } from './series.js';
+import { series, presetSeries, CPU_SESSION, PRESET_SESSION, PRESET_SESSION_2 } from './series.js';
 
 /**
  * The generated fixture table, handed over by App.js at module init.
@@ -23,6 +23,7 @@ export function setFixtures(table) {
 
 let cpu = null;
 let bound = null;
+let bound2 = null;
 
 export const dynamic = {
   // Generated once per page load, so every chart on the page agrees with itself
@@ -35,6 +36,10 @@ export const dynamic = {
     if (sessionId === PRESET_SESSION.sessionId) {
       if (!bound) bound = presetSeries();
       return bound;
+    }
+    if (sessionId === PRESET_SESSION_2.sessionId) {
+      if (!bound2) bound2 = presetSeries(PRESET_SESSION_2);
+      return bound2;
     }
     if (!cpu) cpu = series(CPU_SESSION);
     return cpu;
