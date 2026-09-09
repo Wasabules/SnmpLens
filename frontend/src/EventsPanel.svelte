@@ -41,7 +41,9 @@
   }
 
   onMount(() => {
-    eventsStore.listen();
+    // NOT eventsStore.listen(): App.svelte registers the live tail once at
+    // startup, because the badge has to count with this tab closed. Asking
+    // again here registered a second handler on every visit to the tab.
     reload();
   });
 
