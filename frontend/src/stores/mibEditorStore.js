@@ -93,7 +93,15 @@ function createMibEditorStore() {
       buffer: recovered ? draft : source.content,
       diagnostics: source.diagnostics || [],
     });
-    if (recovered) refresh();
+    // ALWAYS, not only for a recovered draft.
+    //
+    // Diagnostics arrive with the file because MibEditorRead computes them at
+    // read time; the OUTLINE has no such source — refresh() is the only thing
+    // that fills it. So opening a MIB showed an outline reading "nothing
+    // defined yet" over a file defining forty things, until the first
+    // keystroke happened to trigger an analysis. The panel was right and the
+    // data never came.
+    refresh();
     return { source, recovered };
   }
 
@@ -110,6 +118,9 @@ function createMibEditorStore() {
     openToken++;
     clearTimeout(draftTimer);
     set({ ...EMPTY, source, buffer: source.content, diagnostics: source.diagnostics || [] });
+    // Same reason as in open(): a restored bundled MIB and a file opened from
+    // outside the directory both need their outline computed.
+    refresh();
     discardDraft(draftKey(source));
   }
 
