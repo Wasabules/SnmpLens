@@ -1158,7 +1158,9 @@
       "notJson": "此文件不是 JSON（{detail}）。",
       "tooBig": "此文件为 {found} 字节；最多 {max}。",
       "placeholderWithoutDiscover": "此 OID 含有实例占位符，但该部件未说明到哪里发现其实例。",
-      "discoverWithoutPlaceholder": "此部件会发现实例，但没有 OID 含有 {placeholder}，这次 walk 将白白付出代价。"
+      "discoverWithoutPlaceholder": "此部件会发现实例，但没有 OID 含有 {placeholder}，这次 walk 将白白付出代价。",
+      "layoutOverflow": "列 {x} 加上宽度 {w} 超出了 {columns} 列网格。",
+      "layoutOverlap": "它被放置在部件 {other} 之上，会遮挡其中之一。"
     },
     "costAtMost": "至多如此 —— 其中 {discovered} 个 OID 在绑定时于设备上发现，实际数字届时确定，且只会更少。"
   },

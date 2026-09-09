@@ -211,6 +211,11 @@ type Widget struct {
 	// own name rather than its index. Written by expansion, never by an author:
 	// a hand-written preset titles its own widgets.
 	OIDLabels map[string]string `json:"oidLabels,omitempty"`
+	// Layout is where this widget goes on the twelve-column grid. Optional and
+	// per widget: a preset that places nothing keeps the reflowing list of
+	// cards, and one that places some widgets lets the browser find room for
+	// the rest. See layout.go.
+	Layout *Layout `json:"layout,omitempty"`
 }
 
 // Error is one reason a preset was refused.
@@ -351,6 +356,7 @@ func Validate(p Preset) []Error {
 			errs = append(errs, checkOID(fmt.Sprintf("%s.oids[%d]", at, j), probe)...)
 		}
 		errs = append(errs, checkDiscovery(at, w)...)
+		errs = append(errs, checkLayout(at+".layout", w.Layout)...)
 		// A discovering widget contributes its BOUND, not its template count:
 		// the sanity limit has to hold after the walk, and the walk happens on
 		// equipment nobody has seen yet.
@@ -375,6 +381,10 @@ func Validate(p Preset) []Error {
 			errs = append(errs, checkText(at+".labels."+k, v)...)
 		}
 	}
+
+	// After the loop, because an overlap is a relationship between two widgets
+	// rather than a property of either one.
+	errs = append(errs, checkLayoutOverlaps(p.Widgets)...)
 
 	if total > MaxOIDsPerPreset {
 		errs = append(errs, errf("widgets", "tooManyOids", map[string]string{
