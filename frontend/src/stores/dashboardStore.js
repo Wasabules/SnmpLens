@@ -10,20 +10,24 @@ import { writable } from 'svelte/store';
  * build or the browser says a word. Switching to Traps and back would drop the
  * dashboard's selection and land on whatever happened to be first.
  *
- * The selection is a session id, not a session: the sessions themselves live in
+ * The selection is an ID, not a session: the sessions themselves live in
  * pollingStore and are refreshed by the poll clock, so holding one here would
  * hold a stale copy the moment a sample arrived.
+ *
+ * ONE field, which may name a session or a group of them (`group:<key>`, see
+ * utils/dashboardGroup.js). Two fields would have a state that names both at
+ * once, and nothing could render it.
  */
 function createDashboardStore() {
-  const { subscribe, set } = writable({ sessionId: null });
+  const { subscribe, set } = writable({ selection: null });
 
   return {
     subscribe,
-    select(sessionId) {
-      set({ sessionId: sessionId || null });
+    select(selection) {
+      set({ selection: selection || null });
     },
     clear() {
-      set({ sessionId: null });
+      set({ selection: null });
     },
   };
 }

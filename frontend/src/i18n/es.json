@@ -1178,6 +1178,8 @@
     "noReading": "Nada que mostrar.",
     "unknownWidget": "Este preset pide un widget «{kind}» que esta versión no dibuja.",
     "snapshotNote": "Dibujado a partir de {file} tal como estaba al vincular {target}. Editar o eliminar el archivo no cambia este panel; vuelva a vincular el equipo para adoptar una versión nueva.",
+    "allEquipments": "{name} — los {count} equipos",
+    "snapshotNoteGroup": "Dibujado a partir de {file} tal como estaba cuando se vinculó cada uno de estos {count} equipos. Editar o eliminar el archivo no cambia este panel; vuelva a vincular un equipo para adoptar una versión nueva.",
     "waiting": "Esperando la primera lectura."
   }
 }

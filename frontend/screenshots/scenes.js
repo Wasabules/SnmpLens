@@ -151,6 +151,17 @@ const CATALOGUE = [
     describe: 'A dashboard drawn from a community preset bound to one switch.',
   },
   {
+    base: 'dashboard-group',
+    tab: TABS.dashboard,
+    feed: { from: 'monitorSamples', everyMs: 420 },
+    // The picker's first entry is the group; the individual equipments follow
+    // it. By index because a group's value is its preset's whole widget
+    // signature, which is not a thing to paste into a scene.
+    act: ['pick:.picker select|0'],
+    height: 1200,
+    describe: 'One preset bound to two switches of different sizes, drawn as one dashboard.',
+  },
+  {
     base: 'trap-listener',
     tab: TABS.traps,
     // "with their varbinds, the listener running" was true of neither: every

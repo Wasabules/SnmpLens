@@ -765,6 +765,34 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
         <figcaption>A dashboard drawn from a preset bound to one switch — and the port that is down.</figcaption>
       </figure>
 
+      <h3>Several equipments on one dashboard</h3>
+      <p>
+        Bind the same preset to eight access switches and you get eight sessions — one per
+        equipment, because the cost is stated per equipment, the credentials are per
+        equipment, and one slow device must never slow the healthy ones down with it. The
+        dashboard can still draw them <em>together</em>: the equipment picker offers the whole
+        group, and every widget then speaks for all of them.
+      </p>
+      <p>
+        The two switches below were bound from one file and are not the same size — one has
+        eight ports and the other six, because each was <strong>discovered</strong> when it
+        was bound. The port wall keeps them apart; the chart names each series by its
+        equipment.
+      </p>
+      <figure class="shot" style="margin-top:1.5rem">
+        <img class="shot-light" src="assets/img/dashboard-group-light-1200.webp"
+             srcset="assets/img/dashboard-group-light-1200.webp 1200w, assets/img/dashboard-group-light-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="One SnmpLens dashboard drawn across two switches bound from the same preset: uptime and uplink rate per equipment, both port walls, and the traffic of both on one chart." width="1600" height="1200"
+             loading="lazy" decoding="async" />
+        <img class="shot-dark" src="assets/img/dashboard-group-dark-1200.webp"
+             srcset="assets/img/dashboard-group-dark-1200.webp 1200w, assets/img/dashboard-group-dark-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="One SnmpLens dashboard drawn across two switches bound from the same preset: uptime and uplink rate per equipment, both port walls, and the traffic of both on one chart." width="1600" height="1200"
+             loading="lazy" decoding="async" />
+        <figcaption>One preset, two switches of different sizes, one dashboard.</figcaption>
+      </figure>
+
       <h3>A snapshot, not a link</h3>
       <p>
         What a bound dashboard draws is the preset <em>as it was when you bound it</em>.

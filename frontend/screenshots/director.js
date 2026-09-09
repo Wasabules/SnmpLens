@@ -109,6 +109,22 @@
         var els = document.querySelectorAll(css);
         if (els[at]) els[at].click();
 
+      // "pick:.picker select|0" chooses the first option of a <select>.
+      //
+      // Its own step rather than a variant of "type:", because a select is
+      // driven by CHANGE and not by input: the dashboard's equipment picker is
+      // `value={...} on:change`, so dispatching "input" at it sets the element
+      // and leaves the component exactly where it was. By INDEX for the same
+      // reason rows are: a group's value is its preset's whole widget
+      // signature, which is not a thing to paste into a scene.
+      } else if (step.indexOf('pick:') === 0) {
+        var pipe = step.lastIndexOf('|');
+        var box = document.querySelector(step.slice(5, pipe));
+        if (box) {
+          box.selectedIndex = parseInt(step.slice(pipe + 1), 10) || 0;
+          box.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
       // "type:.search-bar input|ifOperStatus" fills a field.
       //
       // Assigning .value alone would show the text and change nothing: Svelte's
