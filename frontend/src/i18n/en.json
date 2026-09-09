@@ -1160,9 +1160,15 @@
       "placeholderWithoutDiscover": "This OID carries an instance placeholder, but the widget does not say where to discover its instances.",
       "discoverWithoutPlaceholder": "This widget discovers its instances but no OID carries {placeholder}, so the walk would be paid for and thrown away.",
       "layoutOverflow": "Column {x} with a width of {w} runs past the {columns}-column grid.",
-      "layoutOverlap": "This is placed on top of widget {other}, which would hide one of them."
+      "layoutOverlap": "This is placed on top of widget {other}, which would hide one of them.",
+      "thresholdWithoutBound": "A threshold needs a minimum, a maximum, or both — with neither it can never fire.",
+      "thresholdInverted": "The minimum ({min}) is above the maximum ({max}), so no reading can be inside the band.",
+      "thresholdOnRate": "A threshold is compared against the raw reading, and a \"{kind}\" widget shows a counter: the band would be breached on the first sample and never recover.",
+      "thresholdConflict": "Widget {other} already watches {oid} with a different band, and a reading can only have one."
     },
-    "costAtMost": "At most — {discovered} of these OIDs are discovered on the equipment when you bind it, so the real figures are known then and can only be lower."
+    "costAtMost": "At most — {discovered} of these OIDs are discovered on the equipment when you bind it, so the real figures are known then and can only be lower.",
+    "costWatched": "Thresholds",
+    "costAlerts": "{alerting} of them are evaluated and raise an incident when breached, which your notification rules may then route to a sink; any others are drawn as a reference line only."
   },
   "dashboard": {
     "empty": "No dashboard yet.",

@@ -1160,9 +1160,15 @@
       "placeholderWithoutDiscover": "Diese OID enthält einen Instanz-Platzhalter, aber das Widget sagt nicht, wo seine Instanzen zu finden sind.",
       "discoverWithoutPlaceholder": "Dieses Widget ermittelt seine Instanzen, doch keine OID enthält {placeholder} — der Walk wäre umsonst.",
       "layoutOverflow": "Spalte {x} mit Breite {w} reicht über das {columns}-Spalten-Raster hinaus.",
-      "layoutOverlap": "Dies liegt über Widget {other}, wodurch eines von beiden verdeckt würde."
+      "layoutOverlap": "Dies liegt über Widget {other}, wodurch eines von beiden verdeckt würde.",
+      "thresholdWithoutBound": "Ein Schwellenwert braucht ein Minimum, ein Maximum oder beides — ohne beides kann er nie auslösen.",
+      "thresholdInverted": "Das Minimum ({min}) liegt über dem Maximum ({max}); kein Messwert kann im Band liegen.",
+      "thresholdOnRate": "Ein Schwellenwert wird mit dem Rohwert verglichen, und ein „{kind}“-Widget zeigt einen Zähler: Das Band wäre schon beim ersten Messwert verletzt und nie wieder eingehalten.",
+      "thresholdConflict": "Widget {other} überwacht {oid} bereits mit einem anderen Band, und ein Messwert kann nur eines haben."
     },
-    "costAtMost": "Höchstens — {discovered} dieser OIDs werden beim Binden auf dem Gerät ermittelt; die echten Zahlen stehen dann fest und können nur niedriger sein."
+    "costAtMost": "Höchstens — {discovered} dieser OIDs werden beim Binden auf dem Gerät ermittelt; die echten Zahlen stehen dann fest und können nur niedriger sein.",
+    "costWatched": "Schwellenwerte",
+    "costAlerts": "{alerting} davon werden ausgewertet und lösen bei Verletzung einen Vorfall aus, den Ihre Benachrichtigungsregeln an ein Ziel weiterleiten können; die übrigen sind nur eine Referenzlinie."
   },
   "dashboard": {
     "empty": "Noch kein Dashboard.",

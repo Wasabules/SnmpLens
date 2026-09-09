@@ -662,6 +662,48 @@ placed it at the top — which is how a preset is ordinarily edited.
 Every shipped preset arranges itself, and that is a test rather than a habit: these are the files somebody copies
 to write their own, and the reflowing fallback looks identical to a layout that failed to load.
 
+### What the preset thinks is too much
+
+`PresetBind` passed `nil` where the session's thresholds go, with a comment saying a preset describes what to
+WATCH and that what counts as too much is the operator's judgement about their own network. That is true of a
+percentage on a link the author has never seen and false of most of what a preset is written for: a UPS running
+on anything but mains, a battery reporting low, a disk at 95%. Those are properties of the MIB, and the author
+knows them better than whoever binds the file.
+
+So a widget may carry `"threshold": {"min": 30, "max": 90, "forSeconds": 300}`, and binding MATERIALISES it into
+the session's own threshold map — the same column `MonitorCreateSession` fills, read by the same evaluator.
+Nothing new evaluates anything; a preset fills in a form the operator would otherwise fill in by hand and can
+edit afterwards. The band is per WIDGET, not per OID, because that is what makes it writeable for a discovering
+preset: "no port may be anything but up" is one statement about however many ports the walk turns up.
+
+Three facts decide the shape, and all three are read out of the code rather than assumed.
+
+**The evaluator compares the RAW reading.** `Sample.Value` is what was polled; `Rate` is derived for the chart
+and the tile and is never evaluated. So a band on a counter is a band on a number that only goes up — it fires on
+the first sample and never resolves. A `rate` widget SAYS its OID is a counter, so that one kind is refused
+outright; a chart of counters cannot be detected and is left to the author.
+
+**`alertEnabled` is not "notify", it is "evaluate at all".** `classify` returns nothing without it, in
+`pkg/monitor/breach.go` and in `utils/thresholdAlerts.js` alike: no episode, no journal entry, nothing. The band
+is still drawn on the chart as a reference line, and that is its whole effect. Since `encoding/json` decodes an
+absent bool to false, a plain `bool` would make every threshold an author writes the obvious way INERT, with the
+dashboard looking exactly as though it were armed. Hence `AlertEnabled *bool` and `Alerts()`: **absent means
+yes**, and false has to be written on purpose.
+
+**A reading can carry one band.** The session holds one map keyed by OID, so two widgets watching the same OID
+with different bands is a question with no answer — the later one would win silently and the earlier widget would
+be drawn under a rule not applied to it. Identical bands are one band and are fine; that is the ordinary case of
+a tile and a chart showing the same reading.
+
+`Cost` counts `Watched` and `Alerting`, and the settings screen states them before binding beside the request
+count. That is the same gate the traffic goes through: an evaluated band raises an incident, which the operator's
+own notification rules may route to a sink, so the file reaching outside the machine is said out loud first.
+
+Two of the five shipped presets watch something, and the three interface ones deliberately do not. `ifOperStatus`
+looks like the obvious candidate and is the wrong one: most ports of a real access switch are legitimately down,
+so a band there opens an episode per unused port the moment the preset is bound — and everything those presets
+chart is a counter.
+
 ### Binding, and the snapshot rule
 
 `PresetBind` creates **one session per target**, never one session across several: the cost was stated per

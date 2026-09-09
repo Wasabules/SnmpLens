@@ -1160,9 +1160,15 @@
       "placeholderWithoutDiscover": "Cet OID porte un marqueur d'instance, mais le widget n'indique pas où découvrir ses instances.",
       "discoverWithoutPlaceholder": "Ce widget découvre ses instances mais aucun OID ne porte {placeholder} : le walk serait payé pour rien.",
       "layoutOverflow": "La colonne {x} avec une largeur de {w} dépasse la grille de {columns} colonnes.",
-      "layoutOverlap": "Ceci est placé par-dessus le widget {other}, ce qui en masquerait un des deux."
+      "layoutOverlap": "Ceci est placé par-dessus le widget {other}, ce qui en masquerait un des deux.",
+      "thresholdWithoutBound": "Un seuil a besoin d’un minimum, d’un maximum ou des deux : sans aucun, il ne peut jamais se déclencher.",
+      "thresholdInverted": "Le minimum ({min}) est supérieur au maximum ({max}) : aucune valeur ne peut se trouver dans la plage.",
+      "thresholdOnRate": "Un seuil est comparé à la valeur brute, et un widget « {kind} » affiche un compteur : la plage serait dépassée dès la première mesure et ne reviendrait jamais.",
+      "thresholdConflict": "Le widget {other} surveille déjà {oid} avec une autre plage, et une valeur ne peut en avoir qu’une."
     },
-    "costAtMost": "Au plus — {discovered} de ces OID sont découverts sur l'équipement au moment de la liaison : les chiffres réels sont connus à ce moment-là et ne peuvent qu'être inférieurs."
+    "costAtMost": "Au plus — {discovered} de ces OID sont découverts sur l'équipement au moment de la liaison : les chiffres réels sont connus à ce moment-là et ne peuvent qu'être inférieurs.",
+    "costWatched": "Seuils",
+    "costAlerts": "{alerting} d’entre eux sont évalués et ouvrent un incident en cas de dépassement, que vos règles de notification peuvent ensuite router vers une destination ; les autres ne sont qu’une ligne de repère."
   },
   "dashboard": {
     "empty": "Aucun tableau de bord pour l'instant.",
