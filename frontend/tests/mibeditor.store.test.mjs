@@ -77,6 +77,11 @@ const check = (name, ok, extra = '') => {
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
 await mibEditorStore.open('A-MIB');
+// open() ANALYSES now, so the analysis it dispatched has to be answered before
+// anything below measures `checking`: an unresolved one keeps inFlight above
+// zero for the rest of the file, and the indicator never clears.
+for (const p of pending.splice(0)) p.resolve({ diagnostics: [], missing: [], outline: [] });
+await tick();
 pending = [];
 calls.length = 0;
 
@@ -317,6 +322,32 @@ check('a pending draft is not written under the newly opened file',
   check('the external file gets a key of its own', keys.length === 2, JSON.stringify(keys));
   check('and it is not the bare name', keys.filter((k) => k === 'L-MIB').length === 1,
     JSON.stringify(keys));
+}
+
+// Opening a file must ANALYSE it, or the outline stays empty until somebody
+// types.
+//
+// Diagnostics arrive with the file — MibEditorRead computes them at read time —
+// so the panel looked alive while the outline read "nothing defined yet" over a
+// MIB defining forty things. refresh() is the only thing that fills it, and it
+// used to run on open only when a draft had been recovered.
+{
+  pending = [];
+  calls.length = 0;
+  await mibEditorStore.open('N-MIB');
+  await tick();
+
+  check('opening a file dispatches an analysis', pending.length === 1,
+    `${pending.length} dispatched`);
+
+  pending[0].resolve({
+    diagnostics: [],
+    missing: [],
+    outline: [{ name: 'nUptime', kind: 'object', line: 12, column: 1, syntax: 'Counter32' }],
+  });
+  await tick();
+  check('so the outline is there before the first keystroke',
+    get(mibEditorStore).outline?.length === 1, JSON.stringify(get(mibEditorStore).outline));
 }
 
 // The outline rides on the analysis, and it must not outlive the file it
