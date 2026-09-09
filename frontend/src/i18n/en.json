@@ -1158,7 +1158,9 @@
       "notJson": "This file is not JSON ({detail}).",
       "tooBig": "This file is {found} bytes; at most {max}.",
       "placeholderWithoutDiscover": "This OID carries an instance placeholder, but the widget does not say where to discover its instances.",
-      "discoverWithoutPlaceholder": "This widget discovers its instances but no OID carries {placeholder}, so the walk would be paid for and thrown away."
+      "discoverWithoutPlaceholder": "This widget discovers its instances but no OID carries {placeholder}, so the walk would be paid for and thrown away.",
+      "layoutOverflow": "Column {x} with a width of {w} runs past the {columns}-column grid.",
+      "layoutOverlap": "This is placed on top of widget {other}, which would hide one of them."
     },
     "costAtMost": "At most — {discovered} of these OIDs are discovered on the equipment when you bind it, so the real figures are known then and can only be lower."
   },

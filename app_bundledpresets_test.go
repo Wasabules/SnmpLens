@@ -76,6 +76,20 @@ func TestEveryBundledPresetIsValid(t *testing.T) {
 		if c.Discovered > 0 && !strings.Contains(strings.ToLower(p.Description), "discover") {
 			t.Errorf("%s discovers its instances and its description does not say so", e.Name())
 		}
+
+		// Every shipped preset ARRANGES itself. These are the files somebody
+		// copies to write their own, so a library where none of them places a
+		// widget teaches that a preset cannot — and the reflowing fallback
+		// looks identical to a layout that failed to load.
+		if !preset.HasLayout(p) {
+			t.Errorf("%s places none of its widgets", e.Name())
+			continue
+		}
+		for i, w := range p.Widgets {
+			if w.Layout == nil {
+				t.Errorf("%s: widget %d (%q) is left to fall where it may", e.Name(), i, w.Title)
+			}
+		}
 	}
 }
 

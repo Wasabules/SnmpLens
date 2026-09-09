@@ -619,6 +619,49 @@ Templates expand INSTANCE-MAJOR — every OID of instance 1, then every OID of i
 and out counters beside each other instead of interleaving twenty-four ins with twenty-four outs. Order is the
 walk's, which is the agent's own order for the column: the order the ports are in on the device.
 
+### The arrangement a preset asks for
+
+Without a layout a preset describes what to poll and says nothing about where any of it goes, so every dashboard
+is the same reflowed list of cards in declaration order. That is fine for four widgets and wrong for the thing a
+preset is FOR: an author who knows the equipment knows the port wall belongs across the top and the two uplink
+counters belong side by side under it, and had no way to say so.
+
+A widget may carry `"layout": {"x": 0, "y": 1, "w": 6, "h": 2}` — zero-based cells of a **twelve-column** grid,
+with spans for the width and the height. Twelve because it divides into halves, thirds and quarters, which is
+what a dashboard is made of. Rows size themselves to their content, so `h` is a minimum rather than a pixel
+count that a font size breaks. `h` defaults to 1: reading an omitted height as 0 would emit `span 0`, which is
+invalid, and a browser answers an invalid span by dropping the whole declaration and auto-placing the widget
+somewhere else entirely.
+
+Deliberately NOT pixels and NOT a free canvas, for the reason the widget vocabulary is frozen: a coordinate
+system a stranger's file can place things at exactly is one it can place things OUTSIDE, or on top of the
+footnote that says where the data came from.
+
+**Placement is per widget and optional.** A preset that places nothing keeps the arrangement it has always had —
+switching every existing dashboard to a twelve-column grid to make room for a feature they do not use would
+change what they look like for nothing. A preset that places SOME widgets lets the browser find room for the
+rest, which is what an author hits the moment they add a widget to a laid-out preset; CSS grid's auto-placement
+skips cells that are already claimed, so mixing the two cannot collide.
+
+**Two things are refused, and both are silent otherwise.** `x + w` past the twelfth column: two legal numbers and
+one widget hanging off the side, which a browser answers by growing an implicit thirteenth column so every row
+below moves. And an OVERLAP: CSS grid stacks them, so the widget written second covers the one written first and
+the dashboard is missing something that is right there in the file. The overlap is reported against the LATER
+widget — the earlier one is where the author started, and blaming both says nothing about which to move.
+
+**The panel places nothing inline.** `DashboardPanel.svelte` sets `--x`/`--w`/`--y`/`--h` and lets the stylesheet
+do the placement, because an inline `grid-column` wins over every rule — including the media query that collapses
+the dashboard to one column below 900 px, which would then silently keep its twelve columns at 320 px.
+`frontend/tests/presetlayout.test.mjs` pins that, and pins the column count in its three places: `LayoutColumns`
+validates against it, `presetLayout.js` converts coordinates with it, and the stylesheet draws it.
+
+**Collapsed, the order is the author's**, top to bottom then left to right (`readingOrder`, applied as CSS
+`order`). Falling back to declaration order is a different list whenever an author added a widget at the end and
+placed it at the top — which is how a preset is ordinarily edited.
+
+Every shipped preset arranges itself, and that is a test rather than a habit: these are the files somebody copies
+to write their own, and the reflowing fallback looks identical to a layout that failed to load.
+
 ### Binding, and the snapshot rule
 
 `PresetBind` creates **one session per target**, never one session across several: the cost was stated per

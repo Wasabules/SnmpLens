@@ -1158,7 +1158,9 @@
       "notJson": "Este archivo no es JSON ({detail}).",
       "tooBig": "Este archivo ocupa {found} bytes; {max} como máximo.",
       "placeholderWithoutDiscover": "Este OID lleva un marcador de instancia, pero el widget no indica dónde descubrir sus instancias.",
-      "discoverWithoutPlaceholder": "Este widget descubre sus instancias pero ningún OID lleva {placeholder}, así que el walk se pagaría en vano."
+      "discoverWithoutPlaceholder": "Este widget descubre sus instancias pero ningún OID lleva {placeholder}, así que el walk se pagaría en vano.",
+      "layoutOverflow": "La columna {x} con una anchura de {w} se sale de la rejilla de {columns} columnas.",
+      "layoutOverlap": "Esto se coloca encima del widget {other}, lo que ocultaría uno de los dos."
     },
     "costAtMost": "Como máximo — {discovered} de estos OID se descubren en el equipo al vincularlo, así que las cifras reales se conocen entonces y solo pueden ser menores."
   },

@@ -10,6 +10,7 @@
   import { dashboardStore, dashboardSession, dashboardCandidates } from './stores/dashboardStore';
   import { formatCadence } from './utils/formatting';
   import { anonMode, anonymizeIp } from './utils/anonymize';
+  import { hasLayout, cellStyle, readingOrder } from './utils/presetLayout';
 
   // The dashboard: one bound preset, drawn.
   //
@@ -29,6 +30,14 @@
 
   // One sync group per session, so panning one chart pans the others.
   $: syncGroup = session ? `dashboard:${session.id}` : null;
+
+  // Two arrangements, and which one applies is decided by the preset rather
+  // than by this component. A preset that places nothing keeps the reflowing
+  // list of cards it has always had; switching every existing dashboard to a
+  // twelve-column grid to make room for a feature they do not use would change
+  // what they look like for nothing.
+  $: placed = hasLayout(widgets);
+  $: orders = readingOrder(widgets);
 
   const targetOf = (s, masked) => {
     const address = (s?.targets || [])[0] || '';
@@ -121,9 +130,18 @@
     {/if}
 
     {#if session}
-      <div class="widgets">
+      <div class="widgets" class:grid12={placed}>
         {#each widgets as widget, i (i)}
-          <section class="widget" class:wide={widget.kind === 'chart' || widget.kind === 'grid'}>
+          <!-- The placement is custom properties and a class, never an inline
+               grid-column: an inline placement wins over every rule, and the
+               media query that collapses this to one column would have nothing
+               to override. -->
+          <section
+            class="widget"
+            class:wide={widget.kind === 'chart' || widget.kind === 'grid'}
+            class:placed={!!widget.layout}
+            style="{cellStyle(widget)};--order:{orders[i]}"
+          >
             <header class="widget-head">
               <h3>{widget.title || $_(`preset.widget.${widget.kind}`)}</h3>
               {#if widget.unit}<span class="unit">{widget.unit}</span>{/if}
@@ -272,6 +290,49 @@
   /* A chart and a wall of ports both need width; a single reading does not. */
   .widget.wide {
     grid-column: 1 / -1;
+  }
+
+  /* The arrangement a preset asked for. Twelve columns because that is what
+     divides into halves, thirds and quarters, which is what a dashboard is made
+     of; rows size themselves to their content, so a chart declaring two rows is
+     twice a tile and never a fixed number of pixels that a font size breaks. */
+  .widgets.grid12 {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-auto-rows: minmax(110px, auto);
+  }
+
+  .widgets.grid12 .widget.placed {
+    grid-column: var(--x) / span var(--w);
+    grid-row: var(--y) / span var(--h);
+  }
+
+  /* A widget the author did not place, in a preset where others are. The
+     browser puts it in the first free space, and a third of the width is the
+     nearest thing to what it would have had in the reflowing arrangement. */
+  .widgets.grid12 .widget:not(.placed) {
+    grid-column: auto / span 4;
+  }
+
+  .widgets.grid12 .widget:not(.placed).wide {
+    grid-column: 1 / -1;
+  }
+
+  /* Narrow enough that twelve columns is four characters each. Everything
+     becomes one column, and `order` keeps the author's sequence — top to
+     bottom, then left to right — instead of falling back to the order the
+     widgets happen to be declared in. */
+  @media (max-width: 900px) {
+    .widgets.grid12 {
+      grid-template-columns: 1fr;
+    }
+
+    .widgets.grid12 .widget,
+    .widgets.grid12 .widget.placed,
+    .widgets.grid12 .widget:not(.placed) {
+      grid-column: 1 / -1;
+      grid-row: auto;
+      order: var(--order);
+    }
   }
 
   .widget {
