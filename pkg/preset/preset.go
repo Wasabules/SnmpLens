@@ -211,6 +211,11 @@ type Widget struct {
 	// own name rather than its index. Written by expansion, never by an author:
 	// a hand-written preset titles its own widgets.
 	OIDLabels map[string]string `json:"oidLabels,omitempty"`
+	// Threshold is the band this widget's readings should stay inside. It is
+	// materialised into the session's own threshold map at bind time and read
+	// by the ordinary evaluator; see threshold.go for what it can and cannot
+	// be put on.
+	Threshold *Threshold `json:"threshold,omitempty"`
 	// Layout is where this widget goes on the twelve-column grid. Optional and
 	// per widget: a preset that places nothing keeps the reflowing list of
 	// cards, and one that places some widgets lets the browser find room for
@@ -357,6 +362,7 @@ func Validate(p Preset) []Error {
 		}
 		errs = append(errs, checkDiscovery(at, w)...)
 		errs = append(errs, checkLayout(at+".layout", w.Layout)...)
+		errs = append(errs, checkThreshold(at+".threshold", w.Kind, w.Threshold)...)
 		// A discovering widget contributes its BOUND, not its template count:
 		// the sanity limit has to hold after the walk, and the walk happens on
 		// equipment nobody has seen yet.
@@ -382,9 +388,10 @@ func Validate(p Preset) []Error {
 		}
 	}
 
-	// After the loop, because an overlap is a relationship between two widgets
-	// rather than a property of either one.
+	// After the loop, because both of these are relationships BETWEEN widgets
+	// rather than properties of either one.
 	errs = append(errs, checkLayoutOverlaps(p.Widgets)...)
+	errs = append(errs, checkThresholdConflicts(p.Widgets)...)
 
 	if total > MaxOIDsPerPreset {
 		errs = append(errs, errf("widgets", "tooManyOids", map[string]string{
@@ -432,6 +439,15 @@ type Cost struct {
 	// takes depends on the transport's chunk size, which is pkg/snmp's to know
 	// and not this package's — a copy of it here is a copy that drifts.
 	VarbindsPerDay int `json:"varbindsPerDay"`
+	// Watched is how many readings carry a band, and Alerting how many of those
+	// route an episode to the notification sinks.
+	//
+	// Alerting is the one figure here that is not about this machine: a preset
+	// with it set will, on a breach, send mail or POST to a webhook the operator
+	// configured. That is the file reaching outside, so it is stated before
+	// binding beside the request count rather than discovered afterwards.
+	Watched  int `json:"watched"`
+	Alerting int `json:"alerting"`
 }
 
 // secondsPerDay is the base Estimate divides. Equal to MaxIntervalSec, and
@@ -441,38 +457,49 @@ const secondsPerDay = 86400
 // Estimate reports what one target bound to this preset will ask for.
 func Estimate(p Preset) Cost {
 	c := Cost{Widgets: len(p.Widgets), IntervalSec: p.IntervalSec}
-	seen := map[string]bool{}
+	// Two widgets showing the same OID are polled once: the scheduler asks for
+	// a SET, and counting it twice would overstate the cost of exactly the
+	// presets that are well written. The watched set is counted separately
+	// because a band and a reading are different things to deduplicate — one
+	// widget may watch an OID that another merely draws.
+	seen, watched := map[string]bool{}, map[string]bool{}
+
 	for _, w := range p.Widgets {
+		per := 0
 		if w.Discover != nil {
 			// Not yet walked: the ceiling the preset agreed to, counted once
 			// per template. Deduplication cannot apply — the OIDs do not exist
 			// yet — so this is the only figure available before binding.
-			per := discoverInstanceLimit(w)
-			n := 0
-			for _, oid := range w.OIDs {
-				if strings.Contains(oid, InstancePlaceholder) {
-					n += per
-				} else if !seen[strings.TrimPrefix(oid, ".")] {
-					seen[strings.TrimPrefix(oid, ".")] = true
-					c.OIDs++
-				}
-			}
-			c.OIDs += n
-			c.Discovered += n
-			continue
+			per = discoverInstanceLimit(w)
 		}
 		for _, oid := range w.OIDs {
-			// Two widgets showing the same OID are polled once: the scheduler
-			// asks for a set, and counting it twice would overstate the cost
-			// of exactly the presets that are well written.
-			key := strings.TrimPrefix(oid, ".")
-			if seen[key] {
-				continue
+			n := 1
+			key := normaliseOID(oid)
+			if hasPlaceholder(oid) {
+				if per == 0 {
+					continue
+				}
+				n = per
+				key = "" // a template is never the same reading twice
 			}
-			seen[key] = true
-			c.OIDs++
+
+			if key == "" || !seen[key] {
+				seen[key] = true
+				c.OIDs += n
+				if key == "" {
+					c.Discovered += n
+				}
+			}
+			if w.Threshold != nil && (key == "" || !watched[key]) {
+				watched[key] = true
+				c.Watched += n
+				if w.Threshold.Alerts() {
+					c.Alerting += n
+				}
+			}
 		}
 	}
+
 	if c.IntervalSec <= 0 {
 		return c
 	}
@@ -492,10 +519,10 @@ func PollOIDs(p Preset) []string {
 			// so reaching one here means somebody polled an unexpanded preset —
 			// and "1.3.6.1.2.1.2.2.1.8.{#}" on the wire is a failure far from
 			// its cause.
-			if strings.Contains(oid, InstancePlaceholder) {
+			if hasPlaceholder(oid) {
 				continue
 			}
-			key := strings.TrimPrefix(oid, ".")
+			key := normaliseOID(oid)
 			if seen[key] {
 				continue
 			}
@@ -505,6 +532,17 @@ func PollOIDs(p Preset) []string {
 	}
 	return out
 }
+
+// hasPlaceholder reports whether an OID is a discovery TEMPLATE rather than an
+// address. One rule, because three places ask: validation substitutes an
+// instance before checking it, PollOIDs refuses to put one on the wire, and a
+// threshold cannot be keyed by an OID that does not exist yet.
+func hasPlaceholder(oid string) bool { return strings.Contains(oid, InstancePlaceholder) }
+
+// normaliseOID is the form an OID is keyed and polled by. ".1.3.6.1" and
+// "1.3.6.1" are the same reading, and a map keyed by the raw string would hold
+// two entries for it — so the leading dot comes off once, here.
+func normaliseOID(oid string) string { return strings.TrimPrefix(oid, ".") }
 
 // checkText bounds a LABEL. checkProse bounds the one field that is a
 // paragraph; both refuse control characters, which is the half that is about

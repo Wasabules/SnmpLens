@@ -1160,9 +1160,15 @@
       "placeholderWithoutDiscover": "Este OID lleva un marcador de instancia, pero el widget no indica dónde descubrir sus instancias.",
       "discoverWithoutPlaceholder": "Este widget descubre sus instancias pero ningún OID lleva {placeholder}, así que el walk se pagaría en vano.",
       "layoutOverflow": "La columna {x} con una anchura de {w} se sale de la rejilla de {columns} columnas.",
-      "layoutOverlap": "Esto se coloca encima del widget {other}, lo que ocultaría uno de los dos."
+      "layoutOverlap": "Esto se coloca encima del widget {other}, lo que ocultaría uno de los dos.",
+      "thresholdWithoutBound": "Un umbral necesita un mínimo, un máximo o ambos: sin ninguno no puede activarse nunca.",
+      "thresholdInverted": "El mínimo ({min}) es mayor que el máximo ({max}), así que ninguna lectura puede estar dentro del rango.",
+      "thresholdOnRate": "Un umbral se compara con la lectura en bruto, y un widget «{kind}» muestra un contador: el rango se superaría en la primera muestra y no se recuperaría nunca.",
+      "thresholdConflict": "El widget {other} ya vigila {oid} con otro rango, y una lectura solo puede tener uno."
     },
-    "costAtMost": "Como máximo — {discovered} de estos OID se descubren en el equipo al vincularlo, así que las cifras reales se conocen entonces y solo pueden ser menores."
+    "costAtMost": "Como máximo — {discovered} de estos OID se descubren en el equipo al vincularlo, así que las cifras reales se conocen entonces y solo pueden ser menores.",
+    "costWatched": "Umbrales",
+    "costAlerts": "{alerting} de ellos se evalúan y abren un incidente al superarse, que sus reglas de notificación pueden enrutar a un destino; los demás son solo una línea de referencia."
   },
   "dashboard": {
     "empty": "Aún no hay panel.",

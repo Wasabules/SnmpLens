@@ -169,7 +169,20 @@
                   <div><span class="k">{$_('preset.costCadence')}</span><span class="v">{formatCadence(detail.cost.intervalSec * 1000)}</span></div>
                   <div><span class="k">{$_('preset.costRequests')}</span><span class="v">{detail.cost.requestsPerDay}</span></div>
                   <div><span class="k">{$_('preset.costVarbinds')}</span><span class="v">{detail.cost.varbindsPerDay}</span></div>
+                  {#if detail.cost.watched > 0}
+                    <div><span class="k">{$_('preset.costWatched')}</span><span class="v">{detail.cost.watched}</span></div>
+                  {/if}
                 </div>
+                {#if detail.cost.alerting > 0}
+                  <!-- The one thing on this screen that is not about this
+                       machine: a band that alerts sends mail, or POSTs to a
+                       webhook, when it is breached. Said BEFORE binding, beside
+                       the request count, because the gate is the same one — the
+                       operator sees what the file will do before it does it. -->
+                  <p class="hint at-most">
+                    {$_('preset.costAlerts', { values: { alerting: detail.cost.alerting } })}
+                  </p>
+                {/if}
                 {#if detail.cost.discovered > 0}
                   <!-- A discovering preset does not know how many instances the
                        equipment has, so every figure above is a CEILING: the

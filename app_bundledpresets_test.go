@@ -76,6 +76,13 @@ func TestEveryBundledPresetIsValid(t *testing.T) {
 		if c.Discovered > 0 && !strings.Contains(strings.ToLower(p.Description), "discover") {
 			t.Errorf("%s discovers its instances and its description does not say so", e.Name())
 		}
+		// A band that is evaluated raises an incident, which the operator's own
+		// rules may route to a sink. Binding one of these is a decision, and it
+		// is made from the description in the library list — where the cost
+		// screen has not been opened yet.
+		if c.Alerting > 0 && !strings.Contains(strings.ToLower(p.Description), "watch") {
+			t.Errorf("%s arms %d incident(s) and its description does not say so", e.Name(), c.Alerting)
+		}
 
 		// Every shipped preset ARRANGES itself. These are the files somebody
 		// copies to write their own, so a library where none of them places a
