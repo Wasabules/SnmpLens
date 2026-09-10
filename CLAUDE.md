@@ -844,8 +844,9 @@ property nothing defines — a `var()` WITH a fallback is a component saying "th
 `PresetBind` creates **one session per target**, never one session across several: the cost was stated per
 equipment, the credentials are per equipment, and the overrun guardrail is per session, so one slow device must
 not back off the healthy ones with it. The connection comes from that target's EFFECTIVE settings
-(`getEffectiveSettings`), not the global ones — `startPolling` uses the global ones because a session can span
-several equipments and there is no single answer; a preset is bound to exactly one, so there is.
+(`getEffectiveSettings`) — its credential profile, its overrides or the defaults — never the global ones.
+`startPolling` follows the same rule for a session over several equipments by splitting it, one session per
+set of identifiers (see **Credential profiles**).
 
 What to poll is **materialised into the session's own columns** (`oid`, `interval_ms`), which is what `specFor`
 reads; the poll clock never opens the snapshot. A session whose layout cannot be decoded keeps polling and loses
