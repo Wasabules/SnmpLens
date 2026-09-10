@@ -64,6 +64,15 @@ func SinkRef(sinkID string) string { return "sink/" + sinkID + "/secret" }
 // produce a confusing "auth works, privacy does not" failure.
 func SessionRef(sessionID string) string { return "session/" + sessionID + "/snmp" }
 
+// TrapUsersRef holds the SNMPv3 users the trap listener accepts, as last
+// applied from the renderer.
+//
+// It exists for background mode. The listener can be started at login, before
+// any window and so before anything that could hand it the users, and without
+// them it hears v1 and v2c and drops every v3 notification. Held here rather
+// than in service.json because the passphrases are in it.
+func TrapUsersRef() string { return "traps/local/usm" }
+
 // SettingsKeyRef is the key the renderer's settings blob is sealed with.
 //
 // One ref with no id: there is exactly one renderer profile. The KEY lives

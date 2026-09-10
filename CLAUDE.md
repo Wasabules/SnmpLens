@@ -178,10 +178,11 @@ it) and `monitoring.db`.
 ### Frontend conventions worth knowing
 
 - **Credential custody.** The renderer seals the sensitive settings fields (`community`, the v3 passphrases,
-  per-target overrides — `SENSITIVE_PATHS` in `crypto.js`) and stores them in localStorage as before, in the same
-  `enc:` + base64(12-byte IV ‖ GCM output) format. What changed is that the KEY is no longer beside them: it lives
-  in `pkg/secrets` (`SettingsKeyRef`) and the renderer never holds it. `app_settings.go` seals and opens in
-  batches, because a save covers one value per sensitive field plus three per target override.
+  per-target overrides and credential profiles — `fields()` in `crypto.js`) and stores them in localStorage as
+  before, in the same `enc:` + base64(12-byte IV ‖ GCM output) format. What changed is that the KEY is no longer
+  beside them: it lives in `pkg/secrets` (`SettingsKeyRef`) and the renderer never holds it. `app_settings.go`
+  seals and opens in batches, because a save covers one value per sensitive field, plus three per target override
+  and one or two per credential profile.
 
   Be precise about what that buys, because it differs: DPAPI and the Keychain tie the key to the account, while
   the Linux file backend keeps it away from OTHER accounts and out of a copied profile and nothing more. The
@@ -204,6 +205,90 @@ it) and `monitoring.db`.
   distinguishes `security` exit 44 (no such item) from a locked keychain for the same reason. The store also opens
   independently of `storage.Init`: a corrupt `monitoring.db` must not take the credentials with it.
 - **Anonymous Mode** is purely frontend masking and is intentionally **non-persistent** (always off on restart) — see `settingsStore.js` forcing `anonymousMode = false` on load. Don't make it persist.
+- **An editor opened inside Settings handles Escape in the CAPTURE phase and stops it** (`<svelte:window
+  on:keydown|capture>`, `NotifySettings`, `CredentialProfiles`). `SettingsModal` closes on an Escape reaching the
+  window while BUBBLING, and two window listeners both run for one key: the sink editor's Escape closed the whole
+  settings dialog with it, and every unsaved change in it. Captured on the window and stopped there, the event
+  never reaches the bubbling phase. The screenshot director's `key:` step cannot show this — it dispatches AT the
+  window, where stopping propagation does not stop other listeners on the same target.
+
+## Credential profiles
+
+A **credential profile** is a named set of SNMP identifiers a target is given instead of the default ones: a
+community (v1 or v2c) or an SNMPv3 USM user — user, security level, both protocols and passphrases, context. It
+carries its VERSION, because "this switch speaks v3 as ops-ro" is one statement, and keeping the version apart from
+the user it goes with is how a v3 user ends up sent as a v2c community. The default identifiers are not a profile:
+they stay the settings' own `community` and `v3` block, spoken in the version picked in the header, and every
+target without a profile uses them.
+
+The model is `utils/credentialProfiles.js`, pure and tested under node (`tests/profiles.test.mjs`). The SNMPv3
+choices are `utils/snmpSecurity.js`, declared ONCE — the default identifiers offered six authentication protocols
+while the per-target form offered four — and the test reads `getAuthProtocol`/`getPrivProtocol` in
+`pkg/snmp/client.go` and requires every value offered to be one Go maps. Otherwise a profile saves cleanly and
+fails on its first request.
+
+**A target's identity comes from exactly one place**, resolved by `getEffectiveSettings` in this order: its profile
+(`targetOverrides[address].profile`), its own overrides (community, version, v3), or the defaults. A profile
+REPLACES the target's own credentials rather than being layered under them — `assignProfile` drops them — because
+two answers to "what does this target authenticate with" is one too many. Transport (port, timeout, retries) stays
+per target. A profile id that names nothing falls back to the defaults, never to nothing. A request carries only
+the credential its version uses: a v3 target is not sent the default community beside its user, and a v2c target
+is not sent the default v3 passphrases.
+
+`credentialRef` on the effective settings says which of the three it was — `'default'`, a profile id, or `''` for
+a target's own overrides — and `buildMonitorConnection` sends it as `MonitorConnection.Profile`, stored in
+`storage.SessionConn.Profile`. An id and never a credential, so it is safe in a copied `monitoring.db`.
+
+**Sealing is the custody above, unchanged.** `fields()` covers each profile's community and passphrases KEYED BY
+THE PROFILE'S ID — never its position or its name — so a profile renamed, reordered, added or deleted while the
+store was locked gets its own ciphertext back and never a neighbour's. `normaliseProfile` drops the credential of
+the other kind and every passphrase above the security level, so nothing is sealed that no request will send.
+
+**A session follows its profile.** A session is a SNAPSHOT of its connection — Go polls windowless with the
+credentials in `pkg/secrets` — so rotating a profile's passphrase used to leave every session built from it
+failing authentication until somebody rebound it. `pollingStore.followCredentials` runs when the settings dialog is
+saved. `changedCredentialRefs` compares identities field by field, because `MonitorUpdateConnection` restarts a
+running session and a restart throws away the samples its deltas and rates are derived from: key order or a rename
+must not count as a change. Each affected session gets the new identity with its own transport kept, and the
+version travels too (`MonitorUpdateConnection(id, version, conn)`), since a profile carries one; the defaults carry
+none, so a session on them keeps its own. Nothing is followed unless the store is open — with a locked keychain the
+passphrases are blank in memory, and following would write nothing over working credentials. A deleted profile is
+not a change: its sessions keep what they have, the way deleting a preset stops nothing.
+
+**`startPolling` polls each target with its own identifiers**, one Go session per group (`groupTargets`) when they
+differ, since a session holds one connection; the split is announced. It used the global settings for every target,
+so a device with a profile — or merely a community of its own — was asked with the default one, and every reading
+was an error that looked exactly like an unreachable device. The version picked in the Monitor form applies to the
+targets on the defaults.
+
+**The trap listener accepts every SNMPv3 user at once** — the default v3 block and every v3 profile — through
+gosnmp's `SnmpV3SecurityParametersTable` (`pkg/snmp/usm.go`). It used to take one user, so a device sending as any
+other was dropped with nothing on screen. Three facts about gosnmp v1.43.2 decide the shape:
+
+- `listenUDP` asserts `Params.SecurityParameters` to `*UsmSecurityParameters` for EVERY v3 packet to compare engine
+  IDs, logs when the assertion fails, and dereferences the result anyway. A table with no SecurityParameters beside
+  it is a nil-pointer panic on gosnmp's own goroutine at the first v3 trap, which no recover of ours covers
+  (`TestATableNeverTravelsWithoutSecurityParameters`).
+- `Table.Add` localises keys and validates nothing, so `checkTrapUser` refuses what would be added and then
+  authenticate nothing — an AuthNoPriv user with no protocol — and names what gosnmp would report as
+  "hashPassword: password is empty". A refused user is reported by name, and the listener starts with the others:
+  receiving nothing over one stale profile is worse than receiving from everyone else.
+- The table can be ADDED to while the listener reads it and never removed from, so `UpdateTrapUsers` RESTARTS the
+  listener on its port — and only when the accepted set changed, compared as a set of what receiving uses (`trapUser`
+  drops the context and anything above the level). Updated in place, a deleted user would keep authenticating and a
+  rotated passphrase would work in both forms. `trapLife` serialises start, stop and update, and a stop now WAITS for
+  the listen goroutine to let go of the field; otherwise a start straight after it is refused as "already running".
+
+The accepted users are remembered in `pkg/secrets` under `TrapUsersRef()` on every start and every update, because
+the listener can be started at login with no window to hand them over: `app_service.go` passed an empty `V3Params`
+there, so a background listener dropped every v3 notification whatever the settings said. The renderer pushes the
+set once the stored credentials are open (`settingsReady` — before that the store holds sealed strings) and again
+whenever it changes.
+
+gosnmp re-localises the keys to the SENDER's engine ID on receipt, which is what lets one table entry serve every
+device configured with that user. `pkg/snmp/usm_test.go` drives it end to end — a real sender with an engine of its
+own, two users, an unknown one and a wrong passphrase in between — because a test of our table-building would pass
+just as well if gosnmp tried only the first entry.
 
 ## Why a MIB did not load
 

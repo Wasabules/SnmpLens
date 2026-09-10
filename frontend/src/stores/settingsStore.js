@@ -1,5 +1,6 @@
 import { writable } from 'svelte/store';
 import { encryptSettings, decryptSettings, forgetCredentials, initCredentialState } from '../utils/crypto';
+import { normaliseProfiles } from '../utils/credentialProfiles.js';
 
 // Default settings
 const defaults = {
@@ -16,6 +17,9 @@ const defaults = {
   locale: '',
   theme: 'system',
   targetOverrides: {},
+  // Named identifiers a target can be given instead of the default ones. See
+  // utils/credentialProfiles.js.
+  credentialProfiles: [],
   targetGroups: [
     { id: 'default', name: 'Default' }
   ],
@@ -73,23 +77,34 @@ function withDefaults(base, saved) {
 }
 
 const initialSettings = raw ? withDefaults(defaults, raw) : { ...defaults };
+// An array is taken from storage as it stands, so each entry is checked here:
+// what is in localStorage is whatever was last written there.
+initialSettings.credentialProfiles = normaliseProfiles(initialSettings.credentialProfiles);
 // Anonymous mode is always off on startup (intentionally non-persistent)
 initialSettings.anonymousMode = false;
+
+// Resolves once the stored credentials have been opened, or found impossible to
+// open. Whatever acts on the REAL values rather than on the sealed strings the
+// store starts with waits for it: the trap listener's SNMPv3 users are pushed to
+// Go, and pushing `enc:…` as a passphrase would refuse every one of them.
+let markReady;
+export const settingsReady = new Promise((resolve) => { markReady = resolve; });
 
 function createSettingsStore() {
   const { subscribe, set } = writable(initialSettings);
 
   // Decrypt on startup (async, updates store once done)
   if (raw) {
-    decryptSettings(initialSettings).then(decrypted => {
-      set(decrypted);
-    });
+    decryptSettings(initialSettings)
+      .then((decrypted) => set(decrypted))
+      .catch((e) => console.warn('stored settings could not be opened:', e))
+      .finally(() => markReady());
   } else {
     // No stored blob to open — but the store's state still has to be known.
     // Without this a fresh profile kept credentialState at its 'ok' default,
     // so no banner appeared on a machine with no credential store at all, and
     // the first save believed it could seal.
-    initCredentialState();
+    initCredentialState().finally(() => markReady());
   }
 
   return {

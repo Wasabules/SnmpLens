@@ -172,6 +172,29 @@ if (v3Declared) {
     Object.keys(v3).every((k) => /^[A-Z]/.test(k)), Object.keys(v3).join(', '));
 }
 
+// The trap listener takes a LIST of users, one V3Params each: the default
+// identifiers' and every v3 credential profile's.
+{
+  const users = buildTrapListenerRequest({
+    ...settings,
+    credentialProfiles: [{
+      id: 'p-core1234', name: 'Core', version: 'v3',
+      v3: { user: 'ops', secLevel: 'AuthNoPriv', authProto: 'SHA256', authPass: 'ops-auth-123',
+        privProto: 'AES', privPass: '', contextName: '' },
+    }],
+  }).users;
+  check('the trap listener is sent the default user and every v3 profile',
+    Array.isArray(users) && users.length === 2, JSON.stringify(users?.map((u) => u.User)));
+  if (v3Declared) {
+    for (const u of users || []) {
+      const dropped = Object.keys(u).filter((k) => !v3Declared.includes(k));
+      const unset = v3Declared.filter((k) => !Object.keys(u).includes(k));
+      check(`trap user ${u.User}: shaped exactly like V3Params`,
+        dropped.length === 0 && unset.length === 0, [...dropped, ...unset].join(', '));
+    }
+  }
+}
+
 const vars = buildSetMultiRequest(settings, TARGETS, '', [{ oid: OID, value: '1', type: 'Integer' }]).vars;
 const varDeclared = keysOf('SetVar');
 check('SetVar was found', !!varDeclared);

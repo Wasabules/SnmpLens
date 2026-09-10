@@ -11,6 +11,7 @@
   import { requestTab } from './stores/tabRequest';
   import { buildTestRequest } from './utils/snmpParams';
   import { getEffectiveSettings } from './utils/targets';
+  import { assignProfile, findProfile, withProfile } from './utils/credentialProfiles.js';
   import { boundPresetsFor } from './utils/presetBindings';
   import TargetOverrideForm from './TargetOverrideForm.svelte';
   import { anonMode, anonymizeIp } from './utils/anonymize';
@@ -45,6 +46,10 @@
   let targets = parseTargets($settingsStore.targets);
   let newAddress = '';
   let newLabel = '';
+  // The identifiers a new target starts with: '' for the defaults, or a
+  // credential profile's id. Kept between adds on purpose — equipment is
+  // usually added a batch of one kind at a time.
+  let newProfile = '';
   let showAddForm = false;
   let expandedOverrideId = null;
   let selectedGroupId = 'all';
@@ -124,7 +129,12 @@
     identifying = true;
     identity = null;
     try {
-      const settings = getEffectiveSettings($settingsStore, address);
+      // With the profile picked for it, when there is one: the device may
+      // answer to nothing else, and identifying it with the defaults would
+      // report it unreachable.
+      const settings = newProfile
+        ? withProfile($settingsStore, newProfile)
+        : getEffectiveSettings($settingsStore, address);
       const result = await IdentifyDevice(buildTestRequest(settings, address));
       identity = result;
       if (Array.isArray(result.presets) && result.presets.length) {
@@ -190,11 +200,19 @@
     // Assign to current group (or default)
     const groupId = selectedGroupId === 'all' ? 'default' : selectedGroupId;
     const newAssignments = { ...($settingsStore.targetGroupAssignments || {}), [address]: groupId };
+    const overrides = newProfile
+      ? assignProfile($settingsStore.targetOverrides, address, newProfile)
+      : $settingsStore.targetOverrides;
     newAddress = '';
     newLabel = '';
     newPreset = '';
     showAddForm = false;
-    settingsStore.save({ ...$settingsStore, targets: serializeTargets(targets), targetGroupAssignments: newAssignments });
+    settingsStore.save({
+      ...$settingsStore,
+      targets: serializeTargets(targets),
+      targetGroupAssignments: newAssignments,
+      targetOverrides: overrides,
+    });
 
     // The target is saved FIRST, and the binding is attempted afterwards. A
     // bind that fails must not cost the operator the equipment they just
@@ -343,9 +361,14 @@
     }
   }
 
-  function hasOverrides(address) {
-    const ov = $settingsStore.targetOverrides?.[address];
-    return ov && Object.keys(ov).length > 0;
+  // Overrides OTHER than a credential profile, which has a chip of its own.
+  function hasOverrides(settings, address) {
+    const ov = settings.targetOverrides?.[address];
+    return !!ov && Object.keys(ov).some((k) => k !== 'profile');
+  }
+
+  function profileOf(settings, address) {
+    return findProfile(settings, settings.targetOverrides?.[address]?.profile);
   }
 
   function toggleOverrides(id) {
@@ -366,6 +389,19 @@
     delete overrides[address];
     settingsStore.save({ ...$settingsStore, targetOverrides: overrides });
     expandedOverrideId = null;
+  }
+
+  // "Save as a profile" from a target's override form: the profile joins the
+  // library and the target is given it in ONE save — two would briefly leave
+  // the target naming a profile that did not exist yet.
+  function saveOverrideAsProfile(address, { profile, overrides: own }) {
+    settingsStore.save({
+      ...$settingsStore,
+      credentialProfiles: [...($settingsStore.credentialProfiles || []), profile],
+      targetOverrides: { ...($settingsStore.targetOverrides || {}), [address]: own },
+    });
+    expandedOverrideId = null;
+    notificationStore.add(get(_)('profiles.savedFromTarget', { values: { name: profile.name } }), 'success');
   }
 
   // --- Group management ---
@@ -481,6 +517,14 @@
         {identifying ? $_('common.working') : $_('targets.presetDetect')}
       </button>
       <input type="text" bind:value={newLabel} placeholder={$_('targets.labelPlaceholder')} on:keydown={(e) => e.key === 'Enter' && addTarget()} />
+      {#if ($settingsStore.credentialProfiles || []).length > 0}
+        <select bind:value={newProfile} title={$_('profiles.identifiers')} on:change={() => (identity = null)}>
+          <option value="">{$_('profiles.useDefault')}</option>
+          {#each $settingsStore.credentialProfiles as p (p.id)}
+            <option value={p.id}>{p.name} · {p.version}</option>
+          {/each}
+        </select>
+      {/if}
       <!-- The preset is chosen HERE, when the equipment is added, because that
            is the only moment somebody knows what the equipment is. -->
       <select bind:value={newPreset} title={$_('targets.presetHint')} disabled={bindablePresets.length === 0}>
@@ -538,8 +582,19 @@
               {:else}
                 <span class="target-address" class:disabled={!target.enabled}>
                   {$anonMode ? anonymizeIp(target.address) : target.address}
-                  {#if hasOverrides(target.address)}
+                  {#if hasOverrides($settingsStore, target.address)}
                     <span class="override-badge" title={$_('targets.overrides.badge')}><Icon name="sliders-horizontal" size={11} /></span>
+                  {/if}
+                  <!-- A badge like the one above, with the name in its title.
+                       Written out, the name took the room the operator's own
+                       label needs: this dialog is six hundred pixels wide, and
+                       both came out cut to a letter or two. -->
+                  {#if profileOf($settingsStore, target.address)}
+                    <span class="override-badge" role="img"
+                      title={$_('profiles.chip', { values: { name: profileOf($settingsStore, target.address).name } })}
+                      aria-label={$_('profiles.chip', { values: { name: profileOf($settingsStore, target.address).name } })}>
+                      <Icon name="key-round" size={11} />
+                    </span>
                   {/if}
                 </span>
                 <input
@@ -624,8 +679,11 @@
             <TargetOverrideForm
               overrides={$settingsStore.targetOverrides?.[target.address] || {}}
               globalSettings={$settingsStore}
+              address={target.address}
+              label={target.label}
               on:save={(e) => saveOverride(target.address, e.detail)}
               on:clear={() => clearOverride(target.address)}
+              on:saveAsProfile={(e) => saveOverrideAsProfile(target.address, e.detail)}
             />
           {/if}
         </div>

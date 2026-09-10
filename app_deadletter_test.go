@@ -207,7 +207,7 @@ func TestShutdownStopsTheTrapListener(t *testing.T) {
 	a.snmpClient.SetRecorder(events.RecorderFunc(a.recordEvent))
 
 	port := freeUDPPort(t)
-	if err := a.snmpClient.StartTrapListener(port, snmp.V3Params{}); err != nil {
+	if _, err := a.snmpClient.StartTrapListener(port, nil); err != nil {
 		t.Fatalf("could not start a listener: %v", err)
 	}
 	// Let it bind, so this tests the running case.

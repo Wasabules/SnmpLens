@@ -4,16 +4,26 @@
   import { notificationStore } from '../stores/notifications';
   import { TestConnection } from '../../wailsjs/go/main/App';
   import { buildTestRequest } from '../utils/snmpParams';
-  import { anonMode, maskString, maskSysDescr } from '../utils/anonymize';
+  import { anonMode, maskSysDescr } from '../utils/anonymize';
   import Icon from '../Icon.svelte';
+  import UsmFields from './UsmFields.svelte';
+  import CredentialProfiles from './CredentialProfiles.svelte';
   import { credentialState, credentialBackend } from '../utils/crypto';
+  import { findProfile, withProfile } from '../utils/credentialProfiles.js';
 
   export let settings;
 
   let testTarget = '';
+  // '' tests the default identifiers in the version picked beside it; a
+  // profile id tests that profile, which carries its own version.
+  let testIdentity = '';
   let testVersion = 'v2c';
   let isTesting = false;
   let testResult = null;
+
+  // A profile deleted while it was picked here falls back to the defaults
+  // rather than testing something that no longer exists.
+  $: if (testIdentity && !findProfile(settings, testIdentity)) testIdentity = '';
 
   async function handleTestConnection() {
     const t = get(_);
@@ -26,7 +36,10 @@
     testResult = null;
 
     try {
-      const result = await TestConnection(buildTestRequest({...settings, snmpVersion: testVersion}, testTarget.trim()));
+      const identity = testIdentity
+        ? withProfile(settings, testIdentity)
+        : { ...settings, snmpVersion: testVersion };
+      const result = await TestConnection(buildTestRequest(identity, testTarget.trim()));
 
       testResult = result;
       if (result.error) {
@@ -65,75 +78,34 @@
   </p>
 {/if}
 
-<fieldset>
-  <legend>{$_('settings.snmp.v1v2cTitle')}</legend>
-  <div class="settings-grid single-column">
-    <div class="form-group">
-      <label for="community">{$_('settings.snmp.community')}</label>
-      {#if $anonMode}
-        <input id="community" type="password" bind:value={settings.community} />
-      {:else}
-        <input id="community" type="text" bind:value={settings.community} />
-      {/if}
-    </div>
-  </div>
-</fieldset>
+<!-- The default identifiers stay what they always were — the community and the
+     v3 block every target uses unless it is given something else — and the
+     profiles below are that something else. -->
+<section class="defaults">
+  <h4 class="section-title">{$_('profiles.defaultTitle')}</h4>
+  <p class="hint">{$_('profiles.defaultHint')}</p>
 
-<fieldset>
-  <legend>{$_('settings.snmp.v3Title')}</legend>
-  <div class="settings-grid">
-    <div class="form-group">
-      <label for="v3-user">{$_('settings.snmp.username')}</label>
-      {#if $anonMode}
-        <input id="v3-user" type="password" bind:value={settings.v3.user} />
-      {:else}
-        <input id="v3-user" type="text" bind:value={settings.v3.user} />
-      {/if}
+  <fieldset>
+    <legend>{$_('settings.snmp.v1v2cTitle')}</legend>
+    <div class="settings-grid single-column">
+      <div class="form-group">
+        <label for="community">{$_('settings.snmp.community')}</label>
+        {#if $anonMode}
+          <input id="community" type="password" bind:value={settings.community} />
+        {:else}
+          <input id="community" type="text" bind:value={settings.community} />
+        {/if}
+      </div>
     </div>
-    <div class="form-group">
-      <label for="v3-secLevel">{$_('settings.snmp.securityLevel')}</label>
-      <select id="v3-secLevel" bind:value={settings.v3.secLevel}>
-        <option value="NoAuthNoPriv">NoAuthNoPriv</option>
-        <option value="AuthNoPriv">AuthNoPriv</option>
-        <option value="AuthPriv">AuthPriv</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label for="v3-authProto">{$_('settings.snmp.authProtocol')}</label>
-      <select id="v3-authProto" bind:value={settings.v3.authProto} disabled={settings.v3.secLevel === 'NoAuthNoPriv'}>
-        <option value="MD5">MD5</option>
-        <option value="SHA">SHA</option>
-        <option value="SHA224">SHA-224</option>
-        <option value="SHA256">SHA-256</option>
-        <option value="SHA384">SHA-384</option>
-        <option value="SHA512">SHA-512</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label for="v3-authPass">{$_('settings.snmp.authPassword')}</label>
-      <input id="v3-authPass" type="password" bind:value={settings.v3.authPass} disabled={settings.v3.secLevel === 'NoAuthNoPriv'} />
-    </div>
-    <div class="form-group">
-      <label for="v3-privProto">{$_('settings.snmp.privProtocol')}</label>
-      <select id="v3-privProto" bind:value={settings.v3.privProto} disabled={settings.v3.secLevel !== 'AuthPriv'}>
-        <option value="DES">DES</option>
-        <option value="AES">AES-128</option>
-        <option value="AES192C">AES-192</option>
-        <option value="AES256C">AES-256</option>
-        <option value="AES192">AES-192 (Blumenthal)</option>
-        <option value="AES256">AES-256 (Blumenthal)</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label for="v3-privPass">{$_('settings.snmp.privPassword')}</label>
-      <input id="v3-privPass" type="password" bind:value={settings.v3.privPass} disabled={settings.v3.secLevel !== 'AuthPriv'} />
-    </div>
-    <div class="form-group full-width">
-      <label for="v3-contextName">{$_('settings.snmp.contextName')}</label>
-      <input id="v3-contextName" type="text" bind:value={settings.v3.contextName} placeholder={$_('settings.snmp.contextPlaceholder')} />
-    </div>
-  </div>
-</fieldset>
+  </fieldset>
+
+  <fieldset>
+    <legend>{$_('settings.snmp.v3Title')}</legend>
+    <UsmFields bind:v3={settings.v3} idPrefix="v3" />
+  </fieldset>
+</section>
+
+<CredentialProfiles bind:settings />
 
 <fieldset class="test-connection">
   <legend><Icon name="plug" size={15} /> {$_('settings.snmp.testTitle')}</legend>
@@ -148,13 +120,24 @@
       />
     </div>
     <div class="form-group">
-      <label for="test-version">{$_('settings.snmp.testVersion')}</label>
-      <select id="test-version" bind:value={testVersion}>
-        <option value="v1">v1</option>
-        <option value="v2c">v2c</option>
-        <option value="v3">v3</option>
+      <label for="test-identity">{$_('profiles.identifiers')}</label>
+      <select id="test-identity" bind:value={testIdentity}>
+        <option value="">{$_('profiles.useDefault')}</option>
+        {#each settings.credentialProfiles || [] as p (p.id)}
+          <option value={p.id}>{p.name} · {p.version}</option>
+        {/each}
       </select>
     </div>
+    {#if !testIdentity}
+      <div class="form-group narrow">
+        <label for="test-version">{$_('settings.snmp.testVersion')}</label>
+        <select id="test-version" bind:value={testVersion}>
+          <option value="v1">v1</option>
+          <option value="v2c">v2c</option>
+          <option value="v3">v3</option>
+        </select>
+      </div>
+    {/if}
     <button
       class="btn test-btn"
       on:click={handleTestConnection}
@@ -177,6 +160,23 @@
 </fieldset>
 
 <style>
+  .defaults {
+    margin-bottom: 22px;
+  }
+
+  .section-title {
+    margin: 0;
+    font-size: 1.05em;
+    font-weight: 600;
+  }
+
+  .hint {
+    font-size: 0.8em;
+    color: var(--text-muted);
+    margin: 6px 0 12px;
+    line-height: 1.45;
+  }
+
   fieldset {
     border: 1px solid var(--border-color);
     border-radius: 6px;
@@ -226,10 +226,6 @@
     color: var(--text-color);
   }
 
-  .full-width {
-    grid-column: 1 / -1;
-  }
-
   .test-connection {
     margin-top: 15px;
     background-color: var(--accent-subtle);
@@ -247,6 +243,11 @@
     flex: 1;
     min-width: 150px;
     margin-bottom: 0;
+  }
+
+  .test-form .form-group.narrow {
+    flex: 0 0 110px;
+    min-width: 0;
   }
 
   .test-btn {
@@ -291,18 +292,21 @@
     border-radius: 4px;
   }
 
+  /* The theme's own variables. These read --bg-hover, --text-secondary,
+     --warning and --danger, which exist nowhere, so the fallbacks always won:
+     a pale banner with grey text on a dark window. */
   .cred-banner.ok {
-    color: var(--text-secondary, #555);
-    background: var(--bg-hover, #f2f2f2);
+    color: var(--text-muted);
+    background: var(--bg-lighter-color);
   }
 
   .cred-banner.warn {
-    color: var(--warning, #b7791f);
-    background: var(--bg-hover, #fdf6e3);
+    color: var(--warning-color);
+    background: var(--warning-subtle);
   }
 
   .cred-banner.err {
-    color: var(--danger, #c0392b);
-    background: var(--bg-hover, #fdf0ef);
+    color: var(--error-color);
+    background: var(--error-subtle);
   }
 </style>

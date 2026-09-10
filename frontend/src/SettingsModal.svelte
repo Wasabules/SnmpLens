@@ -3,7 +3,9 @@
   import { GetPersistentMibDirectory } from '../wailsjs/go/main/App';
   import { onBackdrop } from './utils/modal';
   import { _ } from 'svelte-i18n';
+  import { get } from 'svelte/store';
   import { settingsStore } from './stores/settingsStore';
+  import { pollingStore } from './stores/pollingStore';
   import GeneralSettings from './settings/GeneralSettings.svelte';
   import MibSettings from './settings/MibSettings.svelte';
   import PresetSettings from './settings/PresetSettings.svelte';
@@ -48,7 +50,12 @@
   });
 
   function handleSave() {
+    // The identifiers as they were, for the monitoring sessions built from
+    // them: a session follows its credential profile, and this dialog is where
+    // a profile's credentials — and the default ones — are edited.
+    const before = get(settingsStore);
     settingsStore.save(settings);
+    pollingStore.followCredentials(before, settings);
     dispatch('close');
   }
 

@@ -1,10 +1,11 @@
 import { writable, get } from 'svelte/store';
 import { _ } from 'svelte-i18n';
-import { StartTrapListener, StopTrapListener, GetOidDetails } from '../../wailsjs/go/main/App';
+import { StartTrapListener, StopTrapListener, UpdateTrapUsers, GetOidDetails } from '../../wailsjs/go/main/App';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
 import { notificationStore } from './notifications';
-import { settingsStore } from './settingsStore';
+import { settingsStore, settingsReady } from './settingsStore';
 import { buildTrapListenerRequest } from '../utils/snmpParams';
+import { getState } from '../utils/crypto';
 import { sendNativeNotification } from '../utils/nativeNotify';
 import { createBurstGate } from '../utils/burst';
 
@@ -83,14 +84,31 @@ function createTrapStore() {
     isWindowFocused: true,
   });
 
+  // The SNMPv3 users last handed to Go, as JSON, so an unchanged set is not
+  // sent again on every save of an unrelated setting.
+  let appliedUsers = null;
+
+  // A user Go would not take is said once, by name and with Go's reason —
+  // never dropped in silence, since a device sending as that user would look
+  // exactly like a device sending nothing.
+  function reportRefused(info) {
+    const t = get(_);
+    for (const r of info?.refused || []) {
+      notificationStore.add(t('profiles.trapUserRefused', { values: { user: r.user, reason: r.reason } }), 'warning');
+    }
+  }
+
   async function start() {
     const currentSettings = get(settingsStore);
+    const request = buildTrapListenerRequest(currentSettings);
 
     try {
-      await StartTrapListener(buildTrapListenerRequest(currentSettings));
+      const info = await StartTrapListener(request);
+      appliedUsers = JSON.stringify(request.users);
       update(store => ({ ...store, isListening: true }));
       const t = get(_);
       notificationStore.add(t('traps.listenerStarted', { values: { port: currentSettings.trapPort } }), 'success');
+      reportRefused(info);
     } catch (err) {
       const t = get(_);
       notificationStore.add(t('traps.listenerStartFailed', { values: { error: err } }), 'error');
@@ -183,6 +201,44 @@ function createTrapStore() {
     update(store => ({ ...store, isListening: false }));
     const t = get(_);
     notificationStore.add(t('traps.listenerError', { values: { error } }), 'error');
+  });
+
+  // The listener's SNMPv3 users follow the settings.
+  //
+  // Every v3 credential profile is a user the listener accepts, so saving one
+  // has to reach a listener that is already running — and one that is not,
+  // because Go remembers the set for a listener started at login, before any
+  // window exists. Go restarts a running listener only when the set it accepts
+  // actually changed.
+  //
+  // Only once the stored credentials are open, and only while they can be:
+  // before that the store holds sealed strings, and with a locked keychain the
+  // passphrases are blanked in memory. Pushing either would replace working
+  // users with users that authenticate nothing.
+  async function syncTrapUsers(settings) {
+    if (getState() !== 'ok') return;
+    const { users } = buildTrapListenerRequest(settings);
+    const key = JSON.stringify(users);
+    if (key === appliedUsers) return;
+    appliedUsers = key;
+
+    const t = get(_);
+    try {
+      const info = await UpdateTrapUsers(users);
+      if (info?.restarted) {
+        notificationStore.add(t('profiles.trapUsersApplied', { values: { count: info.users } }), 'info');
+      }
+      // Refusals matter to a listener that is running; reporting them on every
+      // start of a window whose listener is off would be noise about nothing.
+      if (info?.restarted || get(trapStore).isListening) reportRefused(info);
+    } catch (err) {
+      update(store => ({ ...store, isListening: false }));
+      notificationStore.add(t('traps.listenerError', { values: { error: err } }), 'error');
+    }
+  }
+
+  settingsReady.then(() => {
+    settingsStore.subscribe((s) => { syncTrapUsers(s); });
   });
 
   return {

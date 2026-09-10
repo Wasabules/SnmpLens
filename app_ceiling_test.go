@@ -166,7 +166,7 @@ func TestTrapsAreNotLostAtTheStatedRate(t *testing.T) {
 	a.snmpClient.SetRecorder(events.RecorderFunc(a.recordEvent))
 
 	port := freeUDPPort(t)
-	if err := a.snmpClient.StartTrapListener(port, snmp.V3Params{}); err != nil {
+	if _, err := a.snmpClient.StartTrapListener(port, nil); err != nil {
 		t.Fatal(err)
 	}
 	defer a.snmpClient.StopTrapListener()
@@ -211,7 +211,7 @@ func TestMeasureWhereTrapLossBegins(t *testing.T) {
 	a.snmpClient.SetRecorder(events.RecorderFunc(a.recordEvent))
 
 	port := freeUDPPort(t)
-	if err := a.snmpClient.StartTrapListener(port, snmp.V3Params{}); err != nil {
+	if _, err := a.snmpClient.StartTrapListener(port, nil); err != nil {
 		t.Fatal(err)
 	}
 	defer a.snmpClient.StopTrapListener()

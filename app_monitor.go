@@ -28,6 +28,13 @@ type MonitorConnection struct {
 	// on the way in. See sessionCreds.
 	Community string        `json:"community"`
 	V3        snmp.V3Params `json:"v3"`
+	// Profile names the identifiers this connection was built from: "default"
+	// for the default identifiers, a credential profile's id, or empty for a
+	// target's own overrides and for anything older. An opaque id and not a
+	// credential, so it is safe in monitoring.db — and it is what lets a
+	// session FOLLOW its profile: rotate a passphrase and every session polling
+	// with it is updated, instead of failing authentication until rebound.
+	Profile string `json:"profile"`
 }
 
 // sessionCreds is the blob held in the secret store for one session.
@@ -48,6 +55,7 @@ func (c MonitorConnection) split() (*storage.SessionConn, sessionCreds) {
 			V3PrivProto:   c.V3.PrivProto,
 			V3SecLevel:    c.V3.SecLevel,
 			V3ContextName: c.V3.ContextName,
+			Profile:       c.Profile,
 		}, sessionCreds{
 			Community: c.Community,
 			AuthPass:  c.V3.AuthPass,
@@ -430,12 +438,21 @@ func (a *App) MonitorRunning() []string {
 
 // MonitorUpdateConnection replaces a session's connection settings, for when a
 // community or passphrase changes after the session was created.
-func (a *App) MonitorUpdateConnection(sessionID string, conn MonitorConnection) error {
+//
+// The version travels with it because a credential profile carries one: a
+// profile moved from v2c to v3 changes how its sessions must speak, not only
+// what they say. Empty keeps the session's own.
+func (a *App) MonitorUpdateConnection(sessionID, snmpVersion string, conn MonitorConnection) error {
 	if a.storage == nil {
 		return fmt.Errorf("storage not initialized")
 	}
+	switch snmpVersion {
+	case "", "v1", "v2c", "v3":
+	default:
+		return fmt.Errorf("unsupported SNMP version %q", snmpVersion)
+	}
 	sessConn, creds := conn.split()
-	if err := a.storage.UpdateSessionConn(sessionID, sessConn); err != nil {
+	if err := a.storage.UpdateSessionConn(sessionID, snmpVersion, sessConn); err != nil {
 		return err
 	}
 	a.saveSessionCreds(sessionID, creds)
