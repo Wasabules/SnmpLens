@@ -13,6 +13,8 @@
  * destinations' communities filled in from the credential store by ID.
  */
 import { usesAuth, usesPriv } from './snmpSecurity.js';
+import { buildSnmpRequest } from './snmpParams.js';
+import { getEffectiveSettings, getTargetsAsArray } from './targets.js';
 
 /** The versions a device may answer, in the order they are shown. */
 export const SIM_VERSIONS = ['v1', 'v2c', 'v3'];
@@ -375,6 +377,29 @@ export function importReport(results) {
 /** The first model an import brought in, which the picker then selects. */
 export function firstImported(results) {
   return (results || []).find((r) => r.success)?.modelId || '';
+}
+
+/** The categories a recorded model may be filed under: Go's customCategories. */
+export const CUSTOM_CATEGORIES = Object.keys(CATEGORY_ICONS);
+
+/** The targets a device may be recorded from: the addresses the settings list. */
+export function recordableTargets(settings) {
+  return getTargetsAsArray(settings?.targets || '');
+}
+
+/**
+ * What SimulatorRecordDevice is asked: the device, reached as every request to
+ * that target is — its profile, its own overrides or the defaults, through
+ * getEffectiveSettings —, and what the model it makes is to be called.
+ */
+export function recordRequest(settings, target, { name, description = '', vendor = '', category = 'other' }) {
+  return {
+    ...buildSnmpRequest(getEffectiveSettings(settings, target), [target], ''),
+    name,
+    description,
+    vendor,
+    category,
+  };
 }
 
 /** What a device of the model can send, as Go lists it. */

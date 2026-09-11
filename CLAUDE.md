@@ -672,6 +672,20 @@ folder of the archive's own names — and a lone file as `<id>.json`. Importing 
 writing, and `loadModels` takes the newer when a stopped import leaves both: two kept forms of one ID would
 otherwise fail `SetCustomModels` and take every custom model with them.
 
+**Recording a device is walking it into a package** (`app_simrecord.go`, `pkg/snmp/record.go`,
+`pkg/simulator/record.go`). `Client.Record` walks one device under `.1.3.6.1` and `.1.0.8802`, keeping each varbind
+as gosnmp DECODED it — the types are the point, and `Walk`'s formatted results lose them — and `simulator.Recording`
+writes each as a `.snmprec` line: an OCTET STRING as text only when every octet is printable ASCII and in hex
+otherwise, so that the octets read back are the octets sent (`TestARecordingReadsBackAsWhatWasSent` round-trips every
+type through `readWalk`). The agent's own subtrees are never WRITTEN, not merely not served: a recording is a file
+somebody may pass on, and in a real walk that subtree holds the device's user names and community table. The walk
+runs outside the simulator's lock, which a large device would hold for minutes — one recording at a time, guarded
+apart, and `SimulatorCancelRecording` stops it with nothing kept. The request is built in the renderer through
+`getEffectiveSettings`, as every request is, so a device is recorded with its target's profile or overrides, and
+`recordRequest` is checked against the Go struct's tags as the other request builders are. Export writes a kept
+model as a package FOLDER (`repackUnder`), its icon under the name the model gives it, which imports back as itself:
+that is how a recording is edited.
+
 **What only a notification carries** (`Object.NotifyOnly`). An iDRAC alert carries eleven objects its MIB makes
 accessible-for-notify (RFC 2578 7.3) — a message ID, the message, the service tag — and no request may read them.
 They are kept beside the tree rather than in it: a GET answers `noSuchObject`, a walk passes them by, and

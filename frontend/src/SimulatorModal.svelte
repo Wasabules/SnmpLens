@@ -9,7 +9,7 @@
   import {
     SIM_VERSIONS, MAX_EVERY, MAX_DESTINATIONS, MAX_SCHEDULES, blankDevice, blankV3, blankDestination, blankSchedule,
     editableDevice, deviceProblems, devicePayload, addDeviceAsTarget, notificationsOf, trapActivity, deliveryReport,
-    modelOf, modelName, modelDescription, importReport, firstImported,
+    modelOf, modelName, modelDescription, importReport, firstImported, recordRequest, recordableTargets,
   } from './utils/simulator.js';
   import UsmFields from './settings/UsmFields.svelte';
   import ModelPicker from './simulator/ModelPicker.svelte';
@@ -121,6 +121,46 @@
       notificationStore.add(String(e), 'error');
     } finally {
       importingModels = false;
+    }
+  }
+
+  let recordOpen = false;
+  let stopRequested = false;
+
+  // A device recorded becomes a model as one imported does, and the new
+  // device's model: recording one is how someone says they want it.
+  async function recordDevice({ target, name, vendor, category }) {
+    stopRequested = false;
+    const shown = $anonMode ? maskString(target) : target;
+    const description = $_('simulator.record.description', { values: { target, date: new Date().toLocaleDateString() } });
+    try {
+      const result = await simulatorStore.record(recordRequest($settingsStore, target, { name, vendor, category, description }));
+      for (const line of importReport([result])) {
+        notificationStore.add($_(line.key, { values: line.values }), line.level);
+      }
+      await simulatorStore.refreshModels();
+      if (result.success) {
+        recordOpen = false;
+        onModel(result.modelId);
+      }
+    } catch (e) {
+      if (stopRequested) notificationStore.add($_('simulator.record.stopped'), 'info');
+      else notificationStore.add($_('simulator.record.failed', { values: { target: shown, error: String(e) } }), 'error');
+    }
+  }
+
+  function stopRecording() {
+    stopRequested = true;
+    simulatorStore.stopRecording().catch(() => {});
+  }
+
+  async function exportModel(id) {
+    const name = modelName(modelOf($simulatorStore.models, id), $_, id);
+    try {
+      const path = await simulatorStore.exportModel(id);
+      if (path) notificationStore.add($_('simulator.models.exported', { values: { name, path } }), 'success');
+    } catch (e) {
+      notificationStore.add(String(e), 'error');
     }
   }
 
@@ -305,8 +345,10 @@
         {:else}
           <h4 class="section-title first">{$_('simulator.field.model')}</h4>
           <ModelPicker models={$simulatorStore.models} icons={$simulatorStore.icons} devices={$simulatorStore.devices}
-            value={editing.model} busy={importingModels} on:change={(e) => onModel(e.detail)}
-            on:import={importModels} on:delete={(e) => deleteModel(e.detail)} />
+            value={editing.model} busy={importingModels || !!$simulatorStore.recording}
+            targets={recordableTargets($settingsStore)} recording={$simulatorStore.recording} bind:recordOpen
+            on:change={(e) => onModel(e.detail)} on:import={importModels} on:delete={(e) => deleteModel(e.detail)}
+            on:record={(e) => recordDevice(e.detail)} on:stop={stopRecording} on:export={(e) => exportModel(e.detail)} />
         {/if}
         <div class="grid">
           <div class="form-group">

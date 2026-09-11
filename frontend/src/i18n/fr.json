@@ -1442,14 +1442,31 @@
       "custom": "Personnalisé",
       "import": "Importer des modèles…",
       "importTitle": "Ajouter des modèles depuis un fichier JSON, ou depuis un ZIP qui contient leurs icônes ou des paquets complets avec des walks enregistrés",
+      "record": "Enregistrer un équipement…",
+      "recordTitle": "Parcourir un équipement réel et garder ce qu’il répond comme modèle",
+      "exportModel": "Exporter ce modèle en paquet (ZIP), pour le modifier ou le partager",
       "deleteModel": "Supprimer ce modèle personnalisé",
       "inUse": "{count, plural, one {# appareil est fait de ce modèle : supprimez-le d’abord} other {# appareils sont faits de ce modèle : supprimez-les d’abord}}"
+    },
+    "record": {
+      "hint": "SnmpLens parcourt l’équipement avec les identifiants de sa cible et garde chaque valeur qu’il répond, sous forme de paquet — sauf ses utilisateurs SNMP, ses groupes et ses communautés. Un gros équipement prend un moment.",
+      "target": "Équipement à enregistrer",
+      "name": "Nom du modèle",
+      "vendor": "Fabricant",
+      "category": "Catégorie",
+      "start": "Enregistrer",
+      "stop": "Arrêter",
+      "progress": "{count, plural, one {# objet enregistré…} other {# objets enregistrés…}}",
+      "description": "Enregistré depuis {target} le {date}.",
+      "stopped": "L’enregistrement a été arrêté ; rien n’a été gardé.",
+      "failed": "{target} n’a pas pu être enregistré : {error}"
     },
     "models": {
       "imported": "Modèle « {name} » importé",
       "replaced": "Modèle « {name} » mis à jour ; les appareils en marche qui l’utilisent ont redémarré",
       "failed": "{file} : {error}",
       "deleted": "Modèle « {name} » supprimé",
+      "exported": "Modèle « {name} » exporté vers {path}",
       "warning": {
         "iconSkipped": "{name} : son icône « {detail} » n’a pas été importée — une icône voyage dans un ZIP, à côté de son modèle",
         "iconMissing": "{name} : l’archive ne contient pas « {detail} », le modèle n’a donc pas d’icône",

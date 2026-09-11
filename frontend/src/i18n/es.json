@@ -1442,14 +1442,31 @@
       "custom": "Personalizado",
       "import": "Importar modelos…",
       "importTitle": "Añadir modelos desde un archivo JSON, o desde un ZIP con sus iconos o paquetes completos con walks grabados",
+      "record": "Grabar un equipo…",
+      "recordTitle": "Recorrer un equipo real y guardar lo que responde como modelo",
+      "exportModel": "Exportar este modelo como paquete (ZIP), para editarlo o compartirlo",
       "deleteModel": "Eliminar este modelo personalizado",
       "inUse": "{count, plural, one {# dispositivo se basa en este modelo: elimínelo primero} other {# dispositivos se basan en este modelo: elimínelos primero}}"
+    },
+    "record": {
+      "hint": "SnmpLens recorre el equipo con los identificadores de su destino y guarda cada valor que responde, como un paquete — salvo sus usuarios SNMP, grupos y comunidades. Un equipo grande tarda un rato.",
+      "target": "Equipo que grabar",
+      "name": "Nombre del modelo",
+      "vendor": "Fabricante",
+      "category": "Categoría",
+      "start": "Grabar",
+      "stop": "Detener",
+      "progress": "{count, plural, one {# objeto grabado…} other {# objetos grabados…}}",
+      "description": "Grabado desde {target} el {date}.",
+      "stopped": "La grabación se detuvo; no se guardó nada.",
+      "failed": "No se pudo grabar {target}: {error}"
     },
     "models": {
       "imported": "Modelo «{name}» importado",
       "replaced": "Modelo «{name}» actualizado; los dispositivos en marcha que lo usan se han reiniciado",
       "failed": "{file}: {error}",
       "deleted": "Modelo «{name}» eliminado",
+      "exported": "Modelo «{name}» exportado a {path}",
       "warning": {
         "iconSkipped": "{name}: su icono «{detail}» no se importó — un icono viaja en un ZIP, junto a su modelo",
         "iconMissing": "{name}: el archivo no contiene «{detail}», así que el modelo no tiene icono",

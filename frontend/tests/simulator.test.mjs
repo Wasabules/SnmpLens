@@ -66,6 +66,9 @@ const {
   devicesOfModel,
   importReport,
   firstImported,
+  CUSTOM_CATEGORIES,
+  recordableTargets,
+  recordRequest,
   preferredVersion,
   targetOf,
   addDeviceAsTarget,
@@ -384,8 +387,50 @@ for (const key of warningKeys) {
 for (const key of ['imported', 'replaced', 'failed', 'deleted']) {
   check(`en.json says simulator.models.${key}`, Boolean(en.simulator?.models?.[key]));
 }
-for (const key of ['search', 'all', 'categories', 'noMatch', 'custom', 'import', 'importTitle', 'deleteModel', 'inUse']) {
+for (const key of ['search', 'all', 'categories', 'noMatch', 'custom', 'import', 'importTitle', 'deleteModel', 'inUse',
+  'record', 'recordTitle', 'exportModel']) {
   check(`en.json says simulator.picker.${key}`, Boolean(en.simulator?.picker?.[key]));
 }
+for (const key of ['hint', 'target', 'name', 'vendor', 'category', 'start', 'stop', 'progress', 'description', 'stopped', 'failed']) {
+  check(`en.json says simulator.record.${key}`, Boolean(en.simulator?.record?.[key]));
+}
+check('en.json says simulator.models.exported', Boolean(en.simulator?.models?.exported));
+
+// A device is recorded with what its target uses — its profile, its own
+// overrides or the defaults — and the request carries exactly what Go's
+// SimulatorRecordRequest reads, SnmpRequest's fields included: a key Go does
+// not declare is dropped by encoding/json, and a field the renderer forgets
+// arrives as its zero value, a port of 0 among them.
+const goTags = (src, type) => {
+  const body = src.match(new RegExp(`type ${type} struct \\{([\\s\\S]*?)\\n\\}`))?.[1] || '';
+  return [...body.matchAll(/json:"([^",]+)/g)].map((m) => m[1]);
+};
+const recordGo = readFileSync(new URL('../../app_simrecord.go', import.meta.url), 'utf8');
+const paramsGo = readFileSync(new URL('../../pkg/snmp/params.go', import.meta.url), 'utf8');
+const declared = [...goTags(recordGo, 'SimulatorRecordRequest'), ...goTags(paramsGo, 'SnmpRequest')].sort();
+const recordSettings = {
+  targets: '10.0.0.9 # core\n10.0.0.10',
+  community: 'public', snmpVersion: 'v2c', port: 161, timeout: 3, retries: 1,
+  v3: { user: '', securityLevel: 'noAuthNoPriv', authProtocol: 'SHA', authPass: '', privProtocol: 'AES', privPass: '', contextName: '' },
+  targetOverrides: { '10.0.0.10': { community: 'lab-ro', snmpVersion: 'v1', port: 1161 } },
+  credentialProfiles: [],
+};
+const recordReq = recordRequest(recordSettings, '10.0.0.10', { name: 'Core', vendor: 'Acme', category: 'network', description: 'd' });
+check('a recording request carries what SimulatorRecordRequest reads, and nothing else',
+  declared.length >= 12 && JSON.stringify(Object.keys(recordReq).sort()) === JSON.stringify(declared),
+  `${Object.keys(recordReq).sort()} vs ${declared}`);
+check('and reaches the device with what its target uses',
+  recordReq.community === 'lab-ro' && recordReq.version === 'v1' && recordReq.port === 1161 &&
+  JSON.stringify(recordReq.targets) === '["10.0.0.10"]' && recordReq.name === 'Core', JSON.stringify(recordReq));
+check('the targets a device may be recorded from are the addresses the settings list',
+  JSON.stringify(recordableTargets(recordSettings)) === '["10.0.0.9","10.0.0.10"]' &&
+  recordableTargets({}).length === 0, JSON.stringify(recordableTargets(recordSettings)));
+
+// A recorded model is filed under a category Go accepts, and every one Go
+// accepts can be chosen.
+const goCategories = [...customCategories].sort();
+check('the categories a recording offers are those Go accepts',
+  goCategories.length > 0 && JSON.stringify([...CUSTOM_CATEGORIES].sort()) === JSON.stringify(goCategories),
+  `${CUSTOM_CATEGORIES} vs ${goCategories}`);
 
 process.exit(failures ? 1 : 0);

@@ -170,13 +170,24 @@ func readKept(name, form string) (simulator.CustomModel, error) {
 		}
 		return simulator.ParseCustomModel(bytes.TrimPrefix(raw, utf8BOM))
 	}
-	data, err := readAtMost(name, maxKeptPackageBytes)
+	files, err := keptPackageFiles(name)
 	if err != nil {
 		return simulator.CustomModel{}, err
 	}
+	m, _, err := simulator.ParseCustomPackage(files)
+	return m, err
+}
+
+// keptPackageFiles reads back the files of a package the directory keeps, by
+// their names in the package.
+func keptPackageFiles(name string) ([]simulator.PackageFile, error) {
+	data, err := readAtMost(name, maxKeptPackageBytes)
+	if err != nil {
+		return nil, err
+	}
 	ar, err := openArchive(data)
 	if err != nil {
-		return simulator.CustomModel{}, err
+		return nil, err
 	}
 	var files []simulator.PackageFile
 	for _, f := range ar.files {
@@ -185,12 +196,11 @@ func readKept(name, form string) (simulator.CustomModel, error) {
 		}
 		b, err := ar.read(f, packageFileLimit(f.Name))
 		if err != nil {
-			return simulator.CustomModel{}, err
+			return nil, err
 		}
 		files = append(files, simulator.PackageFile{Name: f.Name, Data: b})
 	}
-	m, _, err := simulator.ParseCustomPackage(files)
-	return m, err
+	return files, nil
 }
 
 // emitSimulatorModelsChanged tells the renderer to list the models again.
@@ -297,21 +307,27 @@ func (a *App) importSimulatorModels(paths []string) []SimulatorModelImportResult
 	}
 	s.loadModels()
 	for r := range results {
-		res := &results[r]
-		if !res.Success || !res.Replaced {
-			continue
-		}
-		for i, d := range s.devices {
-			if d.Model != res.ModelID || !s.fleet.Stop(d.ID) {
-				continue
-			}
-			if err := a.startSimulatedLocked(s, i); err != nil {
-				res.Warnings = append(res.Warnings, SimulatorModelWarning{Key: "restartFailed", Detail: fmt.Sprintf("%s: %v", d.Name, err)})
-			}
-		}
+		a.restartModelDevicesLocked(s, &results[r])
 	}
 	a.emitSimulatorModelsChanged()
 	return results
+}
+
+// restartModelDevicesLocked restarts the running devices of the model a result
+// replaced, so that they answer as it now is — as an edited device restarts.
+// s.mu is held.
+func (a *App) restartModelDevicesLocked(s *simulatorService, res *SimulatorModelImportResult) {
+	if !res.Success || !res.Replaced {
+		return
+	}
+	for i, d := range s.devices {
+		if d.Model != res.ModelID || !s.fleet.Stop(d.ID) {
+			continue
+		}
+		if err := a.startSimulatedLocked(s, i); err != nil {
+			res.Warnings = append(res.Warnings, SimulatorModelWarning{Key: "restartFailed", Detail: fmt.Sprintf("%s: %v", d.Name, err)})
+		}
+	}
 }
 
 // importModelFile imports what one picked file holds: a model, or an archive of
@@ -560,11 +576,15 @@ func (s *simulatorService) importPackage(archiveName string, ar *archive, root s
 
 // repack is the ZIP a package is kept as: the files it reads and nothing else,
 // by their names in the package.
-func repack(files []simulator.PackageFile) ([]byte, error) {
+func repack(files []simulator.PackageFile) ([]byte, error) { return repackUnder("", files) }
+
+// repackUnder is a ZIP of a package's files, in a folder of that name when one
+// is given: the shape a package is exported in.
+func repackUnder(folder string, files []simulator.PackageFile) ([]byte, error) {
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
 	for _, f := range files {
-		w, err := zw.CreateHeader(&zip.FileHeader{Name: f.Name, Method: zip.Deflate})
+		w, err := zw.CreateHeader(&zip.FileHeader{Name: path.Join(folder, f.Name), Method: zip.Deflate})
 		if err != nil {
 			return nil, err
 		}
