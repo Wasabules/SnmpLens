@@ -133,6 +133,9 @@ The frontend calls Go through auto-generated bindings in `frontend/wailsjs/`, wh
   `Community:%s` on every SENDING PACKET and `Parsed community %s` on every receive, and the buffer is what the
   debug panel shows), `operations.go` (GET/SET/GETNEXT/GETBULK/WALK), `trap.go` (listener + sender, traps and acknowledged INFORMs — v1 is refused rather than downgraded, since RFC 1157 has no InformRequest PDU), `discovery.go` (CIDR scan, capped at `MaxDiscoveryHosts` — the prefix sizes the allocation before a packet is
   sent, so `10.0.0.0/8` was 16.7M strings and an IPv6 `/64` never finished expanding), `params.go` (bridge request structs).
+- `pkg/simulator/` — simulated SNMP agents: v1, v2c and v3 with the whole USM, answering from a tree of objects on
+  a loopback address, so SnmpLens can be tested and shown without a device. A leaf package — gosnmp and nothing of
+  ours — so `pkg/snmp`'s own tests can drive it without an import cycle. See **The simulator**.
 - `pkg/monitor/` — the poll clock and the alerting engine. `scheduler.go` owns one goroutine per monitoring session (this is what makes background mode real — the clock used to be a `setInterval` in the renderer, so closing the window silently stopped every session and every alert with it); `breach.go` turns samples into threshold/reachability episodes; `counters.go` corrects counter wraps and derives rates from the time that actually elapsed.
 - `pkg/preset/` — the dashboard preset format: `preset.go` (the frozen widget vocabulary, `Validate`,
   `Estimate`, `PollOIDs`), `load.go` (reading a file off disk, listing a directory, matching a device). Pure: it
@@ -443,6 +446,50 @@ a mutex (three goroutines wrote it), the listen goroutine clears the field only 
 listener, and the stop WAITS for `Listening()` before closing: gosnmp's `Close` returns early doing nothing
 while `conn` is nil, having already set `finish`, so a stop landing in the bind window reported success and
 left a listener nothing could stop — measured, still running 2.1 s after `Close` returned in 73 ms.
+
+## The simulator
+
+`pkg/simulator` is the agent the built-in device simulator stands on; value behaviours, traps, the device
+catalogue and the interface build on it. An `Agent` answers GET, GETNEXT, GETBULK and SET in v1, v2c and v3 from a
+sorted tree of `Object`s. gosnmp encodes and decodes; what the package owns is what an agent DECIDES.
+
+**Loopback only, and checked twice.** `CheckListen` accepts 127.0.0.0/8 and `::1` and nothing else — a host name
+is refused rather than resolved, `localhost` excepted and mapped without asking the resolver — and `Agent.Start`
+checks the socket it actually bound (`checkBound`), because a zero `Agent` has a zero address and a zero address
+binds EVERY interface. The rule is Go's, not a form default: a device file is JSON someone else may have written.
+
+**The USM's checks come before gosnmp.** gosnmp's receive path was written for a trap receiver, and three of its
+behaviours are wrong for an agent: it re-localises its keys to whatever engine ID a message names, so a message
+addressed to another engine authenticates; asked to trust the message's parameters, it takes the security level
+from the message too, so a noAuthNoPriv message naming an authPriv user is checked for nothing; and an empty user
+with an empty engine ID skips authentication whatever the flags say. `peekV3` reads the header with a small BER
+reader (fuzzed, `FuzzPeek`), and the engine ID, the user and the level are settled in RFC 3414 3.2's order before
+gosnmp sees a byte. Each refusal is a Report naming its counter, sent only to a message that asked for one, and
+unauthenticated except `notInTimeWindow` — signed, so a manager can trust the clock it resynchronises to.
+
+**Authentication stays in gosnmp** (`UnmarshalTrap`, which despite its name decodes any PDU) rather than an HMAC
+written here: `codeql.yml` runs `security-and-quality`, and HMAC-MD5 and HMAC-SHA-1 are what RFC 3414 mandates. The
+cost is one ambiguity. gosnmp checks the digest and decrypts in one call, so `refuse` decodes again without the
+digest to tell a wrong digest from a wrong privacy key, and a message with BOTH passphrases wrong is reported as a
+decryption error where the RFC names the digest. Either way the manager is told about a passphrase that is wrong.
+
+**Every encrypted message draws its own salt.** `MarshalMsg` sends whatever `PrivacyParameters` holds — gosnmp
+draws a salt only on its own send path — and the salt is the only part of the IV that moves between two messages
+sent in the same second.
+
+**An Agent runs once.** A device that restarts is a new `Agent` with `EngineBoots` one higher, and the caller keeps
+the count: that is what makes a manager still holding the old clock resynchronise, which
+`TestAManagerFollowsARestartedDevice` drives through gosnmp. The engine ID must not change between runs (`EngineID`
+builds the MAC format a Cisco reports), since managers cache it and localise their keys to it.
+
+A request below the level its user is held to is answered `authorizationError` with nothing read, as a device
+configured `rouser NAME priv` answers. Only the default context exists. Nothing is writable yet: a SET is
+`notWritable`, or `noSuchName` in v1 (RFC 3584), where a Counter64 is invisible too — stepped over on GETNEXT,
+`noSuchName` on GET.
+
+The protocol names are `pkg/snmp`'s (`MD5` to `SHA512`, `DES`, `AES` to `AES256C`), mapped again here so the
+package stays a leaf. `TestSnmpLensReadsTheSimulator` holds the two together by driving the SnmpLens client
+against a user of every name: a name mapped differently fails as a digest or a decryption error.
 
 ## Background mode
 
