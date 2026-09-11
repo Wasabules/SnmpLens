@@ -56,6 +56,13 @@ const {
   devicePayload,
   EDITOR_TABS,
   tabsWithProblems,
+  OVERRIDE_TYPES,
+  MAX_OVERRIDES,
+  AGENT_SUBTREES,
+  blankOverride,
+  previewPayload,
+  previewQuery,
+  PREVIEW_COLUMNS,
   deliveryReport,
   trapActivity,
   modelGroups,
@@ -252,12 +259,43 @@ const everyProblem = [
     traps: { ...blankTraps(), destinations: [{ ...blankDestination(162), host: '' }], schedules: [{ ...blankSchedule(), every: 0 }] } },
   { ...fresh, versions: [] },
   { ...fresh, versions: ['v2c', 'v3'], writeCommunity: 'public', users: [{ ...blankV3(), authPass: 'short' }] },
-].flatMap((d) => Object.keys(deviceProblems(d)));
+  { ...fresh, params: { ports: 99 }, overrides: [{ ...blankOverride(), oid: 'sysContact.0' }] },
+].flatMap((d) => Object.keys(deviceProblems(d, { params: [{ name: 'ports', min: 2, max: 24, default: 24 }] })));
 const onTabs = EDITOR_TABS.flatMap((t) => t.fields);
 check('every problem is on a tab', everyProblem.every((k) => onTabs.includes(k)),
   everyProblem.filter((k) => !onTabs.includes(k)).join());
 check('and the devices above are wrong in every way a tab names', onTabs.every((k) => everyProblem.includes(k)),
   onTabs.filter((k) => !everyProblem.includes(k)).join());
+
+/* --- the data: numbers a model is given, and values of its own ------------ */
+
+const catalyst = { id: 'cisco-catalyst-24', params: [{ name: 'ports', min: 2, max: 24, default: 24 }] };
+check('a new device is its model as catalogued', JSON.stringify(fresh.params) === '{}' && fresh.overrides.length === 0);
+check("a number out of its bounds is refused, and an empty one is the model's",
+  deviceProblems({ ...fresh, name: 'x', params: { ports: 30 } }, catalyst).params?.ports === 'paramRange' &&
+  !deviceProblems({ ...fresh, name: 'x', params: { ports: null } }, catalyst).params &&
+  !deviceProblems({ ...fresh, name: 'x', params: { ports: 12 } }, catalyst).params);
+check('only the numbers given are sent, as numbers',
+  JSON.stringify(devicePayload({ ...fresh, name: 'x', params: { ports: '12', disks: null } }).params) === JSON.stringify({ ports: 12 }));
+const ownProblems = (overrides) => deviceProblems({ ...fresh, name: 'x', overrides }).overrides;
+check("a value of its own needs an OID, outside the agent's subtrees, and given once",
+  ownProblems([{ ...blankOverride(), oid: 'sysContact.0' }])?.[0]?.oid === 'overrideOid' &&
+  ownProblems([{ ...blankOverride(), oid: '1.3.6.1.2.1.11.1.0' }])?.[0]?.oid === 'overrideAgent' &&
+  ownProblems([{ ...blankOverride(), oid: '1.3.6.1.4.1.1.0' }, { ...blankOverride(), oid: '.1.3.6.1.4.1.1.0' }])?.[1]?.oid === 'overrideDuplicate' &&
+  !ownProblems([{ ...blankOverride(), oid: '1.3.6.1.2.1.1.4.0', value: 'ops' }]));
+check('and a whole number where its type is a number',
+  ownProblems([{ oid: '1.3.6.1.4.1.1.0', type: 'Gauge32', value: '-1', hex: false }])?.[0]?.value === 'overrideNumber' &&
+  !ownProblems([{ oid: '1.3.6.1.4.1.1.0', type: 'Integer', value: '-1', hex: false }]));
+const withOwn = editableDevice({ ...view, params: { cpus: 4 },
+  overrides: [{ oid: '.1.3.6.1.2.1.1.4.0', type: 'OctetString', value: 'ops', hex: false }] }, creds);
+check('the editor is given the numbers and the values, and sends them back',
+  withOwn.params.cpus === 4 && JSON.stringify(devicePayload(withOwn).overrides) ===
+    JSON.stringify([{ oid: '.1.3.6.1.2.1.1.4.0', type: 'OctetString', value: 'ops', hex: false }]));
+// A preview needs no secret, so it is sent none.
+const previewed = JSON.stringify(previewPayload(writeForm));
+check('a preview is sent no secret',
+  ['c0mmunity', 'wr1te', 'authpass-1', 'privpass-1', 'trap-community'].every((s) => !previewed.includes(s)), previewed);
+check('and all that makes the answers', JSON.parse(previewed).model === writeForm.model && JSON.parse(previewed).name === writeForm.name);
 
 /* --- the port a target names --------------------------------------------- */
 
@@ -563,5 +601,41 @@ const filed = deviceGroups([
 check('devices are grouped by category, in the catalogue order',
   filed.map((g) => `${g.category}:${g.devices.map((d) => d.id).join('+')}`).join(' ') === 'server:3+4 network:1 other:2',
   JSON.stringify(filed));
+
+/* --- a device's data speaks Go's vocabulary ------------------------------- */
+
+const goTypes = [...(customGo.match(/customTypes = map\[string\]gosnmp\.Asn1BER\{([^}]*)\}/)?.[1] || '').matchAll(/"([^"]+)":/g)]
+  .map((m) => m[1]);
+check('every type offered for a value of its own is one Go reads',
+  goTypes.length > 0 && OVERRIDE_TYPES.every((t) => goTypes.includes(t)), OVERRIDE_TYPES.filter((t) => !goTypes.includes(t)).join());
+const overridesGo = readFileSync(new URL('../../pkg/simulator/overrides.go', import.meta.url), 'utf8');
+check('as many values of its own as Go keeps', Number(overridesGo.match(/MaxOverrides = (\d+)/)?.[1]) === MAX_OVERRIDES);
+const packageGo = readFileSync(new URL('../../pkg/simulator/package.go', import.meta.url), 'utf8');
+const goSubtrees = [...(packageGo.match(/agentSubtrees = \[\]oid\{(.*)\}/)?.[1] || '').matchAll(/\{([\d, ]+)\}/g)]
+  .map((m) => m[1].split(',').map((s) => s.trim()).join('.'));
+check("the agent's subtrees are Go's", JSON.stringify(goSubtrees) === JSON.stringify(AGENT_SUBTREES), JSON.stringify(goSubtrees));
+const paramNames = new Set();
+for (const file of readdirSync(goDir).filter((f) => f.endsWith('.go') && !f.endsWith('_test.go'))) {
+  for (const m of readFileSync(new URL(file, goDir), 'utf8').matchAll(/ModelParam\{\{Name:\s*"([^"]+)"/g)) paramNames.add(m[1]);
+}
+check('every number a model may be given is named in en.json',
+  paramNames.size >= 4 && [...paramNames].every((n) => en.simulator?.param?.[n]), [...paramNames].join());
+
+/* --- the preview speaks Go's vocabulary ---------------------------------- */
+
+const previewGo = readFileSync(new URL('../../pkg/simulator/preview.go', import.meta.url), 'utf8');
+const behaviours = [...previewGo.matchAll(/Behaviour\w+\s*=\s*"(\w+)"/g)].map((m) => m[1]);
+check('every behaviour a preview gives a value is named in en.json',
+  behaviours.length >= 6 && behaviours.every((b) => en.simulator?.data?.behaviour?.[b]), behaviours.join());
+check('and every column of the preview', PREVIEW_COLUMNS.every((c) => en.simulator?.data?.column?.[c]));
+const queryGo = readFileSync(new URL('../../app_simpreview.go', import.meta.url), 'utf8')
+  .match(/type SimulatorPreviewQuery struct \{([^}]*)\}/)?.[1] || '';
+const queryTags = [...queryGo.matchAll(/json:"(\w+)"/g)].map((m) => m[1]).sort();
+check('a preview is asked for in the fields Go reads, and no other',
+  queryTags.length === 3 && JSON.stringify(Object.keys(previewQuery('x', true, 1)).sort()) === JSON.stringify(queryTags),
+  queryTags.join());
+check('read as if the device had run since the tab was opened',
+  previewQuery(' ifDescr ', 1, 1000, 61000).sinceSeconds === 60 && previewQuery(' ifDescr ', 1, 1000, 61000).filter === 'ifDescr' &&
+  previewQuery('', false, 0).sinceSeconds === 0);
 
 process.exit(failures ? 1 : 0);

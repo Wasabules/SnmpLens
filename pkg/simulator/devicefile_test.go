@@ -16,7 +16,9 @@ func TestADeviceFileRoundTrips(t *testing.T) {
 			PrivProto: "AES", PrivPass: "priv-pass-1", Write: true}},
 		EngineID: "8000000903001122334455", EngineBoots: 7,
 		Traps: Traps{Destinations: []Destination{{ID: "d1", Host: "192.0.2.50", Port: 162, Version: "v2c",
-			Community: "trap-s3cret"}}, OnStart: true, Schedules: []Schedule{}}}
+			Community: "trap-s3cret"}}, OnStart: true, Schedules: []Schedule{}},
+		Params:    map[string]int{"cpus": 8},
+		Overrides: []Override{{OID: ".1.3.6.1.2.1.1.1.0", Type: "OctetString", Value: "core router"}}}
 	for _, with := range []bool{true, false} {
 		raw, err := ExportDevices([]Device{d}, with)
 		if err != nil {

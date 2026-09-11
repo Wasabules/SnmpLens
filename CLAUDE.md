@@ -606,6 +606,34 @@ row, and what RFC 2579 refuses is refused — a create on a row that exists, `ac
 `notReady`, which is the agent's to say. The callback takes gosmi's lock once per varbind, on the agent's receive
 goroutine, holding nothing of the agent's while it waits.
 
+**A device's data: parameters, values of its own, a preview** (`params.go`, `overrides.go`, `preview.go`). A model
+may declare numbers a device can be given (`ModelParam`: the Catalyst's ports, the Synology's disks, the PDU's
+outlets, the Linux server's processors), bounded by what the model could be and named in the interface by
+`simulator.param.<name>`; the builder reads them through `Identity.count`, and a device given none is the model as
+catalogued. Two rules keep a parameter from breaking a notification. A Catalyst given fewer ports keeps its uplinks
+at the model's ifIndexes, and the bridge numbers its ports by their PLACE among the physical interfaces — the two
+coincided only while the ports were contiguous, and the first test of a smaller switch indexed past the end of the
+port list — so `buildCatalyst` converts ifIndexes to bridge ports (`portOf`). And the PDU never has fewer than the
+eight outlets its `rPDUOutletOff` names. `TestEveryModelParameterBuildsAtItsBounds` builds every model at every
+bound and fails on a notification object that goes missing.
+
+A device's own values (`Override`) are written in a custom model's vocabulary — a type the SMI names, a value, hex
+for octets — take the place of the model's object at their OID or join them, and are refused in the agent's
+subtrees as a model file's objects are. Where one sits is checked at SAVE, by building the model for the device and
+making the tree (`Device.Validate` → `objects` → `newTree`): an instance under another would otherwise surface as a
+start that fails later, with a message nobody connects to the edit.
+
+`PreviewRows` reads the very objects the agent would be given, so the Data tab shows what a walk finds, less the
+agent's own counters — read as if the device had run since the tab was opened, and read again every five seconds,
+so that what moves is SEEN moving. Each row says how its value behaves (`behaviourOf`, by the kind of reading
+`values.go` made: static, counter, gauge, uptime, clock, computed), which is what "only what moves" keys on.
+`SimulatorPreview` takes the device as the editor holds it — saved or not — with its secrets stripped on both sides
+(`previewPayload` in the renderer, `WithoutSecrets` in Go). A filter of dotted numbers is a subtree; anything else
+is looked for in the MIB names, so every object is named first (`mib.Service.NameOIDs`, one hold of gosmi's lock
+for the batch) — and only a scalar or a column names an OID, because gosmi answers with the closest node it knows
+and `SNMPv2-SMI::enterprises` followed by nine arcs is no name to search by. The renderer applies only the latest
+answer: previews overlap while someone types, and nothing orders them.
+
 The protocol names are `pkg/snmp`'s (`MD5` to `SHA512`, `DES`, `AES` to `AES256C`), mapped again here so the
 package stays a leaf. `TestSnmpLensReadsTheSimulator` holds the two together by driving the SnmpLens client
 against a user of every name: a name mapped differently fails as a digest or a decryption error.

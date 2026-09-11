@@ -17,8 +17,11 @@ import (
 // poll, and TestEveryModelFeedsItsPresets holds it to that: binding a preset to
 // a simulated server and getting empty widgets would be a demonstration of the
 // wrong thing.
+//
+// It has two processors unless it is given another number.
 var linuxServer = model{
-	ModelInfo:  ModelInfo{ID: "linux-server", Category: "server"},
+	ModelInfo: ModelInfo{ID: "linux-server", Category: "server",
+		Params: []ModelParam{{Name: "cpus", Min: 1, Max: 64, Default: 2}}},
 	enterprise: 8072, // net-snmp
 	build:      buildLinuxServer,
 	notifications: []Notification{
@@ -62,6 +65,12 @@ func buildLinuxServer(id Identity) []Object {
 	})
 
 	const mem, swap = 8388608, 2097152 // KiB: 8 GiB, and 2 GiB of swap
+	// One row per CPU, indexed as net-snmp indexes hrDeviceTable.
+	cpus := id.count("cpus", 2)
+	processors := make([]int, cpus)
+	for i := range processors {
+		processors[i] = 196608 + i
+	}
 	addHostResources(&o, id.Seed, hostResources{
 		memoryKiB: mem,
 		users:     [2]float64{1, 3},
@@ -77,8 +86,7 @@ func buildLinuxServer(id Identity) []Object {
 			{35, hrStorageFixedDisk, "/run", 4096, 204800, 0.01, 0.02, time.Hour},
 			{36, hrStorageFixedDisk, "/home", 4096, 51200000, 0.63, 0.64, 9 * time.Hour},
 		},
-		// One row per CPU, indexed as net-snmp indexes hrDeviceTable.
-		processors: []int{196608, 196609},
+		processors: processors,
 		cpuLo:      4,
 		cpuHi:      55,
 		cpu:        "GenuineIntel: Intel(R) Xeon(R) Silver 4314 CPU @ 2.40GHz",
@@ -97,11 +105,11 @@ func buildLinuxServer(id Identity) []Object {
 			{"/run", hrFSOther, 35, false},
 			{"/home", hrFSLinuxExt2, 36, false},
 		},
-		procs:    linuxProcesses(2),
+		procs:    linuxProcesses(cpus),
 		software: ubuntuPackages(),
 	})
 	addUCD(&o, id.Seed, ucdInfo{
-		memKB: mem, swapKB: swap, memUsed: [2]float64{0.3, 0.45}, cpus: 2,
+		memKB: mem, swapKB: swap, memUsed: [2]float64{0.3, 0.45}, cpus: cpus,
 		load: [2]float64{0.15, 1.4}, user: [2]float64{3, 38}, system: [2]float64{1, 11},
 		disks: []ucdDisk{
 			{"/", "/dev/mapper/ubuntu--vg-ubuntu--lv", 102400000, [2]float64{0.41, 0.43}},

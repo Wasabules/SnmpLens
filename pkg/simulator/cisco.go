@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net/netip"
+	"slices"
 	"time"
 
 	"github.com/gosnmp/gosnmp"
@@ -23,10 +24,15 @@ import (
 // the memory pools and the environment as Cisco's own MIBs give them.
 //
 // The ports are numbered from 1, as the drawing preset polls them, where a
-// real 2960 numbers them from 10001; the names are a 2960's.
+// real 2960 numbers them from 10001; the names are a 2960's. A device given
+// fewer ports keeps its uplinks at the indexes its model has them — a gap in
+// ifIndex is what a real switch's numbering has too — so that its
+// notifications still name them. Two at least: the second is the access
+// point LLDP hears.
 var (
 	catalyst24 = model{
-		ModelInfo:  ModelInfo{ID: "cisco-catalyst-24", Category: "network"},
+		ModelInfo: ModelInfo{ID: "cisco-catalyst-24", Category: "network",
+			Params: []ModelParam{{Name: "ports", Min: 2, Max: 24, Default: 24}}},
 		enterprise: 9, // Cisco
 		build: func(id Identity) []Object {
 			return buildCatalyst(id, 24, ".1.3.6.1.4.1.9.1.716", "WS-C2960-24TT-L") // catalyst296024TT
@@ -34,7 +40,8 @@ var (
 		notifications: catalystNotifications(24),
 	}
 	catalyst48 = model{
-		ModelInfo:  ModelInfo{ID: "cisco-catalyst-48", Category: "network"},
+		ModelInfo: ModelInfo{ID: "cisco-catalyst-48", Category: "network",
+			Params: []ModelParam{{Name: "ports", Min: 2, Max: 48, Default: 48}}},
 		enterprise: 9,
 		build: func(id Identity) []Object {
 			return buildCatalyst(id, 48, ".1.3.6.1.4.1.9.1.717", "WS-C2960-48TT-L") // catalyst296048TT
@@ -57,9 +64,10 @@ func buildCatalyst(id Identity, ports int, sysObjectID, model string) []Object {
 	lan := lanPrefix(id.Seed)
 	serial := fmt.Sprintf("FOC%04dX%03d", 1800+int(unit(id.Seed+61)*300), int(unit(id.Seed+62)*1000))
 	uplink, spare, vlan1 := ports+1, ports+2, ports+3
-	ifs := make([]iface, 0, ports+3)
+	n := id.count("ports", ports)
+	ifs := make([]iface, 0, n+3)
 	var access, printers []int
-	for p := 1; p <= ports; p++ {
+	for p := 1; p <= n; p++ {
 		f := iface{index: p, descr: fmt.Sprintf("FastEthernet0/%d", p), name: fmt.Sprintf("Fa0/%d", p),
 			ifType: ifTypeEthernet, mtu: 1500, speed: 100_000_000, mac: deviceMAC(id.Seed, uint64(p))}
 		// Most of an access switch's ports are in use and some are not, which is
@@ -79,7 +87,7 @@ func buildCatalyst(id Identity, ports int, sysObjectID, model string) []Object {
 			f.outRate = 8_000 + 300_000*unit(id.Seed+7200+uint64(p))
 			f.errorRate = 0.0005
 		}
-		if p > ports-2 {
+		if p > n-2 {
 			printers = append(printers, p)
 		} else {
 			access = append(access, p)
@@ -97,9 +105,21 @@ func buildCatalyst(id Identity, ports int, sysObjectID, model string) []Object {
 		iface{index: vlan1, descr: "Vlan1", name: "Vl1", ifType: ifTypePropVirtual, mtu: 1500,
 			speed: 1_000_000_000, mac: deviceMAC(id.Seed, 0), up: true, inRate: 2_000, outRate: 1_500},
 	)
-	bridged := make([]int, 0, ports+2)
-	for p := 1; p <= spare; p++ {
-		bridged = append(bridged, p)
+	// Every physical interface is a bridge port: all of them but VLAN 1.
+	physicalIfs := ifs[:len(ifs)-1]
+	bridged := make([]int, 0, len(physicalIfs))
+	for _, f := range physicalIfs {
+		bridged = append(bridged, f.index)
+	}
+	// A bridge port is numbered by its place among them, from 1: once the
+	// switch has fewer ports than its model, an uplink's ifIndex is not its
+	// port's number.
+	portOf := func(ifIndexes ...int) []int {
+		out := make([]int, len(ifIndexes))
+		for i, x := range ifIndexes {
+			out[i] = slices.Index(bridged, x) + 1
+		}
+		return out
 	}
 	core := peerMAC(id.Seed, 900)
 
@@ -113,7 +133,7 @@ func buildCatalyst(id Identity, ports int, sysObjectID, model string) []Object {
 		{index: 1003, container: 1001, class: classFan, relPos: 1, descr: "Fan 1", name: "Fan 1"},
 		{index: 1004, container: 1001, class: classSensor, relPos: 1, descr: "Temperature Sensor 1", name: "Temp 1"},
 	}
-	for _, f := range ifs[:spare] {
+	for _, f := range physicalIfs {
 		entity = append(entity, physical{index: 1010 + f.index, container: 1001, class: classPort, relPos: f.index,
 			descr: f.descr, name: f.ifName(), ifIndex: f.index})
 	}
@@ -132,11 +152,11 @@ func buildCatalyst(id Identity, ports int, sysObjectID, model string) []Object {
 		bridge: &bridgeInfo{
 			ports: bridged,
 			vlans: []vlanInfo{
-				{id: 1, name: "default", untagged: []int{uplink, spare}},
-				{id: 10, name: "USERS", untagged: access, tagged: []int{uplink}},
-				{id: 20, name: "PRINTERS", untagged: printers, tagged: []int{uplink}},
+				{id: 1, name: "default", untagged: portOf(uplink, spare)},
+				{id: 10, name: "USERS", untagged: portOf(access...), tagged: portOf(uplink)},
+				{id: 20, name: "PRINTERS", untagged: portOf(printers...), tagged: portOf(uplink)},
 			},
-			stations: 1, uplinkStations: 40, uplink: uplink, root: core,
+			stations: 1, uplinkStations: 40, uplink: portOf(uplink)[0], root: core,
 		},
 		lldp: &lldpInfo{name: id.Name, descr: catalystDescr, caps: capBridge, neighbours: []neighbour{
 			{ifIndex: uplink, name: "core-sw-01", descr: coreDescr, port: "Gi1/0/12", portDescr: "GigabitEthernet1/0/12",

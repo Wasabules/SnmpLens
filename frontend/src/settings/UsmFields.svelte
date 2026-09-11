@@ -2,6 +2,7 @@
   import { _ } from 'svelte-i18n';
   import { anonMode } from '../utils/anonymize';
   import { SEC_LEVELS, AUTH_PROTOCOLS, PRIV_PROTOCOLS, usesAuth, usesPriv } from '../utils/snmpSecurity.js';
+  import SecretInput from '../SecretInput.svelte';
 
   /**
    * One SNMPv3 USM identity — user, security level, the two protocols with
@@ -18,6 +19,8 @@
   export let problems = {};
   /** Whether to offer the context: a simulated device has only the default one. */
   export let showContext = true;
+  /** Whether the passphrases can be shown (SecretInput): a simulated device's are the operator's to read. */
+  export let revealable = false;
 </script>
 
 <div class="usm-grid">
@@ -49,8 +52,13 @@
   </div>
   <div class="form-group">
     <label for="{idPrefix}-authPass">{$_('settings.snmp.authPassword')}</label>
-    <input id="{idPrefix}-authPass" type="password" autocomplete="new-password"
-      bind:value={v3.authPass} disabled={!usesAuth(v3.secLevel)} />
+    {#if revealable}
+      <SecretInput id="{idPrefix}-authPass" autocomplete="new-password"
+        bind:value={v3.authPass} disabled={!usesAuth(v3.secLevel)} />
+    {:else}
+      <input id="{idPrefix}-authPass" type="password" autocomplete="new-password"
+        bind:value={v3.authPass} disabled={!usesAuth(v3.secLevel)} />
+    {/if}
     {#if problems.authPass}<span class="problem {problems.authPass.level}">{problems.authPass.text}</span>{/if}
   </div>
   <div class="form-group">
@@ -64,8 +72,13 @@
   </div>
   <div class="form-group">
     <label for="{idPrefix}-privPass">{$_('settings.snmp.privPassword')}</label>
-    <input id="{idPrefix}-privPass" type="password" autocomplete="new-password"
-      bind:value={v3.privPass} disabled={!usesPriv(v3.secLevel)} />
+    {#if revealable}
+      <SecretInput id="{idPrefix}-privPass" autocomplete="new-password"
+        bind:value={v3.privPass} disabled={!usesPriv(v3.secLevel)} />
+    {:else}
+      <input id="{idPrefix}-privPass" type="password" autocomplete="new-password"
+        bind:value={v3.privPass} disabled={!usesPriv(v3.secLevel)} />
+    {/if}
     {#if problems.privPass}<span class="problem {problems.privPass.level}">{problems.privPass.text}</span>{/if}
   </div>
   {#if showContext}

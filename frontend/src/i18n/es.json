@@ -64,6 +64,8 @@
     }
   },
   "common": {
+    "showSecret": "Mostrar el valor",
+    "hideSecret": "Ocultar el valor",
     "previous": "Anterior",
     "next": "Siguiente",
     "save": "Guardar",
@@ -1341,6 +1343,7 @@
       "clear": "Quitar todos",
       "applied": "Fallos de {name} aplicados",
       "cleared": "{name} ya no falla",
+      "saveFirst": "Los fallos se aplican a un dispositivo guardado, al instante y mientras funciona: guárdelo primero.",
       "chip": {
         "mute": "mudo",
         "latency": "latencia {ms} ms",
@@ -1353,7 +1356,51 @@
     "tab": {
       "identity": "Dispositivo",
       "access": "Acceso",
-      "traps": "Notificaciones"
+      "traps": "Notificaciones",
+      "data": "Datos",
+      "faults": "Fallos"
+    },
+    "param": {
+      "ports": "Puertos de acceso",
+      "disks": "Discos",
+      "outlets": "Tomas",
+      "cpus": "Procesadores"
+    },
+    "data": {
+      "params": "Tamaño del modelo",
+      "range": "De {min} a {max} — {default} si se deja vacío",
+      "overrides": "Valores propios",
+      "overridesHint": "Cada valor sustituye al del modelo en su OID, o añade una instancia que el modelo no tiene. Se guardan con el dispositivo; guardarlo lo reinicia si está en marcha, como cualquier cambio.",
+      "addOverride": "Añadir un valor",
+      "removeOverride": "Quitar este valor",
+      "oid": "OID",
+      "type": "Tipo",
+      "value": "Valor",
+      "hexTitle": "El valor son los octetos en hexadecimal; se admiten dos puntos y espacios",
+      "preview": "Vista previa",
+      "previewHint": "Lo que respondería el dispositivo, según los ajustes de arriba, guardados o no, como si funcionara desde que se abrió esta pestaña: lo que cambia ha cambiado en cada nueva lectura. Se omiten sus propios contadores (grupo snmp, motor).",
+      "filter": "Filtro",
+      "filterPlaceholder": "Un subárbol OID, p. ej. 1.3.6.1.2.1.2, o un nombre de una MIB cargada, p. ej. ifDescr",
+      "dynamicOnly": "Solo lo que cambia",
+      "column": {
+        "oid": "OID",
+        "name": "Nombre MIB",
+        "type": "Tipo",
+        "behaviour": "Comportamiento",
+        "value": "Valor"
+      },
+      "behaviour": {
+        "static": "estático",
+        "counter": "contador",
+        "gauge": "indicador",
+        "uptime": "tiempo activo",
+        "clock": "hora",
+        "derived": "calculado"
+      },
+      "resizeColumn": "Ancho de la columna {column}: arrástrela o use las flechas",
+      "refresh": "Volver a leer",
+      "previewCount": "{shown} de {total, plural, one {# objeto} other {# objetos}}",
+      "previewEmpty": "Nada coincide."
     },
     "tabProblem": "Hay algo que corregir en esta pestaña",
     "writeHint": "Un SET con la comunidad de escritura, o de un usuario que puede escribir, cambia lo que responde el dispositivo hasta que se reinicia, como una configuración en ejecución mientras no se guarda. Las filas se crean y se eliminan mediante su RowStatus, tal como las describen las MIB cargadas. Lo que el agente cuenta por sí mismo —sus estadísticas SNMP, su motor— nunca se escribe.",
@@ -1390,7 +1437,12 @@
       "trapNeedsV3": "Una notificación v3 se envía como uno de los usuarios SNMPv3 del dispositivo: active primero la v3.",
       "engineId": "De 5 a 32 octetos, en hexadecimal.",
       "every": "De 1 a 86400 segundos.",
-      "writeSameAsRead": "La comunidad de escritura debe ser distinta de la de lectura: si no, todo gestor que lee también escribe."
+      "writeSameAsRead": "La comunidad de escritura debe ser distinta de la de lectura: si no, todo gestor que lee también escribe.",
+      "paramRange": "De {min} a {max}.",
+      "overrideOid": "Un OID: números separados por puntos, p. ej. 1.3.6.1.2.1.1.1.0.",
+      "overrideAgent": "El agente lo cuenta por sí mismo: no se puede imponer.",
+      "overrideDuplicate": "Este OID aparece dos veces.",
+      "overrideNumber": "Un número entero."
     },
     "category": {
       "server": "Servidores",

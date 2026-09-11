@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"maps"
 	"net"
 	"os"
 	"path/filepath"
@@ -138,6 +139,10 @@ type SimulatedDevice struct {
 	Contact   string           `json:"contact"`
 	AutoStart bool             `json:"autoStart"`
 	Faults    simulator.Faults `json:"faults"`
+	// Params and Overrides are the numbers its model was given and the
+	// values it answers in place of its model's.
+	Params    map[string]int       `json:"params"`
+	Overrides []simulator.Override `json:"overrides"`
 }
 
 // SimulatedTraps is what a simulated device sends, as the list shows it: the
@@ -206,6 +211,7 @@ func (s *simulatorService) view(d simulator.Device) SimulatedDevice {
 		EngineID: d.EngineID, EngineBoots: d.EngineBoots,
 		Running: running, Packets: stats.Packets, Traps: traps,
 		Location: d.Location, Contact: d.Contact, AutoStart: d.AutoStart, Faults: d.Faults,
+		Params: maps.Clone(d.Params), Overrides: append([]simulator.Override{}, d.Overrides...),
 	}
 }
 

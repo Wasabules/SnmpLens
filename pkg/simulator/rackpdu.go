@@ -14,7 +14,8 @@ import (
 // SNMPv1 traps under apc, as RFC 3584 translates them:
 // enterprises.318.0.<specific-trap>.
 var apcRackPDU = model{
-	ModelInfo:  ModelInfo{ID: "apc-rack-pdu", Category: "power"},
+	ModelInfo: ModelInfo{ID: "apc-rack-pdu", Category: "power",
+		Params: []ModelParam{{Name: "outlets", Min: len(rackOutlets), Max: 24, Default: len(rackOutlets)}}},
 	enterprise: 318, // APC
 	build:      buildAPCRackPDU,
 	notifications: []Notification{
@@ -36,7 +37,10 @@ const (
 	mtrapargsString = "1.3.6.1.4.1.318.2.3.3.0"
 )
 
-// rackOutlets are the PDU's outlets, named after what they feed.
+// rackOutlets are the PDU's outlets, named after what they feed. A PDU given
+// more — up to 24, as APC's larger PDUs have — names the others by number, and
+// they are on; never fewer, since the eighth, switched off, is the outlet
+// rPDUOutletOff is about.
 var rackOutlets = []string{
 	"srv-web-01 PSU1", "srv-web-02 PSU1", "srv-db-01 PSU1", "sw-top-of-rack",
 	"fw-01", "nas-01", "kvm", "spare",
@@ -66,6 +70,7 @@ func buildAPCRackPDU(id Identity) []Object {
 
 	// The load and the power drawn move together: 230 V times 4.2 to 6.8 A.
 	load := Swing{Period: 9 * time.Minute, Seed: id.Seed + 70000}
+	outlets := id.count("outlets", len(rackOutlets))
 	// rPDUIdent
 	o.add(rPDU+"1.1.0", gosnmp.OctetString, Const(id.Name))
 	o.add(rPDU+"1.2.0", gosnmp.OctetString, Const("B2"))
@@ -73,7 +78,7 @@ func buildAPCRackPDU(id Identity) []Object {
 	o.add(rPDU+"1.5.0", gosnmp.OctetString, Const("AP7921B"))
 	o.add(rPDU+"1.6.0", gosnmp.OctetString, Const(serial))
 	o.add(rPDU+"1.7.0", gosnmp.Integer, Const(16)) // rated amps
-	o.add(rPDU+"1.8.0", gosnmp.Integer, Const(len(rackOutlets)))
+	o.add(rPDU+"1.8.0", gosnmp.Integer, Const(outlets))
 	o.add(rPDU+"1.9.0", gosnmp.Integer, Const(1))
 	o.add(rPDU+"1.16.0", gosnmp.Integer, IntegerGauge(966, 1564, load)) // watts
 	// rPDULoadDevice, and rPDULoadStatusTable's one phase
@@ -85,8 +90,12 @@ func buildAPCRackPDU(id Identity) []Object {
 	o.add(rPDU+"2.3.1.1.4.1", gosnmp.Integer, Const(1))
 	// rPDUOutletControlTable, which the notifications name an outlet from, and
 	// rPDUOutletStatusTable.
-	for i, name := range rackOutlets {
+	for i := range outlets {
 		n := i + 1
+		name := fmt.Sprintf("outlet %d", n)
+		if i < len(rackOutlets) {
+			name = rackOutlets[i]
+		}
 		state := 1 // outletStatusOn
 		if name == "spare" {
 			state = 2
