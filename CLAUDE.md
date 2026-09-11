@@ -632,6 +632,27 @@ Catalysts and the ISR by their CISCO-PRODUCTS-MIB OIDs, and nothing else. The NA
 net-snmp's Linux sysObjectID because their agent is net-snmp, as most embedded devices' is; their own tables tell
 them apart. The vendor OIDs were read from the MIBs (LibreNMS keeps them), not remembered.
 
+**A model answers a whole agent's walk** (`stack.go`, `bridge.go`, `ucd.go`, `hostres.go`), from about 300 objects
+for the probe to 5 600 for the 48-port Catalyst. A device is described ONCE — its interfaces, addresses, gateway and
+routes, sockets, hardware, bridge ports and VLANs, LLDP neighbours — and every standard MIB is built from that one
+description, so they agree the way a real agent's do: an address sits on an interface ifTable lists, a route leaves
+through one, tcpCurrEstab counts the sessions tcpConnTable lists and hrSystemProcesses the rows of hrSWRunTable, a
+bridge port is an interface and the stations learnt on it sit behind it, a port in ENTITY-MIB points at its interface,
+the ISR's BGP-learnt routes go through the peer BGP4-MIB says is established, over the TCP session on port 179 its
+tcpConnTable lists. IF-MIB is whole — every column of ifTable and ifXTable, a 32-bit counter and its 64-bit twin built
+from the same arguments — and a figure a MIB states twice (memory used and available, a percentage and its parts,
+the two halves of a 64-bit disk size, APC's run time in TimeTicks and UPS-MIB's in minutes) is DERIVED from one reading
+at the same instant rather than drawn twice. `TestTheStandardMIBsAgree` holds the cross-references, and `pkg/mib`'s
+`TestSimulatedTablesDecode` walks every model and decodes every table the bundled MIBs describe with SnmpLens's own
+decoder: an index written any other way than RFC 2578 7.7 reads it back fails there rather than as a table of garbled
+rows. LLDP-MIB lives under 1.0.8802, outside .1.3.6.1, as on a real device — a walk of .1.3.6.1 does not see it.
+
+**What the agent counts is the agent's** (`agentobjects.go`). SNMPv2-MIB's snmp group, and for v3 snmpEngine, the MPD
+and USM statistics and snmpUnknownContexts, are read live from the counters the agent keeps as it answers — the
+request counted on ARRIVAL, as net-snmp does, so a GET of snmpInGetRequests counts itself — through the clock each
+request carries. Every device has them beside its model's objects, so neither a built-in model nor a file somebody
+wrote may answer them; a custom model that tries is refused at import, naming the OID.
+
 **What only a notification carries** (`Object.NotifyOnly`). An iDRAC alert carries eleven objects its MIB makes
 accessible-for-notify (RFC 2578 7.3) — a message ID, the message, the service tag — and no request may read them.
 They are kept beside the tree rather than in it: a GET answers `noSuchObject`, a walk passes them by, and

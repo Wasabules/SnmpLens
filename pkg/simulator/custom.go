@@ -356,14 +356,15 @@ func (f customFile) compile() (CustomModel, error) {
 		build:         func(id Identity) []Object { return buildCustom(id, sys, ifs, objs) },
 	}
 
-	// Built once, as a device answering v3 will be: the tree catches what no
-	// field check can — an OID given twice, one under another, a value its type
-	// cannot carry — and names the OID.
-	tr, err := newTree(slices.Concat(m.build(Identity{Name: "model-check", Seed: 1}), engineObjects([]byte{0x80, 0, 0, 0, 0}, 0)))
+	// Built once, as a device answering v3 will be, with what the agent adds:
+	// the tree catches what no field check can — an OID given twice, one under
+	// another, a value its type cannot carry — and names the OID.
+	tr, err := newTree(slices.Concat(m.build(Identity{Name: "model-check", Seed: 1}),
+		agentObjects(true, []byte{0x80, 0, 0, 0, 0}, 1, false)))
 	if err != nil {
 		hint := ""
 		if strings.Contains(err.Error(), "declared twice") {
-			hint = ` ("system" makes the system group, "interfaces" makes IF-MIB's, and snmpEngine is the agent's own)`
+			hint = ` ("system" makes the system group, "interfaces" makes IF-MIB's, and the snmp group, snmpEngine and the USM statistics are the agent's own)`
 		}
 		return CustomModel{}, fmt.Errorf("the model's objects: %w%s", err, hint)
 	}

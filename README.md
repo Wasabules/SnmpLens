@@ -431,7 +431,9 @@ The simulator's catalogue can be extended with models of your own: a JSON file s
 | `notifyOnly` | An accessible-for-notify object: carried by notifications, never answered to a request |
 | `notifications` | The model's own, beside `coldStart`, `warmStart` and `authenticationFailure`, which every device sends |
 
-A file is checked in full when it is imported — unknown fields, types, ranges, an OID given twice — and a refusal names the field or the OID. The example is `pkg/simulator/testdata/custom-model.json`; 32473 is the enterprise number RFC 5612 reserves for documentation.
+Some OIDs are the agent's own and no model may answer them: SNMPv2-MIB's snmp group on every device, and for SNMPv3 snmpEngine, the MPD and USM statistics and snmpUnknownContexts. They are read live from what the agent counts as it answers — requests, varbinds, a refused community, notifications sent.
+
+A file is checked in full when it is imported — unknown fields, types, ranges, an OID given twice, an OID the agent keeps — and a refusal names the field or the OID. The example is `pkg/simulator/testdata/custom-model.json`; 32473 is the enterprise number RFC 5612 reserves for documentation.
 
 ---
 

@@ -21,8 +21,33 @@ type answer struct {
 }
 
 // process answers one request PDU from the tree: RFC 3416 4.2, and RFC 1157 4.1
-// for SNMPv1, whose errors are different.
+// for SNMPv1, whose errors are different. It counts what SNMPv2-MIB's snmp
+// group counts — the request on arrival, as net-snmp does, so that a GET of
+// snmpInGetRequests counts itself.
 func (a *Agent) process(ver gosnmp.SnmpVersion, req *gosnmp.SnmpPacket, c clock) answer {
+	st := &a.stats
+	switch req.PDUType {
+	case gosnmp.GetRequest:
+		st.inGets.Add(1)
+	case gosnmp.GetNextRequest, gosnmp.GetBulkRequest:
+		// The MIB has no counter of its own for GETBULK; net-snmp counts one
+		// as a GETNEXT.
+		st.inGetNexts.Add(1)
+	case gosnmp.SetRequest:
+		st.inSets.Add(1)
+	}
+	ans := a.dispatch(ver, req, c)
+	if ans.status == gosnmp.NoError && req.PDUType != gosnmp.SetRequest {
+		st.inTotalReqVars.Add(uint32(len(ans.vars)))
+	}
+	if ans.status == gosnmp.NoSuchName {
+		st.outNoSuchNames.Add(1)
+	}
+	st.outGetResponses.Add(1)
+	return ans
+}
+
+func (a *Agent) dispatch(ver gosnmp.SnmpVersion, req *gosnmp.SnmpPacket, c clock) answer {
 	v1 := ver == gosnmp.Version1
 	switch req.PDUType {
 	case gosnmp.GetRequest:

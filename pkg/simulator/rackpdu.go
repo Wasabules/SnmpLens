@@ -9,9 +9,10 @@ import (
 
 // apcRackPDU is an APC AP7921B switched rack PDU: eight outlets on one 16 A
 // phase, the last of them switched off. PowerNet-MIB's rPDU group gives the
-// phase load, the power the PDU draws and each outlet's name and state. Its
-// notifications are PowerNet's SNMPv1 traps under apc, as RFC 3584 translates
-// them: enterprises.318.0.<specific-trap>.
+// phase load, the power the PDU draws and each outlet's name and state, beside
+// the small agent's address and sockets. Its notifications are PowerNet's
+// SNMPv1 traps under apc, as RFC 3584 translates them:
+// enterprises.318.0.<specific-trap>.
 var apcRackPDU = model{
 	ModelInfo:  ModelInfo{ID: "apc-rack-pdu", Category: "power"},
 	enterprise: 318, // APC
@@ -49,9 +50,18 @@ func buildAPCRackPDU(id Identity) []Object {
 		"(Embedded PowerNet SNMP Agent SW v2.2 compatible)",
 		".1.3.6.1.4.1.318.1.3.4.5", // masterSwitchrPDU
 		"facilities@example.com", "Rack A2, rear", 72)
-	addInterfaces(&o, id.Seed, []iface{
-		{index: 1, descr: "eth0", ifType: ifTypeEthernet, mtu: 1500, speed: 100_000_000,
-			mac: deviceMAC(id.Seed, 1), up: true, inRate: 300, outRate: 600},
+	lan := lanPrefix(id.Seed)
+	addStack(&o, stack{
+		seed: id.Seed,
+		ifs: []iface{
+			{index: 1, descr: "eth0", ifType: ifTypeEthernet, mtu: 1500, speed: 100_000_000,
+				mac: deviceMAC(id.Seed, 1), up: true, inRate: 300, outRate: 600},
+		},
+		addrs:   []ifAddr{{ifIndex: 1, prefix: addrIn(lan, 220+int(id.Seed%10))}},
+		gateway: hostIn(lan, 1),
+		pps:     6,
+		listen:  []uint16{21, 22, 80, 443},
+		udp:     []uint16{161},
 	})
 
 	// The load and the power drawn move together: 230 V times 4.2 to 6.8 A.

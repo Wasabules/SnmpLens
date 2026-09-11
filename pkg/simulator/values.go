@@ -79,6 +79,8 @@ type counter struct {
 	start     uint64
 	swing     Swing
 	wide      bool
+	// integer is an INTEGER that counts all the same: hrSWRunPerfCPU.
+	integer bool
 }
 
 // Counter answers a Counter32 that grows by perSecond on average from start.
@@ -95,6 +97,13 @@ func Counter64(perSecond float64, start uint64, s Swing) Reading {
 	return counter{perSecond: perSecond, start: start, swing: s, wide: true}
 }
 
+// IntegerCounter is Counter for an INTEGER that counts — hrSWRunPerfCPU, the
+// centi-seconds of processor a process has had — kept below 2^31 as an Integer32
+// must be.
+func IntegerCounter(perSecond float64, start uint64, s Swing) Reading {
+	return counter{perSecond: perSecond, start: start, swing: s, integer: true}
+}
+
 func (c counter) count(t float64) uint64 {
 	depth := math.Min(math.Max(c.swing.Depth, 0), 0.95)
 	return c.start + uint64(c.perSecond*(t+depth*c.swing.area(t)))
@@ -102,16 +111,22 @@ func (c counter) count(t float64) uint64 {
 
 func (c counter) read(k clock) any {
 	n := c.count(elapsed(k))
-	if c.wide {
+	switch {
+	case c.wide:
 		return n
+	case c.integer:
+		return int(n % (1 << 31))
 	}
 	return uint32(n) // the wrap
 }
 
 func (c counter) check(t gosnmp.Asn1BER) error {
 	want := gosnmp.Counter32
-	if c.wide {
+	switch {
+	case c.wide:
 		want = gosnmp.Counter64
+	case c.integer:
+		want = gosnmp.Integer
 	}
 	if t != want {
 		return fmt.Errorf("this counter is a %v, not a %v", want, t)
@@ -128,6 +143,9 @@ type gauge struct {
 	lo, hi  float64
 	swing   Swing
 	integer bool
+	// wide is a level carried in 64 bits: a CounterBasedGauge64, which is a
+	// Counter64 on the wire.
+	wide bool
 }
 
 // Gauge answers a Gauge32 swinging between lo and hi.
@@ -139,10 +157,21 @@ func IntegerGauge(lo, hi float64, s Swing) Reading {
 	return gauge{lo: lo, hi: hi, swing: s, integer: true}
 }
 
+// Gauge64 is Gauge for a level too large for 32 bits — UCD-SNMP-MIB's memory in
+// kilobytes, as a CounterBasedGauge64.
+func Gauge64(lo, hi float64, s Swing) Reading { return gauge{lo: lo, hi: hi, swing: s, wide: true} }
+
+func (g gauge) value(k clock) float64 {
+	return math.Round(g.lo + (g.hi-g.lo)*(0.5+0.5*g.swing.wave(elapsed(k))))
+}
+
 func (g gauge) read(k clock) any {
-	v := math.Round(g.lo + (g.hi-g.lo)*(0.5+0.5*g.swing.wave(elapsed(k))))
-	if g.integer {
+	v := g.value(k)
+	switch {
+	case g.integer:
 		return int(v)
+	case g.wide:
+		return uint64(v)
 	}
 	return uint32(v)
 }
@@ -151,16 +180,142 @@ func (g gauge) check(t gosnmp.Asn1BER) error {
 	switch {
 	case g.integer && t != gosnmp.Integer:
 		return fmt.Errorf("this gauge is an Integer, not a %v", t)
-	case !g.integer && t != gosnmp.Gauge32:
+	case g.wide && t != gosnmp.Counter64:
+		return fmt.Errorf("this gauge is a Counter64, not a %v", t)
+	case !g.integer && !g.wide && t != gosnmp.Gauge32:
 		return fmt.Errorf("this gauge is a Gauge32, not a %v", t)
 	case math.IsNaN(g.lo) || math.IsNaN(g.hi) || g.hi < g.lo:
 		return fmt.Errorf("a gauge swings from a low to a high, not from %v to %v", g.lo, g.hi)
 	case g.integer && (g.lo < math.MinInt32 || g.hi > math.MaxInt32):
 		return fmt.Errorf("%v to %v does not fit an Integer32", g.lo, g.hi)
-	case !g.integer && (g.lo < 0 || g.hi > math.MaxUint32):
+	case g.wide && (g.lo < 0 || g.hi > 1<<62):
+		return fmt.Errorf("%v to %v does not fit a Counter64", g.lo, g.hi)
+	case !g.integer && !g.wide && (g.lo < 0 || g.hi > math.MaxUint32):
 		return fmt.Errorf("%v to %v does not fit a Gauge32", g.lo, g.hi)
 	}
 	return nil
+}
+
+// LoadText is a level written as a decimal string, as UCD-SNMP-MIB's laLoad
+// writes a load average: hundredths from lo to hi, read as "0.42". Built from
+// the arguments of an IntegerGauge in hundredths, the two agree.
+func LoadText(lo, hi float64, s Swing) Reading {
+	return loadText{gauge{lo: lo, hi: hi, swing: s, integer: true}}
+}
+
+type loadText struct{ g gauge }
+
+func (l loadText) read(k clock) any { return fmt.Sprintf("%.2f", l.g.value(k)/100) }
+
+func (l loadText) check(t gosnmp.Asn1BER) error {
+	if t != gosnmp.OctetString {
+		return fmt.Errorf("a load written out is an OCTET STRING, not a %v", t)
+	}
+	return l.g.check(gosnmp.Integer)
+}
+
+// DateAndTime answers the time now as SNMPv2-TC's DateAndTime, in the machine's
+// own zone: hrSystemDate.
+func DateAndTime() Reading { return dateAndTime{} }
+
+type dateAndTime struct{}
+
+func (dateAndTime) read(c clock) any { return dateAndTimeOf(c.now) }
+
+func (dateAndTime) check(t gosnmp.Asn1BER) error {
+	if t != gosnmp.OctetString {
+		return fmt.Errorf("a DateAndTime is an OCTET STRING, not a %v", t)
+	}
+	return nil
+}
+
+// dateAndTimeOf is t in the eleven octets of SNMPv2-TC's DateAndTime: the year
+// in two, month, day, hour, minutes, seconds, tenths, and the offset from UTC.
+func dateAndTimeOf(t time.Time) []byte {
+	_, offset := t.Zone()
+	sign := byte('+')
+	if offset < 0 {
+		sign, offset = '-', -offset
+	}
+	year := t.Year()
+	return []byte{byte(year >> 8), byte(year), byte(t.Month()), byte(t.Day()), byte(t.Hour()), byte(t.Minute()),
+		byte(t.Second()), byte(t.Nanosecond() / 100_000_000), sign, byte(offset / 3600), byte(offset % 3600 / 60)}
+}
+
+// derived is a figure computed from others at the same instant, so that what a
+// MIB states twice agrees when it is read: the memory used and the memory
+// available, a percentage and its parts, the two halves of a 64-bit count.
+// Unexported like the rest: a device file cannot describe one.
+type derived struct {
+	typ gosnmp.Asn1BER
+	f   func(c clock) any
+}
+
+func (d derived) read(c clock) any { return d.f(c) }
+
+func (d derived) check(t gosnmp.Asn1BER) error {
+	if t != d.typ {
+		return fmt.Errorf("this figure is a %v, not a %v", d.typ, t)
+	}
+	return nil
+}
+
+// number is what r reads, as a number whatever Go type it is read in.
+func number(r Reading, c clock) float64 {
+	switch v := r.read(c).(type) {
+	case int:
+		return float64(v)
+	case uint32:
+		return float64(v)
+	case uint64:
+		return float64(v)
+	}
+	return 0
+}
+
+// remainder is total less what the parts read: the processor time left idle,
+// the space left free.
+func remainder(t gosnmp.Asn1BER, total float64, parts ...Reading) Reading {
+	return derived{typ: t, f: func(c clock) any {
+		v := total
+		for _, p := range parts {
+			v -= number(p, c)
+		}
+		return as(t, max(v, 0))
+	}}
+}
+
+// percentOf is what part reads as a whole percentage of total.
+func percentOf(t gosnmp.Asn1BER, part Reading, total float64) Reading {
+	return derived{typ: t, f: func(c clock) any {
+		if total <= 0 {
+			return as(t, 0)
+		}
+		return as(t, math.Round(100*number(part, c)/total))
+	}}
+}
+
+// word is one 32-bit half of what r reads: UCD-SNMP-MIB gives a disk's size in
+// kilobytes as a low and a high Unsigned32.
+func word(r Reading, high bool) Reading {
+	return derived{typ: gosnmp.Gauge32, f: func(c clock) any {
+		v := uint64(number(r, c))
+		if high {
+			return uint32(v >> 32)
+		}
+		return uint32(v)
+	}}
+}
+
+// as is v in the Go type Const holds for t.
+func as(t gosnmp.Asn1BER, v float64) any {
+	switch t {
+	case gosnmp.Integer:
+		return int(min(v, math.MaxInt32))
+	case gosnmp.Counter64:
+		return uint64(v)
+	}
+	return uint32(min(v, math.MaxUint32))
 }
 
 // SecondsUp answers the seconds since the agent started as a Gauge32: how long

@@ -43,6 +43,9 @@ type Reading interface {
 type clock struct {
 	started time.Time // when the agent started answering
 	now     time.Time
+	// stats are the agent's own counters, which SNMPv2-MIB's snmp group and
+	// the USM statistics read (agentObjects); nil where no agent is answering.
+	stats *counters
 }
 
 // uptime is the time since the agent started, in hundredths of a second.

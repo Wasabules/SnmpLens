@@ -83,6 +83,9 @@ type counters struct {
 	packets, parseErrors, badVersions, badCommunities, unknownSecurityModels, invalidMsgs,
 	unknownEngineIDs, unknownUserNames, unsupportedSecLevels, wrongDigests, notInTimeWindows,
 	decryptionErrors, unknownContexts, unknownPDUHandlers, faults atomic.Uint32
+	// What SNMPv2-MIB's snmp group counts besides: the requests by kind, the
+	// varbinds read, the answers and the notifications sent.
+	inGets, inGetNexts, inSets, inTotalReqVars, outGetResponses, outNoSuchNames, outTraps atomic.Uint32
 }
 
 // Agent is one simulated device answering on one socket.
@@ -155,10 +158,9 @@ func NewAgent(cfg Config) (*Agent, error) {
 			return nil, fmt.Errorf("simulator: %w", err)
 		}
 	}
-	objects := cfg.Objects
-	if a.v3 {
-		objects = slices.Concat(cfg.Objects, engineObjects(a.engineID, a.boots))
-	}
+	// What only the agent knows — its own counters, and for v3 its engine —
+	// beside what the device answers.
+	objects := slices.Concat(cfg.Objects, agentObjects(a.v3, a.engineID, a.boots, cfg.Traps.OnAuthFailure))
 	if a.tree, err = newTree(objects); err != nil {
 		return nil, fmt.Errorf("simulator: %w", err)
 	}
@@ -277,7 +279,7 @@ func (a *Agent) serve(conn *net.UDPConn, started time.Time, done chan struct{}) 
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
-		if out := a.handle(buf[:n], clock{started: started, now: time.Now()}); out != nil {
+		if out := a.handle(buf[:n], clock{started: started, now: time.Now(), stats: &a.stats}); out != nil {
 			_, _ = conn.WriteToUDPAddrPort(out, from)
 		}
 	}

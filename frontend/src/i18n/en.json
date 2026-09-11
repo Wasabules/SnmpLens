@@ -1339,59 +1339,59 @@
     "model": {
       "windows-server": {
         "name": "Windows server",
-        "description": "A Windows Server 2022 host with its SNMP service: system, two network adapters, host resources by drive letter. Fits the “Interfaces (IF-MIB)” and “Server (HOST-RESOURCES-MIB)” presets."
+        "description": "A Windows Server 2022 host with its SNMP service: adapters and Windows’s pseudo-interfaces, addresses, routes and sockets (RDP, SMB, IIS), drives by letter, processes and installed programs. Fits the “Interfaces (IF-MIB)” and “Server (HOST-RESOURCES-MIB)” presets."
       },
       "cisco-catalyst-24": {
         "name": "Cisco Catalyst 2960, 24 ports",
-        "description": "An access switch: 24 Fast Ethernet ports, two gigabit uplinks and VLAN 1, with Cisco's CPU load and configuration changes. Recognised as a Cisco, so the “Cisco (IF-MIB)” preset comes first; also fits “Switch ports” and “Switch drawing (24 ports)”."
+        "description": "An access switch: 24 Fast Ethernet ports, two gigabit uplinks and VLAN 1, with its MAC address table, spanning tree, VLANs (Q-BRIDGE and VTP), LLDP and CDP neighbours, ENTITY-MIB hardware, and Cisco’s CPU, memory and environment. Recognised as a Cisco, so the “Cisco (IF-MIB)” preset comes first; also fits “Switch ports” and “Switch drawing (24 ports)”."
       },
       "cisco-catalyst-48": {
         "name": "Cisco Catalyst 2960, 48 ports",
-        "description": "The same access switch with 48 ports. Recognised as a Cisco, so the “Cisco (IF-MIB)” preset comes first; also fits “Switch ports”."
+        "description": "The same access switch with 48 ports, and everything that goes with them. Recognised as a Cisco, so the “Cisco (IF-MIB)” preset comes first; also fits “Switch ports”."
       },
       "cisco-isr-4331": {
         "name": "Cisco ISR 4331 router",
-        "description": "A branch router: WAN, LAN and management ports, two eBGP sessions — one established, one not — and Cisco's CPU load. Sends the BGP notifications and configuration changes."
+        "description": "A branch router: WAN, LAN and management ports, two eBGP sessions — one established, one not — and the routes the first brought, its ARP cache and sockets, ENTITY-MIB hardware, and Cisco’s CPU, memory and environment. Sends the BGP notifications and configuration changes."
       },
       "synology-nas": {
         "name": "Synology NAS",
-        "description": "A DS920+ on DSM: Synology's system, disk and RAID tables beside interfaces and host resources. Fits the “Interfaces (IF-MIB)” and “Server (HOST-RESOURCES-MIB)” presets."
+        "description": "A DS920+ on DSM: Synology’s system, disk and RAID tables beside interfaces, a file server’s sockets (SMB, AFP, NFS), host resources with processes and packages, and UCD-SNMP-MIB. Fits the “Interfaces (IF-MIB)” and “Server (HOST-RESOURCES-MIB)” presets."
       },
       "apc-smart-ups": {
         "name": "APC Smart-UPS, three-phase",
-        "description": "A 10 kVA UPS on its network card, answering the standard UPS-MIB: battery, input and output per phase. Fits the “UPS (RFC 1628)” preset and sends upsTrapOnBattery."
+        "description": "A 10 kVA UPS on its network card, answering the standard UPS-MIB — battery, input and output per phase — and APC’s PowerNet-MIB alike, from the same readings. Fits the “UPS (RFC 1628)” preset and sends upsTrapOnBattery."
       },
       "hp-laserjet": {
         "name": "HP LaserJet printer",
-        "description": "A network laser printer answering the Printer MIB: page count, a black cartridge running low and its alert. Sends printerV2Alert."
+        "description": "A network laser printer answering the Printer MIB: trays, output bin, cover, marker and page counts, a black cartridge running low and its alert, the languages it reads and its panel, with the printer in the host resources. Sends printerV2Alert."
       },
       "environment-probe": {
         "name": "Environment probe",
-        "description": "A temperature and humidity probe answering the standard ENTITY-SENSOR-MIB, as a server room's cold aisle reads."
+        "description": "A temperature and humidity probe answering the standard ENTITY-SENSOR-MIB, as a server room’s cold aisle reads, with its hardware in ENTITY-MIB."
       },
       "linux-server": {
         "name": "Linux server",
-        "description": "An Ubuntu host running net-snmp: system, three interfaces, host resources. Fits the “Interfaces (IF-MIB)” and “Server (HOST-RESOURCES-MIB)” presets."
+        "description": "An Ubuntu 24.04 host running net-snmp, as a walk of one finds it: interfaces, addresses, routes and sockets; its devices, file systems, processes and packages; UCD-SNMP-MIB’s memory, load and disks. Fits the “Interfaces (IF-MIB)” and “Server (HOST-RESOURCES-MIB)” presets."
       },
       "dell-idrac9": {
         "name": "Dell iDRAC9 (PowerEdge R750)",
-        "description": "The out-of-band controller of a PowerEdge R750: global and storage status, power state, temperatures, fan speeds and power consumption (IDRAC-MIB). Sends alertTemperatureProbeWarning."
+        "description": "The out-of-band controller of a PowerEdge R750 (IDRAC-MIB): global, storage and power status, BIOS, processors, memory modules, power supplies, temperatures, fans, consumption, and the RAID controller with its physical and virtual disks. Sends alertTemperatureProbeWarning."
       },
       "mikrotik-rb4011": {
         "name": "MikroTik RB4011 router",
-        "description": "A RouterOS router: ten gigabit ports and an empty SFP+ cage, the board’s voltage, temperatures and power draw (MIKROTIK-MIB), and host resources. Fits the “Interfaces (IF-MIB)” and “Server (HOST-RESOURCES-MIB)” presets."
+        "description": "A RouterOS router for a small office: ten gigabit ports and an empty SFP+ cage, a LAN bridge on 192.168.88.0/24, its routes and services, the board’s health (MIKROTIK-MIB), the neighbours MNDP and LLDP found, and host resources. Fits the “Interfaces (IF-MIB)” and “Server (HOST-RESOURCES-MIB)” presets."
       },
       "fortigate-60f": {
         "name": "Fortinet FortiGate 60F",
-        "description": "A branch firewall on FortiOS 7.2: two WAN ports — the backup one down —, DMZ, LAN and the SSL VPN tunnel, with FortiGate’s processor, memory, disk and session counts. Sends the processor and memory threshold notifications."
+        "description": "A branch firewall on FortiOS 7.2: two WAN ports — the backup one down —, DMZ, LAN and the SSL VPN tunnel, its routes, and FortiGate’s processor, memory, disk, sessions, VDOM, HA mode, policy counters and IPsec tunnels. Sends the processor and memory threshold notifications."
       },
       "unifi-u6-pro": {
         "name": "UniFi U6 Pro access point",
-        "description": "A Wi-Fi 6 access point: two radios and how busy their channels are, three SSIDs with their clients and traffic (UBNT-UniFi-MIB), beside interfaces and host resources."
+        "description": "A Wi-Fi 6 access point: two radios and how busy their channels are, three SSIDs with their clients, traffic, errors and retries (UBNT-UniFi-MIB), its LLDP neighbour, host resources and UCD-SNMP-MIB."
       },
       "apc-rack-pdu": {
         "name": "APC switched rack PDU",
-        "description": "An AP7921B: eight outlets, one of them switched off, the phase load in amps and the power drawn (PowerNet-MIB). Sends rPDUOutletOff and rPDUNearOverload."
+        "description": "An AP7921B: eight outlets, one of them switched off, the phase load in amps and the power drawn (PowerNet-MIB), beside the card’s address and services. Sends rPDUOutletOff and rPDUNearOverload."
       }
     },
     "userN": "User {n}",

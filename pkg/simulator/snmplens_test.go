@@ -62,8 +62,8 @@ func TestSnmpLensReadsTheSimulator(t *testing.T) {
 		for j, r := range rows {
 			got[j] = r.Oid
 		}
-		// The device answers v3, so its engine group is there too.
-		if want := slices.Concat(sampleOrder, engineOrder); !slices.Equal(got, want) {
+		// The device answers v3, so its engine group and statistics are there too.
+		if want := walkOrder(true); !slices.Equal(got, want) {
 			t.Errorf("walked\n%v\nwant\n%v", got, want)
 		}
 	})
