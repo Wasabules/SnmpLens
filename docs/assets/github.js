@@ -122,6 +122,37 @@
     });
   }
 
+  /* --- how many times it has been downloaded ----------------------------- */
+
+  // The checksums file and its signature are NOT counted. The updater fetches
+  // both on every check it makes, so counting them would report the
+  // application's own traffic as people: 54 of the 303 downloads GitHub had
+  // recorded when this was written. What is counted is the installers and the
+  // archives — and it is DOWNLOADS, never users: applying an update fetches
+  // the binary again, and nothing here can tell that from a new reader.
+  function isBinary(asset) {
+    return !/checksums|\.sig$/i.test(asset.name || '');
+  }
+
+  function downloads() {
+    var slot = $('[data-stat="downloads"]');
+    if (!slot) return Promise.resolve();
+
+    // One page of releases. A hundred is far past what this project has, and
+    // paging for older ones would cost every visitor a second request to be
+    // exact about a number nobody reads to the unit.
+    return gh('/releases?per_page=100').then(function (rels) {
+      if (!rels || !rels.length) return; // settle() leaves the fallback
+      var total = 0;
+      rels.forEach(function (r) {
+        (r.assets || []).filter(isBinary).forEach(function (a) {
+          total += a.download_count || 0;
+        });
+      });
+      fill(slot, compact(total));
+    });
+  }
+
   /* --- latest release ---------------------------------------------------- */
 
   // The asset a visitor most likely wants, from what the browser will admit to.
@@ -375,7 +406,7 @@
   /* --- go ----------------------------------------------------------------- */
 
   function start() {
-    Promise.all([repoStats(), latestRelease(), contributors(), releaseHistory()])
+    Promise.all([repoStats(), downloads(), latestRelease(), contributors(), releaseHistory()])
       .catch(function () { settle(); })
       .then(function () { settle(); });
   }
