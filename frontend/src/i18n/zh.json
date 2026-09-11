@@ -1376,15 +1376,31 @@
       "oid": "OID",
       "type": "类型",
       "value": "值",
-      "name": "名称",
       "hexTitle": "值为十六进制八位组，可包含冒号和空格",
       "preview": "预览",
-      "previewHint": "设备启动时将应答的内容，依据上方的设置（无论是否已保存）。省略其自身的计数器（snmp 组、引擎）。",
-      "subtree": "子树",
-      "subtreePlaceholder": "所有 OID，或某个子树，例如 1.3.6.1.2.1.2",
+      "previewHint": "设备将应答的内容，依据上方的设置（无论是否已保存），并假定它自打开此选项卡起一直在运行：每次重新读取，变化的值都会变化。省略其自身的计数器（snmp 组、引擎）。",
+      "filter": "筛选",
+      "filterPlaceholder": "OID 子树，例如 1.3.6.1.2.1.2——或已加载 MIB 中的名称，例如 ifDescr",
+      "dynamicOnly": "仅显示变化的值",
+      "column": {
+        "oid": "OID",
+        "name": "MIB 名称",
+        "type": "类型",
+        "behaviour": "行为",
+        "value": "值"
+      },
+      "behaviour": {
+        "static": "静态",
+        "counter": "计数器",
+        "gauge": "仪表",
+        "uptime": "运行时间",
+        "clock": "时钟",
+        "derived": "计算值"
+      },
+      "resizeColumn": "{column} 列宽：拖动或使用方向键",
       "refresh": "重新读取",
       "previewCount": "{shown} / {total, plural, other {# 个对象}}",
-      "previewEmpty": "此子树下没有内容。"
+      "previewEmpty": "没有匹配项。"
     },
     "tabProblem": "此选项卡中有需要修正的内容",
     "writeHint": "使用写团体名或由具有写权限的用户发出的 SET 会改变设备的应答，直到设备重启——就像尚未保存的运行配置。表行通过其 RowStatus 创建和删除，依据已加载的 MIB 的描述。代理自身统计的内容（SNMP 统计、引擎）永远不可写。",

@@ -371,6 +371,23 @@ export function devicePayload(d) {
   };
 }
 
+/** The preview's columns, in order (simulator.data.column.<id>). */
+export const PREVIEW_COLUMNS = ['oid', 'name', 'type', 'behaviour', 'value'];
+
+/**
+ * What SimulatorPreview is asked for: the rows under an OID or whose MIB name
+ * holds the filter, only those that move when asked, read as if the device had
+ * run since the Data tab was opened at `openedAt` — so that what moves has moved
+ * each time it is read again.
+ */
+export function previewQuery(filter, dynamicOnly, openedAt, now = Date.now()) {
+  return {
+    filter: String(filter || '').trim(),
+    dynamicOnly: !!dynamicOnly,
+    sinceSeconds: openedAt ? Math.max(0, (now - openedAt) / 1000) : 0,
+  };
+}
+
 /**
  * The device as SimulatorPreview takes it: what makes its answers, and not one
  * secret — a preview needs none, so none crosses the bridge for it.

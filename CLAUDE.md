@@ -623,10 +623,15 @@ subtrees as a model file's objects are. Where one sits is checked at SAVE, by bu
 making the tree (`Device.Validate` → `objects` → `newTree`): an instance under another would otherwise surface as a
 start that fails later, with a message nobody connects to the edit.
 
-`PreviewDevice` reads the very objects the agent would be given, as they read the moment it starts, so the Data tab
-shows what a walk finds, less the agent's own counters. `SimulatorPreview` takes the device as the editor holds it —
-saved or not — with its secrets stripped on both sides (`previewPayload` in the renderer, `WithoutSecrets` in Go),
-names the page's OIDs from the loaded MIBs in one `ResolveOids` batch, and the renderer applies only the latest
+`PreviewRows` reads the very objects the agent would be given, so the Data tab shows what a walk finds, less the
+agent's own counters — read as if the device had run since the tab was opened, and read again every five seconds,
+so that what moves is SEEN moving. Each row says how its value behaves (`behaviourOf`, by the kind of reading
+`values.go` made: static, counter, gauge, uptime, clock, computed), which is what "only what moves" keys on.
+`SimulatorPreview` takes the device as the editor holds it — saved or not — with its secrets stripped on both sides
+(`previewPayload` in the renderer, `WithoutSecrets` in Go). A filter of dotted numbers is a subtree; anything else
+is looked for in the MIB names, so every object is named first (`mib.Service.NameOIDs`, one hold of gosmi's lock
+for the batch) — and only a scalar or a column names an OID, because gosmi answers with the closest node it knows
+and `SNMPv2-SMI::enterprises` followed by nine arcs is no name to search by. The renderer applies only the latest
 answer: previews overlap while someone types, and nothing orders them.
 
 The protocol names are `pkg/snmp`'s (`MD5` to `SHA512`, `DES`, `AES` to `AES256C`), mapped again here so the

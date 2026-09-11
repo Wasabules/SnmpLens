@@ -14,59 +14,68 @@ import (
 // answer. The preview reads the very objects the agent would be given, so what
 // it shows is what a walk would find — less the agent's own counters, which
 // count requests and have seen none, and what only a notification carries.
+// Each value says how it behaves, since which of them move is half of what a
+// person looks at a simulated device for.
 
-// MaxPreviewRows bounds a preview: a table on a screen, not a walk.
+// MaxPreviewRows bounds a preview page: a table on a screen, not a walk.
 const MaxPreviewRows = 500
 
-// PreviewRow is one object as a device answers it, its value written out.
+// How a value behaves, as the preview says it.
+const (
+	BehaviourStatic  = "static"  // the same whenever it is read
+	BehaviourCounter = "counter" // only goes up, and wraps
+	BehaviourGauge   = "gauge"   // swings between two bounds
+	BehaviourUptime  = "uptime"  // the time since the device started
+	BehaviourClock   = "clock"   // the time of day
+	BehaviourDerived = "derived" // computed from other readings at the same instant
+)
+
+// PreviewRow is one object as a device answers it: its value written out, and
+// how that value behaves.
 type PreviewRow struct {
-	OID   string `json:"oid"`
-	Type  string `json:"type"`
-	Value string `json:"value"`
+	OID       string `json:"oid"`
+	Type      string `json:"type"`
+	Value     string `json:"value"`
+	Behaviour string `json:"behaviour"`
 }
 
-// Preview is what a device answers under a subtree.
-type Preview struct {
-	Rows []PreviewRow `json:"rows"`
-	// Total is how many objects the subtree holds; Rows are the first of them.
-	Total int `json:"total"`
-}
-
-// PreviewDevice is what d would answer under subtree — everywhere when it is
-// empty — the moment it starts, in at most limit rows. Only what makes the
-// answers is checked: the model, its parameters and d's own values.
-func PreviewDevice(d Device, subtree string, limit int) (Preview, error) {
-	var root oid
-	if s := strings.TrimSpace(subtree); s != "" {
-		var err error
-		if root, err = parseArcs(s); err != nil {
-			return Preview{}, err
-		}
-	}
+// PreviewRows is every object d answers, in the order a walk finds them, as
+// they read once it has run for since. Only what makes the answers is checked:
+// the model, its parameters and d's own values.
+func PreviewRows(d Device, since time.Duration) ([]PreviewRow, error) {
 	objs, err := d.objects()
 	if err != nil {
-		return Preview{}, err
+		return nil, err
 	}
 	t, err := newTree(objs)
 	if err != nil {
-		return Preview{}, err
-	}
-	if limit < 1 || limit > MaxPreviewRows {
-		limit = MaxPreviewRows
+		return nil, err
 	}
 	now := time.Now()
-	c := clock{started: now, now: now}
-	out := Preview{Rows: []PreviewRow{}}
-	for _, e := range t.entries {
-		if !e.oid.hasPrefix(root) {
-			continue
-		}
-		out.Total++
-		if len(out.Rows) < limit {
-			out.Rows = append(out.Rows, PreviewRow{OID: e.oid.String(), Type: smiTypeName(e.typ), Value: shown(e.typ, e.val.read(c))})
-		}
+	c := clock{started: now.Add(-max(since, 0)), now: now}
+	out := make([]PreviewRow, len(t.entries))
+	for i, e := range t.entries {
+		out[i] = PreviewRow{OID: e.oid.String(), Type: smiTypeName(e.typ), Value: shown(e.typ, e.val.read(c)),
+			Behaviour: behaviourOf(e.val)}
 	}
 	return out, nil
+}
+
+// behaviourOf is how a reading moves, by the kind values.go makes it.
+func behaviourOf(r Reading) string {
+	switch r.(type) {
+	case constant:
+		return BehaviourStatic
+	case counter:
+		return BehaviourCounter
+	case gauge, loadText:
+		return BehaviourGauge
+	case uptimeReading, secondsUp, engineSeconds:
+		return BehaviourUptime
+	case dateAndTime:
+		return BehaviourClock
+	}
+	return BehaviourDerived
 }
 
 // smiTypeName is t by the name the SMI gives it, as a model file writes it.

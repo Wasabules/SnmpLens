@@ -121,8 +121,8 @@ function createSimulatorStore() {
     restart: (id) => SimulatorRestartDevice(id),
     /** Changes what a device does wrong, at once and without restarting it. */
     setFaults: (id, faults) => SimulatorSetFaults(id, faults),
-    /** What a device, as the editor holds it, would answer under a subtree: { rows, total }. */
-    preview: async (device, subtree) => (await SimulatorPreview(device, subtree || '')) || { rows: [], total: 0 },
+    /** What a device, as the editor holds it, would answer (previewQuery): { rows, total }. */
+    preview: async (device, query) => (await SimulatorPreview(device, query)) || { rows: [], total: 0 },
     /** The engine ID SnmpLens's own trap listener stands for, in hex. */
     listenerEngineId: async () => (await TrapListenerEngineID()) || '',
   };

@@ -1376,15 +1376,31 @@
       "oid": "OID",
       "type": "Type",
       "value": "Value",
-      "name": "Name",
       "hexTitle": "The value is the octets in hex, colons and spaces allowed",
       "preview": "Preview",
-      "previewHint": "What the device would answer the moment it starts, from the settings above — saved or not. Its own counters (the snmp group, the engine) are left out.",
-      "subtree": "Subtree",
-      "subtreePlaceholder": "Every OID — or a subtree, e.g. 1.3.6.1.2.1.2",
+      "previewHint": "What the device would answer, from the settings above — saved or not — as if it had been running since this tab was opened: what moves has moved each time it is read again. Its own counters (the snmp group, the engine) are left out.",
+      "filter": "Filter",
+      "filterPlaceholder": "An OID subtree, e.g. 1.3.6.1.2.1.2 — or a name from a loaded MIB, e.g. ifDescr",
+      "dynamicOnly": "Only what moves",
+      "column": {
+        "oid": "OID",
+        "name": "MIB name",
+        "type": "Type",
+        "behaviour": "Behaviour",
+        "value": "Value"
+      },
+      "behaviour": {
+        "static": "static",
+        "counter": "counter",
+        "gauge": "gauge",
+        "uptime": "uptime",
+        "clock": "clock",
+        "derived": "computed"
+      },
+      "resizeColumn": "Width of the {column} column: drag it, or use the arrow keys",
       "refresh": "Read again",
       "previewCount": "{shown} of {total, plural, one {# object} other {# objects}}",
-      "previewEmpty": "Nothing under this subtree."
+      "previewEmpty": "Nothing matches."
     },
     "tabProblem": "Something on this tab needs fixing",
     "writeHint": "A SET from the write community, or from a user who can write, changes what the device answers until it restarts — as a running configuration does until it is saved. Rows are created and destroyed through their RowStatus, as the loaded MIBs describe them. What the agent counts itself — its SNMP statistics, its engine — is never written.",

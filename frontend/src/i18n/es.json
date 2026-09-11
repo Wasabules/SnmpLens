@@ -1376,15 +1376,31 @@
       "oid": "OID",
       "type": "Tipo",
       "value": "Valor",
-      "name": "Nombre",
       "hexTitle": "El valor son los octetos en hexadecimal; se admiten dos puntos y espacios",
       "preview": "Vista previa",
-      "previewHint": "Lo que el dispositivo respondería al iniciarse, según los ajustes de arriba, guardados o no. Se omiten sus propios contadores (grupo snmp, motor).",
-      "subtree": "Subárbol",
-      "subtreePlaceholder": "Todos los OID, o un subárbol, p. ej. 1.3.6.1.2.1.2",
+      "previewHint": "Lo que respondería el dispositivo, según los ajustes de arriba, guardados o no, como si funcionara desde que se abrió esta pestaña: lo que cambia ha cambiado en cada nueva lectura. Se omiten sus propios contadores (grupo snmp, motor).",
+      "filter": "Filtro",
+      "filterPlaceholder": "Un subárbol OID, p. ej. 1.3.6.1.2.1.2, o un nombre de una MIB cargada, p. ej. ifDescr",
+      "dynamicOnly": "Solo lo que cambia",
+      "column": {
+        "oid": "OID",
+        "name": "Nombre MIB",
+        "type": "Tipo",
+        "behaviour": "Comportamiento",
+        "value": "Valor"
+      },
+      "behaviour": {
+        "static": "estático",
+        "counter": "contador",
+        "gauge": "indicador",
+        "uptime": "tiempo activo",
+        "clock": "hora",
+        "derived": "calculado"
+      },
+      "resizeColumn": "Ancho de la columna {column}: arrástrela o use las flechas",
       "refresh": "Volver a leer",
       "previewCount": "{shown} de {total, plural, one {# objeto} other {# objetos}}",
-      "previewEmpty": "Nada bajo este subárbol."
+      "previewEmpty": "Nada coincide."
     },
     "tabProblem": "Hay algo que corregir en esta pestaña",
     "writeHint": "Un SET con la comunidad de escritura, o de un usuario que puede escribir, cambia lo que responde el dispositivo hasta que se reinicia, como una configuración en ejecución mientras no se guarda. Las filas se crean y se eliminan mediante su RowStatus, tal como las describen las MIB cargadas. Lo que el agente cuenta por sí mismo —sus estadísticas SNMP, su motor— nunca se escribe.",

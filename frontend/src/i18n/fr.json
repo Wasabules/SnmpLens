@@ -1376,15 +1376,31 @@
       "oid": "OID",
       "type": "Type",
       "value": "Valeur",
-      "name": "Nom",
       "hexTitle": "La valeur est donnée en octets hexadécimaux, deux-points et espaces permis",
       "preview": "Aperçu",
-      "previewHint": "Ce que l’appareil répondrait dès son démarrage, d’après les réglages ci-dessus — enregistrés ou non. Ses propres compteurs (groupe snmp, moteur) sont omis.",
-      "subtree": "Sous-arbre",
-      "subtreePlaceholder": "Tous les OID — ou un sous-arbre, p. ex. 1.3.6.1.2.1.2",
+      "previewHint": "Ce que l’appareil répondrait, d’après les réglages ci-dessus — enregistrés ou non —, comme s’il tournait depuis l’ouverture de cet onglet : ce qui bouge a bougé à chaque relecture. Ses propres compteurs (groupe snmp, moteur) sont omis.",
+      "filter": "Filtre",
+      "filterPlaceholder": "Un sous-arbre OID, p. ex. 1.3.6.1.2.1.2 — ou un nom d’une MIB chargée, p. ex. ifDescr",
+      "dynamicOnly": "Seulement ce qui bouge",
+      "column": {
+        "oid": "OID",
+        "name": "Nom MIB",
+        "type": "Type",
+        "behaviour": "Comportement",
+        "value": "Valeur"
+      },
+      "behaviour": {
+        "static": "statique",
+        "counter": "compteur",
+        "gauge": "jauge",
+        "uptime": "durée",
+        "clock": "horloge",
+        "derived": "calculée"
+      },
+      "resizeColumn": "Largeur de la colonne {column} : la glisser, ou utiliser les flèches",
       "refresh": "Relire",
       "previewCount": "{shown} sur {total, plural, one {# objet} other {# objets}}",
-      "previewEmpty": "Rien sous ce sous-arbre."
+      "previewEmpty": "Rien ne correspond."
     },
     "tabProblem": "Quelque chose est à corriger dans cet onglet",
     "writeHint": "Un SET envoyé avec la communauté d’écriture, ou par un utilisateur autorisé à écrire, change ce que l’appareil répond jusqu’à son redémarrage — comme une configuration en cours tant qu’elle n’est pas enregistrée. Les lignes se créent et se suppriment par leur RowStatus, telles que les décrivent les MIB chargées. Ce que l’agent compte lui-même — ses statistiques SNMP, son moteur — ne s’écrit jamais.",

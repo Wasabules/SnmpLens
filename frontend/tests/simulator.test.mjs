@@ -61,6 +61,8 @@ const {
   AGENT_SUBTREES,
   blankOverride,
   previewPayload,
+  previewQuery,
+  PREVIEW_COLUMNS,
   deliveryReport,
   trapActivity,
   modelGroups,
@@ -618,5 +620,22 @@ for (const file of readdirSync(goDir).filter((f) => f.endsWith('.go') && !f.ends
 }
 check('every number a model may be given is named in en.json',
   paramNames.size >= 4 && [...paramNames].every((n) => en.simulator?.param?.[n]), [...paramNames].join());
+
+/* --- the preview speaks Go's vocabulary ---------------------------------- */
+
+const previewGo = readFileSync(new URL('../../pkg/simulator/preview.go', import.meta.url), 'utf8');
+const behaviours = [...previewGo.matchAll(/Behaviour\w+\s*=\s*"(\w+)"/g)].map((m) => m[1]);
+check('every behaviour a preview gives a value is named in en.json',
+  behaviours.length >= 6 && behaviours.every((b) => en.simulator?.data?.behaviour?.[b]), behaviours.join());
+check('and every column of the preview', PREVIEW_COLUMNS.every((c) => en.simulator?.data?.column?.[c]));
+const queryGo = readFileSync(new URL('../../app_simpreview.go', import.meta.url), 'utf8')
+  .match(/type SimulatorPreviewQuery struct \{([^}]*)\}/)?.[1] || '';
+const queryTags = [...queryGo.matchAll(/json:"(\w+)"/g)].map((m) => m[1]).sort();
+check('a preview is asked for in the fields Go reads, and no other',
+  queryTags.length === 3 && JSON.stringify(Object.keys(previewQuery('x', true, 1)).sort()) === JSON.stringify(queryTags),
+  queryTags.join());
+check('read as if the device had run since the tab was opened',
+  previewQuery(' ifDescr ', 1, 1000, 61000).sinceSeconds === 60 && previewQuery(' ifDescr ', 1, 1000, 61000).filter === 'ifDescr' &&
+  previewQuery('', false, 0).sinceSeconds === 0);
 
 process.exit(failures ? 1 : 0);

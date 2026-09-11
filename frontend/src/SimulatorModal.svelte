@@ -11,7 +11,7 @@
     editableDevice, deviceProblems, devicePayload, addDeviceAsTarget, notificationsOf, trapActivity, deliveryReport,
     modelOf, modelName, modelDescription, importReport, firstImported, recordRequest, recordableTargets, deviceImportReport,
     deviceGroups, faultChips, categoryIcon, EDITOR_TABS, tabsWithProblems, OVERRIDE_TYPES, MAX_OVERRIDES,
-    blankOverride, previewPayload,
+    blankOverride, previewPayload, previewQuery, PREVIEW_COLUMNS,
   } from './utils/simulator.js';
   import UsmFields from './settings/UsmFields.svelte';
   import ModelPicker from './simulator/ModelPicker.svelte';
@@ -42,8 +42,13 @@
     simulatorStore.refresh().catch((e) => notificationStore.add(String(e), 'error'));
     simulatorStore.refreshModels().catch((e) => notificationStore.add(String(e), 'error'));
     const timer = setInterval(() => simulatorStore.refresh().catch(() => {}), 2000);
+    // What moves in the preview is read again while the Data tab is open.
+    const live = setInterval(() => {
+      if (tab === 'data' && editing && !previewBusy) runPreview();
+    }, 5000);
     return () => {
       clearInterval(timer);
+      clearInterval(live);
       clearTimeout(previewTimer);
     };
   });
@@ -59,17 +64,62 @@
   let tab = 'identity';
   $: flagged = tabsWithProblems(problems);
 
-  /** What the device as edited would answer, under the subtree asked for. */
-  let previewSubtree = '';
+  /** What the device as edited would answer: the rows the filter matches. */
+  let previewFilter = '';
+  let previewDynamicOnly = false;
   let preview = null;
   let previewError = '';
   let previewBusy = false;
   let previewTimer = null;
   let previewSeq = 0;
+  /** When the Data tab was opened: values are read as if the device had run since. */
+  let previewOpenedAt = 0;
+  /** The preview's column widths in pixels, which a header's edge is dragged to change. */
+  let previewWidths = { oid: 200, name: 210, type: 110, behaviour: 110, value: 260 };
+  $: previewTableWidth = PREVIEW_COLUMNS.reduce((sum, c) => sum + previewWidths[c], 0);
 
   // The preview follows the editor: a parameter, a value of its own or the
   // name changes what the device answers, so it is asked again a moment after.
-  $: if (tab === 'data' && editing) schedulePreview(editing, previewSubtree);
+  $: if (tab === 'data' && editing) schedulePreview(editing, previewFilter, previewDynamicOnly);
+
+  function openTab(id) {
+    if (id === 'data' && tab !== 'data') {
+      previewOpenedAt = Date.now();
+      preview = null;
+    }
+    tab = id;
+  }
+
+  /** The column being widened: which, where the drag started, and how wide it was. */
+  let resizing = null;
+
+  function startColumnResize(event, col) {
+    resizing = { col, x: event.clientX, width: previewWidths[col] };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }
+
+  function onWindowMouseMove(event) {
+    if (!resizing) return;
+    previewWidths = { ...previewWidths, [resizing.col]: Math.min(800, Math.max(60, resizing.width + event.clientX - resizing.x)) };
+  }
+
+  function onWindowMouseUp() {
+    if (!resizing) return;
+    resizing = null;
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  }
+
+  // The same bounds from the keyboard, as the MIB panel's handle: the arrows
+  // step, Shift steps further.
+  function resizeColumnKey(event, col) {
+    const step = event.shiftKey ? 50 : 10;
+    const delta = { ArrowLeft: -step, ArrowRight: step }[event.key];
+    if (!delta) return;
+    event.preventDefault();
+    previewWidths = { ...previewWidths, [col]: Math.min(800, Math.max(60, previewWidths[col] + delta)) };
+  }
 
   function schedulePreview() {
     clearTimeout(previewTimer);
@@ -83,7 +133,8 @@
     const seq = ++previewSeq;
     previewBusy = true;
     try {
-      const page = await simulatorStore.preview(previewPayload(editing), previewSubtree.trim());
+      const page = await simulatorStore.preview(previewPayload(editing),
+        previewQuery(previewFilter, previewDynamicOnly, previewOpenedAt));
       if (seq === previewSeq) {
         preview = page;
         previewError = '';
@@ -470,7 +521,7 @@
   }
 </script>
 
-<svelte:window on:keydown={onWindowKey} />
+<svelte:window on:keydown={onWindowKey} on:mousemove={onWindowMouseMove} on:mouseup={onWindowMouseUp} />
 
 <div class="sim-backdrop" on:mousedown={onBackdrop(close)} role="presentation">
   <div class="sim-modal" role="dialog" aria-modal="true" aria-labelledby="sim-title" tabindex="-1">
@@ -485,7 +536,7 @@
         <div class="tabs" role="tablist">
           {#each EDITOR_TABS as t (t.id)}
             <button type="button" role="tab" id="sim-tab-{t.id}" class="tab" class:active={tab === t.id}
-              aria-selected={tab === t.id} aria-controls="sim-tab-panel" on:click={() => (tab = t.id)}>
+              aria-selected={tab === t.id} aria-controls="sim-tab-panel" on:click={() => openTab(t.id)}>
               {$_(`simulator.tab.${t.id}`)}
               {#if flagged.includes(t.id)}
                 <span class="tab-flag" title={$_('simulator.tabProblem')} aria-label={$_('simulator.tabProblem')}></span>
@@ -762,8 +813,9 @@
         <h4 class="section-title">{$_('simulator.data.preview')}</h4>
         <p class="hint first">{$_('simulator.data.previewHint')}</p>
         <div class="preview-bar">
-          <input type="text" spellcheck="false" aria-label={$_('simulator.data.subtree')}
-            placeholder={$_('simulator.data.subtreePlaceholder')} bind:value={previewSubtree} />
+          <input type="text" spellcheck="false" aria-label={$_('simulator.data.filter')}
+            placeholder={$_('simulator.data.filterPlaceholder')} bind:value={previewFilter} />
+          <label class="check"><input type="checkbox" bind:checked={previewDynamicOnly} /> {$_('simulator.data.dynamicOnly')}</label>
           <button class="icon-btn" disabled={previewBusy} title={$_('simulator.data.refresh')} aria-label={$_('simulator.data.refresh')}
             on:click={runPreview}>
             <Icon name="refresh-cw" size={14} />
@@ -777,18 +829,32 @@
         {#if previewError}<span class="problem">{previewError}</span>{/if}
         {#if preview?.rows.length}
           <div class="preview-wrap">
-            <table class="preview">
+            <table class="preview" style:width="{previewTableWidth}px">
+              <colgroup>
+                {#each PREVIEW_COLUMNS as c (c)}<col style:width="{previewWidths[c]}px" />{/each}
+              </colgroup>
               <thead>
                 <tr>
-                  <th>{$_('simulator.data.oid')}</th>
-                  <th>{$_('simulator.data.name')}</th>
-                  <th>{$_('simulator.data.type')}</th>
-                  <th>{$_('simulator.data.value')}</th>
+                  {#each PREVIEW_COLUMNS as c (c)}
+                    <th scope="col">
+                      {$_(`simulator.data.column.${c}`)}
+                      <span class="col-resize" role="slider" tabindex="0" aria-orientation="horizontal"
+                        aria-valuemin="60" aria-valuemax="800" aria-valuenow={previewWidths[c]}
+                        aria-label={$_('simulator.data.resizeColumn', { values: { column: $_(`simulator.data.column.${c}`) } })}
+                        on:mousedown={(e) => startColumnResize(e, c)} on:keydown={(e) => resizeColumnKey(e, c)}></span>
+                    </th>
+                  {/each}
                 </tr>
               </thead>
               <tbody>
                 {#each preview.rows as r (r.oid)}
-                  <tr><td><code>{r.oid}</code></td><td>{r.name}</td><td>{r.type}</td><td class="value">{r.value}</td></tr>
+                  <tr class:moving={r.behaviour !== 'static'}>
+                    <td title={r.oid}><code>{r.oid}</code></td>
+                    <td title={r.name}>{r.name}</td>
+                    <td>{r.type}</td>
+                    <td><span class="behaviour {r.behaviour}">{$_(`simulator.data.behaviour.${r.behaviour}`)}</span></td>
+                    <td class="value" title={r.value}>{r.value}</td>
+                  </tr>
                 {/each}
               </tbody>
             </table>
@@ -1484,9 +1550,15 @@
 
   .preview-bar {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
     margin-top: 10px;
+  }
+
+  .preview-bar .check {
+    font-size: 0.85em;
+    white-space: nowrap;
   }
 
   .preview-bar input {
@@ -1508,8 +1580,11 @@
     border-radius: 6px;
   }
 
+  /* Fixed layout: the columns are as wide as someone dragged them, and what
+     does not fit ends in an ellipsis, the whole of it in the cell's title. */
   .preview {
-    width: 100%;
+    table-layout: fixed;
+    min-width: 100%;
     border-collapse: collapse;
     font-size: 0.82em;
   }
@@ -1520,6 +1595,9 @@
     border-bottom: 1px solid var(--border-color);
     text-align: left;
     vertical-align: top;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .preview th {
@@ -1530,8 +1608,36 @@
     font-weight: 600;
   }
 
-  .preview .value {
-    overflow-wrap: anywhere;
+  .col-resize {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 7px;
+    height: 100%;
+    cursor: col-resize;
+  }
+
+  .col-resize:hover,
+  .col-resize:focus-visible {
+    background-color: var(--accent-border);
+    outline: none;
+  }
+
+  .behaviour {
+    padding: 0 6px;
+    border-radius: 4px;
+    font-weight: 600;
+    background-color: var(--hover-overlay-medium);
+    color: var(--text-muted);
+  }
+
+  .behaviour:not(.static) {
+    background-color: var(--accent-border);
+    color: var(--accent-color);
+  }
+
+  .preview tr.moving .value {
+    color: var(--accent-color);
   }
 
   .section-title {

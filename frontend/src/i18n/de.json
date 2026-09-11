@@ -1376,15 +1376,31 @@
       "oid": "OID",
       "type": "Typ",
       "value": "Wert",
-      "name": "Name",
       "hexTitle": "Der Wert sind die Oktette in Hex, Doppelpunkte und Leerzeichen erlaubt",
       "preview": "Vorschau",
-      "previewHint": "Was das Gerät beim Start antworten würde, nach den Einstellungen oben — gespeichert oder nicht. Seine eigenen Zähler (snmp-Gruppe, Engine) sind ausgelassen.",
-      "subtree": "Teilbaum",
-      "subtreePlaceholder": "Alle OIDs — oder ein Teilbaum, z. B. 1.3.6.1.2.1.2",
+      "previewHint": "Was das Gerät antworten würde, nach den Einstellungen oben — gespeichert oder nicht —, als liefe es seit dem Öffnen dieses Reiters: Was sich bewegt, hat sich bei jedem erneuten Lesen bewegt. Seine eigenen Zähler (snmp-Gruppe, Engine) sind ausgelassen.",
+      "filter": "Filter",
+      "filterPlaceholder": "Ein OID-Teilbaum, z. B. 1.3.6.1.2.1.2 — oder ein Name aus einer geladenen MIB, z. B. ifDescr",
+      "dynamicOnly": "Nur was sich bewegt",
+      "column": {
+        "oid": "OID",
+        "name": "MIB-Name",
+        "type": "Typ",
+        "behaviour": "Verhalten",
+        "value": "Wert"
+      },
+      "behaviour": {
+        "static": "statisch",
+        "counter": "Zähler",
+        "gauge": "Messwert",
+        "uptime": "Laufzeit",
+        "clock": "Uhrzeit",
+        "derived": "berechnet"
+      },
+      "resizeColumn": "Breite der Spalte {column}: ziehen oder die Pfeiltasten verwenden",
       "refresh": "Neu lesen",
       "previewCount": "{shown} von {total, plural, one {# Objekt} other {# Objekten}}",
-      "previewEmpty": "Nichts unter diesem Teilbaum."
+      "previewEmpty": "Nichts passt."
     },
     "tabProblem": "Auf diesem Reiter ist etwas zu korrigieren",
     "writeHint": "Ein SET mit der Schreib-Community oder von einem Benutzer mit Schreibrecht ändert, was das Gerät antwortet, bis es neu startet — wie eine laufende Konfiguration, solange sie nicht gespeichert ist. Zeilen werden über ihren RowStatus angelegt und gelöscht, so wie die geladenen MIBs sie beschreiben. Was der Agent selbst zählt — seine SNMP-Statistiken, seine Engine —, wird nie geschrieben.",
