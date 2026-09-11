@@ -403,6 +403,8 @@ const DEMO_ONLY = {
   SimulatorSendTrap: 'A simulated device sends its notifications over UDP, from this machine.',
   ImportSimulatorModelsDialog: 'Importing a simulator model opens the operating system’s file dialog and writes the model to your configuration directory.',
   SimulatorDeleteModel: 'Deleting a simulator model removes its file from your configuration directory.',
+  SimulatorRecordDevice: 'Recording a device walks a real device on your network and writes the model to your configuration directory.',
+  SimulatorExportModelDialog: 'Exporting a simulator model opens the operating system’s file dialog and writes a file.',
 };
 
 for (const [name, why] of Object.entries(DEMO_ONLY)) {

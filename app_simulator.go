@@ -45,6 +45,8 @@ type simulatorService struct {
 	// it held when it was last read.
 	modelDir string
 	models   []simulator.CustomModel
+	// rec is the recording under way, if one is (app_simrecord.go).
+	rec recorder
 }
 
 func newSimulatorService(dir string) *simulatorService {

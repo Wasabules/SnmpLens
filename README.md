@@ -459,6 +459,12 @@ Three rules put the files together:
 
 **Recorded counters move.** Each starts at the value recorded and grows at the rate it had averaged since the device booted — its value over the sysUpTime recorded beside it — swinging around that rate as traffic does. hrSystemUptime and hrSystemDate are the device's own; everything else answers what was recorded. A line of a walk that cannot be read is left out and counted, and the import says where the first one was. A walk is at most 16 MB, and a package's walks record at most 65 536 objects between them. The example is `pkg/simulator/testdata/package`.
 
+### Recording a device
+
+**Record a device…** in the model picker walks a real device — `.1.3.6.1`, then `.1.0.8802` for LLDP — with the identifiers its target uses, and keeps what it answered as a package: a model like any other, from which a device answers what the real one did, its counters moving. The recorded device's own agent — its snmp group, engine, USM users, VACM groups and community table — is never written. A recording can be stopped, and then keeps nothing; a device answering more than 65 536 objects is refused rather than cut short.
+
+**Export** (beside a custom model's delete button) writes any custom model to a ZIP as a package folder, with its icon. It is how a recording is edited — add an `oids.json` beside its walk to make a recorded constant move, or a `traps.json` to give it notifications — and imported again, or passed on.
+
 ---
 
 ## Test Agent

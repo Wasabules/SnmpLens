@@ -1442,14 +1442,31 @@
       "custom": "Custom",
       "import": "Import models…",
       "importTitle": "Add models from a JSON file, or from a ZIP holding their icons or whole packages with recorded walks",
+      "record": "Record a device…",
+      "recordTitle": "Walk a real device and keep what it answers as a model",
+      "exportModel": "Export this model as a package (ZIP), to edit or share it",
       "deleteModel": "Delete this custom model",
       "inUse": "{count, plural, one {# device is made from this model: delete it first} other {# devices are made from this model: delete them first}}"
+    },
+    "record": {
+      "hint": "SnmpLens walks the device with the identifiers its target uses and keeps every value it answers, as a package — its SNMP users, groups and communities excepted. A large device takes a while.",
+      "target": "Device to record",
+      "name": "Model name",
+      "vendor": "Vendor",
+      "category": "Category",
+      "start": "Record",
+      "stop": "Stop",
+      "progress": "{count, plural, one {# object recorded…} other {# objects recorded…}}",
+      "description": "Recorded from {target} on {date}.",
+      "stopped": "The recording was stopped; nothing was kept.",
+      "failed": "{target} could not be recorded: {error}"
     },
     "models": {
       "imported": "Model “{name}” imported",
       "replaced": "Model “{name}” updated; the devices running it have restarted",
       "failed": "{file}: {error}",
       "deleted": "Model “{name}” deleted",
+      "exported": "Model “{name}” exported to {path}",
       "warning": {
         "iconSkipped": "{name}: its icon “{detail}” was not imported — an icon travels in a ZIP, beside its model",
         "iconMissing": "{name}: the archive holds no “{detail}”, so the model has no icon",

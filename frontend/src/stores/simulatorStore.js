@@ -12,6 +12,9 @@ import {
   SimulatorSendTrap,
   ImportSimulatorModelsDialog,
   SimulatorDeleteModel,
+  SimulatorRecordDevice,
+  SimulatorCancelRecording,
+  SimulatorExportModelDialog,
   TrapListenerEngineID,
 } from '../../wailsjs/go/main/App';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
@@ -26,7 +29,8 @@ import { EventsOn } from '../../wailsjs/runtime/runtime';
  * Nothing here is persisted; the lists are re-read.
  */
 function createSimulatorStore() {
-  const { subscribe, update } = writable({ models: [], icons: {}, devices: [], loaded: false });
+  // recording is the recording under way — { objects } kept so far — or null.
+  const { subscribe, update } = writable({ models: [], icons: {}, devices: [], recording: null, loaded: false });
   let subscribed = false;
 
   /** The devices, re-read: what the modal polls while it is open. */
@@ -60,6 +64,10 @@ function createSimulatorStore() {
       EventsOn('simulator:models', () => {
         Promise.all([refreshModels(), refresh()]).catch(() => {});
       });
+      // How far a recording has got, a few hundred objects at a time.
+      EventsOn('simulator:recording', (objects) => {
+        update((s) => (s.recording ? { ...s, recording: { objects } } : s));
+      });
     }
     return Promise.all([refreshModels(), refresh()]);
   }
@@ -80,6 +88,21 @@ function createSimulatorStore() {
     /** Asks for model files, JSON or ZIP, and imports them; resolves to what became of each. */
     importModels: async () => (await ImportSimulatorModelsDialog()) || [],
     removeModel: (id) => SimulatorDeleteModel(id),
+    /**
+     * Records a device as a model; resolves to what became of it, as an import
+     * does, and rejects when it was stopped or could not be walked.
+     */
+    record: async (req) => {
+      update((s) => ({ ...s, recording: { objects: 0 } }));
+      try {
+        return await SimulatorRecordDevice(req);
+      } finally {
+        update((s) => ({ ...s, recording: null }));
+      }
+    },
+    stopRecording: () => SimulatorCancelRecording(),
+    /** Writes a custom model to a ZIP the user names; resolves to where, or '' when cancelled. */
+    exportModel: async (id) => (await SimulatorExportModelDialog(id)) || '',
     /** The engine ID SnmpLens's own trap listener stands for, in hex. */
     listenerEngineId: async () => (await TrapListenerEngineID()) || '',
   };

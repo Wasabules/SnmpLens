@@ -3,6 +3,7 @@
   import { createEventDispatcher, tick } from 'svelte';
   import Icon from '../Icon.svelte';
   import ModelIcon from './ModelIcon.svelte';
+  import RecordForm from './RecordForm.svelte';
   import {
     filterModels, categoriesOf, categoryIcon, modelName, modelDescription, devicesOfModel,
   } from '../utils/simulator.js';
@@ -10,8 +11,9 @@
   /**
    * The model a new device is made from: a search over the catalogue and the
    * custom models, the categories to narrow it, and the chosen model described,
-   * with its icon when a custom model came with one. Importing and deleting a
-   * custom model are asked for here and done by the modal.
+   * with its icon when a custom model came with one. Importing, recording,
+   * exporting and deleting a custom model are asked for here and done by the
+   * modal.
    */
   export let models = [];
   /** The custom models' icons, by model ID. */
@@ -20,6 +22,12 @@
   export let devices = [];
   export let value = '';
   export let busy = false;
+  /** The targets a device may be recorded from. */
+  export let targets = [];
+  /** The recording under way — { objects } — or null. */
+  export let recording = null;
+  /** Whether the recording form is open; the modal closes it once a recording is kept. */
+  export let recordOpen = false;
 
   const dispatch = createEventDispatcher();
   let query = '';
@@ -77,7 +85,15 @@
       on:click={() => dispatch('import')}>
       <Icon name="upload" size={13} /> {$_('simulator.picker.import')}
     </button>
+    <button type="button" class="btn tertiary btn-small" disabled={busy && !recording} aria-expanded={recordOpen || !!recording}
+      title={$_('simulator.picker.recordTitle')} on:click={() => (recordOpen = !recordOpen)}>
+      <Icon name="circle-dot" size={13} /> {$_('simulator.picker.record')}
+    </button>
   </div>
+
+  {#if recordOpen || recording}
+    <RecordForm {targets} {recording} on:record on:stop on:close={() => (recordOpen = false)} />
+  {/if}
 
   <div class="chips" role="group" aria-label={$_('simulator.picker.categories')}>
     <button type="button" class="chip" class:active={!category} aria-pressed={!category} on:click={() => (category = '')}>
@@ -119,12 +135,18 @@
         <p class="sends"><Icon name="radio" size={12} /> {selected.notifications.map((n) => n.name).join(' · ')}</p>
       </div>
       {#if selected.custom}
-        <button type="button" class="icon-btn danger" class:confirming={confirmDelete === selected.id}
-          disabled={inUse > 0 || busy}
-          title={inUse > 0 ? $_('simulator.picker.inUse', { values: { count: inUse } }) : $_('simulator.picker.deleteModel')}
-          aria-label={$_('simulator.picker.deleteModel')} on:click={() => remove(selected)}>
-          {#if confirmDelete === selected.id}{$_('simulator.confirmDelete')}{:else}<Icon name="trash-2" size={14} />{/if}
-        </button>
+        <div class="detail-actions">
+          <button type="button" class="icon-btn" disabled={busy} title={$_('simulator.picker.exportModel')}
+            aria-label={$_('simulator.picker.exportModel')} on:click={() => dispatch('export', selected.id)}>
+            <Icon name="download" size={14} />
+          </button>
+          <button type="button" class="icon-btn danger" class:confirming={confirmDelete === selected.id}
+            disabled={inUse > 0 || busy}
+            title={inUse > 0 ? $_('simulator.picker.inUse', { values: { count: inUse } }) : $_('simulator.picker.deleteModel')}
+            aria-label={$_('simulator.picker.deleteModel')} on:click={() => remove(selected)}>
+            {#if confirmDelete === selected.id}{$_('simulator.confirmDelete')}{:else}<Icon name="trash-2" size={14} />{/if}
+          </button>
+        </div>
       {/if}
     </div>
   {/if}
@@ -140,8 +162,20 @@
 
   .bar {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
+  }
+
+  .detail-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .icon-btn:not(:disabled):not(.danger):hover {
+    color: var(--text-color);
+    background-color: var(--hover-overlay-medium);
   }
 
   .search {

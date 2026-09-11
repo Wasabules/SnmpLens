@@ -1442,14 +1442,31 @@
       "custom": "Eigenes",
       "import": "Modelle importieren…",
       "importTitle": "Modelle aus einer JSON-Datei hinzufügen oder aus einem ZIP mit ihren Symbolen oder ganzen Paketen samt aufgezeichneten Walks",
+      "record": "Gerät aufzeichnen…",
+      "recordTitle": "Ein echtes Gerät durchlaufen und seine Antworten als Modell behalten",
+      "exportModel": "Dieses Modell als Paket (ZIP) exportieren, um es zu bearbeiten oder weiterzugeben",
       "deleteModel": "Dieses eigene Modell löschen",
       "inUse": "{count, plural, one {# Gerät basiert auf diesem Modell: zuerst löschen} other {# Geräte basieren auf diesem Modell: zuerst löschen}}"
+    },
+    "record": {
+      "hint": "SnmpLens durchläuft das Gerät mit den Kennungen seines Ziels und behält jeden Wert, den es liefert, als Paket — außer seinen SNMP-Benutzern, Gruppen und Communities. Ein großes Gerät dauert eine Weile.",
+      "target": "Aufzuzeichnendes Gerät",
+      "name": "Modellname",
+      "vendor": "Hersteller",
+      "category": "Kategorie",
+      "start": "Aufzeichnen",
+      "stop": "Stoppen",
+      "progress": "{count, plural, one {# Objekt aufgezeichnet…} other {# Objekte aufgezeichnet…}}",
+      "description": "Aufgezeichnet von {target} am {date}.",
+      "stopped": "Die Aufzeichnung wurde gestoppt; nichts wurde behalten.",
+      "failed": "{target} konnte nicht aufgezeichnet werden: {error}"
     },
     "models": {
       "imported": "Modell „{name}“ importiert",
       "replaced": "Modell „{name}“ aktualisiert; laufende Geräte damit wurden neu gestartet",
       "failed": "{file}: {error}",
       "deleted": "Modell „{name}“ gelöscht",
+      "exported": "Modell „{name}“ nach {path} exportiert",
       "warning": {
         "iconSkipped": "{name}: Das Symbol „{detail}“ wurde nicht importiert — ein Symbol kommt in einem ZIP neben seinem Modell",
         "iconMissing": "{name}: Das Archiv enthält kein „{detail}“, das Modell hat also kein Symbol",
