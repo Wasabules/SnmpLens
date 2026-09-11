@@ -1332,7 +1332,12 @@ language, it adopts the site's theme on first run, and it sets `__SNMPLENS_DEMO_
 is what makes the bridge REFUSE the calls that reach for the operating system (autostart, the
 service, the updater, file dialogs, writing a MIB, a real test notification) instead of
 answering "ok" to a request to install something. `OpenURL` is the one native call with a real
-browser equivalent, so it gets one.
+browser equivalent, so it gets one. The simulator's lists are the exception to the generated
+fixtures, which answer a `List…` with an empty array and left its dialog with no model and no
+device: `screenshots/demoBindings.js` answers them with the catalogue and the bench of the
+scenes that photograph it. What a device does — starting, stopping, saving, the preview — is
+refused, and `tests/simulator.test.mjs` requires every simulator binding to be answered or
+refused, and the scenes' catalogue to be Go's, model for model.
 
 The captured PNGs are intermediates and are NOT committed: the pages serve WebP at two widths
 (`tools/webp.mjs`, `-preset text` because the photo presets smear the 1 px stems of a 12 px

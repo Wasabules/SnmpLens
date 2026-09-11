@@ -400,6 +400,7 @@ const DEMO_ONLY = {
   SimulatorSaveDevice: 'Saving a simulated device writes it to your configuration directory, and its passwords to the system keychain.',
   SimulatorDeleteDevice: 'Removing a simulated device deletes it from your configuration directory and the system keychain.',
   SimulatorStartDevice: 'Starting a simulated device opens a UDP socket on this machine.',
+  SimulatorStopDevice: 'Stopping a simulated device closes the socket it answers on, on this machine.',
   SimulatorSendTrap: 'A simulated device sends its notifications over UDP, from this machine.',
   ImportSimulatorModelsDialog: 'Importing a simulator model opens the operating system’s file dialog and writes the model to your configuration directory.',
   SimulatorDeleteModel: 'Deleting a simulator model removes its file from your configuration directory.',
@@ -410,6 +411,10 @@ const DEMO_ONLY = {
   SimulatorDuplicateDevice: 'Duplicating a simulated device writes the copy to your configuration directory, and its passwords to the system keychain.',
   SimulatorRestartDevice: 'Restarting a simulated device opens a UDP socket on this machine.',
   SimulatorSetFaults: 'Faults are applied to a simulated device running on this machine, and kept in your configuration directory.',
+  // Not a write: worked out in Go, from the model and the device's settings.
+  // There is no Go here, and a canned table would show one device's objects
+  // under every other device's name.
+  SimulatorPreview: 'The preview is worked out by the application itself, from the model and the device’s settings.',
 };
 
 for (const [name, why] of Object.entries(DEMO_ONLY)) {
