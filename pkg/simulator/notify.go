@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"math/rand/v2"
 	"net"
 	"net/netip"
@@ -678,11 +679,17 @@ func (a *Agent) v1Trap(n Notification, c clock) (gosnmp.SnmpTrap, error) {
 		if err != nil {
 			return t, err
 		}
+		// specific-trap is an INTEGER (RFC 1157) and an arc goes to 2^32 - 1,
+		// past what an Integer32 holds — and what an int holds on a 32-bit build.
+		specific := id[len(id)-1]
+		if specific > math.MaxInt32 {
+			return t, fmt.Errorf("SNMPv1 cannot carry a specific-trap of %d", specific)
+		}
 		cut := len(id) - 1
 		if cut > 2 && id[cut-1] == 0 {
 			cut--
 		}
-		t.GenericTrap, t.SpecificTrap, t.Enterprise = 6, int(id[len(id)-1]), id[:cut].String()
+		t.GenericTrap, t.SpecificTrap, t.Enterprise = 6, int(specific), id[:cut].String()
 	}
 	for _, v := range a.objectsOf(n, c) {
 		if v.Type == gosnmp.Counter64 {

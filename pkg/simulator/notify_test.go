@@ -235,6 +235,11 @@ func TestANotificationTranslatesToSNMPv1(t *testing.T) {
 	if _, err := a.v1Trap(wide, c); err == nil {
 		t.Error("a notification carrying a Counter64 was translated to SNMPv1")
 	}
+	// Nor has it a specific-trap past Integer32, which an arc can be.
+	huge := Notification{Name: "huge", OID: ".1.3.6.1.4.1.9.0.4294967295"}
+	if _, err := a.v1Trap(huge, c); err == nil {
+		t.Error("a specific-trap past Integer32 was translated to SNMPv1")
+	}
 }
 
 // Every notification a model lists can be sent: its OID parses, the device has
