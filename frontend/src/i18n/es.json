@@ -1350,6 +1350,15 @@
         "counters": "contadores ×{speed}"
       }
     },
+    "tab": {
+      "identity": "Dispositivo",
+      "access": "Acceso",
+      "traps": "Notificaciones"
+    },
+    "tabProblem": "Hay algo que corregir en esta pestaña",
+    "writeHint": "Un SET con la comunidad de escritura, o de un usuario que puede escribir, cambia lo que responde el dispositivo hasta que se reinicia, como una configuración en ejecución mientras no se guarda. Las filas se crean y se eliminan mediante su RowStatus, tal como las describen las MIB cargadas. Lo que el agente cuenta por sí mismo —sus estadísticas SNMP, su motor— nunca se escribe.",
+    "engineHint": "Asignado por SnmpLens y conservado durante toda la vida del dispositivo: los gestores localizan en él sus claves SNMPv3.",
+    "engineBoots": "{count, plural, one {iniciado # vez} other {iniciado # veces}}",
     "loopbackHint": "Solo loopback: de 127.0.0.1 a 127.255.255.254, o ::1. En Linux y macOS, un puerto inferior a 1024 requiere permisos de administrador.",
     "field": {
       "name": "Nombre",
@@ -1362,7 +1371,11 @@
       "location": "Ubicación (sysLocation)",
       "contact": "Contacto (sysContact)",
       "modelDefault": "La del modelo",
-      "autoStart": "Iniciar con SnmpLens"
+      "autoStart": "Iniciar con SnmpLens",
+      "writeCommunity": "Comunidad de escritura",
+      "writeCommunityNone": "Ninguna: solo lectura en v1 y v2c",
+      "userWrite": "Puede escribir (SET)",
+      "engineId": "Engine ID"
     },
     "problem": {
       "nameRequired": "Dé un nombre al dispositivo.",
@@ -1376,7 +1389,8 @@
       "trapUser": "Elija uno de los usuarios SNMPv3 del dispositivo.",
       "trapNeedsV3": "Una notificación v3 se envía como uno de los usuarios SNMPv3 del dispositivo: active primero la v3.",
       "engineId": "De 5 a 32 octetos, en hexadecimal.",
-      "every": "De 1 a 86400 segundos."
+      "every": "De 1 a 86400 segundos.",
+      "writeSameAsRead": "La comunidad de escritura debe ser distinta de la de lectura: si no, todo gestor que lee también escribe."
     },
     "category": {
       "server": "Servidores",
@@ -1450,9 +1464,8 @@
     "userN": "Usuario {n}",
     "addUser": "Añadir un usuario",
     "removeUser": "Quitar este usuario",
-    "firstUserTarget": "«Añadir como destino» usa el primer usuario.",
+    "firstUserTarget": "«Añadir como destino» usa el primer usuario que puede escribir o, si no hay ninguno, el primero.",
     "traps": {
-      "title": "Notificaciones",
       "hint": "Adónde envía el dispositivo sus Traps e INFORM, y cuándo. A diferencia de la dirección en la que responde, un destino puede estar en cualquier lugar de la red.",
       "destinationN": "Destino {n}",
       "host": "Host",

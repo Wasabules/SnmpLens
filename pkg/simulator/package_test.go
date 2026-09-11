@@ -184,8 +184,8 @@ func TestAPackageServesAWalk(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if n != len(a.tree.entries) {
-		t.Errorf("walked %d objects of %d", n, len(a.tree.entries))
+	if all := len(a.tree.Load().entries); n != all {
+		t.Errorf("walked %d objects of %d", n, all)
 	}
 	if s := a.Stats(); s.Faults != 0 {
 		t.Errorf("%d answers failed to encode", s.Faults)

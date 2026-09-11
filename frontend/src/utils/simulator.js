@@ -66,7 +66,25 @@ export function blankV3(n = 1) {
     privProto: 'AES',
     privPass: '',
     contextName: '',
+    write: false,
   };
+}
+
+/**
+ * The editor's tabs, in order, and the fields of deviceProblems each holds: a
+ * tab with something wrong in it is marked, since what is wrong may be on a tab
+ * nobody is looking at.
+ */
+export const EDITOR_TABS = [
+  { id: 'identity', fields: ['name', 'port'] },
+  { id: 'access', fields: ['versions', 'community', 'writeCommunity', 'noUser', 'users'] },
+  { id: 'traps', fields: ['destinations', 'schedules'] },
+];
+
+/** The tabs holding at least one of a device's problems. */
+export function tabsWithProblems(problems) {
+  const keys = Object.keys(problems || {});
+  return EDITOR_TABS.filter((t) => t.fields.some((f) => keys.includes(f))).map((t) => t.id);
 }
 
 /**
@@ -83,6 +101,8 @@ export function blankDevice(model, suggestion) {
     port: suggestion?.port || 1161,
     versions: ['v2c'],
     community: 'public',
+    // Read-only until someone gives it a way to be written.
+    writeCommunity: '',
     users: [blankV3()],
     traps: blankTraps(),
     location: '',
@@ -104,6 +124,7 @@ export function editableDevice(view, creds) {
     privProto: u.privProto || 'AES',
     privPass: creds?.users?.[u.name]?.privPass || '',
     contextName: '',
+    write: !!u.write,
   }));
   return {
     id: view.id,
@@ -113,7 +134,11 @@ export function editableDevice(view, creds) {
     port: view.port,
     versions: [...(view.versions || [])],
     community: creds?.community || '',
+    writeCommunity: creds?.writeCommunity || '',
     users: users.length ? users : [blankV3()],
+    // Shown, never sent: the engine is the backend's.
+    engineId: view.engineId || '',
+    engineBoots: view.engineBoots || 0,
     location: view.location || '',
     contact: view.contact || '',
     autoStart: !!view.autoStart,
@@ -152,6 +177,10 @@ export function deviceProblems(d) {
   if (!Number.isInteger(port) || port < 1 || port > 65535) problems.port = 'port';
   if (!versions.length) problems.versions = 'versionRequired';
   if (usesCommunity(versions) && !d.community) problems.community = 'communityRequired';
+  // One community for both is every manager that reads also writing.
+  if (usesCommunity(versions) && d.writeCommunity && d.writeCommunity === d.community) {
+    problems.writeCommunity = 'writeSameAsRead';
+  }
   if (versions.includes('v3')) {
     const users = d.users || [];
     if (!users.length) problems.noUser = 'userRequired';
@@ -227,6 +256,7 @@ export function devicePayload(d) {
     port: Number(d.port),
     versions,
     community: usesCommunity(versions) ? d.community : '',
+    writeCommunity: usesCommunity(versions) ? d.writeCommunity || '' : '',
     users: versions.includes('v3')
       ? (d.users || []).map((u) => ({
           name: (u.user || '').trim(),
@@ -235,6 +265,7 @@ export function devicePayload(d) {
           authPass: u.authPass,
           privProto: u.privProto,
           privPass: u.privPass,
+          write: !!u.write,
         }))
       : [],
     location: (d.location || '').trim(),
@@ -568,7 +599,10 @@ function targetOfLine(line) {
 /**
  * The settings with a device added as a target: the target in the list, named
  * after the device, and an override carrying its identifiers in the most secure
- * version it answers — with its FIRST user for v3.
+ * version it answers — the ones that WRITE when it has any, since they read as
+ * well and a device on a bench is there to be written to: its first user with
+ * write access for v3, else its first user; its write community, else its
+ * community.
  *
  * The port travels in the target when it is not 161, and the override then
  * leaves it out: the target's would win over it anyway. A device added again
@@ -581,7 +615,7 @@ export function addDeviceAsTarget(settings, device, creds) {
   const override = { snmpVersion: version };
   if (target === device.address) override.port = device.port;
   if (version === 'v3') {
-    const u = device.users[0];
+    const u = device.users.find((x) => x.write) || device.users[0];
     override.v3 = {
       user: u.name,
       secLevel: u.secLevel,
@@ -592,7 +626,7 @@ export function addDeviceAsTarget(settings, device, creds) {
       contextName: '',
     };
   } else {
-    override.community = creds?.community || '';
+    override.community = creds?.writeCommunity || creds?.community || '';
   }
   const lines = (settings.targets || '').split('\n').filter((l) => l.trim());
   const added = !lines.some((l) => targetOfLine(l) === target);

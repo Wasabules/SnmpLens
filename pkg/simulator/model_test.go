@@ -147,7 +147,7 @@ func TestEveryModelServesAWalk(t *testing.T) {
 			a := startAgent(t, Config{Versions: []string{"v2c"}, Community: "public", Objects: objects})
 			// Everything a request may read: the model's objects less those only a
 			// notification carries, and the agent's own.
-			readable := len(a.tree.entries)
+			readable := len(a.tree.Load().entries)
 			g := connect(t, manager(a, gosnmp.Version2c, "public"))
 			n := 0
 			// Both subtrees a device answers in: LLDP-MIB lives under

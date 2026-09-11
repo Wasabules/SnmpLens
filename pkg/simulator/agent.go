@@ -34,6 +34,9 @@ type Config struct {
 	Versions []string
 	// Community is what v1 and v2c are read with.
 	Community string
+	// WriteCommunity is what v1 and v2c write with (set.go), and read with as
+	// well; empty, nothing is written in v1 or v2c.
+	WriteCommunity string
 	// Users are the SNMPv3 users.
 	Users []User
 	// EngineID is the agent's snmpEngineID, 5 to 32 octets; see EngineID. It
@@ -52,6 +55,10 @@ type Config struct {
 	Traps Traps
 	// Faults are what the agent is made to do wrong; see Faults.
 	Faults Faults
+	// RowStatus tells an instance of a RowStatus column (RFC 2579) from any
+	// other, and names the column: that needs the MIB, which the agent does not
+	// have. Nil, rows are written like any instance and never destroyed whole.
+	RowStatus func(instance string) (column string, ok bool)
 }
 
 // Stats counts what an agent did with what it received — most of all what it
@@ -86,8 +93,10 @@ type counters struct {
 	unknownEngineIDs, unknownUserNames, unsupportedSecLevels, wrongDigests, notInTimeWindows,
 	decryptionErrors, unknownContexts, unknownPDUHandlers, faults atomic.Uint32
 	// What SNMPv2-MIB's snmp group counts besides: the requests by kind, the
-	// varbinds read, the answers and the notifications sent.
-	inGets, inGetNexts, inSets, inTotalReqVars, outGetResponses, outNoSuchNames, outTraps atomic.Uint32
+	// varbinds read and written, a community used for what it may not do, the
+	// answers and the notifications sent.
+	inGets, inGetNexts, inSets, inTotalReqVars, inTotalSetVars, badCommunityUses,
+	outGetResponses, outNoSuchNames, outTraps atomic.Uint32
 }
 
 // Agent is one simulated device answering on one socket.
@@ -102,8 +111,13 @@ type Agent struct {
 	users       map[string]*user
 	engineID    []byte
 	boots       uint32
-	tree        *tree
-	maxSize     int
+	// tree is what the agent answers. A SET replaces it whole (set.go), so a
+	// notification reading it from another goroutine never sees one half-made.
+	tree    atomic.Pointer[tree]
+	maxSize int
+	// writeCommunity writes in v1 and v2c; empty, nothing is written there.
+	writeCommunity []byte
+	rowStatus      func(string) (string, bool)
 	// notify sends the agent's notifications; nil when it has nowhere to.
 	notify *notifier
 
@@ -150,6 +164,16 @@ func NewAgent(cfg Config) (*Agent, error) {
 		}
 		a.community = []byte(cfg.Community)
 	}
+	if cfg.WriteCommunity != "" {
+		if !a.v1 && !a.v2c {
+			return nil, errors.New("simulator: a write community is for v1 and v2c")
+		}
+		if len(cfg.WriteCommunity) > maxCommunity || cfg.WriteCommunity == cfg.Community {
+			return nil, fmt.Errorf("simulator: a write community is 1 to %d octets, and not the read community", maxCommunity)
+		}
+		a.writeCommunity = []byte(cfg.WriteCommunity)
+	}
+	a.rowStatus = cfg.RowStatus
 	if a.v3 {
 		if len(cfg.EngineID) < 5 || len(cfg.EngineID) > 32 {
 			return nil, errors.New("simulator: an engine ID is 5 to 32 octets (RFC 3411)")
@@ -168,9 +192,11 @@ func NewAgent(cfg Config) (*Agent, error) {
 	// What only the agent knows — its own counters, and for v3 its engine —
 	// beside what the device answers.
 	objects := slices.Concat(cfg.Objects, agentObjects(a.v3, a.engineID, a.boots, cfg.Traps.OnAuthFailure))
-	if a.tree, err = newTree(objects); err != nil {
+	t, err := newTree(objects)
+	if err != nil {
 		return nil, fmt.Errorf("simulator: %w", err)
 	}
+	a.tree.Store(t)
 	if a.notify, err = newNotifier(a, cfg); err != nil {
 		return nil, fmt.Errorf("simulator: %w", err)
 	}
@@ -356,8 +382,11 @@ func (a *Agent) answerCommunity(ver gosnmp.SnmpVersion, msg []byte, c clock) []b
 		a.stats.parseErrors.Add(1)
 		return nil
 	}
-	// In constant time: the community is the only secret v1 and v2c have.
-	if subtle.ConstantTimeCompare([]byte(req.Community), a.community) != 1 {
+	// In constant time: the communities are the only secrets v1 and v2c have.
+	// The write community reads as well; the read community only reads.
+	read := subtle.ConstantTimeCompare([]byte(req.Community), a.community) == 1
+	write := len(a.writeCommunity) > 0 && subtle.ConstantTimeCompare([]byte(req.Community), a.writeCommunity) == 1
+	if !read && !write {
 		a.stats.badCommunities.Add(1)
 		a.authFailed()
 		return nil
@@ -374,7 +403,7 @@ func (a *Agent) answerCommunity(ver gosnmp.SnmpVersion, msg []byte, c clock) []b
 		a.stats.unknownPDUHandlers.Add(1)
 		return nil
 	}
-	out, err := fit(a.process(ver, req, c), bulkFloor(req), tooBig(ver, req), a.maxSize,
+	out, err := fit(a.process(ver, req, c, write), bulkFloor(req), tooBig(ver, req), a.maxSize,
 		func(ans answer) ([]byte, error) {
 			resp := &gosnmp.SnmpPacket{
 				Version:    ver,

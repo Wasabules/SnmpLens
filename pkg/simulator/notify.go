@@ -631,7 +631,7 @@ func (a *Agent) objectsOf(n Notification, c clock) []gosnmp.SnmpPDU {
 		if err != nil {
 			continue
 		}
-		if e := a.tree.notification(id); e != nil {
+		if e := a.tree.Load().notification(id); e != nil {
 			out = append(out, e.varbind(c))
 		}
 	}
@@ -640,7 +640,7 @@ func (a *Agent) objectsOf(n Notification, c clock) []gosnmp.SnmpPDU {
 
 func (a *Agent) sysObjectID(c clock) (string, bool) {
 	id, _ := parseOID(oidSysObjectID)
-	e := a.tree.get(id)
+	e := a.tree.Load().get(id)
 	if e == nil || e.typ != gosnmp.ObjectIdentifier {
 		return "", false
 	}

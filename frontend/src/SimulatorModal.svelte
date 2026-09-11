@@ -10,7 +10,7 @@
     SIM_VERSIONS, MAX_EVERY, MAX_DESTINATIONS, MAX_SCHEDULES, blankDevice, blankV3, blankDestination, blankSchedule,
     editableDevice, deviceProblems, devicePayload, addDeviceAsTarget, notificationsOf, trapActivity, deliveryReport,
     modelOf, modelName, modelDescription, importReport, firstImported, recordRequest, recordableTargets, deviceImportReport,
-    deviceGroups, faultChips, categoryIcon,
+    deviceGroups, faultChips, categoryIcon, EDITOR_TABS, tabsWithProblems,
   } from './utils/simulator.js';
   import UsmFields from './settings/UsmFields.svelte';
   import ModelPicker from './simulator/ModelPicker.svelte';
@@ -45,6 +45,10 @@
 
   $: problems = editing ? deviceProblems(editing) : {};
   $: usmProblems = usmMessages(problems, $_);
+
+  /** The editor's tab, and the tabs holding something to fix. */
+  let tab = 'identity';
+  $: flagged = tabsWithProblems(problems);
 
   /** The editor's SNMPv3 problems, one set per user, in the shape UsmFields shows them. */
   function usmMessages(p, t) {
@@ -89,6 +93,7 @@
     defaultName = nameFor(model, devices);
     editing.name = defaultName;
     saveError = '';
+    tab = 'identity';
   }
 
   // A new device's model. Its name follows the model until someone types
@@ -186,6 +191,7 @@
     try {
       editing = editableDevice(device, await simulatorStore.credentials(device.id));
       saveError = '';
+      tab = 'identity';
     } catch (e) {
       notificationStore.add(String(e), 'error');
     }
@@ -421,6 +427,19 @@
     {#if editing}
       <div class="sim-body">
         <h3 class="editor-title">{editing.id ? $_('simulator.editTitle') : $_('simulator.newTitle')}</h3>
+        <div class="tabs" role="tablist">
+          {#each EDITOR_TABS as t (t.id)}
+            <button type="button" role="tab" id="sim-tab-{t.id}" class="tab" class:active={tab === t.id}
+              aria-selected={tab === t.id} aria-controls="sim-tab-panel" on:click={() => (tab = t.id)}>
+              {$_(`simulator.tab.${t.id}`)}
+              {#if flagged.includes(t.id)}
+                <span class="tab-flag" title={$_('simulator.tabProblem')} aria-label={$_('simulator.tabProblem')}></span>
+              {/if}
+            </button>
+          {/each}
+        </div>
+        <div id="sim-tab-panel" role="tabpanel" aria-labelledby="sim-tab-{tab}">
+        {#if tab === 'identity'}
         {#if editing.id}
           <!-- A device keeps its model: its engine ID carries the model's vendor. -->
           {@const model = modelOf($simulatorStore.models, editing.model)}
@@ -469,7 +488,17 @@
           </div>
         </div>
         <label class="check autostart"><input type="checkbox" bind:checked={editing.autoStart} /> {$_('simulator.field.autoStart')}</label>
+        {#if editing.id && editing.engineId}
+          <div class="engine-line">
+            <span class="engine-label">{$_('simulator.field.engineId')}</span>
+            <code>{editing.engineId}</code>
+            <span class="engine-boots">{$_('simulator.engineBoots', { values: { count: editing.engineBoots } })}</span>
+          </div>
+          <p class="hint"><Icon name="key-round" size={14} /> {$_('simulator.engineHint')}</p>
+        {/if}
+        {/if}
 
+        {#if tab === 'access'}
         <fieldset class="versions">
           <legend>{$_('simulator.field.versions')}</legend>
           {#each SIM_VERSIONS as version (version)}
@@ -482,10 +511,18 @@
         </fieldset>
 
         {#if editing.versions.includes('v1') || editing.versions.includes('v2c')}
-          <div class="form-group community">
-            <label for="sim-community">{$_('simulator.field.community')}</label>
-            <input id="sim-community" type="password" autocomplete="off" bind:value={editing.community} />
-            {#if problems.community}<span class="problem">{$_(`simulator.problem.${problems.community}`)}</span>{/if}
+          <div class="grid communities">
+            <div class="form-group">
+              <label for="sim-community">{$_('simulator.field.community')}</label>
+              <input id="sim-community" type="password" autocomplete="off" bind:value={editing.community} />
+              {#if problems.community}<span class="problem">{$_(`simulator.problem.${problems.community}`)}</span>{/if}
+            </div>
+            <div class="form-group">
+              <label for="sim-write-community">{$_('simulator.field.writeCommunity')}</label>
+              <input id="sim-write-community" type="password" autocomplete="off"
+                placeholder={$_('simulator.field.writeCommunityNone')} bind:value={editing.writeCommunity} />
+              {#if problems.writeCommunity}<span class="problem">{$_(`simulator.problem.${problems.writeCommunity}`)}</span>{/if}
+            </div>
           </div>
         {/if}
 
@@ -505,6 +542,7 @@
               <!-- bind:, as the settings do: UsmFields edits the object in place, and
                    without it the checks above never see a passphrase being typed. -->
               <UsmFields bind:v3={u} idPrefix="sim-v3-{i}" problems={usmProblems[i] || {}} showContext={false} />
+              <label class="check user-write"><input type="checkbox" bind:checked={u.write} /> {$_('simulator.field.userWrite')}</label>
             </div>
           {/each}
           {#if problems.noUser}<span class="problem">{$_(`simulator.problem.${problems.noUser}`)}</span>{/if}
@@ -515,9 +553,11 @@
             {#if editing.users.length > 1}<span class="users-note">{$_('simulator.firstUserTarget')}</span>{/if}
           </div>
         {/if}
+        <p class="hint"><Icon name="pencil" size={14} /> {$_('simulator.writeHint')}</p>
+        {/if}
 
-        <h4 class="section-title">{$_('simulator.traps.title')}</h4>
-        <p class="hint"><Icon name="radio" size={14} /> {$_('simulator.traps.hint')}</p>
+        {#if tab === 'traps'}
+        <p class="hint first"><Icon name="radio" size={14} /> {$_('simulator.traps.hint')}</p>
         {#each editing.traps.destinations as dest, i (i)}
           <div class="user-block">
             <div class="user-head">
@@ -618,6 +658,8 @@
             </button>
           </div>
         {/if}
+        {/if}
+        </div>
       </div>
       <footer class="sim-footer">
         {#if saveError}<span class="save-error">{saveError}</span>{/if}
@@ -1169,9 +1211,78 @@
     cursor: pointer;
   }
 
-  .community {
+  .communities {
     margin-top: 14px;
-    max-width: 50%;
+  }
+
+  .user-write {
+    margin-top: 10px;
+    font-size: 0.9em;
+  }
+
+  .tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    margin: 0 0 14px;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: -1px;
+    padding: 7px 14px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    font-size: 0.9em;
+    cursor: pointer;
+  }
+
+  .tab:hover {
+    color: var(--text-color);
+  }
+
+  .tab.active {
+    border-bottom-color: var(--accent-color);
+    color: var(--text-color);
+    font-weight: 600;
+  }
+
+  .tab-flag {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background-color: var(--error-color);
+  }
+
+  .hint.first {
+    margin-top: 0;
+  }
+
+  .engine-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+    margin-top: 14px;
+    font-size: 0.9em;
+  }
+
+  .engine-label {
+    color: var(--text-light);
+  }
+
+  .engine-line code {
+    overflow-wrap: anywhere;
+  }
+
+  .engine-boots {
+    font-size: 0.92em;
+    color: var(--text-muted);
   }
 
   .section-title {
@@ -1342,9 +1453,6 @@
     }
     .device {
       flex-wrap: wrap;
-    }
-    .community {
-      max-width: none;
     }
   }
 </style>
