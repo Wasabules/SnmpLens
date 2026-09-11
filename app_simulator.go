@@ -173,12 +173,14 @@ type SimulatedUser struct {
 	SecLevel  string `json:"secLevel"`
 	AuthProto string `json:"authProto"`
 	PrivProto string `json:"privProto"`
+	Write     bool   `json:"write"`
 }
 
 func (s *simulatorService) view(d simulator.Device) SimulatedDevice {
 	users := make([]SimulatedUser, len(d.Users))
 	for i, u := range d.Users {
-		users[i] = SimulatedUser{Name: u.Name, SecLevel: u.SecLevel, AuthProto: u.AuthProto, PrivProto: u.PrivProto}
+		users[i] = SimulatedUser{Name: u.Name, SecLevel: u.SecLevel, AuthProto: u.AuthProto, PrivProto: u.PrivProto,
+			Write: u.Write}
 	}
 	stats, running := s.fleet.Status(d.ID)
 	traps := SimulatedTraps{

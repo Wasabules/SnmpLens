@@ -24,7 +24,7 @@ type answer struct {
 // for SNMPv1, whose errors are different. It counts what SNMPv2-MIB's snmp
 // group counts — the request on arrival, as net-snmp does, so that a GET of
 // snmpInGetRequests counts itself.
-func (a *Agent) process(ver gosnmp.SnmpVersion, req *gosnmp.SnmpPacket, c clock) answer {
+func (a *Agent) process(ver gosnmp.SnmpVersion, req *gosnmp.SnmpPacket, c clock, write bool) answer {
 	st := &a.stats
 	switch req.PDUType {
 	case gosnmp.GetRequest:
@@ -38,9 +38,13 @@ func (a *Agent) process(ver gosnmp.SnmpVersion, req *gosnmp.SnmpPacket, c clock)
 	}
 	ans, injected := a.injectedError(ver, req)
 	if !injected {
-		ans = a.dispatch(ver, req, c)
+		ans = a.dispatch(ver, req, c, write)
 	}
-	if ans.status == gosnmp.NoError && req.PDUType != gosnmp.SetRequest {
+	switch {
+	case ans.status != gosnmp.NoError:
+	case req.PDUType == gosnmp.SetRequest:
+		st.inTotalSetVars.Add(uint32(len(ans.vars)))
+	default:
 		st.inTotalReqVars.Add(uint32(len(ans.vars)))
 	}
 	if ans.status == gosnmp.NoSuchName {
@@ -50,7 +54,7 @@ func (a *Agent) process(ver gosnmp.SnmpVersion, req *gosnmp.SnmpPacket, c clock)
 	return ans
 }
 
-func (a *Agent) dispatch(ver gosnmp.SnmpVersion, req *gosnmp.SnmpPacket, c clock) answer {
+func (a *Agent) dispatch(ver gosnmp.SnmpVersion, req *gosnmp.SnmpPacket, c clock, write bool) answer {
 	v1 := ver == gosnmp.Version1
 	switch req.PDUType {
 	case gosnmp.GetRequest:
@@ -60,11 +64,19 @@ func (a *Agent) dispatch(ver gosnmp.SnmpVersion, req *gosnmp.SnmpPacket, c clock
 	case gosnmp.GetBulkRequest:
 		return a.getBulk(req, c)
 	}
-	// A SET. Nothing in a simulated device is writable yet; SNMPv1 has no
-	// notWritable, and RFC 3584 has a v1 agent say noSuchName instead.
-	status := gosnmp.NotWritable
+	if write {
+		return a.set(ver, req)
+	}
+	// A SET from a manager that only reads: nothing is in the view it may
+	// write, which RFC 3416 4.2.5 answers noAccess — net-snmp's answer to a
+	// rocommunity or a rouser. SNMPv1 has no noAccess, and RFC 3584 has a v1
+	// agent say noSuchName instead. A community used so is counted.
+	if ver != gosnmp.Version3 {
+		a.stats.badCommunityUses.Add(1)
+	}
+	status := gosnmp.NoAccess
 	if v1 {
-		status = gosnmp.NoSuchName
+		status = v1Status(status)
 	}
 	return answer{vars: req.Variables, status: status, index: errIndex(0, len(req.Variables))}
 }
@@ -75,12 +87,13 @@ func (a *Agent) dispatch(ver gosnmp.SnmpVersion, req *gosnmp.SnmpPacket, c clock
 func v1Hidden(e *entry) bool { return e.typ == gosnmp.Counter64 }
 
 func (a *Agent) get(v1 bool, vars []gosnmp.SnmpPDU, c clock) answer {
+	t := a.tree.Load()
 	out := make([]gosnmp.SnmpPDU, len(vars))
 	for i, v := range vars {
 		id, err := parseArcs(v.Name)
 		var e *entry
 		if err == nil {
-			e = a.tree.get(id)
+			e = t.get(id)
 		}
 		switch {
 		case e != nil && !(v1 && v1Hidden(e)):
@@ -88,7 +101,7 @@ func (a *Agent) get(v1 bool, vars []gosnmp.SnmpPDU, c clock) answer {
 		case v1:
 			return answer{vars: vars, status: gosnmp.NoSuchName, index: errIndex(i, len(vars))}
 		default:
-			out[i] = gosnmp.SnmpPDU{Name: v.Name, Type: a.tree.missing(id)}
+			out[i] = gosnmp.SnmpPDU{Name: v.Name, Type: t.missing(id)}
 		}
 	}
 	return answer{vars: out}
@@ -99,12 +112,13 @@ func (a *Agent) getNext(v1 bool, vars []gosnmp.SnmpPDU, c clock) answer {
 	if v1 {
 		skip = v1Hidden
 	}
+	t := a.tree.Load()
 	out := make([]gosnmp.SnmpPDU, len(vars))
 	for i, v := range vars {
 		// A name that does not parse is placed before every object, so its
 		// successor is the first one.
 		id, _ := parseArcs(v.Name)
-		switch e := a.tree.next(id, skip); {
+		switch e := t.next(id, skip); {
 		case e != nil:
 			out[i] = e.varbind(c)
 		case v1:
@@ -120,6 +134,7 @@ func (a *Agent) getNext(v1 bool, vars []gosnmp.SnmpPDU, c clock) answer {
 // GETNEXT, then the rest max-repetitions times, each repetition carrying on
 // from the one before.
 func (a *Agent) getBulk(req *gosnmp.SnmpPacket, c clock) answer {
+	t := a.tree.Load()
 	vars := req.Variables
 	n := min(int(req.NonRepeaters), len(vars))
 	out := a.getNext(false, vars[:n], c).vars
@@ -133,7 +148,7 @@ func (a *Agent) getBulk(req *gosnmp.SnmpPacket, c clock) answer {
 	for rep := 0; rep < int(req.MaxRepetitions) && len(repeaters) > 0 && len(out)+len(repeaters) <= maxBulk; rep++ {
 		ended := true
 		for j := range repeaters {
-			if e := a.tree.next(last[j], nil); e != nil {
+			if e := t.next(last[j], nil); e != nil {
 				out = append(out, e.varbind(c))
 				last[j], names[j], ended = e.oid, e.name, false
 			} else {

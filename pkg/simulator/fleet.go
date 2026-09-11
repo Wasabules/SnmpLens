@@ -16,6 +16,9 @@ var ErrRunning = errors.New("simulator: the device is already running")
 type Fleet struct {
 	mu     sync.Mutex
 	agents map[string]*Agent
+	// RowStatus is given to every device the fleet starts: see
+	// Config.RowStatus. Set before the first start.
+	RowStatus func(instance string) (column string, ok bool)
 }
 
 // NewFleet returns a fleet running nothing.
@@ -32,6 +35,7 @@ func (f *Fleet) Start(d Device) error {
 	if err != nil {
 		return err
 	}
+	cfg.RowStatus = f.RowStatus
 	// Outside the lock: localising the users' keys hashes a megabyte each.
 	a, err := NewAgent(cfg)
 	if err != nil {

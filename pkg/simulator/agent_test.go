@@ -120,11 +120,12 @@ func TestSNMPv1(t *testing.T) {
 	}
 }
 
+// A device given no write community is written by nobody.
 func TestASetIsRefused(t *testing.T) {
 	a := startAgent(t, Config{Versions: []string{"v1", "v2c"}, Community: "public"})
 	for ver, want := range map[gosnmp.SnmpVersion]gosnmp.SNMPError{
-		gosnmp.Version2c: gosnmp.NotWritable,
-		gosnmp.Version1:  gosnmp.NoSuchName, // v1 has no notWritable (RFC 3584)
+		gosnmp.Version2c: gosnmp.NoAccess,
+		gosnmp.Version1:  gosnmp.NoSuchName, // v1 has no noAccess (RFC 3584)
 	} {
 		g := connect(t, manager(a, ver, "public"))
 		res, err := g.Set([]gosnmp.SnmpPDU{{Name: ".1.3.6.1.2.1.1.5.0", Type: gosnmp.OctetString, Value: "renamed"}})

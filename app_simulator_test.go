@@ -28,15 +28,15 @@ func simApp(t *testing.T) (*App, *stubStore) {
 func simDevice() simulator.Device {
 	return simulator.Device{
 		Name: "srv-01", Model: "linux-server", Address: "127.0.0.2", Port: 16161,
-		Versions: []string{"v2c", "v3"}, Community: "s3cr3t-community",
+		Versions: []string{"v2c", "v3"}, Community: "s3cr3t-community", WriteCommunity: "wr1te-s3cr3t",
 		Users: []simulator.User{{Name: "ops", SecLevel: "AuthPriv",
-			AuthProto: "SHA256", AuthPass: "auth-s3cr3t", PrivProto: "AES", PrivPass: "priv-s3cr3t"}},
+			AuthProto: "SHA256", AuthPass: "auth-s3cr3t", PrivProto: "AES", PrivPass: "priv-s3cr3t", Write: true}},
 		Traps: simulator.Traps{Destinations: []simulator.Destination{
 			{Host: "127.0.0.1", Port: 1162, Version: "v2c", Community: "trap-s3cr3t"}}},
 	}
 }
 
-var simSecrets = []string{"s3cr3t-community", "auth-s3cr3t", "priv-s3cr3t", "trap-s3cr3t"}
+var simSecrets = []string{"s3cr3t-community", "wr1te-s3cr3t", "auth-s3cr3t", "priv-s3cr3t", "trap-s3cr3t"}
 
 // startSimulated saves d at 127.0.0.1 on a free port and starts it. A port
 // found free can be taken before the device binds it, since `go test ./...`
@@ -96,8 +96,13 @@ func TestASimulatedDevicesSecretsStayInTheStore(t *testing.T) {
 	}
 
 	creds, err := a.SimulatorDeviceCredentials(saved.ID)
-	if err != nil || creds.Community != "s3cr3t-community" || creds.Users["ops"].PrivPass != "priv-s3cr3t" {
+	if err != nil || creds.Community != "s3cr3t-community" || creds.WriteCommunity != "wr1te-s3cr3t" ||
+		creds.Users["ops"].PrivPass != "priv-s3cr3t" {
 		t.Errorf("credentials: %+v, %v", creds, err)
+	}
+	// Whether a user writes is no secret, and the editor needs it back.
+	if len(saved.Users) != 1 || !saved.Users[0].Write {
+		t.Errorf("the list lost the user's write access: %+v", saved.Users)
 	}
 	// A new destination is given its ID, and its community is kept under it.
 	if len(saved.Traps.Destinations) != 1 || saved.Traps.Destinations[0].ID == "" {

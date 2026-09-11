@@ -151,6 +151,9 @@ func (a *App) startup(ctx context.Context) {
 	// application are started — after the secret store, which holds their
 	// communities and passphrases. The others answer once someone starts them.
 	a.sim = newSimulatorService(filepath.Join(configDir, "SnmpLens"))
+	// Which column is a RowStatus is in the MIBs, and the agents have none: a
+	// row is created and destroyed as the loaded MIBs describe it.
+	a.sim.fleet.RowStatus = a.mibService.RowStatusColumn
 	a.startAutoSimulated()
 
 	// The trap listener's engine ID, before initBackgroundMode can start the

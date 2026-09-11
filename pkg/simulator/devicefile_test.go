@@ -11,9 +11,9 @@ import (
 // were asked for and absent otherwise, and the file says which.
 func TestADeviceFileRoundTrips(t *testing.T) {
 	d := Device{ID: "0123456789abcdef", Name: "core-01", Model: "linux-server", Address: "127.0.0.2", Port: 1161,
-		Versions: []string{"v2c", "v3"}, Community: "s3cret-community",
+		Versions: []string{"v2c", "v3"}, Community: "s3cret-community", WriteCommunity: "wr1te-community",
 		Users: []User{{Name: "ops", SecLevel: "AuthPriv", AuthProto: "SHA256", AuthPass: "auth-pass-1",
-			PrivProto: "AES", PrivPass: "priv-pass-1"}},
+			PrivProto: "AES", PrivPass: "priv-pass-1", Write: true}},
 		EngineID: "8000000903001122334455", EngineBoots: 7,
 		Traps: Traps{Destinations: []Destination{{ID: "d1", Host: "192.0.2.50", Port: 162, Version: "v2c",
 			Community: "trap-s3cret"}}, OnStart: true, Schedules: []Schedule{}}}
@@ -22,7 +22,7 @@ func TestADeviceFileRoundTrips(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, secret := range []string{"s3cret-community", "auth-pass-1", "priv-pass-1", "trap-s3cret"} {
+		for _, secret := range []string{"s3cret-community", "wr1te-community", "auth-pass-1", "priv-pass-1", "trap-s3cret"} {
 			if bytes.Contains(raw, []byte(secret)) != with {
 				t.Errorf("with secrets %v, the file holding %q is %v", with, secret, !with)
 			}

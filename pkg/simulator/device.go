@@ -31,7 +31,10 @@ type Device struct {
 	Port      int      `json:"port"`
 	Versions  []string `json:"versions"`
 	Community string   `json:"community"`
-	Users     []User   `json:"users"`
+	// WriteCommunity writes in v1 and v2c, and reads as well; empty, the
+	// device is read-only there. A secret, as the community is.
+	WriteCommunity string `json:"writeCommunity"`
+	Users          []User `json:"users"`
 	// EngineID is hex, given once when the device is created (NewEngineID)
 	// and never changed: managers cache it and localise their keys to it.
 	EngineID string `json:"engineId"`
@@ -93,6 +96,16 @@ func (d Device) Validate() error {
 	if (v1 || v2c) && (d.Community == "" || len(d.Community) > maxCommunity) {
 		return fmt.Errorf("v1 and v2c need a community of 1 to %d octets", maxCommunity)
 	}
+	if d.WriteCommunity != "" {
+		switch {
+		case !v1 && !v2c:
+			return errors.New("a write community is for v1 and v2c")
+		case len(d.WriteCommunity) > maxCommunity:
+			return fmt.Errorf("a write community is 1 to %d octets", maxCommunity)
+		case d.WriteCommunity == d.Community:
+			return errors.New("the write community is the read community: every manager reading would write")
+		}
+	}
 	if v3 {
 		if len(d.Users) == 0 {
 			return errors.New("v3 needs a user")
@@ -136,9 +149,10 @@ func (d Device) Validate() error {
 // user's passphrases by user name, and each destination's community by
 // destination ID.
 type DeviceSecrets struct {
-	Community    string                 `json:"community"`
-	Users        map[string]UserSecrets `json:"users"`
-	Destinations map[string]string      `json:"destinations"`
+	Community      string                 `json:"community"`
+	WriteCommunity string                 `json:"writeCommunity"`
+	Users          map[string]UserSecrets `json:"users"`
+	Destinations   map[string]string      `json:"destinations"`
 }
 
 // UserSecrets are one user's passphrases.
@@ -150,9 +164,10 @@ type UserSecrets struct {
 // Secrets is d's secrets and nothing else.
 func (d Device) Secrets() DeviceSecrets {
 	s := DeviceSecrets{
-		Community:    d.Community,
-		Users:        make(map[string]UserSecrets, len(d.Users)),
-		Destinations: make(map[string]string, len(d.Traps.Destinations)),
+		Community:      d.Community,
+		WriteCommunity: d.WriteCommunity,
+		Users:          make(map[string]UserSecrets, len(d.Users)),
+		Destinations:   make(map[string]string, len(d.Traps.Destinations)),
 	}
 	for _, u := range d.Users {
 		s.Users[u.Name] = UserSecrets{AuthPass: u.AuthPass, PrivPass: u.PrivPass}
@@ -165,7 +180,7 @@ func (d Device) Secrets() DeviceSecrets {
 
 // WithoutSecrets is d with its secrets blanked, sharing nothing with d.
 func (d Device) WithoutSecrets() Device {
-	d.Community = ""
+	d.Community, d.WriteCommunity = "", ""
 	d.Versions = slices.Clone(d.Versions)
 	d.Users = slices.Clone(d.Users)
 	for i := range d.Users {
@@ -180,7 +195,7 @@ func (d Device) WithoutSecrets() Device {
 
 // WithSecrets is d with s filled back in.
 func (d Device) WithSecrets(s DeviceSecrets) Device {
-	d.Community = s.Community
+	d.Community, d.WriteCommunity = s.Community, s.WriteCommunity
 	d.Versions = slices.Clone(d.Versions)
 	d.Users = slices.Clone(d.Users)
 	for i := range d.Users {
@@ -238,12 +253,13 @@ func (d Device) config() (Config, error) {
 		return Config{}, fmt.Errorf("engine ID: %w", err)
 	}
 	return Config{
-		Listen:      d.Listen(),
-		Versions:    d.Versions,
-		Community:   d.Community,
-		Users:       d.Users,
-		EngineID:    engineID,
-		EngineBoots: d.EngineBoots,
+		Listen:         d.Listen(),
+		Versions:       d.Versions,
+		Community:      d.Community,
+		WriteCommunity: d.WriteCommunity,
+		Users:          d.Users,
+		EngineID:       engineID,
+		EngineBoots:    d.EngineBoots,
 		Objects: m.build(Identity{Name: strings.TrimSpace(d.Name), Seed: deviceSeed(d.ID),
 			Location: strings.TrimSpace(d.Location), Contact: strings.TrimSpace(d.Contact)}),
 		Notifications: m.catalogue(),

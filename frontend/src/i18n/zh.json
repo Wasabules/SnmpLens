@@ -1350,6 +1350,15 @@
         "counters": "计数器 ×{speed}"
       }
     },
+    "tab": {
+      "identity": "设备",
+      "access": "访问",
+      "traps": "通知"
+    },
+    "tabProblem": "此选项卡中有需要修正的内容",
+    "writeHint": "使用写团体名或由具有写权限的用户发出的 SET 会改变设备的应答，直到设备重启——就像尚未保存的运行配置。表行通过其 RowStatus 创建和删除，依据已加载的 MIB 的描述。代理自身统计的内容（SNMP 统计、引擎）永远不可写。",
+    "engineHint": "由 SnmpLens 分配，并在设备的整个生命周期内保持不变：管理端据此本地化其 SNMPv3 密钥。",
+    "engineBoots": "{count, plural, other {已启动 # 次}}",
     "loopbackHint": "仅限回环地址：127.0.0.1 至 127.255.255.254，或 ::1。在 Linux 和 macOS 上，低于 1024 的端口需要管理员权限。",
     "field": {
       "name": "名称",
@@ -1362,7 +1371,11 @@
       "location": "位置（sysLocation）",
       "contact": "联系人（sysContact）",
       "modelDefault": "使用型号的默认值",
-      "autoStart": "随 SnmpLens 启动"
+      "autoStart": "随 SnmpLens 启动",
+      "writeCommunity": "写团体名",
+      "writeCommunityNone": "无：v1 和 v2c 只读",
+      "userWrite": "可写（SET）",
+      "engineId": "Engine ID"
     },
     "problem": {
       "nameRequired": "请为设备命名。",
@@ -1376,7 +1389,8 @@
       "trapUser": "请选择设备的一个 SNMPv3 用户。",
       "trapNeedsV3": "v3 通知以设备的某个 SNMPv3 用户身份发送：请先启用 v3。",
       "engineId": "5 到 32 个八位组，十六进制。",
-      "every": "1 到 86400 秒。"
+      "every": "1 到 86400 秒。",
+      "writeSameAsRead": "写团体名必须与读团体名不同：否则任何能读的管理端也都能写。"
     },
     "category": {
       "server": "服务器",
@@ -1450,9 +1464,8 @@
     "userN": "用户 {n}",
     "addUser": "添加用户",
     "removeUser": "删除此用户",
-    "firstUserTarget": "“添加为目标”使用第一个用户。",
+    "firstUserTarget": "“添加为目标”使用第一个具有写权限的用户，否则使用第一个用户。",
     "traps": {
-      "title": "通知",
       "hint": "设备向何处、在何时发送 Trap 和 INFORM。与设备应答的地址不同，目标可以位于网络上的任何位置。",
       "destinationN": "目标 {n}",
       "host": "主机",
