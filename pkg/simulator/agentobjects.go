@@ -30,14 +30,14 @@ func agentObjects(v3 bool, engineID []byte, boots uint32, authenTraps bool) []Ob
 	count(snmp+"2.0", func(c *counters) uint32 { return c.outGetResponses.Load() + c.outTraps.Load() })
 	count(snmp+"3.0", load(func(c *counters) *atomic.Uint32 { return &c.badVersions }))
 	count(snmp+"4.0", load(func(c *counters) *atomic.Uint32 { return &c.badCommunities }))
-	count(snmp+"5.0", nothing) // a community used for what it may not do: nothing is writable
+	count(snmp+"5.0", load(func(c *counters) *atomic.Uint32 { return &c.badCommunityUses }))
 	count(snmp+"6.0", load(func(c *counters) *atomic.Uint32 { return &c.parseErrors }))
 	// What arrived in a response, which an agent receives none of.
 	for _, n := range []int{8, 9, 10, 11, 12} {
 		count(fmt.Sprintf(snmp+"%d.0", n), nothing)
 	}
 	count(snmp+"13.0", load(func(c *counters) *atomic.Uint32 { return &c.inTotalReqVars }))
-	count(snmp+"14.0", nothing) // no SET has succeeded
+	count(snmp+"14.0", load(func(c *counters) *atomic.Uint32 { return &c.inTotalSetVars }))
 	count(snmp+"15.0", load(func(c *counters) *atomic.Uint32 { return &c.inGets }))
 	count(snmp+"16.0", load(func(c *counters) *atomic.Uint32 { return &c.inGetNexts }))
 	count(snmp+"17.0", load(func(c *counters) *atomic.Uint32 { return &c.inSets }))

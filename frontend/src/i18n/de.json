@@ -1350,6 +1350,15 @@
         "counters": "Zähler ×{speed}"
       }
     },
+    "tab": {
+      "identity": "Gerät",
+      "access": "Zugriff",
+      "traps": "Benachrichtigungen"
+    },
+    "tabProblem": "Auf diesem Reiter ist etwas zu korrigieren",
+    "writeHint": "Ein SET mit der Schreib-Community oder von einem Benutzer mit Schreibrecht ändert, was das Gerät antwortet, bis es neu startet — wie eine laufende Konfiguration, solange sie nicht gespeichert ist. Zeilen werden über ihren RowStatus angelegt und gelöscht, so wie die geladenen MIBs sie beschreiben. Was der Agent selbst zählt — seine SNMP-Statistiken, seine Engine —, wird nie geschrieben.",
+    "engineHint": "Von SnmpLens vergeben und für die gesamte Lebensdauer des Geräts beibehalten: Manager lokalisieren ihre SNMPv3-Schlüssel darauf.",
+    "engineBoots": "{count, plural, one {# Mal gestartet} other {# Mal gestartet}}",
     "loopbackHint": "Nur Loopback: 127.0.0.1 bis 127.255.255.254 oder ::1. Unter Linux und macOS erfordert ein Port unter 1024 Administratorrechte.",
     "field": {
       "name": "Name",
@@ -1362,7 +1371,11 @@
       "location": "Standort (sysLocation)",
       "contact": "Kontakt (sysContact)",
       "modelDefault": "Der des Modells",
-      "autoStart": "Mit SnmpLens starten"
+      "autoStart": "Mit SnmpLens starten",
+      "writeCommunity": "Schreib-Community",
+      "writeCommunityNone": "Keine: in v1 und v2c nur lesbar",
+      "userWrite": "Darf schreiben (SET)",
+      "engineId": "Engine-ID"
     },
     "problem": {
       "nameRequired": "Geben Sie dem Gerät einen Namen.",
@@ -1376,7 +1389,8 @@
       "trapUser": "Wählen Sie einen der SNMPv3-Benutzer des Geräts.",
       "trapNeedsV3": "Eine v3-Benachrichtigung wird als SNMPv3-Benutzer des Geräts gesendet: Aktivieren Sie zuerst v3.",
       "engineId": "5 bis 32 Oktette, hexadezimal.",
-      "every": "Von 1 bis 86400 Sekunden."
+      "every": "Von 1 bis 86400 Sekunden.",
+      "writeSameAsRead": "Die Schreib-Community muss sich von der Lese-Community unterscheiden: Sonst schreibt jeder Manager, der liest, auch."
     },
     "category": {
       "server": "Server",
@@ -1450,9 +1464,8 @@
     "userN": "Benutzer {n}",
     "addUser": "Benutzer hinzufügen",
     "removeUser": "Diesen Benutzer entfernen",
-    "firstUserTarget": "„Als Ziel hinzufügen“ verwendet den ersten Benutzer.",
+    "firstUserTarget": "„Als Ziel hinzufügen“ verwendet den ersten Benutzer mit Schreibrecht, sonst den ersten.",
     "traps": {
-      "title": "Benachrichtigungen",
       "hint": "Wohin das Gerät seine Traps und INFORMs sendet, und wann. Anders als die Adresse, an der es antwortet, darf ein Ziel irgendwo im Netzwerk liegen.",
       "destinationN": "Ziel {n}",
       "host": "Host",

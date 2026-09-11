@@ -584,9 +584,27 @@ the count: that is what makes a manager still holding the old clock resynchronis
 builds the MAC format a Cisco reports), since managers cache it and localise their keys to it.
 
 A request below the level its user is held to is answered `authorizationError` with nothing read, as a device
-configured `rouser NAME priv` answers. Only the default context exists. Nothing is writable yet: a SET is
-`notWritable`, or `noSuchName` in v1 (RFC 3584), where a Counter64 is invisible too — stepped over on GETNEXT,
-`noSuchName` on GET.
+configured `rouser NAME priv` answers. Only the default context exists. SNMPv1 cannot see a Counter64 (RFC 3584):
+it is stepped over on GETNEXT and `noSuchName` on GET.
+
+**A SET writes the running device and nothing else** (`set.go`). The write community — a secret, kept beside the
+community — or a v3 user with `Write` may SET. A manager that only reads is answered `noAccess`, as net-snmp answers
+a `rocommunity` or a `rouser`, or `noSuchName` in v1, and a community used so is counted in
+`snmpInBadCommunityUses`. What is written lives in the agent's tree until the device restarts, which is a new
+`Agent` built from its model again: nothing is saved, as a running configuration is not until someone saves it.
+Every varbind is checked before any is applied (RFC 3416 4.2.5), and the tree is REPLACED rather than edited — a
+copy with the changes, swapped in through an `atomic.Pointer` — because notifications read it from their own
+goroutines, and neither they nor a GETBULK may see a SET half-applied. The agent's own subtrees (the snmp group, the
+engine, the USM, the VACM) and an object only a notification carries are `notWritable`. A varbind naming an instance
+nothing answers CREATES it, if it would sit in the tree as an instance does: a leaf, under no instance and with none
+under it. Errors are v2c's, mapped for v1 by `v1Status` (RFC 3584 4.4).
+
+Rows need the MIB, and the agent has none: which column is a `RowStatus` is asked of `Config.RowStatus`, which
+`app.go` points at `mib.Service.RowStatusColumn`, so rows are created and destroyed as the LOADED MIBs describe
+them. `createAndGo` makes the row `active`, `createAndWait` `notInService`, `destroy` removes every instance of the
+row, and what RFC 2579 refuses is refused — a create on a row that exists, `active` on one that does not, and
+`notReady`, which is the agent's to say. The callback takes gosmi's lock once per varbind, on the agent's receive
+goroutine, holding nothing of the agent's while it waits.
 
 The protocol names are `pkg/snmp`'s (`MD5` to `SHA512`, `DES`, `AES` to `AES256C`), mapped again here so the
 package stays a leaf. `TestSnmpLensReadsTheSimulator` holds the two together by driving the SnmpLens client
@@ -746,8 +764,9 @@ again, and nothing would say why until somebody tried. The renderer lists models
 and not with the devices it polls every two seconds, since an icon crosses the bridge as a data URI.
 
 **A device becomes a target in the renderer** (`addDeviceAsTarget` in `utils/simulator.js`): the target in the
-list, and an override with its identifiers in the most secure version it answers — its FIRST user for v3, since a
-device may have several. The target is the device's address, with its port unless that is 161 (`targetOf`:
+list, and an override with its identifiers in the most secure version it answers — the ones that WRITE when it has
+any, since they read as well and a device on a bench is there to be written to: its first user with `Write` for v3,
+else its first, and its write community before its community. The target is the device's address, with its port unless that is 161 (`targetOf`:
 `127.0.0.1:1162`), because a target is what tells devices apart and on macOS — 127.0.0.1 alone unless aliases
 were added — the port is all that does. A port the target names wins over every port field, in Go
 (`netaddr.SplitTarget`) and in `getEffectiveSettings`, so the override leaves it out and `TargetOverrideForm`

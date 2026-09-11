@@ -13,7 +13,7 @@ import (
 // back through SnmpLens's own client. The target names its port and the port
 // field says 161: the target's port wins, as it does everywhere.
 func TestTheOperationsAgainstASimulatedSwitch(t *testing.T) {
-	d := simtest.Start(t, simulator.Device{Model: "cisco-catalyst-24", Name: "sw-floor-2"})
+	d := simtest.Start(t, simulator.Device{Model: "cisco-catalyst-24", Name: "sw-floor-2", WriteCommunity: "private"})
 	c := NewClient(context.Background())
 	targets := []string{d.Target()}
 	answer := func(t *testing.T, res []*BulkResult) *Result {
@@ -53,9 +53,17 @@ func TestTheOperationsAgainstASimulatedSwitch(t *testing.T) {
 		}
 	})
 	t.Run("SET", func(t *testing.T) {
-		res := c.Set(targets, "1.3.6.1.2.1.1.5.0", "public", "renamed", "OctetString", "v2c", 161, 2, 0, V3Params{})
-		if len(res) != 1 || !strings.Contains(strings.ToLower(res[0].Error), "notwritable") {
-			t.Errorf("a SET the device refuses came back as %+v", res[0])
+		// The read community reads and nothing more, as a rocommunity does.
+		res := c.Set(targets, "1.3.6.1.2.1.1.5.0", "public", "refused", "OctetString", "v2c", 161, 2, 0, V3Params{})
+		if len(res) != 1 || !strings.Contains(strings.ToLower(res[0].Error), "noaccess") {
+			t.Errorf("a SET with the read community came back as %+v", res[0])
+		}
+		res = c.Set(targets, "1.3.6.1.2.1.1.5.0", "private", "renamed", "OctetString", "v2c", 161, 2, 0, V3Params{})
+		if len(res) != 1 || res[0].Error != "" {
+			t.Fatalf("a SET with the write community came back as %+v", res[0])
+		}
+		if r := answer(t, c.Get(targets, "1.3.6.1.2.1.1.5.0", "public", "v2c", 161, 2, 0, V3Params{})); r.Value != "renamed" {
+			t.Errorf("sysName read back as %v", r.Value)
 		}
 	})
 }

@@ -49,6 +49,8 @@ type User struct {
 	AuthPass  string `json:"authPass"`
 	PrivProto string `json:"privProto"` // DES, AES, AES192, AES256, AES192C or AES256C
 	PrivPass  string `json:"privPass"`
+	// Write lets the user SET; a user without it only reads.
+	Write bool `json:"write"`
 }
 
 // The names pkg/snmp maps, mapped the same way; TestSnmpLensReadsTheSimulator
@@ -91,6 +93,7 @@ type user struct {
 	priv    gosnmp.SnmpV3PrivProtocol
 	authKey []byte
 	privKey []byte
+	write   bool
 }
 
 func newUsers(list []User, engineID []byte) (map[string]*user, error) {
@@ -119,7 +122,7 @@ func checkUser(u User) (*user, error) {
 	if !ok {
 		return nil, fmt.Errorf("user %q: %q is not a security level (NoAuthNoPriv, AuthNoPriv or AuthPriv)", u.Name, u.SecLevel)
 	}
-	r := &user{name: u.Name, level: level, auth: gosnmp.NoAuth, priv: gosnmp.NoPriv}
+	r := &user{name: u.Name, level: level, auth: gosnmp.NoAuth, priv: gosnmp.NoPriv, write: u.Write}
 	if level&gosnmp.AuthNoPriv != 0 {
 		if r.auth, ok = authProtocols[strings.ToUpper(u.AuthProto)]; !ok {
 			return nil, fmt.Errorf("user %q: %q is not an authentication protocol", u.Name, u.AuthProto)
@@ -271,7 +274,7 @@ func (a *Agent) answerV3(msg []byte, c clock) []byte {
 		// authorizationError, and nothing read.
 		ans = answer{vars: req.Variables, status: gosnmp.AuthorizationError}
 	} else {
-		ans = a.process(gosnmp.Version3, req, c)
+		ans = a.process(gosnmp.Version3, req, c, u.write)
 	}
 	out, err := fit(ans, bulkFloor(req), tooBig(gosnmp.Version3, req), min(a.maxSize, int(req.MsgMaxSize)),
 		func(ans answer) ([]byte, error) {

@@ -54,6 +54,8 @@ const {
   editableDevice,
   deviceProblems,
   devicePayload,
+  EDITOR_TABS,
+  tabsWithProblems,
   deliveryReport,
   trapActivity,
   modelGroups,
@@ -209,8 +211,8 @@ check('the editor is given the community, and every user with its passphrases',
   form.users[0].privPass === 'privpass-1' && form.users[1].authPass === 'monitor-pass');
 check('and editing nothing sends back the same users',
   JSON.stringify(devicePayload(form).users) === JSON.stringify([
-    { name: 'ops', secLevel: 'AuthPriv', authProto: 'SHA256', authPass: 'authpass-1', privProto: 'AES', privPass: 'privpass-1' },
-    { name: 'monitor', secLevel: 'AuthNoPriv', authProto: 'SHA', authPass: 'monitor-pass', privProto: 'AES', privPass: '' },
+    { name: 'ops', secLevel: 'AuthPriv', authProto: 'SHA256', authPass: 'authpass-1', privProto: 'AES', privPass: 'privpass-1', write: false },
+    { name: 'monitor', secLevel: 'AuthNoPriv', authProto: 'SHA', authPass: 'monitor-pass', privProto: 'AES', privPass: '', write: false },
   ]));
 check("a destination's community comes back by its ID, and goes back without the counters",
   form.traps.destinations[0].community === 'trap-community' &&
@@ -220,6 +222,42 @@ check("a destination's community comes back by its ID, and goes back without the
     onAuthFailure: false,
     schedules: [{ notification: 'linkUp', every: 60, irregular: false }],
   }), JSON.stringify(devicePayload(form).traps));
+
+/* --- writing ---------------------------------------------------------------- */
+
+check('a new device writes nothing', fresh.writeCommunity === '' && fresh.users.every((u) => !u.write));
+const writeForm = editableDevice({ ...view, users: [{ ...view.users[0], write: true }] }, { ...creds, writeCommunity: 'wr1te' });
+check('the editor is given the write community, and which users write',
+  writeForm.writeCommunity === 'wr1te' && writeForm.users[0].write === true);
+check('and sends both back', devicePayload(writeForm).writeCommunity === 'wr1te' && devicePayload(writeForm).users[0].write === true);
+check('a device answering v3 alone sends no write community',
+  devicePayload({ ...writeForm, versions: ['v3'] }).writeCommunity === '');
+check('a write community that is the read community is refused',
+  deviceProblems({ ...fresh, name: 'x', writeCommunity: 'public' }).writeCommunity === 'writeSameAsRead' &&
+  !deviceProblems({ ...fresh, name: 'x', writeCommunity: 'private' }).writeCommunity);
+const booted = editableDevice({ ...view, engineId: '8000000903020000000001', engineBoots: 3 }, creds);
+check("the editor shows the device's engine, and sends none",
+  booted.engineId === '8000000903020000000001' && booted.engineBoots === 3 &&
+  devicePayload(booted).engineId === '' && devicePayload(booted).engineBoots === 0);
+
+/* --- the editor's tabs ------------------------------------------------------ */
+
+check('a problem marks the tab it is on',
+  JSON.stringify(tabsWithProblems({ name: 'nameRequired', writeCommunity: 'writeSameAsRead' })) === JSON.stringify(['identity', 'access']) &&
+  tabsWithProblems({}).length === 0);
+// Every problem deviceProblems can report, from devices wrong in every way: one
+// no tab holds would be a Save button greyed out for a reason nobody can see.
+const everyProblem = [
+  { ...fresh, name: '', port: 0, versions: ['v2c', 'v3'], community: '', users: [],
+    traps: { ...blankTraps(), destinations: [{ ...blankDestination(162), host: '' }], schedules: [{ ...blankSchedule(), every: 0 }] } },
+  { ...fresh, versions: [] },
+  { ...fresh, versions: ['v2c', 'v3'], writeCommunity: 'public', users: [{ ...blankV3(), authPass: 'short' }] },
+].flatMap((d) => Object.keys(deviceProblems(d)));
+const onTabs = EDITOR_TABS.flatMap((t) => t.fields);
+check('every problem is on a tab', everyProblem.every((k) => onTabs.includes(k)),
+  everyProblem.filter((k) => !onTabs.includes(k)).join());
+check('and the devices above are wrong in every way a tab names', onTabs.every((k) => everyProblem.includes(k)),
+  onTabs.filter((k) => !everyProblem.includes(k)).join());
 
 /* --- the port a target names --------------------------------------------- */
 
@@ -285,6 +323,14 @@ check('with no override of a port the target already names',
 const overruled = { ...settings, targetOverrides: { '127.0.0.1:1162': { port: 9999 } } };
 check("a port the target names wins over an override's", getEffectiveSettings(overruled, '127.0.0.1:1162').port === 1162);
 check('and over the default, with no override at all', getEffectiveSettings(settings, '127.0.0.1:1163').port === 1163);
+
+// A device on a bench is there to be written to: its target writes when it can.
+const writer = { ...view, users: [view.users[0], { ...view.users[1], write: true }] };
+const w3 = getEffectiveSettings(addDeviceAsTarget(settings, writer, creds).settings, '127.0.0.2');
+check('a device with a user who can write is a target as that user',
+  w3.v3.user === 'monitor' && w3.v3.authPass === 'monitor-pass', w3.v3.user);
+const wc = getEffectiveSettings(addDeviceAsTarget(settings, mac1, { ...creds, writeCommunity: 'wr1te' }).settings, '127.0.0.1:1161');
+check('and a device with a write community, with that community', wc.community === 'wr1te', wc.community);
 
 /* --- every model Go serves is named and described ------------------------ */
 

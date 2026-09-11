@@ -1350,6 +1350,15 @@
         "counters": "compteurs ×{speed}"
       }
     },
+    "tab": {
+      "identity": "Appareil",
+      "access": "Accès",
+      "traps": "Notifications"
+    },
+    "tabProblem": "Quelque chose est à corriger dans cet onglet",
+    "writeHint": "Un SET envoyé avec la communauté d’écriture, ou par un utilisateur autorisé à écrire, change ce que l’appareil répond jusqu’à son redémarrage — comme une configuration en cours tant qu’elle n’est pas enregistrée. Les lignes se créent et se suppriment par leur RowStatus, telles que les décrivent les MIB chargées. Ce que l’agent compte lui-même — ses statistiques SNMP, son moteur — ne s’écrit jamais.",
+    "engineHint": "Attribué par SnmpLens et conservé toute la vie de l’appareil : les gestionnaires y localisent leurs clés SNMPv3.",
+    "engineBoots": "{count, plural, one {démarré # fois} other {démarré # fois}}",
     "loopbackHint": "Bouclage uniquement : de 127.0.0.1 à 127.255.255.254, ou ::1. Sous Linux et macOS, un port inférieur à 1024 exige des droits d'administrateur.",
     "field": {
       "name": "Nom",
@@ -1362,7 +1371,11 @@
       "location": "Emplacement (sysLocation)",
       "contact": "Contact (sysContact)",
       "modelDefault": "Celui du modèle",
-      "autoStart": "Démarrer avec SnmpLens"
+      "autoStart": "Démarrer avec SnmpLens",
+      "writeCommunity": "Communauté d’écriture",
+      "writeCommunityNone": "Aucune : lecture seule en v1 et v2c",
+      "userWrite": "Peut écrire (SET)",
+      "engineId": "Engine ID"
     },
     "problem": {
       "nameRequired": "Donnez un nom à l'appareil.",
@@ -1376,7 +1389,8 @@
       "trapUser": "Choisissez l’un des utilisateurs SNMPv3 de l’appareil.",
       "trapNeedsV3": "Une notification v3 part au nom d’un utilisateur SNMPv3 de l’appareil : activez d’abord la v3.",
       "engineId": "5 à 32 octets, en hexadécimal.",
-      "every": "De 1 à 86400 secondes."
+      "every": "De 1 à 86400 secondes.",
+      "writeSameAsRead": "La communauté d’écriture doit différer de celle de lecture : sinon, tout gestionnaire qui lit écrit aussi."
     },
     "category": {
       "server": "Serveurs",
@@ -1450,9 +1464,8 @@
     "userN": "Utilisateur {n}",
     "addUser": "Ajouter un utilisateur",
     "removeUser": "Retirer cet utilisateur",
-    "firstUserTarget": "« Ajouter comme cible » utilise le premier utilisateur.",
+    "firstUserTarget": "« Ajouter comme cible » utilise le premier utilisateur qui peut écrire, sinon le premier.",
     "traps": {
-      "title": "Notifications",
       "hint": "Où l’appareil envoie ses traps et ses INFORM, et quand. Contrairement à l’adresse où il répond, une destination peut se trouver n’importe où sur le réseau.",
       "destinationN": "Destination {n}",
       "host": "Hôte",

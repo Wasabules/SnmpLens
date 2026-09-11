@@ -1350,6 +1350,15 @@
         "counters": "counters ×{speed}"
       }
     },
+    "tab": {
+      "identity": "Device",
+      "access": "Access",
+      "traps": "Notifications"
+    },
+    "tabProblem": "Something on this tab needs fixing",
+    "writeHint": "A SET from the write community, or from a user who can write, changes what the device answers until it restarts — as a running configuration does until it is saved. Rows are created and destroyed through their RowStatus, as the loaded MIBs describe them. What the agent counts itself — its SNMP statistics, its engine — is never written.",
+    "engineHint": "Given by SnmpLens and kept for the life of the device: managers localise their SNMPv3 keys to it.",
+    "engineBoots": "{count, plural, one {started # time} other {started # times}}",
     "loopbackHint": "Loopback only: 127.0.0.1 to 127.255.255.254, or ::1. On Linux and macOS, a port below 1024 needs administrator rights.",
     "field": {
       "name": "Name",
@@ -1362,7 +1371,11 @@
       "location": "Location (sysLocation)",
       "contact": "Contact (sysContact)",
       "modelDefault": "The model’s own",
-      "autoStart": "Start with SnmpLens"
+      "autoStart": "Start with SnmpLens",
+      "writeCommunity": "Write community",
+      "writeCommunityNone": "None: read-only in v1 and v2c",
+      "userWrite": "Can write (SET)",
+      "engineId": "Engine ID"
     },
     "problem": {
       "nameRequired": "Give the device a name.",
@@ -1376,7 +1389,8 @@
       "trapUser": "Choose one of the device's SNMPv3 users.",
       "trapNeedsV3": "A v3 notification is sent as one of the device's SNMPv3 users: answer v3 first.",
       "engineId": "5 to 32 octets, in hex.",
-      "every": "From 1 to 86400 seconds."
+      "every": "From 1 to 86400 seconds.",
+      "writeSameAsRead": "The write community must differ from the read community: otherwise every manager that reads also writes."
     },
     "category": {
       "server": "Servers",
@@ -1450,9 +1464,8 @@
     "userN": "User {n}",
     "addUser": "Add a user",
     "removeUser": "Remove this user",
-    "firstUserTarget": "Add as target uses the first user.",
+    "firstUserTarget": "Add as target uses the first user who can write, or else the first.",
     "traps": {
-      "title": "Notifications",
       "hint": "Where the device sends its traps and INFORMs, and when. Unlike where it answers, a destination may be anywhere on the network.",
       "destinationN": "Destination {n}",
       "host": "Host",
