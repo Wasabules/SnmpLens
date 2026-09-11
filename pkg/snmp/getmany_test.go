@@ -7,20 +7,25 @@ import (
 	"time"
 )
 
-// deadTarget returns an address nothing will answer on.
+// deadTarget returns an address that receives and never answers: a device that
+// is down, or an agent behind a firewall that drops.
 //
-// A bound-then-closed UDP port, so the address is real and routable and the
-// packets simply go nowhere — which is what an unreachable device looks like
-// to the client, rather than an immediate ICMP refusal.
+// The socket stays OPEN for the length of the test, and that is the point. This
+// used to bind a port and close it again, on the reasoning that nothing would be
+// there — but a released port is anyone's to take, and `go test ./...` runs every
+// package at once. Once pkg/simulator joined the suite, its agents were the one
+// thing in it that answers a GET, and CI run 34583086986 got six values back in
+// 0.00 s from "a device that never answered". Held open, the port is ours;
+// reading nothing, it answers nothing, and the request waits out a real timeout,
+// which is what these tests are about.
 func deadTarget(t *testing.T) (string, int) {
 	t.Helper()
 	c, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {
 		t.Skipf("no UDP socket: %v", err)
 	}
-	port := c.LocalAddr().(*net.UDPAddr).Port
-	c.Close()
-	return "127.0.0.1", port
+	t.Cleanup(func() { c.Close() })
+	return "127.0.0.1", c.LocalAddr().(*net.UDPAddr).Port
 }
 
 // The cost of an unreachable device must not scale with the number of OIDs.
