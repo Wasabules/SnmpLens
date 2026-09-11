@@ -200,7 +200,9 @@
 
         {#if editing.versions.includes('v3')}
           <h4 class="section-title">{$_('simulator.field.v3')}</h4>
-          <UsmFields v3={editing.v3} idPrefix="sim-v3" problems={usmProblems} showContext={false} />
+          <!-- bind:, as the settings do: UsmFields edits the object in place, and
+               without it the checks above never see a passphrase being typed. -->
+          <UsmFields bind:v3={editing.v3} idPrefix="sim-v3" problems={usmProblems} showContext={false} />
         {/if}
       </div>
       <footer class="sim-footer">
