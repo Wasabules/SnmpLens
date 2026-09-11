@@ -903,7 +903,7 @@
                   <button class="btn tertiary btn-small" title={$_('simulator.addAsTargetTitle')} on:click={() => addAsTarget(d)}>
                     <Icon name="target" size={13} /> {$_('simulator.addAsTarget')}
                   </button>
-                  <button class="icon-btn" class:active={faultChips(d.faults).length > 0} aria-expanded={faultsOpen === d.id}
+                  <button class="icon-btn push" class:active={faultChips(d.faults).length > 0} aria-expanded={faultsOpen === d.id}
                     title={$_('simulator.faults.button')} aria-label={$_('simulator.faults.button')}
                     on:click={() => (faultsOpen = faultsOpen === d.id ? null : d.id)}>
                     <Icon name="zap" size={14} />
@@ -1047,10 +1047,14 @@
     gap: 8px;
   }
 
+  /* Two lines: what the device is and does, then what can be done with it. On
+     one line the actions a running device gains squeezed its name and its
+     request count into an ellipsis the moment it started. */
   .device {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 12px;
+    gap: 8px 12px;
     padding: 10px 12px;
     background-color: var(--bg-lighter-color);
     border: 1px solid var(--border-color);
@@ -1115,13 +1119,20 @@
     color: var(--success-color);
   }
 
+  /* A line of its own, lined up under the name: past the state dot, the
+     30 px icon and the two gaps between them. */
   .actions {
     display: flex;
-    flex: 0 1 auto;
+    flex: 1 1 100%;
     flex-wrap: wrap;
-    justify-content: flex-end;
     align-items: center;
     gap: 6px;
+    padding-left: calc(9px + 30px + 2 * 12px);
+  }
+
+  /* The buttons that act on the device itself start the right-hand group. */
+  .actions .push {
+    margin-left: auto;
   }
 
   .icon-btn:disabled {
@@ -1132,10 +1143,6 @@
   .icon-btn.active {
     color: var(--warning-color);
     border-color: var(--warning-border);
-  }
-
-  .device {
-    flex-wrap: wrap;
   }
 
   .category-title {
@@ -1686,8 +1693,8 @@
     .dest-grid {
       grid-template-columns: 1fr 1fr;
     }
-    .device {
-      flex-wrap: wrap;
+    .actions {
+      padding-left: 0;
     }
   }
 </style>
