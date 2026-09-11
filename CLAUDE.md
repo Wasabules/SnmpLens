@@ -144,7 +144,10 @@ The frontend calls Go through auto-generated bindings in `frontend/wailsjs/`, wh
 - `pkg/events/`, `pkg/notify/`, `pkg/secrets/`, `pkg/service/`, `pkg/tray/`, `pkg/autostart/` — the event journal vocabulary, notification routing (syslog over UDP/TCP/**TLS per RFC5425**, webhook, email, with a durable outbox), OS-protected credential storage, the pre-GUI preference file, the fail-soft system-tray icon, and the per-user login entry (HKCU Run key / LaunchAgent / XDG autostart — never machine-wide, so it never needs elevation).
 - `pkg/netaddr/address.go` — address handling shared by `pkg/snmp` and `pkg/network`. `NormaliseTarget` strips
   the brackets people paste around an IPv6 literal, because gosnmp adds its own via `JoinHostPort` and
-  `[[::1]]:161` fails naming neither; zones (`fe80::1%eth0`) are kept. `ListenAddress` returns the bare `:port`
+  `[[::1]]:161` fails naming neither; zones (`fe80::1%eth0`) are kept. `SplitTarget` reads a port the target
+  names (`10.0.0.5:1161`, `[2001:db8::5]:1161`) and lets it win over the port field — every dial, the trap
+  sender's included, goes through it, a bare IPv6 literal's colons are never taken for a port, and `portOf` in
+  `utils/targets.js` is the same reading on the renderer's side. `ListenAddress` returns the bare `:port`
   wildcard, which Go opens as a DUAL-STACK socket — `0.0.0.0` behaves identically but reads like a deliberate
   IPv4-only choice, which is how it gets "fixed" into one. `LastAddressIn` parses rather than pattern-matches.
 - `pkg/network/tools.go` — pure-Go ping & traceroute (**pro-bing**); no elevated privileges required. Targets go
@@ -609,12 +612,16 @@ answer for every ID in `pkg/simulator`. The Linux model answers everything the "
 values are pure functions of time (`values.go`): counters that only go up and wrap at 32 bits as a real
 interface's do, gauges that swing, nothing ticking in the background.
 
-**A device becomes a target in the renderer** (`addDeviceAsTarget` in `utils/simulator.js`): its address in the
-list, and an override with its port and its identifiers in the most secure version it answers. The test resolves
-the result through `getEffectiveSettings`, which every request is built from. A target IS an address, so on macOS
-— 127.0.0.1 alone unless aliases are added — devices differ by port and only one of them can be a target until
-targets take `host:port`; `SimulatorSuggestAddress` gives each device an address of its own on Windows and Linux
-for that reason.
+**A device becomes a target in the renderer** (`addDeviceAsTarget` in `utils/simulator.js`): the target in the
+list, and an override with its identifiers in the most secure version it answers — its FIRST user for v3, since a
+device may have several. The target is the device's address, with its port unless that is 161 (`targetOf`:
+`127.0.0.1:1162`), because a target is what tells devices apart and on macOS — 127.0.0.1 alone unless aliases
+were added — the port is all that does. A port the target names wins over every port field, in Go
+(`netaddr.SplitTarget`) and in `getEffectiveSettings`, so the override leaves it out and `TargetOverrideForm`
+shows it as the target's rather than offering a field that would be ignored. The test resolves the result through
+`getEffectiveSettings`, which every request is built from, with two devices sharing 127.0.0.1.
+`SimulatorSuggestAddress` still offers an address of its own first, finding by binding which ones exist: once
+devices send traps, their source address is what will tell them apart.
 
 One trap for whoever adds a model: a file named `model_linux.go` is compiled on Linux ONLY — `_linux` is a GOOS
 suffix, and the build on Windows reported the model as undefined — so the Linux model lives in `linuxserver.go`.

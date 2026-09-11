@@ -354,15 +354,16 @@ const CATALOGUE = [
   {
     base: 'simulator-editor',
     tab: TABS.operations,
-    height: 1000,
+    height: 1400,
     bindings: {
       ListSimulatorModels: [{ id: 'linux-server', category: 'server' }],
       ListSimulatedDevices: [],
       SimulatorSuggestAddress: { address: '127.0.0.2', port: 161 },
     },
-    // v3 ticked after v2c: both identities, and the passphrases not yet typed.
-    act: ['sel:.status-item.simulator|0', 'New device', 'sel:.versions input|2'],
-    describe: 'A new simulated device: its model, its loopback address, and who may ask it.',
+    // v3 ticked after v2c, and a second user added: both identities, and the
+    // passphrases not yet typed.
+    act: ['sel:.status-item.simulator|0', 'New device', 'sel:.versions input|2', 'Add a user'],
+    describe: 'A new simulated device: its model, its loopback address, and who may ask it — two SNMPv3 users here.',
   },
 ];
 

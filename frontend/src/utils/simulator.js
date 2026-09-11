@@ -7,8 +7,8 @@
  * one thing Go cannot: how a device becomes a TARGET, which lives in the
  * renderer's settings.
  *
- * The editor holds the SNMPv3 user in the shape UsmFields edits — `user`,
- * `secLevel`, the protocols and passphrases — and devicePayload turns it into
+ * The editor holds each SNMPv3 user in the shape UsmFields edits — `user`,
+ * `secLevel`, the protocols and passphrases — and devicePayload turns them into
  * Go's `users` list.
  */
 import { usesAuth, usesPriv } from './snmpSecurity.js';
@@ -19,8 +19,17 @@ export const SIM_VERSIONS = ['v1', 'v2c', 'v3'];
 /** The shortest passphrase a simulated user may have, as pkg/simulator holds it. */
 export const MIN_PASSPHRASE = 8;
 
-export function blankV3() {
-  return { user: 'simulator', secLevel: 'AuthPriv', authProto: 'SHA256', authPass: '', privProto: 'AES', privPass: '', contextName: '' };
+/** A new SNMPv3 user; `n` numbers the ones after the first. */
+export function blankV3(n = 1) {
+  return {
+    user: n === 1 ? 'simulator' : `user${n}`,
+    secLevel: 'AuthPriv',
+    authProto: 'SHA256',
+    authPass: '',
+    privProto: 'AES',
+    privPass: '',
+    contextName: '',
+  };
 }
 
 /**
@@ -37,16 +46,24 @@ export function blankDevice(model, suggestion) {
     port: suggestion?.port || 1161,
     versions: ['v2c'],
     community: 'public',
-    v3: blankV3(),
+    users: [blankV3()],
   };
 }
 
 /**
  * A listed device in the editor's shape, its credentials filled in. The list
- * never carries them; they come from SimulatorDeviceCredentials.
+ * never carries them; they come from SimulatorDeviceCredentials, by user name.
  */
 export function editableDevice(view, creds) {
-  const u = view.users?.[0];
+  const users = (view.users || []).map((u) => ({
+    user: u.name,
+    secLevel: u.secLevel,
+    authProto: u.authProto || 'SHA256',
+    authPass: creds?.users?.[u.name]?.authPass || '',
+    privProto: u.privProto || 'AES',
+    privPass: creds?.users?.[u.name]?.privPass || '',
+    contextName: '',
+  }));
   return {
     id: view.id,
     name: view.name,
@@ -55,26 +72,18 @@ export function editableDevice(view, creds) {
     port: view.port,
     versions: [...(view.versions || [])],
     community: creds?.community || '',
-    v3: u
-      ? {
-          user: u.name,
-          secLevel: u.secLevel,
-          authProto: u.authProto || 'SHA256',
-          authPass: creds?.users?.[u.name]?.authPass || '',
-          privProto: u.privProto || 'AES',
-          privPass: creds?.users?.[u.name]?.privPass || '',
-          contextName: '',
-        }
-      : blankV3(),
+    users: users.length ? users : [blankV3()],
   };
 }
 
 const usesCommunity = (versions) => versions.includes('v1') || versions.includes('v2c');
 
 /**
- * What a device would be refused for, by field, as i18n key suffixes
- * (simulator.problem.<key>). Mirrors Device.Validate for what a form can get
- * wrong; Go still checks all of it, and the address.
+ * What a device would be refused for, as i18n key suffixes
+ * (simulator.problem.<key>): by field, and under `users`, one entry per SNMPv3
+ * user — present only when one of them has something wrong. Mirrors
+ * Device.Validate for what a form can get wrong; Go still checks all of it, and
+ * the address.
  */
 export function deviceProblems(d) {
   const problems = {};
@@ -85,22 +94,34 @@ export function deviceProblems(d) {
   if (!versions.length) problems.versions = 'versionRequired';
   if (usesCommunity(versions) && !d.community) problems.community = 'communityRequired';
   if (versions.includes('v3')) {
-    const u = d.v3 || {};
-    if (!u.user?.trim()) problems.user = 'userRequired';
-    if (usesAuth(u.secLevel) && (u.authPass || '').length < MIN_PASSPHRASE) problems.authPass = 'passphraseShort';
-    if (usesPriv(u.secLevel) && (u.privPass || '').length < MIN_PASSPHRASE) problems.privPass = 'passphraseShort';
+    const users = d.users || [];
+    if (!users.length) problems.noUser = 'userRequired';
+    const count = new Map();
+    for (const u of users) {
+      const name = (u.user || '').trim();
+      count.set(name, (count.get(name) || 0) + 1);
+    }
+    const perUser = users.map((u) => {
+      const p = {};
+      const name = (u.user || '').trim();
+      if (!name) p.user = 'userRequired';
+      else if (count.get(name) > 1) p.user = 'userDuplicate';
+      if (usesAuth(u.secLevel) && (u.authPass || '').length < MIN_PASSPHRASE) p.authPass = 'passphraseShort';
+      if (usesPriv(u.secLevel) && (u.privPass || '').length < MIN_PASSPHRASE) p.privPass = 'passphraseShort';
+      return p;
+    });
+    if (perUser.some((p) => Object.keys(p).length)) problems.users = perUser;
   }
   return problems;
 }
 
 /**
  * The device as SimulatorSaveDevice takes it: the community only if a version
- * uses one, the user only if v3 is answered. The engine is the backend's to
+ * uses one, the users only if v3 is answered. The engine is the backend's to
  * give, and is not sent.
  */
 export function devicePayload(d) {
   const versions = SIM_VERSIONS.filter((v) => d.versions.includes(v));
-  const u = d.v3 || {};
   return {
     id: d.id || '',
     name: d.name.trim(),
@@ -110,7 +131,14 @@ export function devicePayload(d) {
     versions,
     community: usesCommunity(versions) ? d.community : '',
     users: versions.includes('v3')
-      ? [{ name: (u.user || '').trim(), secLevel: u.secLevel, authProto: u.authProto, authPass: u.authPass, privProto: u.privProto, privPass: u.privPass }]
+      ? (d.users || []).map((u) => ({
+          name: (u.user || '').trim(),
+          secLevel: u.secLevel,
+          authProto: u.authProto,
+          authPass: u.authPass,
+          privProto: u.privProto,
+          privPass: u.privPass,
+        }))
       : [],
     engineId: '',
     engineBoots: 0,
@@ -122,21 +150,37 @@ export function preferredVersion(versions = []) {
   return ['v3', 'v2c', 'v1'].find((v) => versions.includes(v)) || 'v2c';
 }
 
-function addressOf(line) {
+/**
+ * The target a device is reached at: its address, and its port too unless that
+ * is SNMP's own 161 — "127.0.0.1:1162", "[::1]:1161". On macOS, where every
+ * device shares 127.0.0.1, the port is all that tells two devices apart, and a
+ * target that names it is a target of its own.
+ */
+export function targetOf(device) {
+  if (device.port === 161) return device.address;
+  const host = device.address.includes(':') ? `[${device.address}]` : device.address;
+  return `${host}:${device.port}`;
+}
+
+function targetOfLine(line) {
   return line.trim().replace(/^\/\//, '').split('#')[0].trim();
 }
 
 /**
- * The settings with a device added as a target: its address in the list, named
- * after it, and an override carrying its port and its identifiers in the most
- * secure version it answers.
+ * The settings with a device added as a target: the target in the list, named
+ * after the device, and an override carrying its identifiers in the most secure
+ * version it answers — with its FIRST user for v3.
  *
- * A target IS an address, so a device on an address already listed gives that
- * target its identifiers rather than adding a second line; `added` says which.
+ * The port travels in the target when it is not 161, and the override then
+ * leaves it out: the target's would win over it anyway. A device added again
+ * gives its target its identifiers once more instead of listing it twice;
+ * `added` says which.
  */
 export function addDeviceAsTarget(settings, device, creds) {
+  const target = targetOf(device);
   const version = preferredVersion(device.versions);
-  const override = { port: device.port, snmpVersion: version };
+  const override = { snmpVersion: version };
+  if (target === device.address) override.port = device.port;
   if (version === 'v3') {
     const u = device.users[0];
     override.v3 = {
@@ -152,11 +196,12 @@ export function addDeviceAsTarget(settings, device, creds) {
     override.community = creds?.community || '';
   }
   const lines = (settings.targets || '').split('\n').filter((l) => l.trim());
-  const added = !lines.some((l) => addressOf(l) === device.address);
-  const targets = added ? [...lines, `${device.address} # ${device.name}`].join('\n') : settings.targets;
+  const added = !lines.some((l) => targetOfLine(l) === target);
+  const targets = added ? [...lines, `${target} # ${device.name}`].join('\n') : settings.targets;
   return {
-    settings: { ...settings, targets, targetOverrides: { ...(settings.targetOverrides || {}), [device.address]: override } },
+    settings: { ...settings, targets, targetOverrides: { ...(settings.targetOverrides || {}), [target]: override } },
     added,
     version,
+    target,
   };
 }

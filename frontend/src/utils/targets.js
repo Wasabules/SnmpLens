@@ -96,6 +96,27 @@ export function targetTitle(address, anon) {
 }
 
 /**
+ * The port a target names, or null. "10.0.0.5:1161", "switch-01:1161" and
+ * "[2001:db8::5]:1161" name one; an address, a host name or a bare IPv6 literal —
+ * whose colons are not a port — do not.
+ *
+ * The same reading as Go's netaddr.SplitTarget, which is what a request is
+ * dialled with, and the same rule: a port the target names wins over every port
+ * field. Simulated devices on macOS all answer on 127.0.0.1 and differ by port
+ * alone, and a target is what tells devices apart.
+ *
+ * @param {string} target
+ * @returns {number|null}
+ */
+export function portOf(target) {
+  const t = String(target || '').trim();
+  const m = t.match(/^\[[^\]]+\]:(\d{1,5})$/) || t.match(/^[^:[\]]+:(\d{1,5})$/);
+  if (!m) return null;
+  const port = Number(m[1]);
+  return port >= 1 && port <= 65535 ? port : null;
+}
+
+/**
  * The settings a request to one target is built from.
  *
  * Identity first — who the request says it is — then transport. The identity
@@ -109,13 +130,19 @@ export function targetTitle(address, anon) {
  * record it and follow the profile afterwards: 'default', a profile id, or ''
  * for the target's own overrides.
  *
+ * A port the target names ("127.0.0.1:1162", portOf) wins over the override's
+ * and the default's, as it does in Go — so what the renderer groups and records
+ * is the port the request is actually sent to.
+ *
  * @param {object} settings - The full $settingsStore value
  * @param {string} address - Target address
  * @returns {object} Merged settings
  */
 export function getEffectiveSettings(settings, address) {
+  const named = portOf(address);
+  const withNamedPort = (s) => (named ? { ...s, port: named } : s);
   const overrides = settings.targetOverrides?.[address];
-  if (!overrides) return { ...settings, credentialRef: DEFAULT_REF };
+  if (!overrides) return withNamedPort({ ...settings, credentialRef: DEFAULT_REF });
 
   const profile = findProfile(settings, overrides.profile);
   let identity;
@@ -132,13 +159,13 @@ export function getEffectiveSettings(settings, address) {
     identity = { credentialRef: DEFAULT_REF };
   }
 
-  return {
+  return withNamedPort({
     ...settings,
     ...identity,
     ...(overrides.port !== undefined && { port: overrides.port }),
     ...(overrides.timeout !== undefined && { timeout: overrides.timeout }),
     ...(overrides.retries !== undefined && { retries: overrides.retries }),
-  };
+  });
 }
 
 /**

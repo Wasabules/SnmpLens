@@ -164,8 +164,11 @@ func concurrentExecute(targets []string, fn func(target string) *BulkResult) []*
 
 // newGoSNMP creates and configures a GoSNMP instance.
 func (c *Client) newGoSNMP(target, community, version string, port, timeoutSec, retries int, v3 V3Params) (*gosnmp.GoSNMP, error) {
+	// A target may name its own port ("127.0.0.1:1162"), which then wins over
+	// the port field (netaddr.SplitTarget).
+	host, port := netaddr.SplitTarget(target, port)
 	g := &gosnmp.GoSNMP{
-		Target:    netaddr.NormaliseTarget(target),
+		Target:    host,
 		Port:      normalisePort(port, DefaultPort),
 		Community: community,
 		Timeout:   time.Duration(timeoutSec) * time.Second,

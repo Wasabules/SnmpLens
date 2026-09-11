@@ -632,7 +632,8 @@
     "presetDeviceMasked": "Équipement identifié",
     "presetBind": "Lier",
     "presetBindTooltip": "Lier un preset de tableau de bord à cet équipement",
-    "presetAlreadyBound": "Déjà lié : {names}. En lier un autre ajoute une seconde horloge de scrutation."
+    "presetAlreadyBound": "Déjà lié : {names}. En lier un autre ajoute une seconde horloge de scrutation.",
+    "portInAddress": "fixé par la cible"
   },
   "update": {
     "available": "SnmpLens {version} est disponible",
@@ -1306,7 +1307,7 @@
       "port": "Port",
       "versions": "Versions SNMP",
       "community": "Communauté",
-      "v3": "Utilisateur SNMPv3"
+      "v3": "Utilisateurs SNMPv3"
     },
     "problem": {
       "nameRequired": "Donnez un nom à l'appareil.",
@@ -1314,13 +1315,18 @@
       "versionRequired": "Choisissez au moins une version.",
       "communityRequired": "v1 et v2c demandent une communauté.",
       "userRequired": "L'utilisateur SNMPv3 doit avoir un nom.",
-      "passphraseShort": "8 caractères au minimum."
+      "passphraseShort": "8 caractères au minimum.",
+      "userDuplicate": "Deux utilisateurs ne peuvent pas porter le même nom."
     },
     "model": {
       "linux-server": {
         "name": "Serveur Linux",
         "description": "Un hôte Ubuntu avec net-snmp : système, trois interfaces, ressources de l'hôte. Convient aux presets « Interfaces (IF-MIB) » et « Server (HOST-RESOURCES-MIB) »."
       }
-    }
+    },
+    "userN": "Utilisateur {n}",
+    "addUser": "Ajouter un utilisateur",
+    "removeUser": "Retirer cet utilisateur",
+    "firstUserTarget": "« Ajouter comme cible » utilise le premier utilisateur."
   }
 }

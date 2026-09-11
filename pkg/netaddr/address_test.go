@@ -56,6 +56,39 @@ func TestNormalisedTargetSurvivesJoinHostPort(t *testing.T) {
 	}
 }
 
+// A target may name its port, in each form a person writes one, and a bare IPv6
+// literal's colons are not taken for one.
+func TestSplitTargetReadsThePortATargetNames(t *testing.T) {
+	cases := []struct {
+		in   string
+		host string
+		port int
+	}{
+		{"10.0.0.5:1161", "10.0.0.5", 1161},
+		{"switch-01.example.com:1161", "switch-01.example.com", 1161},
+		{"[2001:db8::5]:1161", "2001:db8::5", 1161},
+		{"[fe80::1%eth0]:1161", "fe80::1%eth0", 1161},
+		{"  127.0.0.1:1162  ", "127.0.0.1", 1162},
+		// No port named: the one given stands.
+		{"10.0.0.5", "10.0.0.5", 161},
+		{"switch-01.example.com", "switch-01.example.com", 161},
+		{"::1", "::1", 161},
+		{"2001:db8::5", "2001:db8::5", 161},
+		{"[::1]", "::1", 161},
+		{"fe80::1%eth0", "fe80::1%eth0", 161},
+		// What is not a port is not read as one.
+		{"10.0.0.5:0", "10.0.0.5:0", 161},
+		{"10.0.0.5:70000", "10.0.0.5:70000", 161},
+		{"10.0.0.5:snmp", "10.0.0.5:snmp", 161},
+		{":1161", ":1161", 161},
+	}
+	for _, c := range cases {
+		if host, port := SplitTarget(c.in, 161); host != c.host || port != c.port {
+			t.Errorf("SplitTarget(%q) = %q, %d; want %q, %d", c.in, host, port, c.host, c.port)
+		}
+	}
+}
+
 // A wildcard listen must accept both families, or IPv6 traps never arrive.
 // Asserted against the socket rather than the string, because it is Go's
 // wildcard handling — not the text — that decides.

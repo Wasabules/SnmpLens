@@ -632,7 +632,8 @@
     "presetDeviceMasked": "设备已识别",
     "presetBind": "绑定",
     "presetBindTooltip": "将仪表板预设绑定到此设备",
-    "presetAlreadyBound": "已绑定：{names}。再绑定一个会增加一个轮询时钟。"
+    "presetAlreadyBound": "已绑定：{names}。再绑定一个会增加一个轮询时钟。",
+    "portInAddress": "由目标指定"
   },
   "update": {
     "available": "SnmpLens {version} 可用",
@@ -1314,13 +1315,18 @@
       "versionRequired": "请至少选择一个版本。",
       "communityRequired": "v1 和 v2c 需要团体名。",
       "userRequired": "SNMPv3 用户需要名称。",
-      "passphraseShort": "至少 8 个字符。"
+      "passphraseShort": "至少 8 个字符。",
+      "userDuplicate": "两个用户不能同名。"
     },
     "model": {
       "linux-server": {
         "name": "Linux 服务器",
         "description": "运行 net-snmp 的 Ubuntu 主机：系统、三个接口、主机资源。适用于“Interfaces (IF-MIB)”和“Server (HOST-RESOURCES-MIB)”预设。"
       }
-    }
+    },
+    "userN": "用户 {n}",
+    "addUser": "添加用户",
+    "removeUser": "删除此用户",
+    "firstUserTarget": "“添加为目标”使用第一个用户。"
   }
 }

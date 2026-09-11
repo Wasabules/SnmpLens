@@ -46,7 +46,8 @@ func Ping(target string, count int) (PingResult, error) {
 	if count <= 0 {
 		count = 4
 	}
-	target = netaddr.NormaliseTarget(target)
+	// A target that names its SNMP port ("10.0.0.5:1161") is still that host.
+	target, _ = netaddr.SplitTarget(target, 0)
 	result := PingResult{Target: target}
 	if err := netaddr.ValidTarget(target); err != nil {
 		return result, err
@@ -90,7 +91,8 @@ func Ping(target string, count int) (PingResult, error) {
 // Traceroute uses system traceroute/tracert command with OS-specific arguments.
 // Emits "tracerouteProgress" events per hop via Wails runtime.
 func Traceroute(ctx context.Context, target string) ([]TracerouteHop, error) {
-	target = netaddr.NormaliseTarget(target)
+	// A target that names its SNMP port ("10.0.0.5:1161") is still that host.
+	target, _ = netaddr.SplitTarget(target, 0)
 	// Checked before it becomes argv. There is no shell here, so nothing can
 	// be injected as a command — but a value starting with a dash IS read as
 	// an option by tracert and by traceroute, and nothing checked.

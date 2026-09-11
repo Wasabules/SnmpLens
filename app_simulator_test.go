@@ -221,8 +221,15 @@ func TestANewDeviceIsOfferedAnAddressOfItsOwn(t *testing.T) {
 	if got := suggestAddress("linux", nil, free); got != (SimulatorAddress{"127.0.0.2", 1161}) {
 		t.Errorf("linux: %+v", got)
 	}
-	if got := suggestAddress("darwin", []string{"127.0.0.1:1161"}, free); got != (SimulatorAddress{"127.0.0.1", 1162}) {
+	// macOS answers on 127.0.0.1 alone unless aliases were added: a bind anywhere
+	// else fails, and the device goes to 127.0.0.1 at the next free port...
+	onlyLoopbackOne := func(listen string) bool { return strings.HasPrefix(listen, "127.0.0.1:") }
+	if got := suggestAddress("darwin", []string{"127.0.0.1:1161"}, onlyLoopbackOne); got != (SimulatorAddress{"127.0.0.1", 1162}) {
 		t.Errorf("darwin: %+v", got)
+	}
+	// ...and with aliases it gets an address of its own, like the others.
+	if got := suggestAddress("darwin", nil, free); got != (SimulatorAddress{"127.0.0.2", 1161}) {
+		t.Errorf("darwin with aliases: %+v", got)
 	}
 	busy := func(listen string) bool { return listen != "127.0.0.2:1161" }
 	if got := suggestAddress("linux", nil, busy); got.Address != "127.0.0.3" {

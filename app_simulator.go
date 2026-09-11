@@ -186,10 +186,12 @@ type SimulatorAddress struct {
 // port no other device is configured on, that nothing holds right now, and that
 // an ordinary user may bind.
 //
-// Windows and Linux answer on the whole of 127.0.0.0/8, so each device gets an
-// address of its own — which is what lets it be a target of its own, since a
-// target is an address. macOS configures only 127.0.0.1 unless aliases are
-// added, so there the devices differ by port. A port below 1024 needs
+// An address of its own first, so the device is a target without a port — and,
+// once devices send traps, tells its traps apart by their source. Windows and
+// Linux answer on the whole of 127.0.0.0/8; macOS on 127.0.0.1 and on the aliases
+// someone added, and trying to bind is how to find out which. Failing that,
+// 127.0.0.1 at the next free port: a target names its port ("127.0.0.1:1162"),
+// so each device is still a target of its own. A port below 1024 needs
 // privileges everywhere but Windows.
 func (a *App) SimulatorSuggestAddress() SimulatorAddress {
 	s := a.sim
@@ -209,24 +211,21 @@ func suggestAddress(goos string, taken []string, free func(listen string) bool) 
 		listen := net.JoinHostPort(address, strconv.Itoa(port))
 		return !slices.Contains(taken, listen) && free(listen)
 	}
-	if goos == "darwin" {
-		for port := 1161; port < 1261; port++ {
-			if usable("127.0.0.1", port) {
-				return SimulatorAddress{"127.0.0.1", port}
-			}
-		}
-	} else {
-		port := 1161
-		if goos == "windows" {
-			port = 161
-		}
-		for host := 2; host < 255; host++ {
-			if address := "127.0.0." + strconv.Itoa(host); usable(address, port) {
-				return SimulatorAddress{address, port}
-			}
+	port := 1161
+	if goos == "windows" {
+		port = 161
+	}
+	for host := 2; host < 255; host++ {
+		if address := "127.0.0." + strconv.Itoa(host); usable(address, port) {
+			return SimulatorAddress{address, port}
 		}
 	}
-	return SimulatorAddress{"127.0.0.1", 1161}
+	for p := port; p < port+100; p++ {
+		if usable("127.0.0.1", p) {
+			return SimulatorAddress{"127.0.0.1", p}
+		}
+	}
+	return SimulatorAddress{"127.0.0.1", port}
 }
 
 func canBindUDP(listen string) bool {
