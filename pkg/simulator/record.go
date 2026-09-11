@@ -157,10 +157,14 @@ var latinFolds = map[rune]string{
 	'ù': "u", 'ú': "u", 'û': "u", 'ü': "u", 'ý': "y", 'ÿ': "y", 'æ': "ae", 'œ': "oe", 'ß': "ss",
 }
 
-// ModelSlug makes a custom model's id from a name: lower-case letters and
-// digits, one hyphen for whatever runs between them, the accents of a Latin
-// name taken off rather than made into hyphens.
-func ModelSlug(name string) string {
+// ModelSlug makes a custom model's id from a name (Slug).
+func ModelSlug(name string) string { return Slug(name, "recorded-device") }
+
+// Slug makes an id, or a file name, from a name: lower-case letters and digits,
+// one hyphen for whatever runs between them, the accents of a Latin name taken
+// off rather than made into hyphens — and fallback for a name with nothing of
+// the kind, one in Chinese among them.
+func Slug(name, fallback string) string {
 	var b strings.Builder
 	gap := false
 	for _, r := range strings.ToLower(name) {
@@ -182,7 +186,7 @@ func ModelSlug(name string) string {
 		slug = strings.TrimRight(slug[:48], "-")
 	}
 	if slug == "" {
-		return "recorded-device"
+		return fallback
 	}
 	return slug
 }

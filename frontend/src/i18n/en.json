@@ -1301,6 +1301,31 @@
     "startFailed": "{name} could not start: {error}",
     "confirmDelete": "Delete?",
     "deleteTitle": "Delete this device",
+    "importDevices": "Import devices…",
+    "importDevicesTitle": "Add simulated devices from a file exported by SnmpLens",
+    "exportAll": "Export all…",
+    "exportAllTitle": "Write every simulated device to a file, to move the bench or pass it on",
+    "exportDevice": "Export this device to a file",
+    "duplicate": "Duplicate this device",
+    "copyName": "{name} (copy)",
+    "duplicated": "“{name}” duplicated as “{copy}”",
+    "restart": "Restart this device: uptime and counters from zero, and coldStart if it sends one",
+    "restarted": "{name} restarted",
+    "export": {
+      "title": "Export {count, plural, one {# device} other {# devices}}",
+      "hint": "The passwords — communities and passphrases — stay in your system’s keychain unless you put them in the file. Put them in only to hand over a complete bench: anyone who has the file can read them.",
+      "without": "Without passwords",
+      "with": "With passwords",
+      "done": "Exported to {path}"
+    },
+    "devices": {
+      "imported": "Device “{name}” imported",
+      "failed": "{name}: {error}",
+      "warning": {
+        "addressMoved": "{name}: its address was taken, so it answers elsewhere ({detail})",
+        "noSecrets": "{name}: the file carries no passwords — give it its community or passphrases before starting it"
+      }
+    },
     "loopbackHint": "Loopback only: 127.0.0.1 to 127.255.255.254, or ::1. On Linux and macOS, a port below 1024 needs administrator rights.",
     "field": {
       "name": "Name",

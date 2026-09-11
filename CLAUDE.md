@@ -686,6 +686,19 @@ apart, and `SimulatorCancelRecording` stops it with nothing kept. The request is
 model as a package FOLDER (`repackUnder`), its icon under the name the model gives it, which imports back as itself:
 that is how a recording is edited.
 
+**A bench moves as a file** (`app_simbench.go`, `pkg/simulator/devicefile.go`). A file of simulated devices holds one
+device or several as `FileDevice` — what makes the device the one it is, never its ID, engine ID or boots, so two
+imports of one file are two devices with two engines no manager confuses. The export ASKS every time whether to put
+the passwords in (the renderer's choice panel), writes `"secrets": "included"` or `"omitted"` into the file so nobody
+passes it on believing it holds none, and writes a file holding them 0600. The import is read as a model file is —
+`kind` and `formatVersion` first, then strictly — and makes every device NEW here: an ID, an engine and, when the
+address it names is taken, the one `suggestAddress` gives, said in a warning. A device that cannot be made here — a
+model this machine lacks, an address off loopback — is refused ON ITS OWN, and the others are kept. A file that says
+its passwords were left out has any it holds anyway ignored — what a file says of itself is what is believed — and
+its devices are checked by `ValidateWithoutSecrets`, everything but the secrets, and KEPT without them: starting one
+fails naming what it lacks until the editor gives it. Duplicating is the same making of a new device, from a device
+and with its passwords; restarting is a stop and a start, so the boots rise and coldStart goes out as on any start.
+
 **What only a notification carries** (`Object.NotifyOnly`). An iDRAC alert carries eleven objects its MIB makes
 accessible-for-notify (RFC 2578 7.3) — a message ID, the message, the service tag — and no request may read them.
 They are kept beside the tree rather than in it: a GET answers `noSuchObject`, a walk passes them by, and

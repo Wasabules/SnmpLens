@@ -66,6 +66,7 @@ const {
   devicesOfModel,
   importReport,
   firstImported,
+  deviceImportReport,
   CUSTOM_CATEGORIES,
   recordableTargets,
   recordRequest,
@@ -432,5 +433,36 @@ const goCategories = [...customCategories].sort();
 check('the categories a recording offers are those Go accepts',
   goCategories.length > 0 && JSON.stringify([...CUSTOM_CATEGORIES].sort()) === JSON.stringify(goCategories),
   `${CUSTOM_CATEGORIES} vs ${goCategories}`);
+
+// An import of simulated devices is reported device by device, each warning
+// after its device; a file refused whole is one line, under its own name.
+const benchLines = deviceImportReport([
+  { name: 'core-01', success: true, id: 'a', warnings: [{ key: 'addressMoved', detail: '127.0.0.2:161 → 127.0.0.3:161' }] },
+  { name: 'gone', success: false, error: '"custom:x" is not a device model', warnings: [] },
+  { name: 'edge-01', success: true, id: 'b', warnings: [{ key: 'noSecrets', detail: '' }] },
+]);
+check('an import of devices is reported device by device, each warning after its device',
+  benchLines.map((l) => `${l.key}:${l.level}`).join(' ') ===
+  'simulator.devices.imported:success simulator.devices.warning.addressMoved:warning simulator.devices.failed:error ' +
+  'simulator.devices.imported:success simulator.devices.warning.noSecrets:warning',
+  JSON.stringify(benchLines));
+
+// Every warning Go gives about a device imported has its sentence.
+const benchGo = readFileSync(new URL('../../app_simbench.go', import.meta.url), 'utf8');
+const benchKeys = new Set([...benchGo.matchAll(/Key: "([A-Za-z]+)"/g)].map((m) => m[1]));
+check('the warnings a device import gives were found in app_simbench.go', benchKeys.size >= 2, [...benchKeys].join());
+for (const key of benchKeys) {
+  check(`en.json says simulator.devices.warning.${key}`, Boolean(en.simulator?.devices?.warning?.[key]));
+}
+for (const key of ['importDevices', 'importDevicesTitle', 'exportAll', 'exportAllTitle', 'exportDevice', 'duplicate',
+  'copyName', 'duplicated', 'restart', 'restarted']) {
+  check(`en.json says simulator.${key}`, Boolean(en.simulator?.[key]));
+}
+for (const key of ['title', 'hint', 'without', 'with', 'done']) {
+  check(`en.json says simulator.export.${key}`, Boolean(en.simulator?.export?.[key]));
+}
+for (const key of ['imported', 'failed']) {
+  check(`en.json says simulator.devices.${key}`, Boolean(en.simulator?.devices?.[key]));
+}
 
 process.exit(failures ? 1 : 0);

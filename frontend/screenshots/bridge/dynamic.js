@@ -405,6 +405,10 @@ const DEMO_ONLY = {
   SimulatorDeleteModel: 'Deleting a simulator model removes its file from your configuration directory.',
   SimulatorRecordDevice: 'Recording a device walks a real device on your network and writes the model to your configuration directory.',
   SimulatorExportModelDialog: 'Exporting a simulator model opens the operating system’s file dialog and writes a file.',
+  ImportSimulatedDevicesDialog: 'Importing simulated devices opens the operating system’s file dialog, and writes the devices to your configuration directory and their passwords to the system keychain.',
+  SimulatorExportDevicesDialog: 'Exporting simulated devices opens the operating system’s file dialog and writes a file.',
+  SimulatorDuplicateDevice: 'Duplicating a simulated device writes the copy to your configuration directory, and its passwords to the system keychain.',
+  SimulatorRestartDevice: 'Restarting a simulated device opens a UDP socket on this machine.',
 };
 
 for (const [name, why] of Object.entries(DEMO_ONLY)) {

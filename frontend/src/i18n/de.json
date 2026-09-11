@@ -1301,6 +1301,31 @@
     "startFailed": "{name} konnte nicht starten: {error}",
     "confirmDelete": "Löschen?",
     "deleteTitle": "Dieses Gerät löschen",
+    "importDevices": "Geräte importieren…",
+    "importDevicesTitle": "Simulierte Geräte aus einer von SnmpLens exportierten Datei hinzufügen",
+    "exportAll": "Alle exportieren…",
+    "exportAllTitle": "Alle simulierten Geräte in eine Datei schreiben, um die Testumgebung umzuziehen oder weiterzugeben",
+    "exportDevice": "Dieses Gerät in eine Datei exportieren",
+    "duplicate": "Dieses Gerät duplizieren",
+    "copyName": "{name} (Kopie)",
+    "duplicated": "„{name}“ als „{copy}“ dupliziert",
+    "restart": "Dieses Gerät neu starten: Uptime und Zähler ab null, und coldStart, falls es einen sendet",
+    "restarted": "{name} wurde neu gestartet",
+    "export": {
+      "title": "{count, plural, one {# Gerät} other {# Geräte}} exportieren",
+      "hint": "Die Passwörter — Communities und Passphrasen — bleiben im Schlüsselbund Ihres Systems, es sei denn, Sie legen sie in die Datei. Tun Sie das nur, um eine vollständige Testumgebung weiterzugeben: Wer die Datei hat, kann sie lesen.",
+      "without": "Ohne Passwörter",
+      "with": "Mit Passwörtern",
+      "done": "Nach {path} exportiert"
+    },
+    "devices": {
+      "imported": "Gerät „{name}“ importiert",
+      "failed": "{name}: {error}",
+      "warning": {
+        "addressMoved": "{name}: Seine Adresse war belegt, es antwortet daher woanders ({detail})",
+        "noSecrets": "{name}: Die Datei enthält keine Passwörter — geben Sie ihm seine Community oder Passphrasen, bevor Sie es starten"
+      }
+    },
     "loopbackHint": "Nur Loopback: 127.0.0.1 bis 127.255.255.254 oder ::1. Unter Linux und macOS erfordert ein Port unter 1024 Administratorrechte.",
     "field": {
       "name": "Name",
