@@ -397,6 +397,9 @@ const DEMO_ONLY = {
   MibEditorRestoreBundled: 'Restoring a bundled MIB rewrites it on disk.',
   MibEditorOpenExternal: 'Opening a MIB from elsewhere uses the file dialog.',
   NotifyTestSink: 'A test notification opens a real connection to your syslog relay, webhook or mail server.',
+  SimulatorSaveDevice: 'Saving a simulated device writes it to your configuration directory, and its passwords to the system keychain.',
+  SimulatorDeleteDevice: 'Removing a simulated device deletes it from your configuration directory and the system keychain.',
+  SimulatorStartDevice: 'Starting a simulated device opens a UDP socket on this machine.',
 };
 
 for (const [name, why] of Object.entries(DEMO_ONLY)) {

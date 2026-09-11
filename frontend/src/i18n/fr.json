@@ -20,7 +20,9 @@
       "trapInactive": "Écoute inactive",
       "trap": "Trap",
       "trapOff": "OFF",
-      "snmpVersionTitle": "Version SNMP par défaut"
+      "snmpVersionTitle": "Version SNMP par défaut",
+      "simulator": "Simulateur",
+      "simulatorTitle": "Appareils simulés : {running} en marche sur {total}"
     },
     "mibDrop": {
       "overlay": "Déposez les fichiers MIB ici",
@@ -1278,5 +1280,47 @@
     "trapsChip": "traps",
     "trapsOnTitle": "Accepté par l’écoute des traps — cliquer pour l’exclure",
     "trapsOffTitle": "Non accepté par l’écoute des traps — cliquer pour l’accepter"
+  },
+  "simulator": {
+    "title": "Simulateur",
+    "intro": "Les appareils simulés répondent en SNMP sur cette machine uniquement, à des adresses de bouclage (127.x.x.x). Démarrez-en un, puis ajoutez-le comme cible pour l'interroger comme un vrai équipement.",
+    "empty": "Aucun appareil simulé pour l'instant.",
+    "new": "Nouvel appareil",
+    "newTitle": "Nouvel appareil simulé",
+    "editTitle": "Modifier l'appareil simulé",
+    "running": "En marche",
+    "stopped": "Arrêté",
+    "packets": "{count, plural, one {# requête reçue} other {# requêtes reçues}}",
+    "addAsTarget": "Ajouter comme cible",
+    "addAsTargetTitle": "Ajouter cet appareil à vos cibles, avec son port et ses identifiants",
+    "targetAdded": "{address} ajouté à vos cibles, interrogé en {version}",
+    "targetUpdated": "{address} était déjà une cible : son port et ses identifiants correspondent désormais à l'appareil ({version})",
+    "startFailed": "{name} n'a pas pu démarrer : {error}",
+    "confirmDelete": "Supprimer ?",
+    "deleteTitle": "Supprimer cet appareil",
+    "loopbackHint": "Bouclage uniquement : de 127.0.0.1 à 127.255.255.254, ou ::1. Sous Linux et macOS, un port inférieur à 1024 exige des droits d'administrateur.",
+    "field": {
+      "name": "Nom",
+      "model": "Modèle",
+      "address": "Adresse",
+      "port": "Port",
+      "versions": "Versions SNMP",
+      "community": "Communauté",
+      "v3": "Utilisateur SNMPv3"
+    },
+    "problem": {
+      "nameRequired": "Donnez un nom à l'appareil.",
+      "port": "Un port est un nombre de 1 à 65535.",
+      "versionRequired": "Choisissez au moins une version.",
+      "communityRequired": "v1 et v2c demandent une communauté.",
+      "userRequired": "L'utilisateur SNMPv3 doit avoir un nom.",
+      "passphraseShort": "8 caractères au minimum."
+    },
+    "model": {
+      "linux-server": {
+        "name": "Serveur Linux",
+        "description": "Un hôte Ubuntu avec net-snmp : système, trois interfaces, ressources de l'hôte. Convient aux presets « Interfaces (IF-MIB) » et « Server (HOST-RESOURCES-MIB) »."
+      }
+    }
   }
 }

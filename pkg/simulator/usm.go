@@ -43,12 +43,12 @@ const (
 // User is an SNMPv3 user of the USM (RFC 3414), named in the words SnmpLens's
 // own SNMPv3 settings use (snmp.V3Params), so one can be written from the other.
 type User struct {
-	Name      string
-	SecLevel  string // NoAuthNoPriv, AuthNoPriv or AuthPriv
-	AuthProto string // MD5, SHA, SHA224, SHA256, SHA384 or SHA512
-	AuthPass  string
-	PrivProto string // DES, AES, AES192, AES256, AES192C or AES256C
-	PrivPass  string
+	Name      string `json:"name"`
+	SecLevel  string `json:"secLevel"`  // NoAuthNoPriv, AuthNoPriv or AuthPriv
+	AuthProto string `json:"authProto"` // MD5, SHA, SHA224, SHA256, SHA384 or SHA512
+	AuthPass  string `json:"authPass"`
+	PrivProto string `json:"privProto"` // DES, AES, AES192, AES256, AES192C or AES256C
+	PrivPass  string `json:"privPass"`
 }
 
 // The names pkg/snmp maps, mapped the same way; TestSnmpLensReadsTheSimulator
@@ -108,10 +108,10 @@ func newUsers(list []User, engineID []byte) (map[string]*user, error) {
 	return users, nil
 }
 
-// resolveUser checks u and localises its keys. A protocol above the user's
-// level is ignored rather than refused, as pkg/snmp ignores it: a form keeps
-// its defaults in the fields a lower level disables.
-func resolveUser(u User, engineID []byte) (*user, error) {
+// checkUser reports what is wrong with u and maps its names, deriving no key.
+// A protocol above the user's level is ignored rather than refused, as pkg/snmp
+// ignores it: a form keeps its defaults in the fields a lower level disables.
+func checkUser(u User) (*user, error) {
 	if u.Name == "" || len(u.Name) > maxUserName {
 		return nil, fmt.Errorf("user %q: a USM user name is 1 to %d octets", u.Name, maxUserName)
 	}
@@ -120,12 +120,6 @@ func resolveUser(u User, engineID []byte) (*user, error) {
 		return nil, fmt.Errorf("user %q: %q is not a security level (NoAuthNoPriv, AuthNoPriv or AuthPriv)", u.Name, u.SecLevel)
 	}
 	r := &user{name: u.Name, level: level, auth: gosnmp.NoAuth, priv: gosnmp.NoPriv}
-	sp := &gosnmp.UsmSecurityParameters{
-		UserName:               u.Name,
-		AuthoritativeEngineID:  string(engineID),
-		AuthenticationProtocol: gosnmp.NoAuth,
-		PrivacyProtocol:        gosnmp.NoPriv,
-	}
 	if level&gosnmp.AuthNoPriv != 0 {
 		if r.auth, ok = authProtocols[strings.ToUpper(u.AuthProto)]; !ok {
 			return nil, fmt.Errorf("user %q: %q is not an authentication protocol", u.Name, u.AuthProto)
@@ -133,7 +127,6 @@ func resolveUser(u User, engineID []byte) (*user, error) {
 		if len(u.AuthPass) < minPassphrase {
 			return nil, fmt.Errorf("user %q: the authentication passphrase is shorter than %d octets", u.Name, minPassphrase)
 		}
-		sp.AuthenticationProtocol, sp.AuthenticationPassphrase = r.auth, u.AuthPass
 	}
 	if level == gosnmp.AuthPriv {
 		if r.priv, ok = privProtocols[strings.ToUpper(u.PrivProto)]; !ok {
@@ -142,7 +135,27 @@ func resolveUser(u User, engineID []byte) (*user, error) {
 		if len(u.PrivPass) < minPassphrase {
 			return nil, fmt.Errorf("user %q: the privacy passphrase is shorter than %d octets", u.Name, minPassphrase)
 		}
-		sp.PrivacyProtocol, sp.PrivacyPassphrase = r.priv, u.PrivPass
+	}
+	return r, nil
+}
+
+// resolveUser checks u and localises its keys to engineID.
+func resolveUser(u User, engineID []byte) (*user, error) {
+	r, err := checkUser(u)
+	if err != nil {
+		return nil, err
+	}
+	sp := &gosnmp.UsmSecurityParameters{
+		UserName:               u.Name,
+		AuthoritativeEngineID:  string(engineID),
+		AuthenticationProtocol: r.auth,
+		PrivacyProtocol:        r.priv,
+	}
+	if r.level&gosnmp.AuthNoPriv != 0 {
+		sp.AuthenticationPassphrase = u.AuthPass
+	}
+	if r.level == gosnmp.AuthPriv {
+		sp.PrivacyPassphrase = u.PrivPass
 	}
 	if err := sp.InitSecurityKeys(); err != nil {
 		return nil, fmt.Errorf("user %q: %w", u.Name, err)

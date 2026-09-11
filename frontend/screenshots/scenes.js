@@ -330,6 +330,40 @@ const CATALOGUE = [
     act: ['WALK', 'Execute WALK', 'key:shift+A'],
     describe: 'The same screen with every address replaced by a stable alias.',
   },
+  {
+    base: 'simulator',
+    tab: TABS.operations,
+    height: 900,
+    bindings: {
+      ListSimulatorModels: [{ id: 'linux-server', category: 'server' }],
+      ListSimulatedDevices: [
+        {
+          id: 'c0ffee01', name: 'srv-web-01', model: 'linux-server', address: '127.0.0.2', port: 161,
+          versions: ['v2c', 'v3'], users: [{ name: 'ops', secLevel: 'AuthPriv', authProto: 'SHA256', privProto: 'AES' }],
+          engineId: '80001f880302a1b2c3d4e5', engineBoots: 3, running: true, packets: 1284,
+        },
+        {
+          id: 'c0ffee02', name: 'srv-db-01', model: 'linux-server', address: '127.0.0.3', port: 161,
+          versions: ['v2c'], users: [], engineId: '80001f880302f6e5d4c3b2', engineBoots: 1, running: false, packets: 0,
+        },
+      ],
+    },
+    act: ['sel:.status-item.simulator|0'],
+    describe: 'The simulator: two simulated Linux servers, one answering, each one click from being a target.',
+  },
+  {
+    base: 'simulator-editor',
+    tab: TABS.operations,
+    height: 1000,
+    bindings: {
+      ListSimulatorModels: [{ id: 'linux-server', category: 'server' }],
+      ListSimulatedDevices: [],
+      SimulatorSuggestAddress: { address: '127.0.0.2', port: 161 },
+    },
+    // v3 ticked after v2c: both identities, and the passphrases not yet typed.
+    act: ['sel:.status-item.simulator|0', 'New device', 'sel:.versions input|2'],
+    describe: 'A new simulated device: its model, its loopback address, and who may ask it.',
+  },
 ];
 
 export function buildScenes(seeds) {

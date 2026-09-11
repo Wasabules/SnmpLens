@@ -585,6 +585,40 @@ The protocol names are `pkg/snmp`'s (`MD5` to `SHA512`, `DES`, `AES` to `AES256C
 package stays a leaf. `TestSnmpLensReadsTheSimulator` holds the two together by driving the SnmpLens client
 against a user of every name: a name mapped differently fails as a digest or a decryption error.
 
+**Devices live in `simulator.json`, and their secrets do not.** `app_simulator.go` keeps the devices in a file
+beside `monitoring.db`, and their communities and passphrases in `pkg/secrets` under `SimulatorDeviceRef(id)` —
+the file is what a person copies to another machine. `Device.WithoutSecrets` runs on every write AND every read,
+so a community typed into the file by hand is not one the application sends. The renderer's list is a
+`SimulatedDevice`, a type with no field that could hold a secret, rather than a `Device` with them blanked: a
+secret field added to `Device` later cannot reach the renderer by default. Secrets come back out through one call,
+`SimulatorDeviceCredentials`, for the editor and for "Add as target", and `app_simulator_test.go` searches the
+file and the marshalled list for the secret values themselves. The two listing calls are `List…` for
+`tools/genbridge.mjs`, which answers such a binding with an empty array and anything else with `null`.
+
+**The backend gives the engine.** A new device's ID and engine ID are made in Go (`NewDeviceID`, and
+`NewEngineID`: the model's vendor in the MAC format, the MAC drawn from the ID), and an edit keeps both, and the
+boot count, whatever the renderer sends — the engine ID is what managers localise their keys to, and the count is
+what keeps a previous run's messages out of the time window. Every start raises the count and WRITES it before
+the device answers. A running device that is edited restarts; nothing starts by itself at launch. The header's
+status and the modal read `simulatorStore`, which Go refreshes with `simulator:changed`.
+
+**A model is a vocabulary, not prose.** `simulator.Models()` serves an ID and a category; the name and the
+description are `simulator.model.<id>` in the five locales, and `tests/simulator.test.mjs` requires `en.json` to
+answer for every ID in `pkg/simulator`. The Linux model answers everything the "Interfaces (IF-MIB)" and "Server
+(HOST-RESOURCES-MIB)" presets poll — `TestTheLinuxModelFeedsItsPresets` expands their widgets against it — and its
+values are pure functions of time (`values.go`): counters that only go up and wrap at 32 bits as a real
+interface's do, gauges that swing, nothing ticking in the background.
+
+**A device becomes a target in the renderer** (`addDeviceAsTarget` in `utils/simulator.js`): its address in the
+list, and an override with its port and its identifiers in the most secure version it answers. The test resolves
+the result through `getEffectiveSettings`, which every request is built from. A target IS an address, so on macOS
+— 127.0.0.1 alone unless aliases are added — devices differ by port and only one of them can be a target until
+targets take `host:port`; `SimulatorSuggestAddress` gives each device an address of its own on Windows and Linux
+for that reason.
+
+One trap for whoever adds a model: a file named `model_linux.go` is compiled on Linux ONLY — `_linux` is a GOOS
+suffix, and the build on Windows reported the model as undefined — so the Linux model lives in `linuxserver.go`.
+
 ## Background mode
 
 Three preferences are read by `main()` **before** `wails.Run`, so they cannot live in localStorage: they sit in `service.json` next to `monitoring.db` (`pkg/service`). `HideWindowOnClose` is deliberately NOT used — it is fixed before we know whether a tray icon actually appeared, and an app that refuses to close with no tray to quit from is unusable. `OnBeforeClose` makes the same decision later, once `tray.Start` has answered. Everything about `pkg/tray` is fail-soft for that reason, including a readiness timeout: a desktop with no StatusNotifierItem host never calls back rather than returning an error.
