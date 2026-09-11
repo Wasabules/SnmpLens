@@ -1,0 +1,445 @@
+package app
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+	"unicode/utf8"
+
+	"SnmpLens/pkg/events"
+	"SnmpLens/pkg/mib"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
+)
+
+// The MIB editor.
+//
+// Every method that names a file goes through resolveMibPath. The existing
+// ListMibFiles takes a caller-supplied directory and hands it straight to
+// os.ReadDir, which is a precedent worth not following: monitoring.db,
+// service.json and the pkg/secrets store all live one directory above the MIB
+// folder, and these methods WRITE.
+
+// mibBackupDirName is a SIBLING of the MIB directory, never inside it.
+//
+// ListMibFiles filters only dotfiles, README and LICENSE, and the MIB path
+// store enables everything it finds. A backup left beside the original would
+// therefore be loaded as a second copy of the same module — and since
+// os.ReadDir is alphabetical, "IF-MIB.1234.bak" would load before "IF-MIB" and
+// its stale content would win, silently, with no error anywhere.
+const mibBackupDirName = "mib-backups"
+
+// mibTempDirName holds the write-then-rename staging file, a sibling of the
+// MIB folder for exactly the reason above.
+const mibTempDirName = "mib-temp"
+
+// resolveMibPath maps a file name to a path inside the MIB directory, and
+// refuses anything that would land outside it.
+func (a *App) resolveMibPath(name string) (string, error) {
+	return mib.SafeMibPath(a.persistentMibDir, name)
+}
+
+// bundledContent returns the embedded copy of a standard MIB, if there is one.
+func (a *App) bundledContent(name string) (string, bool) {
+	// An fs.FS always uses forward slashes, even on Windows.
+	raw, err := bundledFile(a.mibs, "mibs/"+filepath.Base(name))
+	if err != nil {
+		return "", false
+	}
+	content, _ := mib.NormaliseSource(raw)
+	return content, true
+}
+
+// MibEditorList returns the MIBs in the persistent directory.
+func (a *App) MibEditorList() ([]mib.FileInfo, error) {
+	names, err := mib.ListMibFiles(a.persistentMibDir)
+	if err != nil {
+		return []mib.FileInfo{}, err
+	}
+
+	out := make([]mib.FileInfo, 0, len(names))
+	for _, name := range names {
+		info := mib.FileInfo{Name: name}
+		if path, err := a.resolveMibPath(name); err == nil {
+			if st, err := os.Stat(path); err == nil {
+				info.Size = st.Size()
+			}
+			if embedded, ok := a.bundledContent(name); ok {
+				info.Bundled = true
+				if raw, err := os.ReadFile(path); err == nil {
+					onDisk, _ := mib.NormaliseSource(raw)
+					info.Modified = onDisk != embedded
+				}
+			}
+		}
+		out = append(out, info)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
+}
+
+// MibEditorRead opens a MIB from the persistent directory.
+func (a *App) MibEditorRead(name string) (mib.Source, error) {
+	path, err := a.resolveMibPath(name)
+	if err != nil {
+		return mib.Source{}, err
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return mib.Source{}, err
+	}
+	// Refuse a file that cannot survive the round trip.
+	//
+	// Wails marshals every bound result with encoding/json, which replaces
+	// each invalid UTF-8 byte with U+FFFD. So a Latin-1 vendor MIB reached the
+	// editor already mangled, and saving it — even with NO edits — wrote the
+	// replacement characters back over the original bytes. Measured: 0x8a and
+	// 0xe9 both came back as ef bf bd. Irreversible, and silent.
+	//
+	// An SMI module is ASCII by grammar, so this is a broken file rather than
+	// a limitation: say so, and let the user convert it.
+	if !utf8.Valid(raw) {
+		return mib.Source{}, fmt.Errorf(
+			"%s is not valid UTF-8 and cannot be edited without corrupting it — convert it to UTF-8 first (MIBs are ASCII by grammar)",
+			filepath.Base(name))
+	}
+
+	content, eol := mib.NormaliseSource(raw)
+	_, bundled := a.bundledContent(name)
+
+	return mib.Source{
+		Name: filepath.Base(name), Path: path, Content: content, Eol: eol,
+		Bundled: bundled, Sha256: mib.Checksum(content),
+		Diagnostics: mib.Validate(content),
+	}, nil
+}
+
+// MibEditorOpenExternal opens a MIB from anywhere on disk, read-only.
+//
+// External means external: the file is loaded into the editor but its path is
+// not kept, so a save has to choose a name inside the MIB directory. Writing
+// back to an arbitrary path is how an editor turns into a way to overwrite any
+// file the user can reach.
+func (a *App) MibEditorOpenExternal() (mib.Source, error) {
+	if a.ctx == nil {
+		return mib.Source{}, fmt.Errorf("no window")
+	}
+	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Open a MIB file",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "MIB files", Pattern: "*.mib;*.txt;*.my;*"},
+		},
+	})
+	if err != nil {
+		return mib.Source{}, err
+	}
+	if path == "" {
+		return mib.Source{}, nil // cancelled
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return mib.Source{}, err
+	}
+	if !utf8.Valid(raw) {
+		return mib.Source{}, fmt.Errorf(
+			"%s is not valid UTF-8 and cannot be edited without corrupting it — convert it to UTF-8 first",
+			filepath.Base(path))
+	}
+
+	content, eol := mib.NormaliseSource(raw)
+
+	// Offer the module's own name rather than the file name: gosmi resolves a
+	// module by name, so a file called "vendor.txt" holding ACME-MIB has to be
+	// saved as ACME-MIB to ever load.
+	suggested := mib.ModuleName(content)
+	if suggested == "" {
+		suggested = filepath.Base(path)
+	}
+
+	return mib.Source{
+		Name: suggested, Path: path, Content: content, Eol: eol,
+		External: true, Sha256: mib.Checksum(content),
+		Diagnostics: mib.Validate(content),
+	}, nil
+}
+
+// MibEditorValidate checks buffer text without touching disk or gosmi.
+func (a *App) MibEditorValidate(content string) []mib.Diagnostic {
+	return mib.Validate(content)
+}
+
+// MibEditorAnalyse runs every check from one parse.
+//
+// It used to call three functions that each parsed the file: 130 ms of work on
+// a 185 KB MIB for 45 ms of answers, on every pause in typing. The bridge call
+// was unified before the parse was, which is why the editor still felt slow.
+func (a *App) MibEditorAnalyse(content string) mib.Analysis {
+	return mib.AnalyseAll(content, mib.Symbols())
+}
+
+// MibEditorSave writes a MIB, backing up whatever was there first.
+//
+// force skips the "changed on disk since you opened it" check. Nothing here
+// refuses to save a MIB that fails validation: the file may be a work in
+// progress, and an editor that will not let you save is not an editor. The
+// consequences are made visible instead — the reload reports what broke, and
+// a bundled MIB can be restored.
+func (a *App) MibEditorSave(name, content, baseSha256 string, force bool) (mib.SaveResult, error) {
+	path, err := a.resolveMibPath(name)
+	if err != nil {
+		return mib.SaveResult{}, err
+	}
+
+	result := mib.SaveResult{Diagnostics: mib.Validate(content)}
+
+	existing, statErr := os.ReadFile(path)
+
+	// Refuse a save that would silently discard someone else's edit. The
+	// baseline is what the editor read; if disk no longer matches it, the file
+	// changed underneath — another instance, an import, a text editor.
+	if statErr == nil && !force && baseSha256 != "" {
+		onDisk, _ := mib.NormaliseSource(existing)
+		if mib.Checksum(onDisk) != baseSha256 {
+			result.Conflict = true
+			return result, nil
+		}
+	}
+
+	if statErr == nil {
+		backup, err := a.backupMib(name, existing)
+		if err != nil {
+			return result, fmt.Errorf("could not back up %s before saving: %w", name, err)
+		}
+		result.BackupPath = backup
+	}
+
+	eol := "lf"
+	if statErr == nil {
+		_, eol = mib.NormaliseSource(existing)
+	}
+	payload := []byte(mib.RestoreEol(content, eol))
+
+	// Write to a temporary file on the SAME volume, then rename: a crash
+	// halfway through must not leave a truncated MIB that breaks every module
+	// importing from it.
+	// In a SIBLING directory, for the same reason backups and drafts are:
+	// ListMibFiles returns everything in mibs/ that is not a dotfile, so a
+	// crash between the write and the rename left IF-MIB.tmp beside IF-MIB —
+	// and os.ReadDir being alphabetical, the half-written copy loaded second
+	// and won, gosmi's module map being last-wins.
+	tmpDir := filepath.Join(filepath.Dir(a.persistentMibDir), mibTempDirName)
+	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
+		return result, err
+	}
+	tmp := filepath.Join(tmpDir, filepath.Base(path)+".tmp")
+	if err := os.WriteFile(tmp, payload, 0o644); err != nil {
+		return result, err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		os.Remove(tmp)
+		return result, err
+	}
+
+	result.Saved = true
+	result.Sha256 = mib.Checksum(content)
+	return result, nil
+}
+
+// backupMib copies the previous content into a sibling directory.
+func (a *App) backupMib(name string, content []byte) (string, error) {
+	dir := filepath.Join(filepath.Dir(a.persistentMibDir), mibBackupDirName)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	// Nanoseconds, and a collision loop.
+	//
+	// A second-resolution stamp made two saves inside one wall-clock second
+	// write the same backup name, and the second silently destroyed the first
+	// — the copy of the version the user actually wanted back.
+	base := filepath.Join(dir, filepath.Base(name))
+	path := fmt.Sprintf("%s.%d.bak", base, time.Now().UnixNano())
+	for i := 1; ; i++ {
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			break
+		}
+		path = fmt.Sprintf("%s.%d-%d.bak", base, time.Now().UnixNano(), i)
+		if i > 100 {
+			return "", fmt.Errorf("could not find a free backup name in %s", dir)
+		}
+	}
+	if err := os.WriteFile(path, content, 0o644); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+// MibEditorRestoreBundled puts back the copy that ships in the binary.
+//
+// This is the way out of having broken a standard MIB. Nearly every other MIB
+// IMPORTS from SNMPv2-SMI and SNMPv2-TC, so an editing mistake in one of those
+// takes the whole tree with it, and the file on disk is the only copy the app
+// reads at runtime.
+func (a *App) MibEditorRestoreBundled(name string) (mib.Source, error) {
+	embedded, ok := a.bundledContent(name)
+	if !ok {
+		return mib.Source{}, fmt.Errorf("%s does not ship with SnmpLens; there is nothing to restore", name)
+	}
+	if _, err := a.MibEditorSave(name, embedded, "", true); err != nil {
+		return mib.Source{}, err
+	}
+	return a.MibEditorRead(name)
+}
+
+// MibEditorReload rebuilds the tree from the files the user actually enabled.
+//
+// It used to fall back to "everything on disk" when handed an empty list, which
+// silently re-enabled every MIB somebody had deliberately switched off in
+// Settings. An empty list now means an empty list.
+func (a *App) MibEditorReload(enabledFiles []string) mib.Reloaded {
+	result := a.mibService.Rebuild(enabledFiles)
+	if !result.Health.Ok {
+		a.recordSystemEvent(events.KindSystemMibLoadFailed, "major",
+			"The MIB tree no longer resolves after a reload: "+strings.Join(result.Health.Failures, "; "))
+	}
+	return result
+}
+
+// --- symbols and import assistance ---
+
+// MibEditorSymbols returns every name the loaded tree knows.
+func (a *App) MibEditorSymbols() mib.Catalogue {
+	return mib.Symbols()
+}
+
+// MibEditorCheckImports reports symbols the buffer uses but never imports.
+func (a *App) MibEditorCheckImports(content string) []mib.MissingImport {
+	missing := mib.CheckImports(content, mib.Symbols())
+	if missing == nil {
+		return []mib.MissingImport{}
+	}
+	return missing
+}
+
+// MibEditorFixImports returns the buffer with its IMPORTS clause repaired.
+func (a *App) MibEditorFixImports(content string) mib.ImportFix {
+	return mib.FixImports(content, mib.Symbols())
+}
+
+// --- drafts ---
+
+// mibDraftDirName is where unsaved buffers live, a sibling of the MIB folder
+// for the same reason backups are: anything inside mibs/ gets loaded as a MIB.
+const mibDraftDirName = "mib-drafts"
+
+// DraftInfo describes an unsaved buffer recovered from a previous session.
+type DraftInfo struct {
+	Name    string `json:"name"`
+	SavedAt string `json:"savedAt"`
+	Size    int64  `json:"size"`
+}
+
+func (a *App) draftPath(name string) (string, error) {
+	clean := filepath.Base(strings.TrimSpace(name))
+	if clean == "" || clean == "." {
+		return "", fmt.Errorf("invalid draft name %q", name)
+	}
+	dir := filepath.Join(filepath.Dir(a.persistentMibDir), mibDraftDirName)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, clean+".draft"), nil
+}
+
+// MibEditorSaveDraft keeps an unsaved buffer outside the MIB directory.
+//
+// It exists because the editor is one tab among seven: the buffer has to
+// survive switching away, closing the window and the machine going down, and
+// none of those are moments where the user chose to write a possibly broken
+// MIB into the folder the whole app loads from.
+func (a *App) MibEditorSaveDraft(name, content string) error {
+	path, err := a.draftPath(name)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(content), 0o644)
+}
+
+// MibEditorReadDraft returns a stored buffer, or empty if there is none.
+func (a *App) MibEditorReadDraft(name string) (string, error) {
+	path, err := a.draftPath(name)
+	if err != nil {
+		return "", err
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	return string(raw), nil
+}
+
+// MibEditorListDrafts reports what can be recovered.
+func (a *App) MibEditorListDrafts() ([]DraftInfo, error) {
+	dir := filepath.Join(filepath.Dir(a.persistentMibDir), mibDraftDirName)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []DraftInfo{}, nil
+		}
+		return []DraftInfo{}, err
+	}
+	out := []DraftInfo{}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".draft") {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		out = append(out, DraftInfo{
+			Name:    strings.TrimSuffix(e.Name(), ".draft"),
+			SavedAt: info.ModTime().UTC().Format(time.RFC3339),
+			Size:    info.Size(),
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].SavedAt > out[j].SavedAt })
+	return out, nil
+}
+
+// MibEditorDiscardDraft removes a stored buffer.
+func (a *App) MibEditorDiscardDraft(name string) error {
+	path, err := a.draftPath(name)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+// MibDependencyGraph reports what every MIB in the directory imports.
+//
+// Cheap enough to offer freely: readImports reads the head of each file as text
+// and stops at the semicolon ending the IMPORTS clause — no parse, no gosmi,
+// and therefore no exclusive lock held across the scan.
+func (a *App) MibDependencyGraph() ([]mib.GraphNode, error) {
+	if a.mibService == nil {
+		return []mib.GraphNode{}, fmt.Errorf("MIB service not initialized")
+	}
+	nodes, err := a.mibService.ModuleGraph()
+	if err != nil {
+		return []mib.GraphNode{}, err
+	}
+	if nodes == nil {
+		// Never nil: it crosses the bridge as null and throws on the first .map.
+		return []mib.GraphNode{}, nil
+	}
+	return nodes, nil
+}

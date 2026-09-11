@@ -83,7 +83,7 @@ const structs = new Map([
   ...goStructs(read('../../pkg/snmp/params.go')),
   ...goStructs(read('../../pkg/snmp/client.go')),
   ...goStructs(read('../../pkg/snmp/setmulti.go')),
-  ...goStructs(read('../../app_monitor.go')),
+  ...goStructs(read('../../internal/app/monitor.go')),
 ]);
 
 /** The JSON keys a struct accepts, embedded structs flattened in. */

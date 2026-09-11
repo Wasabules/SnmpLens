@@ -6,7 +6,7 @@ import {
   EventsAckAll,
   EventsDelete,
   EventsClear,
-} from '../../wailsjs/go/main/App';
+} from '../../wailsjs/go/app/App';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
 import { _ } from 'svelte-i18n';
 import { notificationStore } from './notifications';

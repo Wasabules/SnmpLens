@@ -7,7 +7,7 @@
   import { targetLabels } from '../stores/targetLabels';
   import { mibStore } from '../stores/mibStore';
   import { oidName, oidTooltip } from '../utils/oidDisplay';
-  import { EventsQuery } from '../../wailsjs/go/main/App';
+  import { EventsQuery } from '../../wailsjs/go/app/App';
   import { EventsOn } from '../../wailsjs/runtime/runtime';
   import { capNewestFirst } from '../utils/burst';
 

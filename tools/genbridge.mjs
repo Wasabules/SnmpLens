@@ -60,7 +60,7 @@ for (const file of walk(join(repo, 'frontend', 'src'))) {
   // a refusal message written for that could never fire. Import the bridge
   // statically; there is nothing to defer, since a dozen components pull the
   // same module in anyway.
-  collect(/import\s*\{([^}]*)\}\s*from\s*['"][^'"]*wailsjs\/go\/main\/App['"]/g, appNames);
+  collect(/import\s*\{([^}]*)\}\s*from\s*['"][^'"]*wailsjs\/go\/app\/App['"]/g, appNames);
   collect(/import\s*\{([^}]*)\}\s*from\s*['"][^'"]*wailsjs\/runtime[^'"]*['"]/g, runtimeNames);
 }
 

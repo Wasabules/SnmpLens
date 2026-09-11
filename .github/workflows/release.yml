@@ -131,7 +131,7 @@ jobs:
           cp build/bin/SnmpLens deb-pkg/usr/local/bin/snmplens
           chmod 755 deb-pkg/usr/local/bin/snmplens
 
-          cp SnmpLens.png deb-pkg/usr/share/icons/hicolor/256x256/apps/snmplens.png
+          cp docs/assets/img/SnmpLens.png deb-pkg/usr/share/icons/hicolor/256x256/apps/snmplens.png
 
           cat > deb-pkg/DEBIAN/control << EOF
           Package: snmplens

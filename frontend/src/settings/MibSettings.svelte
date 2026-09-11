@@ -9,7 +9,7 @@
   import { notificationStore } from '../stores/notifications';
   import Icon from '../Icon.svelte';
   import MibDiagnosis from '../mib/MibDiagnosis.svelte';
-  import { MibDiagnose, BrowseDialog, ListMibFiles, MibDependencyGraph } from '../../wailsjs/go/main/App';
+  import { MibDiagnose, BrowseDialog, ListMibFiles, MibDependencyGraph } from '../../wailsjs/go/app/App';
   import { dependencyRoll, symbolsWanted, ABSENT, FAILED } from '../utils/mibDependencies';
   import {
     rootsOf, treeFrom, flattenTree, graphSummary, MISSING, NOT_LOADED,

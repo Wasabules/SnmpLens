@@ -1,7 +1,7 @@
 <script>
   import { _ } from 'svelte-i18n';
   import { get } from 'svelte/store';
-  import { SnmpDiscover, NetworkPing, NetworkTraceroute } from '../wailsjs/go/main/App';
+  import { SnmpDiscover, NetworkPing, NetworkTraceroute } from '../wailsjs/go/app/App';
   import { EventsOn, EventsOff } from '../wailsjs/runtime/runtime';
   import { settingsStore } from './stores/settingsStore';
   import { notificationStore } from './stores/notifications';

@@ -34,7 +34,7 @@ const bundled = await esbuild.build({
   plugins: [{
     name: 'alias',
     setup(b) {
-      b.onResolve({ filter: /wailsjs[/]go[/]main[/]App$/ }, () => ({ path: join(dir, 'stub.js') }));
+      b.onResolve({ filter: /wailsjs[/]go[/]app[/]App$/ }, () => ({ path: join(dir, 'stub.js') }));
     },
   }],
 });

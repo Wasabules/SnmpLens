@@ -5,7 +5,7 @@
   import { trapStore } from './stores/trapStore';
   import { settingsStore } from './stores/settingsStore';
   import { notificationStore } from './stores/notifications';
-  import { SendTrap, SendInform, TrapListenerEngineID } from '../wailsjs/go/main/App';
+  import { SendTrap, SendInform, TrapListenerEngineID } from '../wailsjs/go/app/App';
   import Trap from './Trap.svelte';
   import { escapeCSV, downloadFile } from './utils/csv';
   import { anonMode, anonymizeIp, maskString } from './utils/anonymize';

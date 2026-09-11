@@ -12,7 +12,7 @@ import {
   MonitorAcceptSlow,
   MonitorUpdateConnection,
   PresetBind,
-} from '../../wailsjs/go/main/App';
+} from '../../wailsjs/go/app/App';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
 import { settingsStore } from './settingsStore';
 import { notificationStore } from './notifications';

@@ -92,7 +92,7 @@ The integration tests talk to a real agent — the simulator, run in-process by 
 run on every build and every platform. They used to need the Python agent and `SNMPLENS_TEST_AGENT`, and in
 practice ran nowhere. `pkg/monitor`'s poll a simulated server, and a 32-bit counter that wraps every two seconds
 to prove the delta goes through the wrap; `pkg/snmp`'s run every operation and a discovery scan against simulated
-devices. `app_integration_test.go` follows one thing through several features at once: a model identified, a
+devices. `internal/app/integration_test.go` follows one thing through several features at once: a model identified, a
 preset bound and polled with every OID answered; a band crossed, journalled and delivered to a webhook; a device
 going down and coming back; a switch's notifications in every version, journalled as coming from the switch and
 routed; a request SnmpLens sends with the wrong community coming back as the device's authenticationFailure; a v3
@@ -113,7 +113,13 @@ The frontend calls Go through auto-generated bindings in `frontend/wailsjs/`, wh
 - Adding a Go method changes the generated module's EXPORTS, which hot module replacement cannot patch: a page
   that already imported it fails with "does not provide an export named X", which reads like a missing method
   rather than a stale tab. `vite.config.js` forces a full reload when anything under `wailsjs/` changes.
-- The public API surface is the set of exported methods on the `App` struct in `app.go`. Each becomes a callable JS function (e.g. `import { SnmpGet } from '../wailsjs/go/main/App'`).
+- The public API surface is the set of exported methods on the `App` struct in `internal/app/` — EVERY exported
+  method, which is why the lifecycle (`startup`, `shutdown`, the close decision) is unexported and `app.Run` is a
+  function rather than a method: a method would be callable from the renderer. Each becomes a callable JS
+  function (e.g. `import { SnmpGet } from '../wailsjs/go/app/App'`); the directory is named after the Go package.
+- `main.go` holds only what the binary embeds — `frontend/dist`, `mibs/`, `presets/`, the tray artwork — because
+  `//go:embed` cannot reach above the directory of the file it sits in, and hands it to `app.Run` as `fs.FS`. Tests
+  in `internal/app` read the same directories from the tree (`repo_test.go`: `repoRoot`, `mibs`, `presets`).
 - After changing any `App` method signature or any Go struct that crosses the bridge, you **must** re-run `wails dev`/`wails build` to regenerate bindings before the frontend can use them. A fresh checkout has no `wailsjs/` until the first build.
 - Request params are passed as structs defined in `pkg/snmp/params.go` (`SnmpRequest`, `SetRequest`, `GetBulkRequest`, etc.). The frontend constructs matching plain objects in
   `frontend/src/utils/snmpParams.js`, and the JSON field names are the whole of the contract.
@@ -141,7 +147,7 @@ The frontend calls Go through auto-generated bindings in `frontend/wailsjs/`, wh
 - `pkg/preset/` — the dashboard preset format: `preset.go` (the frozen widget vocabulary, `Validate`,
   `Estimate`, `PollOIDs`), `load.go` (reading a file off disk, listing a directory, matching a device). Pure: it
   touches no network, no database and no gosmi. See **Dashboard presets**.
-- `app_router.go` — the event router: routing runs on its own goroutine in bounded batches, with a durable watermark so a crash replays rather than loses. See **The trap path**.
+- `internal/app/router.go` — the event router: routing runs on its own goroutine in bounded batches, with a durable watermark so a crash replays rather than loses. See **The trap path**.
 - `pkg/events/`, `pkg/notify/`, `pkg/secrets/`, `pkg/service/`, `pkg/tray/`, `pkg/autostart/` — the event journal vocabulary, notification routing (syslog over UDP/TCP/**TLS per RFC5425**, webhook, email, with a durable outbox), OS-protected credential storage, the pre-GUI preference file, the fail-soft system-tray icon, and the per-user login entry (HKCU Run key / LaunchAgent / XDG autostart — never machine-wide, so it never needs elevation).
 - `pkg/netaddr/address.go` — address handling shared by `pkg/snmp` and `pkg/network`. `NormaliseTarget` strips
   the brackets people paste around an IPv6 literal, because gosnmp adds its own via `JoinHostPort` and
@@ -187,7 +193,7 @@ it) and `monitoring.db`.
 - **Credential custody.** The renderer seals the sensitive settings fields (`community`, the v3 passphrases,
   per-target overrides and credential profiles — `fields()` in `crypto.js`) and stores them in localStorage as
   before, in the same `enc:` + base64(12-byte IV ‖ GCM output) format. What changed is that the KEY is no longer
-  beside them: it lives in `pkg/secrets` (`SettingsKeyRef`) and the renderer never holds it. `app_settings.go`
+  beside them: it lives in `pkg/secrets` (`SettingsKeyRef`) and the renderer never holds it. `internal/app/settings.go`
   seals and opens in batches, because a save covers one value per sensitive field, plus three per target override
   and one or two per credential profile.
 
@@ -287,7 +293,7 @@ other was dropped with nothing on screen. Three facts about gosnmp v1.43.2 decid
   the listen goroutine to let go of the field; otherwise a start straight after it is refused as "already running".
 
 The accepted users are remembered in `pkg/secrets` under `TrapUsersRef()` on every start and every update, because
-the listener can be started at login with no window to hand them over: `app_service.go` passed an empty `V3Params`
+the listener can be started at login with no window to hand them over: `internal/app/service.go` passed an empty `V3Params`
 there, so a background listener dropped every v3 notification whatever the settings said. The renderer pushes the
 set once the stored credentials are open (`settingsReady` — before that the store holds sealed strings) and again
 whenever it changes.
@@ -372,7 +378,7 @@ resolves to `iso`. `pkg/mib` checks `Kind` rather than trusting the lookup.
 
 ## MIB editor
 
-The MIB editor tab (`MibEditorPanel.svelte`, `pkg/mib/editor.go`, `app_mibeditor.go`) edits the MIBs in the
+The MIB editor tab (`MibEditorPanel.svelte`, `pkg/mib/editor.go`, `internal/app/mibeditor.go`) edits the MIBs in the
 persistent directory, or opens one from anywhere and saves it in. Validation is two-tier because the two tiers
 see different things: `parser.Parse` (gosmi's own sub-package) gives **line:column** syntax errors and is pure, so
 it runs while you type; `gosmi.LoadModule` sees semantic errors but reports them as `Could not load module at X`
@@ -459,7 +465,7 @@ is held for a batch rather than per OID: a 300-varbind walk takes it once.
 `Rebuild` holds that lock from the teardown through the health probe. Releasing it after the core modules let
 readers into a world holding only `SNMPv2-SMI` and `SNMPv2-TC` — measured, 12 reads of sysDescr came back with a
 DIFFERENT NAME, not an error — and let two rebuilds interleave, each `Exit`/`Init` destroying what the other had
-loaded, so the probe reported a failure that was not real and `app_mibeditor.go` routed it to every sink as a
+loaded, so the probe reported a failure that was not real and `internal/app/mibeditor.go` routed it to every sink as a
 "major" event. CI runs `-race` for exactly this class.
 
 ## The trap path
@@ -481,7 +487,7 @@ fails CI rather than quietly halving the next storm. The durable fix is a `WithR
 **The insert stays synchronous, the ROUTING does not.** gosnmp sends an INFORM's acknowledgement after the
 handler returns, so acknowledging a confirmed notification before it is durably journalled would be a lie.
 Routing was measured at 1.30 ms per event against 0.97 ms for the insert — essentially all of it a second
-write transaction — and now goes to `eventRouter` (`app_router.go`). Batching is not an optimisation on
+write transaction — and now goes to `eventRouter` (`internal/app/router.go`). Batching is not an optimisation on
 top: unbatched the router costs the same 1.0 ms per event and cannot keep up with a producer it just made
 twice as fast. At 50 events per transaction it costs 0.13 ms.
 
@@ -597,7 +603,7 @@ nothing answers CREATES it, if it would sit in the tree as an instance does: a l
 under it. Errors are v2c's, mapped for v1 by `v1Status` (RFC 3584 4.4).
 
 Rows need the MIB, and the agent has none: which column is a `RowStatus` is asked of `Config.RowStatus`, which
-`app.go` points at `mib.Service.RowStatusColumn`, so rows are created and destroyed as the LOADED MIBs describe
+`internal/app/app.go` points at `mib.Service.RowStatusColumn`, so rows are created and destroyed as the LOADED MIBs describe
 them. `createAndGo` makes the row `active`, `createAndWait` `notInService`, `destroy` removes every instance of the
 row, and what RFC 2579 refuses is refused — a create on a row that exists, `active` on one that does not, and
 `notReady`, which is the agent's to say. The callback takes gosmi's lock once per varbind, on the agent's receive
@@ -635,13 +641,13 @@ The protocol names are `pkg/snmp`'s (`MD5` to `SHA512`, `DES`, `AES` to `AES256C
 package stays a leaf. `TestSnmpLensReadsTheSimulator` holds the two together by driving the SnmpLens client
 against a user of every name: a name mapped differently fails as a digest or a decryption error.
 
-**Devices live in `simulator.json`, and their secrets do not.** `app_simulator.go` keeps the devices in a file
+**Devices live in `simulator.json`, and their secrets do not.** `internal/app/simulator.go` keeps the devices in a file
 beside `monitoring.db`, and their communities and passphrases in `pkg/secrets` under `SimulatorDeviceRef(id)` —
 the file is what a person copies to another machine. `Device.WithoutSecrets` runs on every write AND every read,
 so a community typed into the file by hand is not one the application sends. The renderer's list is a
 `SimulatedDevice`, a type with no field that could hold a secret, rather than a `Device` with them blanked: a
 secret field added to `Device` later cannot reach the renderer by default. Secrets come back out through one call,
-`SimulatorDeviceCredentials`, for the editor and for "Add as target", and `app_simulator_test.go` searches the
+`SimulatorDeviceCredentials`, for the editor and for "Add as target", and `internal/app/simulator_test.go` searches the
 file and the marshalled list for the secret values themselves. The two listing calls are `List…` for
 `tools/genbridge.mjs`, which answers such a binding with an empty array and anything else with `null`.
 
@@ -716,7 +722,7 @@ folder of the archive's own names — and a lone file as `<id>.json`. Importing 
 writing, and `loadModels` takes the newer when a stopped import leaves both: two kept forms of one ID would
 otherwise fail `SetCustomModels` and take every custom model with them.
 
-**Recording a device is walking it into a package** (`app_simrecord.go`, `pkg/snmp/record.go`,
+**Recording a device is walking it into a package** (`internal/app/simrecord.go`, `pkg/snmp/record.go`,
 `pkg/simulator/record.go`). `Client.Record` walks one device under `.1.3.6.1` and `.1.0.8802`, keeping each varbind
 as gosnmp DECODED it — the types are the point, and `Walk`'s formatted results lose them — and `simulator.Recording`
 writes each as a `.snmprec` line: an OCTET STRING as text only when every octet is printable ASCII and in hex
@@ -730,7 +736,7 @@ apart, and `SimulatorCancelRecording` stops it with nothing kept. The request is
 model as a package FOLDER (`repackUnder`), its icon under the name the model gives it, which imports back as itself:
 that is how a recording is edited.
 
-**A bench moves as a file** (`app_simbench.go`, `pkg/simulator/devicefile.go`). A file of simulated devices holds one
+**A bench moves as a file** (`internal/app/simbench.go`, `pkg/simulator/devicefile.go`). A file of simulated devices holds one
 device or several as `FileDevice` — what makes the device the one it is, never its ID, engine ID or boots, so two
 imports of one file are two devices with two engines no manager confuses. The export ASKS every time whether to put
 the passwords in (the renderer's choice panel), writes `"secrets": "included"` or `"omitted"` into the file so nobody
@@ -775,7 +781,7 @@ the vendor its sysObjectID names under enterprises unless it gives one. `testdat
 the README shows, and a test holds it answering over the wire. The registry is process-wide (`SetCustomModels`),
 because a device names its model by ID and `Validate`, `NewEngineID` and a start are functions of the device alone.
 
-`app_simmodels.go` keeps the models in `simulator-models/`, a sibling like `assets/`, each under its own id —
+`internal/app/simmodels.go` keeps the models in `simulator-models/`, a sibling like `assets/`, each under its own id —
 `<id>.json` and its icon `<id>.png`, `.jpg` or `.gif` by the format the DECODER named — and never under a name the
 file or the archive chose: an entry called `../../x` is read as what it holds and nothing more. Only the dialog is
 bound, because a method taking a path would read any file the renderer named and quote it back in a parse error. A
@@ -879,7 +885,7 @@ text ends with what the peer wrote and a 503 reading "invalid upstream" was bein
 no code is RETRIED: six attempts cost half an hour of backoff, discarding one loses the incident. Scrubbing a
 credential out of an error must therefore keep the chain (`scrubbedError` overrides `Error()` and keeps
 `Unwrap()`), or the code disappears with it. **A dead letter is never routed back to the sink that produced it**
-(`deadLetterSink` in `app.go`), or one unreachable collector grows the journal without bound. **A disabled or
+(`deadLetterSink` in `internal/app/app.go`), or one unreachable collector grows the journal without bound. **A disabled or
 deleted sink is never queued for**, because the dispatcher's only answer is a dead letter and a dead letter is a
 MAJOR event — switching a sink off used to alarm on every event. **The drain is one goroutine per DESTINATION,
 serial within one**: parallel across sinks so an unreachable relay does not hold up a healthy webhook, serial
@@ -947,7 +953,7 @@ time (see **Discovery** below), and that is what keeps the poll path GET-only an
 **The cost is stated over a DAY.** `MaxIntervalSec` is 86400, so an hourly base is integer-divided to zero for
 every cadence past 3600 s — a third of the legal range reported "0 requests, 0 varbinds" on the one screen whose
 job is to say what a preset will cost. There is no request count in `preset.Cost`: how many requests a round
-takes depends on `snmp.MaxVarbindsPerGet`, which is `pkg/snmp`'s to know, so `app_preset.go` computes it where
+takes depends on `snmp.MaxVarbindsPerGet`, which is `pkg/snmp`'s to know, so `internal/app/preset.go` computes it where
 both packages are in scope.
 
 **The bounds in `pkg/preset` are sanity bounds against a malformed file, not the guardrail.** Sixty OIDs against
@@ -980,7 +986,7 @@ written for a 24-port switch is a preset for exactly one shape of switch, and a 
 shareable. So a widget may say WHERE its instances come from instead of listing them — `"discover": {"walk":
 "1.3.6.1.2.1.2.2.1.2"}` — with `{#}` in its OIDs where the instance goes (`preset.InstancePlaceholder`).
 
-**The walk happens at BIND TIME and nowhere else** (`app_preset.go`, `discoverFor`). What is stored afterwards is
+**The walk happens at BIND TIME and nowhere else** (`internal/app/preset.go`, `discoverFor`). What is stored afterwards is
 a plain preset with concrete OIDs, so the poll path stays GET-only, the cost is arithmetic before the first tick,
 and `pkg/monitor`'s guardrail sees no difference at all — nothing about discovery survives into polling. One walk
 per COLUMN, not per widget: a grid of port states and a chart of port counters both discover from ifDescr, and
@@ -1119,7 +1125,7 @@ application would look it up against a session that never polls it: a shape perm
 looking correct and the cost screen never mentioning the reading it appears to show.
 
 **The background is the operator's, never the preset's.** A preset names a FILE NAME; the file is resolved inside
-a sibling `assets/` directory (`app_assets.go`) and nowhere else. A preset carrying image bytes would be an
+a sibling `assets/` directory (`internal/app/assets.go`) and nowhere else. A preset carrying image bytes would be an
 arbitrary blob this application decodes, and one carrying a PATH would be an arbitrary-file-read primitive over
 the bridge — the pair the preset import gate is written about. `pkg/imagegate` is the gate, and it is a DECODE:
 a file gets in only if the standard library reads it as PNG, JPEG or GIF and its dimensions are sane, with the
@@ -1190,7 +1196,7 @@ Three rules carry it, and each is a defect in the version without it:
   forever at one report per tick. Hysteresis is the other half.
 
 The default is to widen to twice the cycle, capped at eight times the interval, and to report the edge ONCE per
-episode — the same edge-triggering the pool-contention sampler in `app_router.go` uses. `MonitorAcceptSlow` is
+episode — the same edge-triggering the pool-contention sampler in `internal/app/router.go` uses. `MonitorAcceptSlow` is
 the operator saying "keep the cadence I chose": it reaches the RUNNING session rather than restarting it, because
 a restart throws away the samples every delta and rate is derived from. It is deliberately not persisted.
 

@@ -4,7 +4,7 @@
   import { get } from 'svelte/store';
   import Icon from '../Icon.svelte';
   import { notificationStore } from '../stores/notifications';
-  import { ServiceGetStatus, ServiceSetConfig, AutostartGet, AutostartSet } from '../../wailsjs/go/main/App';
+  import { ServiceGetStatus, ServiceSetConfig, AutostartGet, AutostartSet } from '../../wailsjs/go/app/App';
 
   // These preferences do NOT live in the settings store: they are read by Go
   // before a window exists, so they have their own file. Keeping them in

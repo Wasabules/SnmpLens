@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="SnmpLens.png" alt="SnmpLens" width="128" />
+  <img src="docs/assets/img/SnmpLens.png" alt="SnmpLens" width="128" />
 </p>
 
 <h1 align="center">SnmpLens</h1>
@@ -350,9 +350,11 @@ Rotation is not seamless: copies already installed trust only the public key the
 
 ```
 SnmpLens
-├── main.go, app*.go           # Wails entry point, and the methods the frontend calls
+├── main.go                     # Wails entry point: the embedded files, handed to internal/app
+├── internal/app/               # The methods the frontend calls, one file per feature
 ├── pkg/
 │   ├── snmp/                   # SNMP client: operations, walks, traps and informs, discovery
+│   ├── simulator/              # Simulated SNMP agents: v1/v2c/v3, models, notifications, recordings
 │   ├── mib/                    # MIB loading (gosmi), diagnostics, editor analysis, dependency graph
 │   ├── monitor/                # The poll clock, threshold episodes, counter wraps, overload guardrail
 │   ├── preset/                 # Dashboard presets: validation, cost, discovery, layout, thresholds, maps
