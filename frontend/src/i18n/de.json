@@ -1311,6 +1311,7 @@
     "duplicated": "„{name}“ als „{copy}“ dupliziert",
     "restart": "Dieses Gerät neu starten: Uptime und Zähler ab null, und coldStart, falls es einen sendet",
     "restarted": "{name} wurde neu gestartet",
+    "autoStartChip": "startet mit SnmpLens",
     "export": {
       "title": "{count, plural, one {# Gerät} other {# Geräte}} exportieren",
       "hint": "Die Passwörter — Communities und Passphrasen — bleiben im Schlüsselbund Ihres Systems, es sei denn, Sie legen sie in die Datei. Tun Sie das nur, um eine vollständige Testumgebung weiterzugeben: Wer die Datei hat, kann sie lesen.",
@@ -1326,6 +1327,29 @@
         "noSecrets": "{name}: Die Datei enthält keine Passwörter — geben Sie ihm seine Community oder Passphrasen, bevor Sie es starten"
       }
     },
+    "faults": {
+      "button": "Fehler: dieses Gerät fehlerhaft verhalten lassen",
+      "hint": "Sofort angewendet, ohne das Gerät neu zu starten: Seine Uptime und Zähler sind das, woran ein Fehler getestet wird. Wird mit dem Gerät gespeichert.",
+      "mute": "Stumm: beantwortet nichts (Benachrichtigungen werden weiter gesendet)",
+      "latency": "Latenz",
+      "jitter": "Jitter",
+      "loss": "Verlust",
+      "error": "Fehlerantworten",
+      "errorNone": "Keine",
+      "counters": "Zähler",
+      "apply": "Anwenden",
+      "clear": "Alle entfernen",
+      "applied": "Fehler von {name} angewendet",
+      "cleared": "{name} verhält sich wieder normal",
+      "chip": {
+        "mute": "stumm",
+        "latency": "Latenz {ms} ms",
+        "latencyJitter": "Latenz {ms} ± {jitter} ms",
+        "loss": "Verlust {percent} %",
+        "error": "{error} {percent} %",
+        "counters": "Zähler ×{speed}"
+      }
+    },
     "loopbackHint": "Nur Loopback: 127.0.0.1 bis 127.255.255.254 oder ::1. Unter Linux und macOS erfordert ein Port unter 1024 Administratorrechte.",
     "field": {
       "name": "Name",
@@ -1334,7 +1358,11 @@
       "port": "Port",
       "versions": "SNMP-Versionen",
       "community": "Community",
-      "v3": "SNMPv3-Benutzer"
+      "v3": "SNMPv3-Benutzer",
+      "location": "Standort (sysLocation)",
+      "contact": "Kontakt (sysContact)",
+      "modelDefault": "Der des Modells",
+      "autoStart": "Mit SnmpLens starten"
     },
     "problem": {
       "nameRequired": "Geben Sie dem Gerät einen Namen.",

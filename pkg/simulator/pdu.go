@@ -36,7 +36,10 @@ func (a *Agent) process(ver gosnmp.SnmpVersion, req *gosnmp.SnmpPacket, c clock)
 	case gosnmp.SetRequest:
 		st.inSets.Add(1)
 	}
-	ans := a.dispatch(ver, req, c)
+	ans, injected := a.injectedError(ver, req)
+	if !injected {
+		ans = a.dispatch(ver, req, c)
+	}
 	if ans.status == gosnmp.NoError && req.PDUType != gosnmp.SetRequest {
 		st.inTotalReqVars.Add(uint32(len(ans.vars)))
 	}

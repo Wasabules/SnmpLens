@@ -50,6 +50,8 @@ type Config struct {
 	Notifications []Notification
 	// Traps is where the agent sends them, and when.
 	Traps Traps
+	// Faults are what the agent is made to do wrong; see Faults.
+	Faults Faults
 }
 
 // Stats counts what an agent did with what it received — most of all what it
@@ -113,6 +115,11 @@ type Agent struct {
 	started time.Time
 
 	stats counters
+
+	// faults is what the agent is made to do wrong (faults.go), read on every
+	// message; faultMu serialises changing it, which moves the counters' warp.
+	faults  atomic.Pointer[faultState]
+	faultMu sync.Mutex
 }
 
 // NewAgent checks cfg and prepares an agent; Start makes it answer.
@@ -167,6 +174,10 @@ func NewAgent(cfg Config) (*Agent, error) {
 	if a.notify, err = newNotifier(a, cfg); err != nil {
 		return nil, fmt.Errorf("simulator: %w", err)
 	}
+	if err := cfg.Faults.Check(); err != nil {
+		return nil, fmt.Errorf("simulator: faults: %w", err)
+	}
+	a.faults.Store(&faultState{faults: cfg.Faults})
 	return a, nil
 }
 
@@ -200,6 +211,12 @@ func (a *Agent) Start() error {
 	a.conn = conn
 	a.done = make(chan struct{})
 	a.started = time.Now()
+	// Counters made to run fast run so from the start.
+	if fs := a.faults.Load(); fs != nil {
+		a.faultMu.Lock()
+		a.setFaultsLocked(fs.faults, a.started, a.started)
+		a.faultMu.Unlock()
+	}
 	go a.serve(conn, a.started, a.done)
 	if a.notify != nil {
 		a.notify.start()
@@ -279,7 +296,23 @@ func (a *Agent) serve(conn *net.UDPConn, started time.Time, done chan struct{}) 
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
-		if out := a.handle(buf[:n], clock{started: started, now: time.Now(), stats: &a.stats}); out != nil {
+		fs := a.faults.Load()
+		if fs != nil && fs.faults.drops(roll()) {
+			// Lost on the way: the agent never sees it, and counts nothing.
+			continue
+		}
+		c := clock{started: started, now: time.Now(), stats: &a.stats}
+		if fs != nil {
+			c.warp = fs.warp
+		}
+		out := a.handle(buf[:n], c)
+		switch {
+		case out == nil:
+		case fs != nil && (fs.faults.LatencyMs > 0 || fs.faults.JitterMs > 0):
+			// Late, and without holding up the messages after it: a slow
+			// device, not a stuck one.
+			time.AfterFunc(fs.faults.delay(draw()), func() { _, _ = conn.WriteToUDPAddrPort(out, from) })
+		default:
 			_, _ = conn.WriteToUDPAddrPort(out, from)
 		}
 	}

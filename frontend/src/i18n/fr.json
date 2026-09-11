@@ -1311,6 +1311,7 @@
     "duplicated": "« {name} » dupliqué en « {copy} »",
     "restart": "Redémarrer cet appareil : uptime et compteurs à zéro, et coldStart s’il en envoie un",
     "restarted": "{name} a redémarré",
+    "autoStartChip": "démarre avec SnmpLens",
     "export": {
       "title": "Exporter {count, plural, one {# appareil} other {# appareils}}",
       "hint": "Les mots de passe — communautés et phrases secrètes — restent dans le coffre de votre système, sauf si vous les mettez dans le fichier. Ne les y mettez que pour transmettre un banc complet : quiconque a le fichier peut les lire.",
@@ -1326,6 +1327,29 @@
         "noSecrets": "{name} : le fichier ne contient pas de mots de passe — donnez-lui sa communauté ou ses phrases secrètes avant de le démarrer"
       }
     },
+    "faults": {
+      "button": "Pannes : faire dysfonctionner cet appareil",
+      "hint": "Appliquées tout de suite, sans redémarrer l’appareil : son uptime et ses compteurs sont ce contre quoi une panne se teste. Gardées avec l’appareil.",
+      "mute": "Muet : ne répond à rien (les notifications partent toujours)",
+      "latency": "Latence",
+      "jitter": "Gigue",
+      "loss": "Perte",
+      "error": "Erreurs",
+      "errorNone": "Aucune",
+      "counters": "Compteurs",
+      "apply": "Appliquer",
+      "clear": "Tout effacer",
+      "applied": "Pannes de {name} appliquées",
+      "cleared": "{name} ne dysfonctionne plus",
+      "chip": {
+        "mute": "muet",
+        "latency": "latence {ms} ms",
+        "latencyJitter": "latence {ms} ± {jitter} ms",
+        "loss": "perte {percent} %",
+        "error": "{error} {percent} %",
+        "counters": "compteurs ×{speed}"
+      }
+    },
     "loopbackHint": "Bouclage uniquement : de 127.0.0.1 à 127.255.255.254, ou ::1. Sous Linux et macOS, un port inférieur à 1024 exige des droits d'administrateur.",
     "field": {
       "name": "Nom",
@@ -1334,7 +1358,11 @@
       "port": "Port",
       "versions": "Versions SNMP",
       "community": "Communauté",
-      "v3": "Utilisateurs SNMPv3"
+      "v3": "Utilisateurs SNMPv3",
+      "location": "Emplacement (sysLocation)",
+      "contact": "Contact (sysContact)",
+      "modelDefault": "Celui du modèle",
+      "autoStart": "Démarrer avec SnmpLens"
     },
     "problem": {
       "nameRequired": "Donnez un nom à l'appareil.",

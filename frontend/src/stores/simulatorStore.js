@@ -19,6 +19,7 @@ import {
   SimulatorExportDevicesDialog,
   SimulatorDuplicateDevice,
   SimulatorRestartDevice,
+  SimulatorSetFaults,
   TrapListenerEngineID,
 } from '../../wailsjs/go/main/App';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
@@ -117,6 +118,8 @@ function createSimulatorStore() {
     exportDevices: async (ids, withSecrets) => (await SimulatorExportDevicesDialog(ids || [], !!withSecrets)) || '',
     duplicate: (id, name) => SimulatorDuplicateDevice(id, name),
     restart: (id) => SimulatorRestartDevice(id),
+    /** Changes what a device does wrong, at once and without restarting it. */
+    setFaults: (id, faults) => SimulatorSetFaults(id, faults),
     /** The engine ID SnmpLens's own trap listener stands for, in hex. */
     listenerEngineId: async () => (await TrapListenerEngineID()) || '',
   };

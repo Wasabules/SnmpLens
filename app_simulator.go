@@ -132,6 +132,12 @@ type SimulatedDevice struct {
 	// Packets is what the device has received since it started.
 	Packets uint32         `json:"packets"`
 	Traps   SimulatedTraps `json:"traps"`
+	// Location, Contact and AutoStart are the device's own settings, and
+	// Faults what it is made to do wrong. None of it is a secret.
+	Location  string           `json:"location"`
+	Contact   string           `json:"contact"`
+	AutoStart bool             `json:"autoStart"`
+	Faults    simulator.Faults `json:"faults"`
 }
 
 // SimulatedTraps is what a simulated device sends, as the list shows it: the
@@ -197,6 +203,7 @@ func (s *simulatorService) view(d simulator.Device) SimulatedDevice {
 		Versions: slices.Clone(d.Versions), Users: users,
 		EngineID: d.EngineID, EngineBoots: d.EngineBoots,
 		Running: running, Packets: stats.Packets, Traps: traps,
+		Location: d.Location, Contact: d.Contact, AutoStart: d.AutoStart, Faults: d.Faults,
 	}
 }
 
@@ -336,7 +343,8 @@ func (a *App) SimulatorSaveDevice(d simulator.Device) (SimulatedDevice, error) {
 	} else if i = s.index(d.ID); i < 0 {
 		return SimulatedDevice{}, fmt.Errorf("there is no simulated device %q", d.ID)
 	} else {
-		d.EngineID, d.EngineBoots = s.devices[i].EngineID, s.devices[i].EngineBoots
+		// The faults too: they are set while the device runs, never in the editor.
+		d.EngineID, d.EngineBoots, d.Faults = s.devices[i].EngineID, s.devices[i].EngineBoots, s.devices[i].Faults
 	}
 	if err := d.Validate(); err != nil {
 		return SimulatedDevice{}, err
@@ -437,6 +445,62 @@ func (a *App) SimulatorStopDevice(id string) error {
 		a.emitSimulatorChanged()
 	}
 	return nil
+}
+
+// SimulatorSetFaults changes what a simulated device does wrong, at once and
+// without restarting it — its uptime and counters are what a fault is tested
+// against — and keeps it with the device, for its next start as well.
+func (a *App) SimulatorSetFaults(id string, f simulator.Faults) error {
+	s := a.sim
+	if s == nil {
+		return errNoSimulator
+	}
+	if err := f.Check(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i := s.index(id)
+	if i < 0 {
+		return fmt.Errorf("there is no simulated device %q", id)
+	}
+	next := slices.Clone(s.devices)
+	next[i].Faults = f
+	if err := s.write(next); err != nil {
+		return fmt.Errorf("saving the simulated devices: %w", err)
+	}
+	s.devices = next
+	if err := s.fleet.SetFaults(id, f); err != nil && !errors.Is(err, simulator.ErrNotRunning) {
+		return err
+	}
+	a.emitSimulatorChanged()
+	return nil
+}
+
+// startAutoSimulated starts the devices that start with the application, once
+// the credential store is open. One that will not start is logged and left
+// stopped, and the others start.
+func (a *App) startAutoSimulated() {
+	s := a.sim
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	started := false
+	for i, d := range s.devices {
+		if !d.AutoStart {
+			continue
+		}
+		if err := a.startSimulatedLocked(s, i); err != nil {
+			log.Printf("simulator: %s did not start with the application: %v", d.Name, err)
+			continue
+		}
+		started = true
+	}
+	if started {
+		a.emitSimulatorChanged()
+	}
 }
 
 // SimulatorSendTrap has a running simulated device send a notification now to

@@ -88,6 +88,18 @@ func (f *Fleet) Notify(id, name string) ([]Delivery, error) {
 	return a.Notify(name)
 }
 
+// SetFaults changes what a running device does wrong, without restarting it;
+// see Agent.SetFaults.
+func (f *Fleet) SetFaults(id string, faults Faults) error {
+	f.mu.Lock()
+	a := f.agents[id]
+	f.mu.Unlock()
+	if a == nil {
+		return ErrNotRunning
+	}
+	return a.SetFaults(faults)
+}
+
 // Status reports whether a device is running, and its counters if it is.
 func (f *Fleet) Status(id string) (Stats, bool) {
 	f.mu.Lock()

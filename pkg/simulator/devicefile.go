@@ -57,6 +57,8 @@ type FileDevice struct {
 	Community string   `json:"community,omitempty"`
 	Users     []User   `json:"users,omitempty"`
 	Traps     Traps    `json:"traps"`
+	Location  string   `json:"location,omitempty"`
+	Contact   string   `json:"contact,omitempty"`
 }
 
 // ExportDevices is the file holding devices, their secrets in it or not.
@@ -78,7 +80,8 @@ func ExportDevices(devices []Device, withSecrets bool) ([]byte, error) {
 			traps.Schedules = []Schedule{}
 		}
 		f.Devices[i] = FileDevice{Name: d.Name, Model: d.Model, Address: d.Address, Port: d.Port,
-			Versions: slices.Clone(d.Versions), Community: d.Community, Users: slices.Clone(d.Users), Traps: traps}
+			Versions: slices.Clone(d.Versions), Community: d.Community, Users: slices.Clone(d.Users), Traps: traps,
+			Location: d.Location, Contact: d.Contact}
 	}
 	raw, err := json.MarshalIndent(f, "", "  ")
 	if err != nil {
@@ -130,7 +133,8 @@ func ParseDeviceFile(raw []byte) (DeviceFile, error) {
 func (fd FileDevice) Device() Device {
 	return Device{Name: strings.TrimSpace(fd.Name), Model: fd.Model, Address: strings.TrimSpace(fd.Address),
 		Port: fd.Port, Versions: slices.Clone(fd.Versions), Community: fd.Community,
-		Users: slices.Clone(fd.Users), Traps: fd.Traps.clone()}
+		Users: slices.Clone(fd.Users), Traps: fd.Traps.clone(),
+		Location: strings.TrimSpace(fd.Location), Contact: strings.TrimSpace(fd.Contact)}
 }
 
 // ValidateWithoutSecrets is Validate for a device whose secrets are yet to be

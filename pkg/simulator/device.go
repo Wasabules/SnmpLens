@@ -40,6 +40,15 @@ type Device struct {
 	EngineBoots uint32 `json:"engineBoots"`
 	// Traps is what the device sends, where to and when.
 	Traps Traps `json:"traps"`
+	// Location and Contact are the device's sysLocation and sysContact, in
+	// place of its model's when they are given.
+	Location string `json:"location"`
+	Contact  string `json:"contact"`
+	// AutoStart starts the device with the application.
+	AutoStart bool `json:"autoStart"`
+	// Faults are what the device is made to do wrong: changed while it runs
+	// (Fleet.SetFaults), and kept with it.
+	Faults Faults `json:"faults"`
 }
 
 // Listen is the address the device answers on, in the form CheckListen reads.
@@ -107,6 +116,12 @@ func (d Device) Validate() error {
 	}
 	if err := d.Traps.check(users, m.catalogue()); err != nil {
 		return err
+	}
+	if len(d.Location) > 255 || len(d.Contact) > 255 {
+		return errors.New("a device's location and contact are at most 255 octets")
+	}
+	if err := d.Faults.Check(); err != nil {
+		return fmt.Errorf("faults: %w", err)
 	}
 	if id, err := hex.DecodeString(d.EngineID); err != nil || len(id) < 5 || len(id) > 32 {
 		return errors.New("a device's engine ID is 5 to 32 octets, in hex")
@@ -223,14 +238,16 @@ func (d Device) config() (Config, error) {
 		return Config{}, fmt.Errorf("engine ID: %w", err)
 	}
 	return Config{
-		Listen:        d.Listen(),
-		Versions:      d.Versions,
-		Community:     d.Community,
-		Users:         d.Users,
-		EngineID:      engineID,
-		EngineBoots:   d.EngineBoots,
-		Objects:       m.build(Identity{Name: strings.TrimSpace(d.Name), Seed: deviceSeed(d.ID)}),
+		Listen:      d.Listen(),
+		Versions:    d.Versions,
+		Community:   d.Community,
+		Users:       d.Users,
+		EngineID:    engineID,
+		EngineBoots: d.EngineBoots,
+		Objects: m.build(Identity{Name: strings.TrimSpace(d.Name), Seed: deviceSeed(d.ID),
+			Location: strings.TrimSpace(d.Location), Contact: strings.TrimSpace(d.Contact)}),
 		Notifications: m.catalogue(),
 		Traps:         d.Traps.clone(),
+		Faults:        d.Faults,
 	}, nil
 }

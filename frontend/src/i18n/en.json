@@ -1311,6 +1311,7 @@
     "duplicated": "“{name}” duplicated as “{copy}”",
     "restart": "Restart this device: uptime and counters from zero, and coldStart if it sends one",
     "restarted": "{name} restarted",
+    "autoStartChip": "starts with SnmpLens",
     "export": {
       "title": "Export {count, plural, one {# device} other {# devices}}",
       "hint": "The passwords — communities and passphrases — stay in your system’s keychain unless you put them in the file. Put them in only to hand over a complete bench: anyone who has the file can read them.",
@@ -1326,6 +1327,29 @@
         "noSecrets": "{name}: the file carries no passwords — give it its community or passphrases before starting it"
       }
     },
+    "faults": {
+      "button": "Faults: make this device misbehave",
+      "hint": "Applied at once, without restarting the device: its uptime and counters are what a fault is tested against. Kept with the device.",
+      "mute": "Mute: answer nothing (notifications are still sent)",
+      "latency": "Latency",
+      "jitter": "Jitter",
+      "loss": "Loss",
+      "error": "Errors",
+      "errorNone": "None",
+      "counters": "Counters",
+      "apply": "Apply",
+      "clear": "Clear all",
+      "applied": "Faults of {name} applied",
+      "cleared": "{name} does nothing wrong any more",
+      "chip": {
+        "mute": "mute",
+        "latency": "latency {ms} ms",
+        "latencyJitter": "latency {ms} ± {jitter} ms",
+        "loss": "loss {percent} %",
+        "error": "{error} {percent} %",
+        "counters": "counters ×{speed}"
+      }
+    },
     "loopbackHint": "Loopback only: 127.0.0.1 to 127.255.255.254, or ::1. On Linux and macOS, a port below 1024 needs administrator rights.",
     "field": {
       "name": "Name",
@@ -1334,7 +1358,11 @@
       "port": "Port",
       "versions": "SNMP versions",
       "community": "Community",
-      "v3": "SNMPv3 users"
+      "v3": "SNMPv3 users",
+      "location": "Location (sysLocation)",
+      "contact": "Contact (sysContact)",
+      "modelDefault": "The model’s own",
+      "autoStart": "Start with SnmpLens"
     },
     "problem": {
       "nameRequired": "Give the device a name.",
