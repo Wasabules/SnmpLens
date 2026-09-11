@@ -401,6 +401,8 @@ const DEMO_ONLY = {
   SimulatorDeleteDevice: 'Removing a simulated device deletes it from your configuration directory and the system keychain.',
   SimulatorStartDevice: 'Starting a simulated device opens a UDP socket on this machine.',
   SimulatorSendTrap: 'A simulated device sends its notifications over UDP, from this machine.',
+  ImportSimulatorModelsDialog: 'Importing a simulator model opens the operating system’s file dialog and writes the model to your configuration directory.',
+  SimulatorDeleteModel: 'Deleting a simulator model removes its file from your configuration directory.',
 };
 
 for (const [name, why] of Object.entries(DEMO_ONLY)) {

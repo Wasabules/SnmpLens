@@ -19,6 +19,8 @@
  * drifts from the other.
  */
 
+import { ACME_CRAC_ICON } from './simulatorIcon.js';
+
 /** The seven tabs, as App.svelte names them. */
 export const TABS = {
   operations: 'operations',
@@ -401,18 +403,21 @@ const CATALOGUE = [
     height: 1400,
     bindings: {
       ListSimulatorModels: simulatorModels(),
+      ListSimulatorModelIcons: [{ id: 'custom:acme-crac', icon: ACME_CRAC_ICON }],
       ListSimulatedDevices: [],
       SimulatorSuggestAddress: { address: '127.0.0.2', port: 161 },
     },
-    // v3 ticked after v2c, and a second user added: both identities, and the
+    // The model picker, a custom model with its icon among the catalogue; v3
+    // ticked after v2c, and a second user added: both identities, and the
     // passphrases not yet typed.
     act: ['sel:.status-item.simulator|0', 'New device', 'sel:.versions input|2', 'Add a user'],
     describe: 'A new simulated device: its model, its loopback address, and who may ask it — two SNMPv3 users here.',
   },
 ];
 
-// The simulator's catalogue as ListSimulatorModels serves it. A function
-// declaration, so the catalogue above can call it before this line is reached.
+// The simulator's catalogue as ListSimulatorModels serves it, in Go's order, and
+// one custom model after it. A function declaration, so the catalogue above can
+// call it before this line is reached.
 function simulatorModels() {
   const generic = (own = []) => [
     { name: 'coldStart', oid: '.1.3.6.1.6.3.1.1.5.1' },
@@ -430,15 +435,29 @@ function simulatorModels() {
       { name: 'nsNotifyShutdown', oid: '.1.3.6.1.4.1.8072.4.0.2' },
       { name: 'nsNotifyRestart', oid: '.1.3.6.1.4.1.8072.4.0.3' }]) },
     { id: 'windows-server', category: 'server', notifications: generic(link) },
+    { id: 'dell-idrac9', category: 'server', notifications: generic([
+      { name: 'alertTemperatureProbeWarning', oid: '.1.3.6.1.4.1.674.10892.5.3.2.1.0.2162' }]) },
     { id: 'cisco-catalyst-24', category: 'network', notifications: generic([...link, config]) },
     { id: 'cisco-catalyst-48', category: 'network', notifications: generic([...link, config]) },
     { id: 'cisco-isr-4331', category: 'network', notifications: generic([...link,
       { name: 'bgpEstablishedNotification', oid: '.1.3.6.1.2.1.15.0.1' },
       { name: 'bgpBackwardTransNotification', oid: '.1.3.6.1.2.1.15.0.2' }, config]) },
+    { id: 'mikrotik-rb4011', category: 'network', notifications: generic([...link,
+      { name: 'mtxrTemperatureException', oid: '.1.3.6.1.4.1.14988.1.1.9.0.2' }]) },
+    { id: 'fortigate-60f', category: 'security', notifications: generic([...link,
+      { name: 'fnTrapCpuThreshold', oid: '.1.3.6.1.4.1.12356.100.1.3.0.101' },
+      { name: 'fnTrapMemThreshold', oid: '.1.3.6.1.4.1.12356.100.1.3.0.102' }]) },
+    { id: 'unifi-u6-pro', category: 'wireless', notifications: generic([link[1]]) },
     { id: 'synology-nas', category: 'storage', notifications: generic(link) },
     { id: 'apc-smart-ups', category: 'power', notifications: generic([{ name: 'upsTrapOnBattery', oid: '.1.3.6.1.2.1.33.2.1' }]) },
+    { id: 'apc-rack-pdu', category: 'power', notifications: generic([
+      { name: 'rPDUOutletOff', oid: '.1.3.6.1.4.1.318.0.269' },
+      { name: 'rPDUNearOverload', oid: '.1.3.6.1.4.1.318.0.274' }]) },
     { id: 'hp-laserjet', category: 'printing', notifications: generic([{ name: 'printerV2Alert', oid: '.1.3.6.1.2.1.43.18.2.0.1' }]) },
     { id: 'environment-probe', category: 'environment', notifications: generic() },
+    { id: 'custom:acme-crac', category: 'environment', custom: true, name: 'Acme CRAC-40 cooling unit', vendor: 'Acme',
+      description: 'A computer room air conditioner: three temperature sensors, the fan speed, the compressor’s running time, and an alarm when the return air is too warm.',
+      notifications: generic([{ name: 'acmeHighTemperature', oid: '.1.3.6.1.4.1.32473.0.1' }]) },
   ];
 }
 

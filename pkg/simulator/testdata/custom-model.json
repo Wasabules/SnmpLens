@@ -1,0 +1,35 @@
+{
+  "kind": "snmplens-simulator-model",
+  "formatVersion": 1,
+  "id": "acme-crac",
+  "name": "Acme CRAC-40 cooling unit",
+  "vendor": "Acme",
+  "category": "environment",
+  "description": "A computer room air conditioner: three temperature sensors, the fan speed, the compressor's running time, and an alarm when the return air is too warm.",
+  "icon": "acme-crac.png",
+  "system": {
+    "descr": "Acme CRAC-40 controller, firmware 3.2.1",
+    "objectId": "1.3.6.1.4.1.32473.1.40",
+    "contact": "facilities@example.com",
+    "location": "Server room, north wall"
+  },
+  "interfaces": [
+    { "descr": "eth0", "speedMbps": 100, "up": true, "inOctetsPerSec": 400, "outOctetsPerSec": 900 }
+  ],
+  "objects": [
+    { "oid": "1.3.6.1.4.1.32473.2.1.0", "type": "OctetString", "value": "CRAC-40" },
+    { "oid": "1.3.6.1.4.1.32473.2.2.1.1.{#}", "instances": [1, 2, 3], "type": "Integer32", "value": "{#}" },
+    { "oid": "1.3.6.1.4.1.32473.2.2.1.2.{#}", "instances": [1, 2, 3], "type": "OctetString", "value": "Sensor {#}" },
+    { "oid": "1.3.6.1.4.1.32473.2.2.1.3.{#}", "instances": [1, 2, 3], "type": "Integer32",
+      "gauge": { "min": 180, "max": 260, "periodSec": 900 } },
+    { "oid": "1.3.6.1.4.1.32473.2.3.0", "type": "Gauge32", "gauge": { "min": 1200, "max": 1800 } },
+    { "oid": "1.3.6.1.4.1.32473.2.4.0", "type": "Counter64", "counter": { "perSecond": 1, "start": 31536000 } },
+    { "oid": "1.3.6.1.4.1.32473.2.5.0", "type": "TimeTicks", "uptime": true },
+    { "oid": "1.3.6.1.4.1.32473.2.6.0", "type": "OctetString", "hex": "00:1a:2b:3c:4d:5e" },
+    { "oid": "1.3.6.1.4.1.32473.3.1.0", "type": "OctetString", "value": "Return air above 27 °C", "notifyOnly": true }
+  ],
+  "notifications": [
+    { "name": "acmeHighTemperature", "oid": "1.3.6.1.4.1.32473.0.1",
+      "objects": ["1.3.6.1.4.1.32473.2.2.1.3.2", "1.3.6.1.4.1.32473.3.1.0"] }
+  ]
+}

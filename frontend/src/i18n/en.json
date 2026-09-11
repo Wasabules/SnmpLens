@@ -1331,7 +1331,10 @@
       "storage": "Storage",
       "power": "Power",
       "printing": "Printing",
-      "environment": "Environment"
+      "environment": "Environment",
+      "security": "Security",
+      "wireless": "Wireless",
+      "other": "Other"
     },
     "model": {
       "windows-server": {
@@ -1369,6 +1372,26 @@
       "linux-server": {
         "name": "Linux server",
         "description": "An Ubuntu host running net-snmp: system, three interfaces, host resources. Fits the “Interfaces (IF-MIB)” and “Server (HOST-RESOURCES-MIB)” presets."
+      },
+      "dell-idrac9": {
+        "name": "Dell iDRAC9 (PowerEdge R750)",
+        "description": "The out-of-band controller of a PowerEdge R750: global and storage status, power state, temperatures, fan speeds and power consumption (IDRAC-MIB). Sends alertTemperatureProbeWarning."
+      },
+      "mikrotik-rb4011": {
+        "name": "MikroTik RB4011 router",
+        "description": "A RouterOS router: ten gigabit ports and an empty SFP+ cage, the board’s voltage, temperatures and power draw (MIKROTIK-MIB), and host resources. Fits the “Interfaces (IF-MIB)” and “Server (HOST-RESOURCES-MIB)” presets."
+      },
+      "fortigate-60f": {
+        "name": "Fortinet FortiGate 60F",
+        "description": "A branch firewall on FortiOS 7.2: two WAN ports — the backup one down —, DMZ, LAN and the SSL VPN tunnel, with FortiGate’s processor, memory, disk and session counts. Sends the processor and memory threshold notifications."
+      },
+      "unifi-u6-pro": {
+        "name": "UniFi U6 Pro access point",
+        "description": "A Wi-Fi 6 access point: two radios and how busy their channels are, three SSIDs with their clients and traffic (UBNT-UniFi-MIB), beside interfaces and host resources."
+      },
+      "apc-rack-pdu": {
+        "name": "APC switched rack PDU",
+        "description": "An AP7921B: eight outlets, one of them switched off, the phase load in amps and the power drawn (PowerNet-MIB). Sends rPDUOutletOff and rPDUNearOverload."
       }
     },
     "userN": "User {n}",
@@ -1410,6 +1433,29 @@
       "sendFailed": "{name} was not sent: {error}",
       "activity": "{sent, plural, one {# notification sent} other {# notifications sent}}",
       "activityFailed": "{failed} failed"
+    },
+    "picker": {
+      "search": "Search: name, vendor, notification…",
+      "all": "All",
+      "categories": "Categories",
+      "noMatch": "No model matches “{query}”.",
+      "custom": "Custom",
+      "import": "Import models…",
+      "importTitle": "Add models from a JSON file, or from a ZIP that carries their icons",
+      "deleteModel": "Delete this custom model",
+      "inUse": "{count, plural, one {# device is made from this model: delete it first} other {# devices are made from this model: delete them first}}"
+    },
+    "models": {
+      "imported": "Model “{name}” imported",
+      "replaced": "Model “{name}” updated; the devices running it have restarted",
+      "failed": "{file}: {error}",
+      "deleted": "Model “{name}” deleted",
+      "warning": {
+        "iconSkipped": "{name}: its icon “{detail}” was not imported — an icon travels in a ZIP, beside its model",
+        "iconMissing": "{name}: the archive holds no “{detail}”, so the model has no icon",
+        "iconRefused": "{name}: its icon was refused ({detail})",
+        "restartFailed": "{name}: a device did not restart — {detail}"
+      }
     }
   }
 }

@@ -15,6 +15,9 @@ const (
 	ifTypeEthernet         = 6
 	ifTypeSoftwareLoopback = 24
 	ifTypePropVirtual      = 53
+	ifTypeIEEE80211        = 71
+	ifTypeTunnel           = 131
+	ifTypeBridge           = 209
 )
 
 // iface is one interface of a model: what IF-MIB says of it, and how busy it is.

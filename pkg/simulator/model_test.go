@@ -24,6 +24,11 @@ var modelPresets = map[string][]string{
 	"apc-smart-ups":     {"ups.json", "interfaces.json"},
 	"hp-laserjet":       {"interfaces.json"},
 	"environment-probe": {"interfaces.json"},
+	"dell-idrac9":       {"interfaces.json"},
+	"mikrotik-rb4011":   {"interfaces.json", "host-resources.json"},
+	"fortigate-60f":     {"interfaces.json"},
+	"unifi-u6-pro":      {"interfaces.json", "host-resources.json"},
+	"apc-rack-pdu":      {"interfaces.json"},
 }
 
 type presetFile struct {
@@ -133,12 +138,18 @@ func TestTheCiscoPresetClaimsTheSimulatedCiscos(t *testing.T) {
 }
 
 // Every model goes out over the wire whole: every value encodes and a walk
-// visits every object. A value gosnmp cannot encode would otherwise fail the
-// one response that carries it, as a timeout.
+// visits every object a request may read. A value gosnmp cannot encode would
+// otherwise fail the one response that carries it, as a timeout.
 func TestEveryModelServesAWalk(t *testing.T) {
 	for _, m := range models {
 		t.Run(m.ID, func(t *testing.T) {
 			objects := m.build(Identity{Name: "dev-01", Seed: 7})
+			readable := 0
+			for _, o := range objects {
+				if !o.NotifyOnly {
+					readable++
+				}
+			}
 			a := startAgent(t, Config{Versions: []string{"v2c"}, Community: "public", Objects: objects})
 			g := connect(t, manager(a, gosnmp.Version2c, "public"))
 			n := 0
@@ -148,8 +159,8 @@ func TestEveryModelServesAWalk(t *testing.T) {
 			}); err != nil {
 				t.Fatal(err)
 			}
-			if n != len(objects) {
-				t.Errorf("walked %d objects of %d", n, len(objects))
+			if n != readable {
+				t.Errorf("walked %d objects of %d", n, readable)
 			}
 			res, err := g.Get([]string{".1.3.6.1.2.1.1.5.0"})
 			if err != nil || text(res.Variables[0]) != "dev-01" {

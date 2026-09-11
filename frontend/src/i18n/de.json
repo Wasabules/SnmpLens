@@ -1331,7 +1331,10 @@
       "storage": "Speicher",
       "power": "Stromversorgung",
       "printing": "Druck",
-      "environment": "Umgebung"
+      "environment": "Umgebung",
+      "security": "Sicherheit",
+      "wireless": "Drahtlos",
+      "other": "Sonstige"
     },
     "model": {
       "windows-server": {
@@ -1369,6 +1372,26 @@
       "linux-server": {
         "name": "Linux-Server",
         "description": "Ein Ubuntu-Host mit net-snmp: System, drei Schnittstellen, Host-Ressourcen. Passt zu den Presets „Interfaces (IF-MIB)“ und „Server (HOST-RESOURCES-MIB)“."
+      },
+      "dell-idrac9": {
+        "name": "Dell iDRAC9 (PowerEdge R750)",
+        "description": "Der Out-of-Band-Controller eines PowerEdge R750: Gesamt- und Speicherstatus, Betriebszustand, Temperaturen, Lüfterdrehzahlen und Leistungsaufnahme (IDRAC-MIB). Sendet alertTemperatureProbeWarning."
+      },
+      "mikrotik-rb4011": {
+        "name": "MikroTik-Router RB4011",
+        "description": "Ein RouterOS-Router: zehn Gigabit-Ports und ein leerer SFP+-Schacht, Spannung, Temperaturen und Leistungsaufnahme der Platine (MIKROTIK-MIB) sowie Host-Ressourcen. Passt zu den Presets „Interfaces (IF-MIB)“ und „Server (HOST-RESOURCES-MIB)“."
+      },
+      "fortigate-60f": {
+        "name": "Fortinet FortiGate 60F",
+        "description": "Eine Filial-Firewall mit FortiOS 7.2: zwei WAN-Ports — der Backup-Port ausgefallen —, DMZ, LAN und der SSL-VPN-Tunnel, mit CPU-, Speicher-, Festplatten- und Sitzungswerten von FortiGate. Sendet die CPU- und Speicher-Schwellwertbenachrichtigungen."
+      },
+      "unifi-u6-pro": {
+        "name": "UniFi-Access-Point U6 Pro",
+        "description": "Ein Wi-Fi-6-Access-Point: zwei Funkmodule mit ihrer Kanalauslastung, drei SSIDs mit ihren Clients und ihrem Datenverkehr (UBNT-UniFi-MIB), dazu Schnittstellen und Host-Ressourcen."
+      },
+      "apc-rack-pdu": {
+        "name": "Schaltbare APC-Rack-PDU",
+        "description": "Eine AP7921B: acht Steckdosen, eine davon ausgeschaltet, die Phasenlast in Ampere und die aufgenommene Leistung (PowerNet-MIB). Sendet rPDUOutletOff und rPDUNearOverload."
       }
     },
     "userN": "Benutzer {n}",
@@ -1410,6 +1433,29 @@
       "sendFailed": "{name} wurde nicht gesendet: {error}",
       "activity": "{sent, plural, one {# Benachrichtigung gesendet} other {# Benachrichtigungen gesendet}}",
       "activityFailed": "{failed} fehlgeschlagen"
+    },
+    "picker": {
+      "search": "Suchen: Name, Hersteller, Benachrichtigung…",
+      "all": "Alle",
+      "categories": "Kategorien",
+      "noMatch": "Kein Modell passt zu „{query}“.",
+      "custom": "Eigenes",
+      "import": "Modelle importieren…",
+      "importTitle": "Modelle aus einer JSON-Datei hinzufügen oder aus einem ZIP, das ihre Symbole enthält",
+      "deleteModel": "Dieses eigene Modell löschen",
+      "inUse": "{count, plural, one {# Gerät basiert auf diesem Modell: zuerst löschen} other {# Geräte basieren auf diesem Modell: zuerst löschen}}"
+    },
+    "models": {
+      "imported": "Modell „{name}“ importiert",
+      "replaced": "Modell „{name}“ aktualisiert; laufende Geräte damit wurden neu gestartet",
+      "failed": "{file}: {error}",
+      "deleted": "Modell „{name}“ gelöscht",
+      "warning": {
+        "iconSkipped": "{name}: Das Symbol „{detail}“ wurde nicht importiert — ein Symbol kommt in einem ZIP neben seinem Modell",
+        "iconMissing": "{name}: Das Archiv enthält kein „{detail}“, das Modell hat also kein Symbol",
+        "iconRefused": "{name}: Das Symbol wurde abgelehnt ({detail})",
+        "restartFailed": "{name}: Ein Gerät wurde nicht neu gestartet — {detail}"
+      }
     }
   }
 }

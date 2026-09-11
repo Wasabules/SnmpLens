@@ -616,8 +616,8 @@ func (a *Agent) varbinds(n Notification, c clock) []gosnmp.SnmpPDU {
 	return vars
 }
 
-// objectsOf reads n's objects from the tree; one the device does not have is
-// left out.
+// objectsOf reads n's objects from the tree, those only a notification reads
+// included; one the device does not have is left out.
 func (a *Agent) objectsOf(n Notification, c clock) []gosnmp.SnmpPDU {
 	var out []gosnmp.SnmpPDU
 	for _, name := range n.Objects {
@@ -625,7 +625,7 @@ func (a *Agent) objectsOf(n Notification, c clock) []gosnmp.SnmpPDU {
 		if err != nil {
 			continue
 		}
-		if e := a.tree.get(id); e != nil {
+		if e := a.tree.notification(id); e != nil {
 			out = append(out, e.varbind(c))
 		}
 	}

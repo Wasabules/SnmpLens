@@ -610,13 +610,16 @@ the device answers. A running device that is edited restarts; nothing starts by 
 status and the modal read `simulatorStore`, which Go refreshes with `simulator:changed`.
 
 **A model is a vocabulary, not prose.** `simulator.Models()` serves an ID, a category and the notifications; the
-name and the description are `simulator.model.<id>`, and the category `simulator.category.<category>`, in the five
-locales, and `tests/simulator.test.mjs` requires `en.json` to answer for every ID and category in `pkg/simulator`.
-Values are pure functions of time (`values.go`): counters that only go up and wrap at 32 bits as a real
-interface's do, gauges that swing, nothing ticking in the background.
+name and the description of a built-in model are `simulator.model.<id>`, and the category
+`simulator.category.<category>`, in the five locales, and `tests/simulator.test.mjs` requires `en.json` to answer
+for every ID and category in `pkg/simulator`. A custom model is the exception, and says so (`Custom`): no locale
+knows it, so it carries its own name, description and vendor. Values are pure functions of time (`values.go`):
+counters that only go up and wrap at 32 bits as a real interface's do, gauges that swing, nothing ticking in the
+background.
 
-**The catalogue is what the presets poll.** Nine models: a Linux server, a Windows server, a Catalyst 2960 with 24
-and with 48 ports, an ISR 4331 with two eBGP sessions, a Synology NAS, a three-phase APC Smart-UPS, an HP LaserJet
+**The catalogue is what the presets poll.** Fourteen models: a Linux server, a Windows server, the iDRAC9 of a
+PowerEdge R750, a Catalyst 2960 with 24 and with 48 ports, an ISR 4331 with two eBGP sessions, a MikroTik RB4011, a
+FortiGate 60F, a UniFi U6 Pro, a Synology NAS, a three-phase APC Smart-UPS, an APC switched rack PDU, an HP LaserJet
 and an ENTITY-SENSOR-MIB probe. Each says which bundled presets it feeds (`modelPresets`), and
 `TestEveryModelFeedsItsPresets` expands those presets' widgets against it, discovery walks included — a model
 cannot be added without saying what it answers, nor a preset grow a widget its models leave empty. Three choices
@@ -625,9 +628,42 @@ look odd without that. The Catalyst numbers its ports from 1, because "Switch dr
 "UPS (RFC 1628)" charts three output lines. And interfaces, host resources and the system group are shared
 builders (`ifaces.go`, `hostres.go`, `addSystem`), so what a preset reads means the same on every model.
 `TestTheCiscoPresetClaimsTheSimulatedCiscos` holds the identification: the "Cisco (IF-MIB)" preset claims the
-Catalysts and the ISR by their CISCO-PRODUCTS-MIB OIDs, and nothing else. The NAS and the probe report net-snmp's
-Linux sysObjectID because DSM's agent is net-snmp, as most embedded probes' is; their own tables tell them apart.
-The vendor OIDs were read from the MIBs, not remembered.
+Catalysts and the ISR by their CISCO-PRODUCTS-MIB OIDs, and nothing else. The NAS, the probe and the UniFi report
+net-snmp's Linux sysObjectID because their agent is net-snmp, as most embedded devices' is; their own tables tell
+them apart. The vendor OIDs were read from the MIBs (LibreNMS keeps them), not remembered.
+
+**What only a notification carries** (`Object.NotifyOnly`). An iDRAC alert carries eleven objects its MIB makes
+accessible-for-notify (RFC 2578 7.3) — a message ID, the message, the service tag — and no request may read them.
+They are kept beside the tree rather than in it: a GET answers `noSuchObject`, a walk passes them by, and
+`objectsOf` finds them for the notification that names them. One value per OID, so two notifications carrying the
+same object carry the same value; the iDRAC and the PDU send one such alert each for that reason.
+
+**Custom models** (`custom.go`). A custom model is a JSON file someone else wrote — `"kind":
+"snmplens-simulator-model"`, `"formatVersion": 1` — and it is read the way a preset is: a frozen vocabulary it
+PICKS from and never describes. An SMI type by name, one behaviour among those `values.go` implements (`value`,
+`hex`, `uptime`, `secondsUp`, `gauge`, `counter`), a `{#}` template expanded over `instances` (`"value": "{#}"` is
+the index column), notifications naming objects the model answers. A field the format does not define is REFUSED
+rather than ignored, since a misspelt `vaule` would otherwise be an object with no value, reported as something
+else; every bound is checked before anything is built, the expansion counted first. Then the model is BUILT ONCE,
+with the snmpEngine group beside it as a v3 device's tree has, so that an OID given twice, one under another or a
+value its type cannot carry is refused at import, naming the OID, rather than at the first start. Its catalogue ID
+is `custom:<id>`, so a custom model can never take a built-in's ID, today's or a later one's; its engine carries
+the vendor its sysObjectID names under enterprises unless it gives one. `testdata/custom-model.json` is the example
+the README shows, and a test holds it answering over the wire. The registry is process-wide (`SetCustomModels`),
+because a device names its model by ID and `Validate`, `NewEngineID` and a start are functions of the device alone.
+
+`app_simmodels.go` keeps the models in `simulator-models/`, a sibling like `assets/`, each under its own id —
+`<id>.json` and its icon `<id>.png`, `.jpg` or `.gif` by the format the DECODER named — and never under a name the
+file or the archive chose: an entry called `../../x` is read as what it holds and nothing more. Only the dialog is
+bound, because a method taking a path would read any file the renderer named and quote it back in a parse error. A
+ZIP is read without trusting its central directory: entries are counted, each is read through a limit, and what is
+unpacked is added up as it is read (archive/zip itself stops at the size an entry declares; the limit bounds what
+it may declare). An icon passes `pkg/imagegate` and a picker's bounds, 256 KB and 512 px. A lone JSON cannot bring
+an icon — the one it names would have to be read from wherever the file came from — and the import says so. A model
+imported again replaces the one kept and restarts its running devices, as an edited device restarts; one imported
+without an icon keeps the icon it had. A model a device is made from is not deleted: the device would not start
+again, and nothing would say why until somebody tried. The renderer lists models and icons on `simulator:models`
+and not with the devices it polls every two seconds, since an icon crosses the bridge as a data URI.
 
 **A device becomes a target in the renderer** (`addDeviceAsTarget` in `utils/simulator.js`): the target in the
 list, and an override with its identifiers in the most secure version it answers — its FIRST user for v3, since a

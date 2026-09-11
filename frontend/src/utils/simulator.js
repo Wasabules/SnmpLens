@@ -275,6 +275,108 @@ export function modelGroups(models) {
   return groups;
 }
 
+/** The categories the models are in, in the order Go lists them. */
+export function categoriesOf(models) {
+  return modelGroups(models).map((g) => g.category);
+}
+
+/**
+ * The Lucide icon a model is drawn with when it has no picture of its own: its
+ * category's. A custom model that came with an icon is drawn with that.
+ */
+export const CATEGORY_ICONS = {
+  server: 'server',
+  network: 'network',
+  security: 'shield',
+  wireless: 'wifi',
+  storage: 'hard-drive',
+  power: 'battery-charging',
+  printing: 'printer',
+  environment: 'thermometer',
+  other: 'package',
+};
+
+export function categoryIcon(category) {
+  return CATEGORY_ICONS[category] || CATEGORY_ICONS.other;
+}
+
+/** The model of that ID — undefined for a custom model since deleted. */
+export function modelOf(models, id) {
+  return (models || []).find((m) => m.id === id);
+}
+
+/**
+ * What a model is called: a built-in one in the locale, a custom one in the
+ * words of its file, which no locale knows. A model that is gone is called by
+ * the ID its devices still carry.
+ */
+export function modelName(model, t, id = '') {
+  if (!model) return id.replace(/^custom:/, '');
+  return model.custom ? model.name : t(`simulator.model.${model.id}.name`);
+}
+
+export function modelDescription(model, t) {
+  if (!model) return '';
+  return model.custom ? model.description || '' : t(`simulator.model.${model.id}.description`);
+}
+
+/** Text as a search compares it: lower case, accents dropped — "ecran" finds "écran". */
+export function fold(s) {
+  return String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+/**
+ * The models a search keeps, in the order given: those of the category, when
+ * one is chosen, where every word of the query is found in what describes the
+ * model — its name, vendor, description, category, ID, or a notification it
+ * sends. "cisco bgp" finds the router; "onduleur" finds the UPS in French.
+ */
+export function filterModels(models, query, category, t) {
+  const words = fold(query).split(/\s+/).filter(Boolean);
+  return (models || []).filter((m) => {
+    if (category && m.category !== category) return false;
+    if (!words.length) return true;
+    const text = fold([
+      modelName(m, t), m.vendor, modelDescription(m, t), t(`simulator.category.${m.category}`), m.id,
+      ...(m.notifications || []).map((n) => n.name),
+    ].join(' '));
+    return words.every((w) => text.includes(w));
+  });
+}
+
+/** The devices made from a model: while there is one, the model is not deleted. */
+export function devicesOfModel(devices, id) {
+  return (devices || []).filter((d) => d.model === id);
+}
+
+/**
+ * What to say about an import, as i18n keys: a line per model imported, updated
+ * or refused, and one per warning about a model imported anyway.
+ */
+export function importReport(results) {
+  const out = [];
+  for (const r of results || []) {
+    if (!r.success) {
+      out.push({ key: 'simulator.models.failed', values: { file: r.file, error: r.error }, level: 'error' });
+      continue;
+    }
+    out.push({
+      key: r.replaced ? 'simulator.models.replaced' : 'simulator.models.imported',
+      values: { name: r.name },
+      level: 'success',
+    });
+    for (const w of r.warnings || []) {
+      out.push({ key: `simulator.models.warning.${w.key}`, values: { name: r.name, detail: w.detail }, level: 'warning' });
+    }
+  }
+  return out;
+}
+
+/** The first model an import brought in, which the picker then selects. */
+export function firstImported(results) {
+  return (results || []).find((r) => r.success)?.modelId || '';
+}
+
 /** What a device of the model can send, as Go lists it. */
 export function notificationsOf(models, modelId) {
   return (models || []).find((m) => m.id === modelId)?.notifications || [];
