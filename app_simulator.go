@@ -41,11 +41,22 @@ type simulatorService struct {
 	path    string
 	devices []simulator.Device
 	fleet   *simulator.Fleet
+	// modelDir holds the custom models (app_simmodels.go), and models is what
+	// it held when it was last read.
+	modelDir string
+	models   []simulator.CustomModel
 }
 
 func newSimulatorService(dir string) *simulatorService {
-	s := &simulatorService{path: filepath.Join(dir, simulatorFile), fleet: simulator.NewFleet()}
+	s := &simulatorService{
+		path:     filepath.Join(dir, simulatorFile),
+		modelDir: filepath.Join(dir, simulatorModelSubdir),
+		fleet:    simulator.NewFleet(),
+	}
 	s.load()
+	// The custom models before any device is validated or started: a device
+	// names its model by ID.
+	s.loadModels()
 	return s
 }
 

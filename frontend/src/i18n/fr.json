@@ -1331,7 +1331,10 @@
       "storage": "Stockage",
       "power": "Énergie",
       "printing": "Impression",
-      "environment": "Environnement"
+      "environment": "Environnement",
+      "security": "Sécurité",
+      "wireless": "Sans fil",
+      "other": "Autres"
     },
     "model": {
       "windows-server": {
@@ -1369,6 +1372,26 @@
       "linux-server": {
         "name": "Serveur Linux",
         "description": "Un hôte Ubuntu avec net-snmp : système, trois interfaces, ressources de l'hôte. Convient aux presets « Interfaces (IF-MIB) » et « Server (HOST-RESOURCES-MIB) »."
+      },
+      "dell-idrac9": {
+        "name": "Dell iDRAC9 (PowerEdge R750)",
+        "description": "Le contrôleur hors bande d’un PowerEdge R750 : état global et du stockage, alimentation, températures, vitesse des ventilateurs et consommation (IDRAC-MIB). Envoie alertTemperatureProbeWarning."
+      },
+      "mikrotik-rb4011": {
+        "name": "Routeur MikroTik RB4011",
+        "description": "Un routeur RouterOS : dix ports gigabit et une cage SFP+ vide, la tension, les températures et la consommation de la carte (MIKROTIK-MIB), et les ressources de l’hôte. Convient aux presets « Interfaces (IF-MIB) » et « Server (HOST-RESOURCES-MIB) »."
+      },
+      "fortigate-60f": {
+        "name": "Fortinet FortiGate 60F",
+        "description": "Un pare-feu d’agence sous FortiOS 7.2 : deux ports WAN — celui de secours en panne —, DMZ, LAN et le tunnel VPN SSL, avec la charge processeur, la mémoire, le disque et les sessions de FortiGate. Envoie les notifications de seuil processeur et mémoire."
+      },
+      "unifi-u6-pro": {
+        "name": "Point d’accès UniFi U6 Pro",
+        "description": "Un point d’accès Wi-Fi 6 : deux radios et l’occupation de leur canal, trois SSID avec leurs clients et leur trafic (UBNT-UniFi-MIB), plus les interfaces et les ressources de l’hôte."
+      },
+      "apc-rack-pdu": {
+        "name": "PDU APC commutable",
+        "description": "Une AP7921B : huit prises, dont une coupée, la charge de la phase en ampères et la puissance consommée (PowerNet-MIB). Envoie rPDUOutletOff et rPDUNearOverload."
       }
     },
     "userN": "Utilisateur {n}",
@@ -1410,6 +1433,29 @@
       "sendFailed": "{name} n’a pas été envoyé : {error}",
       "activity": "{sent, plural, one {# notification envoyée} other {# notifications envoyées}}",
       "activityFailed": "{failed} en échec"
+    },
+    "picker": {
+      "search": "Rechercher : nom, fabricant, notification…",
+      "all": "Tous",
+      "categories": "Catégories",
+      "noMatch": "Aucun modèle ne correspond à « {query} ».",
+      "custom": "Personnalisé",
+      "import": "Importer des modèles…",
+      "importTitle": "Ajouter des modèles depuis un fichier JSON, ou depuis un ZIP qui contient leurs icônes",
+      "deleteModel": "Supprimer ce modèle personnalisé",
+      "inUse": "{count, plural, one {# appareil est fait de ce modèle : supprimez-le d’abord} other {# appareils sont faits de ce modèle : supprimez-les d’abord}}"
+    },
+    "models": {
+      "imported": "Modèle « {name} » importé",
+      "replaced": "Modèle « {name} » mis à jour ; les appareils en marche qui l’utilisent ont redémarré",
+      "failed": "{file} : {error}",
+      "deleted": "Modèle « {name} » supprimé",
+      "warning": {
+        "iconSkipped": "{name} : son icône « {detail} » n’a pas été importée — une icône voyage dans un ZIP, à côté de son modèle",
+        "iconMissing": "{name} : l’archive ne contient pas « {detail} », le modèle n’a donc pas d’icône",
+        "iconRefused": "{name} : son icône a été refusée ({detail})",
+        "restartFailed": "{name} : un appareil n’a pas redémarré — {detail}"
+      }
     }
   }
 }

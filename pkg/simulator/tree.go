@@ -16,6 +16,11 @@ type Object struct {
 	OID   string
 	Type  gosnmp.Asn1BER
 	Value Reading
+	// NotifyOnly is an object no request reads and a notification carries:
+	// accessible-for-notify in its MIB (RFC 2578 7.3) — an alert's message, the
+	// name of what it is about. A GET answers it noSuchObject and a walk passes
+	// it by, as a real agent's do.
+	NotifyOnly bool
 }
 
 // Reading is what an object answers when it is asked.
@@ -131,6 +136,8 @@ type tree struct {
 	// objects holds the object each instance belongs to — its OID less the last
 	// arc — which is what tells noSuchInstance from noSuchObject.
 	objects map[string]bool
+	// notifyOnly holds, by OID, the objects only a notification reads.
+	notifyOnly map[string]*entry
 }
 
 type entry struct {
@@ -145,7 +152,11 @@ func (e *entry) varbind(c clock) gosnmp.SnmpPDU {
 }
 
 func newTree(objects []Object) (*tree, error) {
-	t := &tree{entries: make([]entry, 0, len(objects)), objects: make(map[string]bool, len(objects))}
+	t := &tree{
+		entries:    make([]entry, 0, len(objects)),
+		objects:    make(map[string]bool, len(objects)),
+		notifyOnly: map[string]*entry{},
+	}
 	for _, o := range objects {
 		id, err := parseOID(o.OID)
 		if err != nil {
@@ -157,7 +168,15 @@ func newTree(objects []Object) (*tree, error) {
 		if err := o.Value.check(o.Type); err != nil {
 			return nil, fmt.Errorf("%s: %w", id, err)
 		}
-		t.entries = append(t.entries, entry{oid: id, name: id.String(), typ: o.Type, val: o.Value})
+		e := entry{oid: id, name: id.String(), typ: o.Type, val: o.Value}
+		if o.NotifyOnly {
+			if t.notifyOnly[e.name] != nil {
+				return nil, fmt.Errorf("%s is declared twice", id)
+			}
+			t.notifyOnly[e.name] = &e
+			continue
+		}
+		t.entries = append(t.entries, e)
 		t.objects[id[:len(id)-1].String()] = true
 	}
 	slices.SortFunc(t.entries, func(a, b entry) int { return slices.Compare(a.oid, b.oid) })
@@ -172,7 +191,21 @@ func newTree(objects []Object) (*tree, error) {
 			return nil, fmt.Errorf("%s lies under %s, which is an instance itself", cur, prev)
 		}
 	}
+	for _, e := range t.notifyOnly {
+		if _, found := t.find(e.oid); found {
+			return nil, fmt.Errorf("%s is declared twice", e.oid)
+		}
+	}
 	return t, nil
+}
+
+// notification returns the object named exactly o for a notification to carry:
+// one a request reads, or one only a notification does.
+func (t *tree) notification(o oid) *entry {
+	if e := t.get(o); e != nil {
+		return e
+	}
+	return t.notifyOnly[o.String()]
 }
 
 // find returns where o is, or would be, among the entries.

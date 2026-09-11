@@ -9,9 +9,11 @@
   import {
     SIM_VERSIONS, MAX_EVERY, MAX_DESTINATIONS, MAX_SCHEDULES, blankDevice, blankV3, blankDestination, blankSchedule,
     editableDevice, deviceProblems, devicePayload, addDeviceAsTarget, notificationsOf, trapActivity, deliveryReport,
-    modelGroups,
+    modelOf, modelName, modelDescription, importReport, firstImported,
   } from './utils/simulator.js';
   import UsmFields from './settings/UsmFields.svelte';
+  import ModelPicker from './simulator/ModelPicker.svelte';
+  import ModelIcon from './simulator/ModelIcon.svelte';
   import Icon from './Icon.svelte';
 
   /**
@@ -34,6 +36,7 @@
   // list is re-read while the dialog is open.
   onMount(() => {
     simulatorStore.refresh().catch((e) => notificationStore.add(String(e), 'error'));
+    simulatorStore.refreshModels().catch((e) => notificationStore.add(String(e), 'error'));
     const timer = setInterval(() => simulatorStore.refresh().catch(() => {}), 2000);
     return () => clearInterval(timer);
   });
@@ -69,26 +72,68 @@
   /** The name a new device was given, which follows its model until someone types another. */
   let defaultName = '';
 
+  function nameFor(id, devices) {
+    return `${modelName(modelOf($simulatorStore.models, id), $_, id)} ${devices.length + 1}`;
+  }
+
   async function newDevice(models, devices) {
     const model = models[0]?.id || 'linux-server';
     const suggestion = await simulatorStore.suggestAddress().catch(() => null);
     editing = blankDevice(model, suggestion);
-    defaultName = `${$_(`simulator.model.${model}.name`)} ${devices.length + 1}`;
+    defaultName = nameFor(model, devices);
     editing.name = defaultName;
     saveError = '';
   }
 
-  // A schedule naming a notification the new model does not send falls back
-  // to one at random, rather than being refused at save.
-  function onModel() {
-    if (editing.name === defaultName) {
-      defaultName = `${$_(`simulator.model.${editing.model}.name`)} ${$simulatorStore.devices.length + 1}`;
+  // A new device's model. Its name follows the model until someone types
+  // another, and a schedule naming a notification the new model does not send
+  // falls back to one at random, rather than being refused at save.
+  function onModel(id) {
+    if (!editing || editing.id) return;
+    const followsModel = editing.name === defaultName;
+    editing.model = id;
+    if (followsModel) {
+      defaultName = nameFor(id, $simulatorStore.devices);
       editing.name = defaultName;
     }
-    const names = notificationsOf($simulatorStore.models, editing.model).map((n) => n.name);
+    const names = notificationsOf($simulatorStore.models, id).map((n) => n.name);
     editing.traps.schedules = editing.traps.schedules.map((s) =>
       (s.notification && !names.includes(s.notification) ? { ...s, notification: '' } : s));
     editing = editing;
+  }
+
+  let importingModels = false;
+
+  // Each model imported, updated or refused is reported, and the first one
+  // imported becomes the new device's model: importing one is how someone says
+  // they want it.
+  async function importModels() {
+    importingModels = true;
+    try {
+      const results = await simulatorStore.importModels();
+      for (const line of importReport(results)) {
+        notificationStore.add($_(line.key, { values: line.values }), line.level);
+      }
+      await simulatorStore.refreshModels();
+      const first = firstImported(results);
+      if (first) onModel(first);
+    } catch (e) {
+      notificationStore.add(String(e), 'error');
+    } finally {
+      importingModels = false;
+    }
+  }
+
+  async function deleteModel(id) {
+    const name = modelName(modelOf($simulatorStore.models, id), $_, id);
+    try {
+      await simulatorStore.removeModel(id);
+      await simulatorStore.refreshModels();
+      notificationStore.add($_('simulator.models.deleted', { values: { name } }), 'success');
+      if (editing && editing.model === id) onModel($simulatorStore.models[0]?.id || 'linux-server');
+    } catch (e) {
+      notificationStore.add(String(e), 'error');
+    }
   }
 
   async function edit(device) {
@@ -247,25 +292,28 @@
     {#if editing}
       <div class="sim-body">
         <h3 class="editor-title">{editing.id ? $_('simulator.editTitle') : $_('simulator.newTitle')}</h3>
+        {#if editing.id}
+          <!-- A device keeps its model: its engine ID carries the model's vendor. -->
+          {@const model = modelOf($simulatorStore.models, editing.model)}
+          <div class="model-card">
+            <ModelIcon category={model?.category || 'other'} icon={$simulatorStore.icons[editing.model] || ''} size={44} />
+            <div class="model-card-text">
+              <span class="model-card-name">{modelName(model, $_, editing.model)}</span>
+              <span class="model-card-description">{modelDescription(model, $_)}</span>
+            </div>
+          </div>
+        {:else}
+          <h4 class="section-title first">{$_('simulator.field.model')}</h4>
+          <ModelPicker models={$simulatorStore.models} icons={$simulatorStore.icons} devices={$simulatorStore.devices}
+            value={editing.model} busy={importingModels} on:change={(e) => onModel(e.detail)}
+            on:import={importModels} on:delete={(e) => deleteModel(e.detail)} />
+        {/if}
         <div class="grid">
           <div class="form-group">
             <label for="sim-name">{$_('simulator.field.name')}</label>
             <input id="sim-name" type="text" maxlength="64" spellcheck="false" bind:value={editing.name} />
             {#if problems.name}<span class="problem">{$_(`simulator.problem.${problems.name}`)}</span>{/if}
           </div>
-          <div class="form-group">
-            <label for="sim-model">{$_('simulator.field.model')}</label>
-            <select id="sim-model" bind:value={editing.model} disabled={!!editing.id} on:change={onModel}>
-              {#each modelGroups($simulatorStore.models) as group (group.category)}
-                <optgroup label={$_(`simulator.category.${group.category}`)}>
-                  {#each group.models as m (m.id)}
-                    <option value={m.id}>{$_(`simulator.model.${m.id}.name`)}</option>
-                  {/each}
-                </optgroup>
-              {/each}
-            </select>
-          </div>
-          <p class="model-description">{$_(`simulator.model.${editing.model}.description`)}</p>
           <div class="form-group">
             <label for="sim-address">{$_('simulator.field.address')}</label>
             <input id="sim-address" type="text" spellcheck="false" bind:value={editing.address} />
@@ -446,12 +494,14 @@
           <ul class="devices">
             {#each $simulatorStore.devices as d (d.id)}
               {@const activity = trapActivity(d.traps)}
+              {@const model = modelOf($simulatorStore.models, d.model)}
               <li class="device" class:running={d.running}>
                 <span class="state" title={d.running ? $_('simulator.running') : $_('simulator.stopped')}></span>
+                <ModelIcon category={model?.category || 'other'} icon={$simulatorStore.icons[d.model] || ''} size={30} />
                 <div class="identity">
                   <span class="name">{d.name}</span>
                   <span class="meta">
-                    {$_(`simulator.model.${d.model}.name`)} · <code>{d.address}:{d.port}</code>
+                    {modelName(model, $_, d.model)} · <code>{d.address}:{d.port}</code>
                   </span>
                   <span class="meta">
                     {#each d.versions as version (version)}<span class="chip">{version}</span>{/each}
@@ -763,12 +813,32 @@
     opacity: 0.7;
   }
 
-  .model-description {
-    grid-column: 1 / -1;
-    margin: -4px 0 0;
+  .model-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    padding: 10px 12px;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+  }
+
+  .model-card-text {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .model-card-name {
+    font-weight: 600;
+  }
+
+  .model-card-description {
     font-size: 0.82em;
-    color: var(--text-muted);
     line-height: 1.4;
+    color: var(--text-muted);
   }
 
   .hint {
@@ -813,6 +883,10 @@
   .section-title {
     margin: 16px 0 0;
     font-size: 0.95em;
+  }
+
+  .section-title.first {
+    margin-top: 0;
   }
 
   .user-block {

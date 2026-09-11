@@ -384,6 +384,54 @@ Everything SnmpLens writes lives in the user config directory:
 | `mib-drafts/`   | Unsaved MIB editor buffers                                       |
 | `monitoring.db` | SQLite: history, events, sessions, rules, destinations, outbox   |
 | `service.json`  | The few preferences read before the window exists                |
+| `simulator.json` | Simulated devices (their passwords are in the system keychain)  |
+| `simulator-models/` | Custom simulator models, and their icons                     |
+
+---
+
+## Custom Simulator Models
+
+The simulator's catalogue can be extended with models of your own: a JSON file saying what a device answers, imported from the model picker (**Import models…**) on its own, or in a ZIP archive that also carries the model's icon — PNG, JPEG or GIF, up to 512 × 512 px. An archive may hold several models. A model imported again replaces the one kept, and the devices made from it restart.
+
+```json
+{
+  "kind": "snmplens-simulator-model",
+  "formatVersion": 1,
+  "id": "acme-crac",
+  "name": "Acme CRAC-40 cooling unit",
+  "vendor": "Acme",
+  "category": "environment",
+  "icon": "acme-crac.png",
+  "system": { "descr": "Acme CRAC-40 controller, firmware 3.2.1", "objectId": "1.3.6.1.4.1.32473.1.40" },
+  "interfaces": [{ "descr": "eth0", "speedMbps": 100, "up": true, "inOctetsPerSec": 400, "outOctetsPerSec": 900 }],
+  "objects": [
+    { "oid": "1.3.6.1.4.1.32473.2.2.1.1.{#}", "instances": [1, 2, 3], "type": "Integer32", "value": "{#}" },
+    { "oid": "1.3.6.1.4.1.32473.2.2.1.2.{#}", "instances": [1, 2, 3], "type": "OctetString", "value": "Sensor {#}" },
+    { "oid": "1.3.6.1.4.1.32473.2.2.1.3.{#}", "instances": [1, 2, 3], "type": "Integer32", "gauge": { "min": 180, "max": 260 } },
+    { "oid": "1.3.6.1.4.1.32473.2.4.0", "type": "Counter64", "counter": { "perSecond": 1, "start": 31536000 } },
+    { "oid": "1.3.6.1.4.1.32473.3.1.0", "type": "OctetString", "value": "Return air above 27 °C", "notifyOnly": true }
+  ],
+  "notifications": [
+    { "name": "acmeHighTemperature", "oid": "1.3.6.1.4.1.32473.0.1",
+      "objects": ["1.3.6.1.4.1.32473.2.2.1.3.2", "1.3.6.1.4.1.32473.3.1.0"] }
+  ]
+}
+```
+
+| Field | What it says |
+| ----- | ------------ |
+| `id` | Lower-case letters, digits and hyphens; the model is listed as `custom:<id>` |
+| `category` | `server`, `network`, `security`, `wireless`, `storage`, `power`, `printing`, `environment` or `other` |
+| `icon` | A file in the same ZIP; a model imported alone keeps the icon it already had |
+| `system` | `descr` and `objectId` (sysDescr, sysObjectID) are required; `contact`, `location`, `services` are not. sysName is the device's name |
+| `interfaces` | IF-MIB's tables: `descr`, `name`, `alias`, `type` (IANAifType), `mtu`, `speedMbps`, `up`, `adminDown`, and the rates `inOctetsPerSec`, `outOctetsPerSec`, `errorsPerSec` the counters move at |
+| `objects[].type` | `Integer32`, `OctetString`, `ObjectIdentifier`, `IpAddress`, `Counter32`, `Gauge32`, `Unsigned32`, `TimeTicks`, `Counter64`, `Opaque` |
+| `objects[]` behaviour | Exactly one of `value`, `hex` (octets), `uptime`, `secondsUp`, `gauge` (`min`, `max`, `periodSec`) and `counter` (`perSecond`, `start`, `swing`, `periodSec`) |
+| `instances` | A table's rows: `{#}` in the OID, and in a string value, becomes each; `"value": "{#}"` is the row's own index |
+| `notifyOnly` | An accessible-for-notify object: carried by notifications, never answered to a request |
+| `notifications` | The model's own, beside `coldStart`, `warmStart` and `authenticationFailure`, which every device sends |
+
+A file is checked in full when it is imported — unknown fields, types, ranges, an OID given twice — and a refusal names the field or the OID. The example is `pkg/simulator/testdata/custom-model.json`; 32473 is the enterprise number RFC 5612 reserves for documentation.
 
 ---
 

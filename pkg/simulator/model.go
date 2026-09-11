@@ -16,6 +16,12 @@ type ModelInfo struct {
 	Category string `json:"category"`
 	// Notifications are what a device of the model can send.
 	Notifications []NotificationInfo `json:"notifications"`
+	// Custom is a model somebody wrote (ParseCustomModel). No locale knows it,
+	// so it names and describes itself, in the words of its file.
+	Custom      bool   `json:"custom"`
+	Name        string `json:"name,omitempty"`
+	Description string `json:"description,omitempty"`
+	Vendor      string `json:"vendor,omitempty"`
 }
 
 // Identity is what makes one device differ from another of the same model.
@@ -41,18 +47,22 @@ type model struct {
 // is made from the first. Each says which bundled presets it feeds
 // (TestEveryModelFeedsItsPresets).
 var models = []model{
-	linuxServer, windowsServer,
-	catalyst24, catalyst48, isr4331,
+	linuxServer, windowsServer, dellIDRAC9,
+	catalyst24, catalyst48, isr4331, mikrotikRB4011,
+	fortiGate60F,
+	unifiU6Pro,
 	synologyNAS,
-	apcSmartUPS,
+	apcSmartUPS, apcRackPDU,
 	hpLaserJet,
 	environmentProbe,
 }
 
-// Models lists the models a device can be made from.
+// Models lists the models a device can be made from: the catalogue, then the
+// custom models by name.
 func Models() []ModelInfo {
-	out := make([]ModelInfo, len(models))
-	for i, m := range models {
+	all := slices.Concat(models, customModels())
+	out := make([]ModelInfo, len(all))
+	for i, m := range all {
 		info := m.ModelInfo
 		for _, n := range m.catalogue() {
 			info.Notifications = append(info.Notifications, NotificationInfo{Name: n.Name, OID: n.OID})
@@ -74,6 +84,11 @@ func findModel(id string) (model, bool) {
 			return m, true
 		}
 	}
+	for _, m := range customModels() {
+		if m.ID == id {
+			return m, true
+		}
+	}
 	return model{}, false
 }
 
@@ -82,6 +97,11 @@ type objects []Object
 
 func (o *objects) add(oid string, t gosnmp.Asn1BER, r Reading) {
 	*o = append(*o, Object{OID: oid, Type: t, Value: r})
+}
+
+// addForNotify adds an object only a notification carries (Object.NotifyOnly).
+func (o *objects) addForNotify(oid string, t gosnmp.Asn1BER, r Reading) {
+	*o = append(*o, Object{OID: oid, Type: t, Value: r, NotifyOnly: true})
 }
 
 // addSystem adds the system group (RFC 3418) as a model's agent answers it.

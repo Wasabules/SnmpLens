@@ -57,6 +57,15 @@ const {
   deliveryReport,
   trapActivity,
   modelGroups,
+  categoriesOf,
+  categoryIcon,
+  CATEGORY_ICONS,
+  modelName,
+  modelDescription,
+  filterModels,
+  devicesOfModel,
+  importReport,
+  firstImported,
   preferredVersion,
   targetOf,
   addDeviceAsTarget,
@@ -298,6 +307,82 @@ for (const key of ['sent', 'acknowledged', 'sentAll', 'failed']) {
 for (const id of ids) {
   check(`en.json names and describes the model ${id}`,
     Boolean(en.simulator?.model?.[id]?.name && en.simulator?.model?.[id]?.description));
+}
+
+/* --- the model picker ---------------------------------------------------- */
+
+// A custom model may take a category none of the catalogue's has ("other"), so
+// the list the Go side accepts is read too; each is named, and drawn.
+const { icons } = await import(new URL('../src/icons.js', import.meta.url).href);
+const customGo = readFileSync(new URL('custom.go', goDir), 'utf8');
+const customCategories = [...(customGo.match(/customCategories = \[\]string\{([^}]*)\}/)?.[1] || '').matchAll(/"([^"]+)"/g)]
+  .map((m) => m[1]);
+check('the categories a custom model may take were found in pkg/simulator', customCategories.length >= 9, customCategories.join());
+for (const category of new Set([...categories, ...customCategories])) {
+  check(`en.json names the category ${category}, and it is drawn with an icon the registry has`,
+    Boolean(en.simulator?.category?.[category]) && CATEGORY_ICONS[category] in icons);
+}
+
+const words = {
+  'simulator.model.apc-smart-ups.name': 'Onduleur APC Smart-UPS, triphasé',
+  'simulator.model.apc-smart-ups.description': 'Un onduleur de 10 kVA',
+  'simulator.model.cisco-isr-4331.name': 'Routeur Cisco ISR 4331',
+  'simulator.model.cisco-isr-4331.description': 'Un routeur d’agence',
+  'simulator.category.power': 'Énergie',
+  'simulator.category.network': 'Réseau',
+  'simulator.category.environment': 'Environnement',
+};
+const t = (key) => words[key] ?? key;
+const catalogue = [
+  { id: 'apc-smart-ups', category: 'power', custom: false, notifications: [{ name: 'upsTrapOnBattery' }] },
+  { id: 'cisco-isr-4331', category: 'network', custom: false, notifications: [{ name: 'bgpEstablishedNotification' }] },
+  { id: 'custom:acme-crac', category: 'environment', custom: true, name: 'Acme CRAC-40 cooling unit', vendor: 'Acme',
+    description: 'A computer room air conditioner', notifications: [{ name: 'acmeHighTemperature' }] },
+];
+const found = (query, category = '') => filterModels(catalogue, query, category, t).map((m) => m.id).join(' ');
+check('a search finds a model by its name in the locale, with its accents or without',
+  found('onduleur') === 'apc-smart-ups' && found('TRIPHASE') === 'apc-smart-ups' && found('énergie') === 'apc-smart-ups');
+check('every word must be found, anywhere that describes the model — a notification it sends included',
+  found('cisco bgp') === 'cisco-isr-4331' && found('cisco onduleur') === '');
+check('a custom model is found by its own name, description and vendor, which no locale knows',
+  found('acme') === 'custom:acme-crac' && found('air conditioner') === 'custom:acme-crac');
+check('a category narrows the list, and a search of nothing keeps all of it',
+  found('', 'network') === 'cisco-isr-4331' && found('') === 'apc-smart-ups cisco-isr-4331 custom:acme-crac' &&
+  found('cisco', 'power') === '');
+check('a built-in model is named by the locale, a custom one by its file, and a gone one by its ID',
+  modelName(catalogue[0], t) === 'Onduleur APC Smart-UPS, triphasé' && modelName(catalogue[2], t) === 'Acme CRAC-40 cooling unit' &&
+  modelName(undefined, t, 'custom:gone') === 'gone' && modelDescription(catalogue[2], t) === 'A computer room air conditioner' &&
+  modelDescription(undefined, t) === '');
+check('the categories come in the order of their first model', categoriesOf(catalogue).join() === 'power,network,environment');
+check('a category nobody drew is drawn as a package', categoryIcon('toaster') === 'package' && categoryIcon('wireless') === 'wifi');
+check('the devices made from a model are the ones naming it',
+  devicesOfModel([{ model: 'custom:acme-crac' }, { model: 'linux-server' }], 'custom:acme-crac').length === 1 &&
+  devicesOfModel(undefined, 'x').length === 0);
+
+const imports = importReport([
+  { file: 'a.json', success: true, name: 'A', modelId: 'custom:a', replaced: false, warnings: [{ key: 'iconSkipped', detail: 'a.png' }] },
+  { file: 'b.zip › b.json', success: false, error: 'line 3, column 5: …', warnings: [] },
+  { file: 'c.zip › c.json', success: true, name: 'C', modelId: 'custom:c', replaced: true, warnings: [] },
+]);
+check('an import is reported model by model, each warning after its model',
+  imports.map((l) => `${l.key}:${l.level}`).join(' ') ===
+  'simulator.models.imported:success simulator.models.warning.iconSkipped:warning simulator.models.failed:error simulator.models.replaced:success',
+  JSON.stringify(imports));
+check('and the picker selects the first model an import brought',
+  firstImported([{ success: false }, { success: true, modelId: 'custom:c' }]) === 'custom:c' && firstImported([]) === '');
+
+// Every warning Go gives about an import has its sentence.
+const appGo = readFileSync(new URL('../../app_simmodels.go', import.meta.url), 'utf8');
+const warningKeys = new Set([...appGo.matchAll(/Key: "([A-Za-z]+)"/g)].map((m) => m[1]));
+check('the warnings an import gives were found in app_simmodels.go', warningKeys.size >= 4, [...warningKeys].join());
+for (const key of warningKeys) {
+  check(`en.json says simulator.models.warning.${key}`, Boolean(en.simulator?.models?.warning?.[key]));
+}
+for (const key of ['imported', 'replaced', 'failed', 'deleted']) {
+  check(`en.json says simulator.models.${key}`, Boolean(en.simulator?.models?.[key]));
+}
+for (const key of ['search', 'all', 'categories', 'noMatch', 'custom', 'import', 'importTitle', 'deleteModel', 'inUse']) {
+  check(`en.json says simulator.picker.${key}`, Boolean(en.simulator?.picker?.[key]));
 }
 
 process.exit(failures ? 1 : 0);
