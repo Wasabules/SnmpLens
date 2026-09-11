@@ -172,7 +172,22 @@ try {
     into a protocol where a character changes meaning is escaped: dot-stuffing for SMTP data
     per RFC 5321, header encoding that turns a newline into an escape rather than a new
     header, and sanitising for the RFC 5424 syslog header. Values substituted into a template
-    are never re-scanned, so a trap OID that reads like a placeholder stays text.
+    are never re-scanned, so a trap OID that reads like a placeholder stays text. Exported
+    CSV neutralises a cell a spreadsheet would run as a formula — one beginning with
+    <code>=</code>, <code>+</code>, <code>-</code> or <code>@</code> — since a device's own
+    description can begin that way.
+  </p>
+
+  <h3>Dashboard presets</h3>
+  <p>
+    A preset is a file somebody else wrote, and binding one makes SnmpLens send SNMP requests
+    to your equipment. So a preset picks from a fixed vocabulary instead of describing
+    anything: widget kinds and map shapes the application owns, numeric OIDs only, and a
+    bound on every list and string. It cannot carry markup — maps are drawn from four
+    shapes, never from SVG — and it cannot carry a path or an image: a map background is a
+    file name resolved inside your own backgrounds folder, and an image gets into that
+    folder only if it decodes as PNG, JPEG or GIF with sane dimensions. Before a preset is
+    bound, the library states what it will cost and whether it can raise an incident.
   </p>
 
   <h3>Releases</h3>

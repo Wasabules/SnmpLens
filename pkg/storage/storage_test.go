@@ -279,7 +279,7 @@ func TestUpdateSessionConn(t *testing.T) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	id, _ := st.CreateSession("", "1.1", []string{"10.0.0.1"}, 5000, "v2c", now, nil, nil, nil)
 
-	if err := st.UpdateSessionConn(id, &SessionConn{Port: 1161, TimeoutSec: 9}); err != nil {
+	if err := st.UpdateSessionConn(id, "", &SessionConn{Port: 1161, TimeoutSec: 9}); err != nil {
 		t.Fatalf("UpdateSessionConn: %v", err)
 	}
 	sessions, _ := st.ListSessions()

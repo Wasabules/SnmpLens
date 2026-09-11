@@ -24,53 +24,40 @@ type TrapVariable struct {
 	Value string `json:"value"`
 }
 
-// StartTrapListener starts listening for SNMP traps, configured with v3 parameters.
 // DefaultTrapPort is the IANA port for SNMP traps.
 const DefaultTrapPort = 162
 
-func (c *Client) StartTrapListener(port int, v3 V3Params) error {
+// trapStopGrace bounds how long a stop waits for the listen goroutine to let go
+// of the listener it closed. It normally takes microseconds.
+const trapStopGrace = 2 * time.Second
+
+// StartTrapListener binds the trap port, accepting every USM user given.
+//
+// v1 and v2c notifications are received whatever the users are: gosnmp does not
+// check a received community, and this listener never did either. A v3
+// notification is received when it authenticates as ONE of the users — all of
+// them at once, through gosnmp's SnmpV3SecurityParametersTable, which is what
+// lets one listener hear devices configured with different USM users. It used
+// to take exactly one user, the default identifiers' v3 block, so a device
+// sending as anybody else was dropped with nothing on screen to say why.
+//
+// A user that cannot be used is refused and reported, never kept: the listener
+// starts with the others, because receiving nothing over one stale profile is
+// worse than receiving from everyone else.
+func (c *Client) StartTrapListener(port int, users []V3Params) (TrapListenerInfo, error) {
+	c.trapLife.Lock()
+	defer c.trapLife.Unlock()
+	return c.startTrapListener(port, users)
+}
+
+func (c *Client) startTrapListener(port int, users []V3Params) (TrapListenerInfo, error) {
 	c.trapMu.Lock()
 	defer c.trapMu.Unlock()
 
 	if c.trapListener != nil {
-		return fmt.Errorf("trap listener is already running")
+		return TrapListenerInfo{Refused: []TrapUserRefusal{}}, fmt.Errorf("trap listener is already running")
 	}
 
-	params := &gosnmp.GoSNMP{
-		Port:    normalisePort(port, DefaultTrapPort),
-		Version: gosnmp.Version3,
-	}
-
-	if v3.User != "" {
-		secLevel, err := getSecurityLevel(v3.SecLevel)
-		if err != nil {
-			return err
-		}
-		authProto, err := getAuthProtocol(v3.AuthProto)
-		if err != nil {
-			return err
-		}
-		privProto, err := getPrivProtocol(v3.PrivProto)
-		if err != nil {
-			return err
-		}
-
-		params.SecurityModel = gosnmp.UserSecurityModel
-		params.MsgFlags = secLevel
-		params.SecurityParameters = &gosnmp.UsmSecurityParameters{
-			UserName:                 v3.User,
-			AuthenticationProtocol:   authProto,
-			AuthenticationPassphrase: v3.AuthPass,
-			PrivacyProtocol:          privProto,
-			PrivacyPassphrase:        v3.PrivPass,
-		}
-	} else {
-		params.Version = gosnmp.Version2c
-	}
-
-	listener := gosnmp.NewTrapListener()
-	listener.OnNewTrap = c.handleTrap
-	listener.Params = params
 	// Through the scrubbed ring buffer, and only when debug is on.
 	//
 	// This used to be log.New(os.Stdout, ...) unconditionally: not the ring
@@ -78,10 +65,30 @@ func (c *Client) StartTrapListener(port int, v3 V3Params) error {
 	// arriving trap printed "Parsed community <whatever the sender used>" to
 	// stdout whether or not anyone had asked for a debug log. A trap sender's
 	// community is not ours to disclose, and stdout in a packaged app goes
-	// somewhere nobody chose.
+	// somewhere nobody chose. The USM table logs through the same writer.
+	var logger gosnmp.Logger
 	if c.debugEnabled {
-		listener.Params.Logger = gosnmp.NewLogger(log.New(&ringLogWriter{client: c}, "", 0))
+		logger = gosnmp.NewLogger(log.New(&ringLogWriter{client: c}, "", 0))
 	}
+
+	params := &gosnmp.GoSNMP{
+		Port:    normalisePort(port, DefaultTrapPort),
+		Version: gosnmp.Version2c,
+		Logger:  logger,
+	}
+	sec := newTrapSecurity(users, logger)
+	if sec.table != nil {
+		params.Version = gosnmp.Version3
+		params.SecurityModel = gosnmp.UserSecurityModel
+		params.MsgFlags = sec.flags
+		// Both, never the table alone: see trapSecurity.first.
+		params.SecurityParameters = sec.first
+		params.TrapSecurityParametersTable = sec.table
+	}
+
+	listener := gosnmp.NewTrapListener()
+	listener.OnNewTrap = c.handleTrap
+	listener.Params = params
 
 	// Enlarge the socket buffer as soon as it is bound.
 	//
@@ -140,11 +147,19 @@ func (c *Client) StartTrapListener(port int, v3 V3Params) error {
 			runtime.EventsEmit(c.ctx, "trapError", fmt.Sprintf("Error in listener: %v", err))
 		}
 	}()
-	return nil
+	c.trapPort = port
+	c.trapUsers = sec.info.accepted
+	return sec.info, nil
 }
 
 // StopTrapListener stops the active trap listener.
 func (c *Client) StopTrapListener() {
+	c.trapLife.Lock()
+	defer c.trapLife.Unlock()
+	c.stopTrapListener()
+}
+
+func (c *Client) stopTrapListener() {
 	c.trapMu.Lock()
 	listener := c.trapListener
 	bound := c.trapBound
@@ -189,6 +204,54 @@ func (c *Client) StopTrapListener() {
 	// that goroutine takes the same lock to clear the field.
 	log.Println("Stopping trap listener...")
 	listener.Close()
+
+	// And wait for the listen goroutine to let go of it. Close returns once
+	// gosnmp's loop has ended, but the field is cleared by OUR goroutine after
+	// Listen returns, so a start straight after a stop could still be refused
+	// as "already running". Harmless for a person pressing a button; not for
+	// UpdateTrapUsers, which is a stop and a start back to back.
+	select {
+	case <-done:
+	case <-time.After(trapStopGrace):
+		log.Println("trap listener: still unwinding after close")
+	}
+}
+
+// UpdateTrapUsers changes which USM users a running listener accepts.
+//
+// gosnmp's table can be ADDED to while the listener reads it and never removed
+// from, so changing it in place would leave a deleted user authenticating until
+// the next restart, and a rotated passphrase accepted in its old form as well as
+// its new one. The listener is restarted instead, on the port it holds — and
+// only when the accepted set actually changed, so renaming a profile or saving
+// settings that touch no v3 user costs nothing. The restart closes the port for
+// the few milliseconds between the two calls, and a datagram arriving then is
+// refused by the kernel: the price of never accepting a credential that was
+// taken away, paid only when one was.
+//
+// With nothing listening it only answers what the users WOULD be, so the caller
+// can remember them for the next start.
+func (c *Client) UpdateTrapUsers(users []V3Params) (TrapListenerInfo, error) {
+	c.trapLife.Lock()
+	defer c.trapLife.Unlock()
+
+	next := newTrapSecurity(users, gosnmp.Logger{}).info
+	c.trapMu.Lock()
+	running := c.trapListener != nil
+	port := c.trapPort
+	same := sameTrapUsers(c.trapUsers, next.accepted)
+	c.trapMu.Unlock()
+
+	if !running || same {
+		return next, nil
+	}
+	c.stopTrapListener()
+	info, err := c.startTrapListener(port, users)
+	if err != nil {
+		return info, fmt.Errorf("the trap listener stopped to change its SNMPv3 users and could not start again: %w", err)
+	}
+	info.Restarted = true
+	return info, nil
 }
 
 // TrapListenerRunning reports whether a listener is currently bound.

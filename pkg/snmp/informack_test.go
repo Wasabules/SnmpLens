@@ -27,7 +27,7 @@ func TestAnInformIsNotAcknowledgedWhenTheJournalWriteFails(t *testing.T) {
 	}))
 
 	port := freePort(t)
-	if err := c.StartTrapListener(port, V3Params{}); err != nil {
+	if _, err := c.StartTrapListener(port, nil); err != nil {
 		t.Skipf("cannot bind a trap listener: %v", err)
 	}
 	defer c.StopTrapListener()
@@ -51,7 +51,7 @@ func TestAnInformIsAcknowledgedWhenTheJournalWriteSucceeds(t *testing.T) {
 	c.SetRecorder(events.Nop{})
 
 	port := freePort(t)
-	if err := c.StartTrapListener(port, V3Params{}); err != nil {
+	if _, err := c.StartTrapListener(port, nil); err != nil {
 		t.Skipf("cannot bind a trap listener: %v", err)
 	}
 	defer c.StopTrapListener()
@@ -82,7 +82,7 @@ func TestGosnmpStillLetsTheHandlerDeclineAnAcknowledgement(t *testing.T) {
 	}))
 
 	port := freePort(t)
-	if err := c.StartTrapListener(port, V3Params{}); err != nil {
+	if _, err := c.StartTrapListener(port, nil); err != nil {
 		t.Skipf("cannot bind a trap listener: %v", err)
 	}
 	defer c.StopTrapListener()

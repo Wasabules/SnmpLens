@@ -32,6 +32,7 @@
   import MibEditorPanel from './MibEditorPanel.svelte';
   import { mibEditorStore } from './stores/mibEditorStore';
   import { tabRequest } from './stores/tabRequest';
+  import { settingsRequest } from './stores/settingsRequest';
   import { OnFileDrop, OnFileDropOff } from '../wailsjs/runtime/runtime';
 
   let activeTab = 'operations'; // 'operations', 'traps', or 'history'
@@ -52,6 +53,9 @@
     : 0;
   let selectedNode = null;
   let showSettings = false;
+  // Where Settings opens — `{ section, anchor }` from requestSettings — or null
+  // for the first section, which is what the shortcut and the button open.
+  let settingsTarget = null;
   let showTargets = false;
   let showDebug = false;
   let pendingSnmpAction = null;
@@ -319,6 +323,14 @@
     tabRequest.set(null);
   }
 
+  // Something elsewhere asked for Settings at a given place — the Traps tab's
+  // "Manage profiles", today.
+  $: if ($settingsRequest) {
+    settingsTarget = $settingsRequest;
+    showSettings = true;
+    settingsRequest.set(null);
+  }
+
   onMount(async () => {
     // Load saved panel width
     loadPanelWidth();
@@ -466,7 +478,8 @@
 <main style="--wails-drop-target:drop">
   <Notifications />
   {#if showSettings}
-    <SettingsModal {showDebug} on:toggleDebug={() => showDebug = !showDebug} on:close={() => showSettings = false} />
+    <SettingsModal {showDebug} initial={settingsTarget} on:toggleDebug={() => showDebug = !showDebug}
+      on:close={() => { showSettings = false; settingsTarget = null; }} />
   {/if}
 
   {#if showImportErrors}

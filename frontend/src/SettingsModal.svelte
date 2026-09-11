@@ -1,9 +1,11 @@
 <script>
-  import { createEventDispatcher, onMount } from 'svelte';
+  import { createEventDispatcher, onMount, tick } from 'svelte';
   import { GetPersistentMibDirectory } from '../wailsjs/go/main/App';
   import { onBackdrop } from './utils/modal';
   import { _ } from 'svelte-i18n';
+  import { get } from 'svelte/store';
   import { settingsStore } from './stores/settingsStore';
+  import { pollingStore } from './stores/pollingStore';
   import GeneralSettings from './settings/GeneralSettings.svelte';
   import MibSettings from './settings/MibSettings.svelte';
   import PresetSettings from './settings/PresetSettings.svelte';
@@ -15,6 +17,13 @@
   const dispatch = createEventDispatcher();
 
   export let showDebug = false;
+
+  /**
+   * Where to open: `{ section, anchor }`, or null for the first section. Set
+   * through requestSettings — the Traps tab's "Manage profiles" opens the SNMP
+   * section at the credential profiles.
+   */
+  export let initial = null;
 
   // The sections, declared once instead of six times.
   //
@@ -31,7 +40,7 @@
     { id: 'service', icon: 'server-cog' },
   ];
 
-  let activeTab = 'general';
+  let activeTab = SECTIONS.some((s) => s.id === initial?.section) ? initial.section : 'general';
   let settings;
   let defaultMibPath = '';
 
@@ -40,6 +49,10 @@
   });
 
   onMount(async () => {
+    if (initial?.anchor) {
+      await tick();
+      document.getElementById(initial.anchor)?.scrollIntoView({ block: 'start' });
+    }
     try {
       defaultMibPath = await GetPersistentMibDirectory();
     } catch (e) {
@@ -48,7 +61,12 @@
   });
 
   function handleSave() {
+    // The identifiers as they were, for the monitoring sessions built from
+    // them: a session follows its credential profile, and this dialog is where
+    // a profile's credentials — and the default ones — are edited.
+    const before = get(settingsStore);
     settingsStore.save(settings);
+    pollingStore.followCredentials(before, settings);
     dispatch('close');
   }
 

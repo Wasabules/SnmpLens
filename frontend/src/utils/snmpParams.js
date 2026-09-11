@@ -1,3 +1,5 @@
+import { trapUsers } from './credentialProfiles.js';
+
 /**
  * Build a base SnmpRequest object from the settings store value.
  * @param {object} settings - The $settingsStore value
@@ -110,14 +112,16 @@ export function buildDiscoverRequest(settings, cidr, timeout) {
 }
 
 /**
- * Build a TrapListenerRequest object.
+ * Build a TrapListenerRequest: the port, and every SNMPv3 user the listener
+ * accepts — the default identifiers' and every v3 credential profile's. One
+ * listener hears every device at once, and devices send as different users.
  * @param {object} settings
  * @returns {object}
  */
 export function buildTrapListenerRequest(settings) {
   return {
     port: settings.trapPort,
-    v3: buildV3Params(settings),
+    users: trapUsers(settings).map(v3Params),
   };
 }
 
@@ -137,6 +141,10 @@ export function buildMonitorConnection(settings) {
     retries: settings.retries,
     community: settings.community,
     v3: buildV3Params(settings),
+    // Which identifiers these are — 'default', a credential profile's id, or
+    // '' for a target's own overrides — so the session can follow its profile
+    // when a passphrase is rotated. Set by getEffectiveSettings.
+    profile: settings.credentialRef ?? '',
   };
 }
 
@@ -146,7 +154,11 @@ export function buildMonitorConnection(settings) {
  * @returns {object}
  */
 function buildV3Params(settings) {
-  const v3 = settings.v3 || {};
+  return v3Params(settings.v3 || {});
+}
+
+/** One v3 block in the shape pkg/snmp.V3Params declares — capitalised tags. */
+function v3Params(v3) {
   return {
     User: v3.user || '',
     AuthPass: v3.authPass || '',

@@ -5,9 +5,10 @@
 <h1 align="center">SnmpLens</h1>
 
 <p align="center">
-  A modern, cross-platform SNMP MIB browser and network management desktop application.
+  A modern, cross-platform SNMP MIB browser, MIB editor and monitoring desktop application —
+  dashboards drawn from shareable presets, a trap receiver, and alerts routed to syslog, a webhook or email.
   <br />
-  Built with <a href="https://wails.io/">Wails</a> (Go + Svelte).
+  One native binary, built with <a href="https://wails.io/">Wails</a> (Go + Svelte).
 </p>
 
 <p align="center">
@@ -33,44 +34,36 @@
 ## Screenshots
 
 <p align="center">
-  <img src="docs/assets/img/operations-dark-1200.webp" alt="SNMP Operations - Dark Theme" width="90%" />
-  <br /><em>SNMP Operations with Smart Table View</em>
+  <img src="docs/assets/img/operations-dark-1200.webp" alt="SNMP Operations" width="90%" />
+  <br /><em>SNMP Operations — a walk of <code>ifTable</code> pivoted into columns and split by INDEX</em>
 </p>
 
-<p align="center">
-  <img src="docs/assets/img/mib-browser-dark-1200.webp" alt="MIB Browser" width="90%" />
-  <br /><em>Hierarchical MIB Tree Browser with search and favorites</em>
-</p>
-
-<p align="center">
-  <img src="docs/assets/img/monitor-charts-dark-1200.webp" alt="Real-time Monitoring" width="90%" />
-  <br /><em>Real-time OID Monitoring with Chart.js graphs</em>
-</p>
-
-<p align="center">
-  <img src="docs/assets/img/trap-listener-dark-1200.webp" alt="Trap Listener" width="90%" />
-  <br /><em>SNMP Trap Listener with filtering and export</em>
-</p>
-
-<p align="center">
-  <img src="docs/assets/img/network-discovery-dark-1200.webp" alt="Network Discovery" width="90%" />
-  <br /><em>CIDR Network Discovery, Ping and Traceroute</em>
-</p>
-
-<p align="center">
-  <img src="docs/assets/img/history-diff-dark-1200.webp" alt="History and Diff" width="90%" />
-  <br /><em>Query History with side-by-side diff comparison</em>
-</p>
-
-<p align="center">
-  <img src="docs/assets/img/anonymous-mode-dark-1200.webp" alt="Anonymous Mode" width="90%" />
-  <br /><em>Anonymous Mode — sensitive data hidden for safe screenshots</em>
-</p>
-
-<p align="center">
-  <img src="docs/assets/img/operations-light-1200.webp" alt="Light Theme" width="90%" />
-  <br /><em>Light Theme</em>
-</p>
+<table>
+  <tr>
+    <td width="50%"><img src="docs/assets/img/dashboard-preset-dark-1200.webp" alt="Dashboard drawn from a preset" width="100%" /><br /><em>A dashboard drawn from a preset: tiles, a chart, a wall of port states and a map of the rack</em></td>
+    <td width="50%"><img src="docs/assets/img/dashboard-group-dark-1200.webp" alt="One preset across two switches" width="100%" /><br /><em>One preset drawn across two switches of different sizes</em></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/assets/img/mib-browser-dark-1200.webp" alt="MIB Browser" width="100%" /><br /><em>The MIB tree, searchable across name, OID, description and syntax</em></td>
+    <td width="50%"><img src="docs/assets/img/mib-editor-dark-1200.webp" alt="MIB Editor" width="100%" /><br /><em>The MIB editor, reporting an unknown type and a duplicated OID by line and column</em></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/assets/img/monitor-charts-dark-1200.webp" alt="Monitoring" width="100%" /><br /><em>Polling sessions charted as values, deltas, rates or latency</em></td>
+    <td width="50%"><img src="docs/assets/img/events-journal-dark-1200.webp" alt="Event journal" width="100%" /><br /><em>The event journal — traps, thresholds, reachability, and deliveries that failed</em></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/assets/img/settings-notifications-dark-1200.webp" alt="Alert routing" width="100%" /><br /><em>Alert routing: destinations, rules and the delivery log</em></td>
+    <td width="50%"><img src="docs/assets/img/trap-listener-dark-1200.webp" alt="Trap Listener" width="100%" /><br /><em>Received traps, with the trap OID resolved through your MIBs</em></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/assets/img/network-discovery-dark-1200.webp" alt="Network Discovery" width="100%" /><br /><em>CIDR discovery, then ping and traceroute without elevated privileges</em></td>
+    <td width="50%"><img src="docs/assets/img/history-diff-dark-1200.webp" alt="History and Diff" width="100%" /><br /><em>Two walks of the same device, diffed</em></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/assets/img/anonymous-mode-dark-1200.webp" alt="Anonymous Mode" width="100%" /><br /><em>Anonymous Mode — addresses and credentials masked for safe screenshots</em></td>
+    <td width="50%"><img src="docs/assets/img/operations-light-1200.webp" alt="Light Theme" width="100%" /><br /><em>Light theme</em></td>
+  </tr>
+</table>
 
 ---
 
@@ -79,14 +72,31 @@
 ### SNMP Operations
 
 - **GET / SET / GETNEXT / GETBULK / WALK** with concurrent multi-target execution
-- **Smart Table View** — auto-detects SNMP tables and renders structured columns with sorting and CSV export
-- **Smart Value Formatting** — TimeTicks displayed as human-readable duration (e.g. `127d 3h 46m`), large numbers with thousand separators
+- **Conceptual tables** — a walk is pivoted into columns and split by INDEX following RFC 2578 §7.7, so `tcpConnTable` reads as four index fields instead of one opaque sub-OID, name-keyed tables show names, and rows sort numerically. Sortable, filterable, exportable to CSV
+- **Row creation and deletion** on tables that define a `RowStatus` column, written as one atomic SET so the agent never sees a half-built row
+- **Smart Value Formatting** — TimeTicks as a readable duration (e.g. `127d 3h 46m`), enumerations as `ethernetCsmacd(6)`, large numbers with thousand separators
 - **Result Filtering** — regex-capable filter bar on WALK/GETBULK results to search across OIDs, names, types, and values
 - **One-click Copy** — copy any OID, value, or target to clipboard with a single click
 - **Device Comparison** — side-by-side multi-target comparison with delta and percentage differences
 - **Double-click GET** — double-click any MIB tree node to instantly perform a GET operation
 - **SNMPv3 Full Support** — authentication (MD5, SHA, SHA-256, SHA-512) and privacy (DES, AES, AES-256)
-- **SNMP Debug** — live packet inspection with auto-refresh
+- **IPv6** — targets, the trap listener and traceroute, including link-local addresses with a zone
+- **SNMP Debug** — live packet inspection, with community strings and passphrases scrubbed from the log
+
+### Dashboards & Presets (`Ctrl + 8`)
+
+- **Presets** — small JSON files describing what to poll on one kind of equipment and how to draw it. Meant to be shared: a preset picks from a fixed vocabulary of widgets and cannot carry anything that executes
+- **Preset library** — *Settings → Presets*: add a preset by file or by dropping it on the window. A preset with problems is kept and listed with them, and cannot be bound until they are fixed
+- **Cost stated before binding** — OIDs, cadence, requests and values a day, how many readings carry a threshold and how many of those can raise an incident
+- **Device detection** — asks an equipment for its `sysObjectID` and puts the presets written for it first
+- **Discovery at bind time** — a widget can name a column to walk instead of listing its instances, so one preset fits a 24-port switch and a 48-port chassis, with every port named the way the equipment names it
+- **Layout** — widgets placed on a twelve-column grid, collapsing to one column on a narrow window
+- **Thresholds carried by the preset** — materialised into the monitoring session when it is bound, and editable afterwards like any other
+- **Six widget kinds** — latest value, per-second rate, chart, state tile, grid of states (a switch's port panel), and a **map**
+- **Maps** — boxes, lines, labels and dots bound to OIDs and coloured by what each reading is doing, drawn over a picture of your rack or site. Backgrounds are yours: PNG, JPEG or GIF, checked by decoding them; SVG is deliberately refused
+- **Several equipments on one dashboard** — one monitoring session per equipment, drawn together as a group
+- **A snapshot, not a link** — editing or deleting a preset never changes a dashboard already bound; binding again adopts the new version
+- **Six example presets** — IF-MIB interfaces, switch ports, Cisco, a HOST-RESOURCES server, a UPS (RFC 1628), and a 24-port switch drawn as its front panel
 
 ### MIB Browser
 
@@ -94,22 +104,43 @@
 - **Global Search** across name, OID, description, and syntax
 - **Filter Chips** for dynamic filtering
 - **Favorites** — bookmark frequently used OIDs
-- **Node Details** panel with full OID metadata (syntax, access, status, description)
-- **Custom MIBs** — load your own MIB files from a persistent directory
-- **Drag & Drop Import** — drop MIB files or folders anywhere in the app to import them instantly. Supports recursive folder scanning, duplicate detection, and shows a detailed error report if any files fail to load
+- **Node Details** panel with full OID metadata (syntax, access, status, units, parent, description)
+- **Custom MIBs** — load your own MIB files from a persistent directory, and switch any module off
+- **Drag & Drop Import** — drop MIB files or folders anywhere in the app. Recursive folder scanning and duplicate detection
+- **Why a MIB did not load** — the stage it reached, the line and column with an excerpt, the imports that could not be satisfied and the symbols each was needed for, and a plain answer for the files people download by mistake (an HTML page, a PDF, a zip, UTF-16)
+- **Dependency tree** — *Settings → MIBs* shows what imports what, which modules are missing, and which symbols they were needed for
 
-### Monitoring & Alerting
+### MIB Editor (`Ctrl + 7`)
+
+- **Syntax highlighting**, find and replace (`Ctrl + F`), undo and redo grouped by edit rather than by keystroke
+- **Three kinds of checking** — syntax errors with line and column as you type, whether the module loads, and a semantic pass on a pause that catches what loading does not: unknown types, duplicate OIDs, unresolved parents, missing modules in `FROM`, undefined `INDEX` objects
+- **Fix imports** — works out which symbol comes from which module and edits the IMPORTS clause as text, so comments and alignment survive
+- **Outline** — every definition in the file with its kind, syntax, access and status, filterable, and still there above a syntax error
+- **Safe to use on standard MIBs** — bundled MIBs are backed up before they are overwritten, can be restored to the shipped version, and the tree is health-checked after a reload. Unsaved work survives closing the window
+
+### Monitoring
 
 - **Real-time OID Polling** with interactive Chart.js graphs
-- **Multiple View Modes** — raw values, delta, rate (per-second), and latency
-- **Threshold Alerts** — configurable min/max with native OS notifications (Windows toast, macOS, Linux)
+- **Multiple View Modes** — raw values, delta, rate (per-second), and latency. Counter wraps are corrected, and rates derived from the time that actually elapsed
+- **Threshold Alerts** — a minimum, a maximum and how long it must be breached for. A value oscillating around its threshold is one incident, not forty; a device that stops answering is its own kind of incident
+- **Runs in the background** — the poll clock lives in the Go backend, so sessions, thresholds and alerts keep running with the window closed. Tray icon, start at login (per-user, never asks for elevation), and sessions resumed at startup
+- **Overload guardrail** — when a round no longer fits inside its cadence, the session widens its own period and says so, instead of polling the device flat out. *Keep my cadence* overrides it
 - **Session Management** — create, pause, resume, and delete monitoring sessions
 - **Historical Data** — SQLite storage for long-term trending with time-range queries
 
+### Events & Alert Routing (`Ctrl + 6`)
+
+- **Event journal** — traps, threshold episodes opened and resolved, devices that stopped answering, deliveries that failed. Filterable and exportable
+- **Routing rules** — match on category, severity, source and OID prefix, with priorities, a "stop here" flag and quiet hours in your own timezone
+- **Destinations** — syslog (UDP, TCP, or TLS per RFC 5425, with mutual TLS), webhook (bearer token, custom headers), and email (implicit TLS or STARTTLS). Each accepts a CA certificate, so an internal collector can be trusted without turning verification off
+- **Message templates** — per destination, over a fixed list of variables. A webhook can send its own JSON — which is how you talk to Slack, Teams or Alertmanager — with a preview rendered by the same code that sends it
+- **Durable outbox** — deliveries survive a closed window or an unreachable relay, with retries and backoff. A delivery log shows what was sent, what is waiting, and what was given up on, with a retry button
+
 ### Trap Management
 
-- **Trap Listener** — receive SNMPv1/v2c/v3 traps on configurable port
-- **Trap Sender** — send custom traps for testing
+- **Trap Listener** — receive SNMPv1/v2c/v3 traps and acknowledged INFORMs on a configurable port
+- **Built for storms** — an 8 MiB receive buffer; measured with no loss at 2000 traps per second sustained
+- **Trap Sender** — send traps, or INFORMs to check a receiver acknowledges them (refused on v1, which has no such PDU)
 - **Native OS Notifications** — Windows toast / macOS / Linux notifications with MIB-resolved trap names
 - **Filtering & Export** — filter received traps and export to CSV
 
@@ -117,7 +148,7 @@
 
 - **CIDR Discovery** — scan IP ranges for SNMP-responsive devices
 - **Ping** — cross-platform, no elevated privileges required (pure Go)
-- **Traceroute** — hop-by-hop route tracing
+- **Traceroute** — hop-by-hop route tracing, over IPv4 or IPv6
 
 ### Query History
 
@@ -129,43 +160,60 @@
 
 - Multiple targets with comma or newline separation
 - **Target Groups** for organizing devices
+- **Labels** — a device's label appears in operations, traps, history and events, with the address on hover
 - **Per-target Overrides** — custom SNMP version, community, port per device
 - **Connection Testing** — verify reachability before operations
+- **Bind a preset** — choose a dashboard preset when you add an equipment, or bind one later
 
 ### Anonymous Mode
 
 - **One-click privacy** — hide all sensitive data for safe screenshots and demos
 - **Stable aliases** — IPs become `Device-1`, `Device-2`, etc. (consistent within a session)
 - **Comprehensive masking** — covers IP addresses, community strings, SNMPv3 credentials, hostnames, device descriptions, trap sources, debug logs
-- **Quick toggle** — `Ctrl+Shift+A` or checkbox in Settings > Privacy
+- **Quick toggle** — `Ctrl+Shift+A` or the checkbox in *Settings → General*
 - **Visual indicator** — pulsing `ANON` badge in the tab bar when active
 - **Non-persistent** — automatically disabled on restart to prevent accidental data hiding
+
+### Security
+
+- **Credentials held by the operating system** — the community string and SNMPv3 passphrases are sealed with a key kept by DPAPI on Windows, the Keychain on macOS, or a protected file on Linux, rather than stored beside the ciphertext
+- **Signed updates** — an Ed25519-signed checksum manifest, bound to its release tag, verified before anything is applied; build provenance is attested
+- **Content from the network is escaped** for every protocol it is written into — SMTP, mail headers, the syslog header — and exported CSV neutralises cells that a spreadsheet would run as a formula
+- **Presets cannot execute anything** — a fixed widget and shape vocabulary, numeric OIDs only, no SVG, and map backgrounds named rather than carried
+
+See the [security policy](SECURITY.md) for how to report a vulnerability.
 
 ### UI / UX
 
 - **Dark / Light Theme** with system detection or manual toggle
-- **Anonymous Mode** — hide sensitive data (IPs, credentials) for screenshots (`Ctrl+Shift+A`)
 - **Native Desktop Notifications** — configurable per feature (traps, monitoring alerts)
 - **5 Languages** — English, French, German, Spanish, Chinese (auto-detected)
 - **Resizable Panels** — adjustable MIB browser width (persisted)
 - **Keyboard Shortcuts** — see table below
-- **AES-256-GCM Encryption** for locally stored credentials
+- **Browser demo** — the real interface on fixed data, at [snmplens.com/demo.html](https://snmplens.com/demo.html)
 
 ---
 
 ## Keyboard Shortcuts
 
-| Shortcut          | Action                  |
-| ----------------- | ----------------------- |
-| `Ctrl + 1`        | Operations tab          |
-| `Ctrl + 2`        | Traps tab               |
-| `Ctrl + 3`        | History tab             |
-| `Ctrl + 4`        | Monitor tab             |
-| `Ctrl + 5`        | Network / Discovery tab |
-| `Ctrl + ,`        | Open Settings           |
-| `Ctrl + Shift + A` | Toggle Anonymous Mode  |
-| `F5`              | Reload MIB files        |
-| `Esc`             | Close modal             |
+| Shortcut           | Action                                  |
+| ------------------ | --------------------------------------- |
+| `Ctrl + 1`         | Operations tab                          |
+| `Ctrl + 2`         | Traps tab                               |
+| `Ctrl + 3`         | History tab                             |
+| `Ctrl + 4`         | Monitor tab                             |
+| `Ctrl + 5`         | Network / Discovery tab                 |
+| `Ctrl + 6`         | Events tab                              |
+| `Ctrl + 7`         | MIB editor tab                          |
+| `Ctrl + 8`         | Dashboard tab                           |
+| `Ctrl + ,`         | Open Settings                           |
+| `Ctrl + B`         | Show or hide the MIB panel              |
+| `Ctrl + Shift + A` | Toggle Anonymous Mode                   |
+| `Ctrl + F`         | Find and replace, in the MIB editor     |
+| `F5`               | Reload MIB files                        |
+| `Esc`              | Close the open dialog                   |
+
+On macOS these use the Control key, not Command — except find and replace in the MIB editor, which accepts either.
 
 ---
 
@@ -174,11 +222,12 @@
 | Layer    | Technology                                                                 |
 | -------- | -------------------------------------------------------------------------- |
 | Framework | [Wails v2](https://wails.io/) — Go backend + Web frontend in one binary  |
-| Backend  | Go 1.25 — [gosnmp](https://github.com/gosnmp/gosnmp), [gosmi](https://github.com/sleepinggenius2/gosmi), [SQLite](https://pkg.go.dev/modernc.org/sqlite), [pro-bing](https://github.com/prometheus-community/pro-bing) |
-| Frontend | [Svelte 5](https://svelte.dev/) + [Vite](https://vitejs.dev/)             |
+| Backend  | Go 1.26 — [gosnmp](https://github.com/gosnmp/gosnmp), [gosmi](https://github.com/sleepinggenius2/gosmi), [SQLite](https://pkg.go.dev/modernc.org/sqlite), [pro-bing](https://github.com/prometheus-community/pro-bing) |
+| Frontend | [Svelte 5](https://svelte.dev/) + [Vite 8](https://vitejs.dev/)          |
 | Charts   | [Chart.js](https://www.chartjs.org/) with date-fns adapter                |
 | i18n     | [svelte-i18n](https://github.com/kaisermann/svelte-i18n)                  |
 | Database | SQLite (embedded, WAL mode)                                                |
+| Credentials | Key held by DPAPI (Windows), the Keychain (macOS) or a protected file (Linux) |
 
 ---
 
@@ -188,8 +237,8 @@
 
 | Requirement | Version |
 | ----------- | ------- |
-| [Go](https://go.dev/) | 1.25+ |
-| [Node.js](https://nodejs.org/) | 18+ |
+| [Go](https://go.dev/) | 1.26+ |
+| [Node.js](https://nodejs.org/) | 20.19+ or 22.12+ (what Vite 8 requires) |
 | [Wails CLI](https://wails.io/docs/gettingstarted/installation) | v2 |
 
 **Linux only** — install GTK and WebKit development libraries:
@@ -240,18 +289,26 @@ The running version is embedded at build time via ldflags; local (`wails build`)
 
 ### Release integrity & authenticity
 
-Every release includes `SnmpLens-checksums.txt` (SHA-256 of all assets) and its Ed25519 signature `SnmpLens-checksums.txt.sig`. Before applying an update the app verifies the signature against the public key embedded in `pkg/updater/verify.go`, then verifies the asset's SHA-256 against the (now-authenticated) manifest. This is the same "signed manifest" model used by Linux package repositories.
+Every release includes `SnmpLens-checksums.txt` (SHA-256 of all assets) and its Ed25519 signature `SnmpLens-checksums.txt.sig`. Before applying an update the app verifies the signature against the public key embedded in `pkg/updater/verify.go`, then verifies the asset's SHA-256 against the now-authenticated manifest — the "signed manifest" model Linux package repositories use.
 
-**Setting up / rotating the signing key:**
+- **Signing is mandatory.** The release workflow fails when the key is missing, rather than publishing a release every installed copy would refuse.
+- **The manifest names its tag** on its first line (`version v1.2.3`), so an older signed manifest cannot be replayed to install a previous, possibly vulnerable, release.
+- **Build provenance is attested**, and can be checked without trusting this repository:
+
+  ```bash
+  gh attestation verify SnmpLens-windows-amd64.exe --repo Wasabules/SnmpLens
+  ```
+
+**Rotating the signing key:**
 
 ```bash
 go run ./tools/updatersign keygen
 ```
 
 1. Paste the printed **public key** into `pkg/updater/verify.go` (`updaterPublicKey`).
-2. Store the printed **private key** in the GitHub Actions secret `UPDATER_PRIVATE_KEY`.
+2. Store the printed **private key** as the `UPDATER_PRIVATE_KEY` secret of the `release` environment (*Settings → Environments → release*). That environment should carry a protection rule — a required reviewer or a tag policy — so a run has to be admitted before the key is handed to it.
 
-Do both together in the same release: if a build embeds a public key but the secret is missing, CI produces no signature and that build will (correctly) refuse the unsigned update. While `updaterPublicKey` is empty, downloads are still integrity-checked with SHA-256 but not authenticated.
+Rotation is not seamless: copies already installed trust only the public key they were built with, so they refuse updates signed with a new key and have to be updated by hand once.
 
 ---
 
@@ -259,47 +316,74 @@ Do both together in the same release: if a build embeds a public key but the sec
 
 ```
 SnmpLens
-├── main.go / app.go          # Wails application entry point and bindings
+├── main.go, app*.go           # Wails entry point, and the methods the frontend calls
 ├── pkg/
-│   ├── mib/                   # MIB loading and tree construction (gosmi)
-│   ├── snmp/                  # SNMP client, operations, traps, discovery
-│   ├── network/               # Ping and traceroute tools
-│   └── storage/               # SQLite persistence for monitoring data
-├── mibs/                      # Bundled standard SNMPv2 MIB files
-└── frontend/
-    └── src/
-        ├── App.svelte         # Main layout with tabbed navigation
-        ├── MibPanel.svelte    # MIB tree browser
-        ├── OperationsPanel    # SNMP operations UI
-        ├── MonitorPanel       # Real-time polling and charts
-        ├── TrapPanel          # Trap listener/sender
-        ├── DiscoveryPanel     # Network tools
-        ├── HistoryPanel       # Query history and diff
-        ├── stores/            # Svelte stores (state management)
-        ├── utils/             # Helpers (crypto, CSV, formatting)
-        └── i18n/              # Translation files (en, fr, de, es, zh)
+│   ├── snmp/                   # SNMP client: operations, walks, traps and informs, discovery
+│   ├── mib/                    # MIB loading (gosmi), diagnostics, editor analysis, dependency graph
+│   ├── monitor/                # The poll clock, threshold episodes, counter wraps, overload guardrail
+│   ├── preset/                 # Dashboard presets: validation, cost, discovery, layout, thresholds, maps
+│   ├── imagegate/              # The decode check a map background has to pass
+│   ├── events/                 # The event journal vocabulary
+│   ├── notify/                 # Alert routing: syslog, webhook, email, templates, durable outbox
+│   ├── storage/                # SQLite (WAL): history, sessions, events, rules, outbox
+│   ├── secrets/                # Credential store held by the operating system
+│   ├── updater/                # Signed-manifest auto-update
+│   ├── service/ tray/ autostart/  # Background operation: early preferences, tray icon, login entry
+│   ├── network/                # Pure-Go ping and traceroute
+│   └── netaddr/                # Address handling shared by snmp and network (IPv6, zones)
+├── mibs/                       # Bundled standard MIBs, extracted on first run
+├── presets/                    # Example dashboard presets, extracted on first run
+└── frontend/src/
+    ├── App.svelte              # Tabbed shell, shortcuts, resizable MIB panel, file drop
+    ├── MibPanel.svelte         # MIB tree browser
+    ├── OperationsPanel.svelte  # SNMP operations and conceptual tables
+    ├── TrapPanel.svelte        # Trap and inform listener and sender
+    ├── HistoryPanel.svelte     # Query history and diff
+    ├── MonitorPanel.svelte     # Polling sessions and charts
+    ├── DashboardPanel.svelte   # Dashboards drawn from presets
+    ├── DiscoveryPanel.svelte   # CIDR discovery, ping, traceroute
+    ├── EventsPanel.svelte      # Event journal
+    ├── MibEditorPanel.svelte   # MIB editor
+    ├── SettingsModal.svelte    # Settings dialog; each section lives in settings/
+    ├── stores/                 # Svelte stores (state management)
+    ├── utils/                  # Helpers (CSV, formatting, layout, dashboard grouping…)
+    └── i18n/                   # Translation files (en, fr, de, es, zh)
 ```
 
-The Go backend exposes methods to the frontend via [Wails bindings](https://wails.io/docs/howdoesitwork). SNMP operations run concurrently using goroutines for multi-target execution. Monitoring data is persisted in an embedded SQLite database with WAL mode. Sensitive credentials are encrypted with AES-256-GCM in the browser's localStorage.
+The Go backend exposes methods to the frontend via [Wails bindings](https://wails.io/docs/howdoesitwork). SNMP operations run concurrently using goroutines for multi-target execution. Monitoring runs in Go, one goroutine per session, so it keeps going with the window closed. Data is persisted in an embedded SQLite database with WAL mode. Credentials are sealed with a key held by the operating system, which the frontend never sees.
+
+The reasoning behind the less obvious decisions — and the measurements that settled them — is written down in [CLAUDE.md](CLAUDE.md).
 
 ---
 
 ## Configuration
 
-Configuration is managed through the in-app **Settings** dialog (`Ctrl + ,`):
+Everything is set in the in-app **Settings** dialog (`Ctrl + ,`), in six sections:
 
-- **SNMP** — default version, community string, port, timeout, retries, SNMPv3 credentials
-- **Monitoring** — data retention period, auto-resume sessions, desktop notifications, alert sounds
-- **MIBs** — manage MIB file directories, load custom MIBs
-- **UI** — theme (dark/light/system), language, auto-GET on node selection
+- **General** — theme, language, SNMP timeout and retries, confirmation before a SET, data retention, notifications, update checks, Anonymous Mode
+- **MIBs** — the MIB directory, which modules are loaded, missing dependencies and the dependency tree
+- **Presets** — the dashboard preset library, what each one costs, and map backgrounds
+- **SNMP** — default community, SNMPv3 credentials, and a connection test
+- **Notifications** — alert destinations, routing rules, message templates and the delivery log
+- **Service** — background operation, start at login, what to resume at startup, and the SET audit
 
-MIB files and the monitoring database are stored in the user config directory:
+Everything SnmpLens writes lives in the user config directory:
 
 | OS      | Path                              |
 | ------- | --------------------------------- |
 | Windows | `%APPDATA%\SnmpLens\`             |
 | macOS   | `~/.config/SnmpLens/`             |
 | Linux   | `~/.config/SnmpLens/`             |
+
+| Item            | Contents                                                         |
+| --------------- | ---------------------------------------------------------------- |
+| `mibs/`         | The bundled MIBs, extracted on first run, plus everything you add |
+| `presets/`      | Dashboard presets                                                |
+| `assets/`       | Map backgrounds                                                  |
+| `mib-backups/`  | Backups taken before a bundled MIB is overwritten                |
+| `mib-drafts/`   | Unsaved MIB editor buffers                                       |
+| `monitoring.db` | SQLite: history, events, sessions, rules, destinations, outbox   |
+| `service.json`  | The few preferences read before the window exists                |
 
 ---
 
@@ -319,7 +403,6 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10
 - 5 simulated interfaces with dynamic traffic counters
 - Realistic OIDs: system, ifTable, ifXTable, IP, SNMP stats, hrSystem, hrStorage
 - Periodic trap sending (v2c and v3) with linkDown, linkUp, coldStart, customAlert
-- Recursive folder import support
 
 ### Credentials
 

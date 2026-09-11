@@ -34,7 +34,7 @@ func TestStartAndStopDoNotRace(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 15; j++ {
-				_ = c.StartTrapListener(port, V3Params{})
+				_, _ = c.StartTrapListener(port, nil)
 				c.StopTrapListener()
 			}
 		}()
@@ -68,7 +68,7 @@ func TestStartingTwiceIsRefused(t *testing.T) {
 	c.SetRecorder(events.Nop{})
 	port := freePort(t)
 
-	if err := c.StartTrapListener(port, V3Params{}); err != nil {
+	if _, err := c.StartTrapListener(port, nil); err != nil {
 		t.Fatalf("the first start failed: %v", err)
 	}
 	defer c.StopTrapListener()
@@ -77,7 +77,7 @@ func TestStartingTwiceIsRefused(t *testing.T) {
 	// race against the goroutine that has not run yet.
 	time.Sleep(150 * time.Millisecond)
 
-	if err := c.StartTrapListener(port, V3Params{}); err == nil {
+	if _, err := c.StartTrapListener(port, nil); err == nil {
 		t.Error("a second listener was started over the first; the first socket " +
 			"is now bound with nothing holding a reference to close it")
 	}
@@ -102,7 +102,7 @@ func TestStoppingABoundListenerIsImmediate(t *testing.T) {
 	c.SetRecorder(events.Nop{})
 	port := freePort(t)
 
-	if err := c.StartTrapListener(port, V3Params{}); err != nil {
+	if _, err := c.StartTrapListener(port, nil); err != nil {
 		t.Fatalf("start: %v", err)
 	}
 	// Let it bind, so this measures the stop and not the bind.
@@ -127,7 +127,7 @@ func TestStartStopStart(t *testing.T) {
 	c.SetRecorder(events.Nop{})
 	port := freePort(t)
 
-	if err := c.StartTrapListener(port, V3Params{}); err != nil {
+	if _, err := c.StartTrapListener(port, nil); err != nil {
 		t.Fatalf("first start: %v", err)
 	}
 	time.Sleep(150 * time.Millisecond)
@@ -136,7 +136,7 @@ func TestStartStopStart(t *testing.T) {
 	// Wait for the listener goroutine to clear the field.
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		if err := c.StartTrapListener(port, V3Params{}); err == nil {
+		if _, err := c.StartTrapListener(port, nil); err == nil {
 			c.StopTrapListener()
 			return
 		}

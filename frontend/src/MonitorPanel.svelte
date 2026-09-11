@@ -5,7 +5,7 @@
   import { pollingStore } from './stores/pollingStore';
   import { settingsStore } from './stores/settingsStore';
   import { notificationStore } from './stores/notifications';
-  import { getTargetsAsArray } from './utils/targets';
+  import { getTargetsAsArray, usesOwnIdentifiers } from './utils/targets';
   import { formatTimeShort, formatCadence } from './utils/formatting';
   import { anonMode, anonymizeIp } from './utils/anonymize';
   import { targetLabels } from './stores/targetLabels';
@@ -253,10 +253,15 @@
     // startPolling is async: without the await, `id` is a Promise and every
     // per-session display default below would be filed under "[object Promise]"
     // instead of the session.
-    const id = await pollingStore.startPolling(oids, targets, pollInterval, thresholdMap, pollVersion, pollName.trim());
-    viewModes[id] = 'raw';
-    displayModes[id] = 'graph';
-    layoutModes[id] = 'separate';
+    //
+    // Usually one session; one per set of identifiers when the targets do not
+    // all authenticate the same way.
+    const ids = await pollingStore.startPolling(oids, targets, pollInterval, thresholdMap, pollVersion, pollName.trim());
+    for (const id of ids) {
+      viewModes[id] = 'raw';
+      displayModes[id] = 'graph';
+      layoutModes[id] = 'separate';
+    }
     notificationStore.add(t('monitor.pollingStarted', { values: { oid: oids.join(', '), version: pollVersion, interval: pollInterval/1000, thresholds: Object.keys(thresholdMap).length ? t('monitor.withThresholds') : '' } }), 'success');
   }
 
@@ -477,11 +482,14 @@
           </button>
         {/if}
       </div>
+      {#if usesOwnIdentifiers($settingsStore, selectedTargets)}
+        <span class="field-hint"><Icon name="key-round" size={12} /> {$_('profiles.monitorOwnIdentity')}</span>
+      {/if}
     </div>
     <div class="form-row">
       <div class="form-group compact">
         <label for="poll-version">{$_('monitor.versionLabel')}</label>
-        <select id="poll-version" bind:value={pollVersion}>
+        <select id="poll-version" bind:value={pollVersion} title={$_('profiles.monitorVersionHint')}>
           <option value="v1">v1</option>
           <option value="v2c">v2c</option>
           <option value="v3">v3</option>
