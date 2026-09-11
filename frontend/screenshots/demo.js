@@ -26,12 +26,14 @@
 
   window.__SNMPLENS_DEMO__ = true;
 
-  // A scene, for the stubbed bridge to consult. No overrides and no scripted
-  // events — everything comes from the fixtures — but a FEED, so the monitoring
-  // charts are alive rather than a picture of a chart.
+  // A scene, for the stubbed bridge to consult. No scripted events, and
+  // overrides for the simulator alone — the generated fixtures answer its lists
+  // with empty arrays, which left the dialog with no model and no device; these
+  // are the screenshot scenes' own (screenshots/demoBindings.js). And a FEED, so
+  // the monitoring charts are alive rather than a picture of a chart.
   window.__SNMPLENS_SCENE__ = {
     name: 'demo',
-    bindings: {},
+    bindings: __BINDINGS__,
     events: [],
     feed: { from: 'monitorSamples', everyMs: 1500 },
     latency: {

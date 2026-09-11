@@ -638,4 +638,76 @@ check('read as if the device had run since the tab was opened',
   previewQuery(' ifDescr ', 1, 1000, 61000).sinceSeconds === 60 && previewQuery(' ifDescr ', 1, 1000, 61000).filter === 'ifDescr' &&
   previewQuery('', false, 0).sinceSeconds === 0);
 
+/* --- the demo's simulator ------------------------------------------------ */
+
+// The browser demo has no backend. Its simulator answers from the scenes that
+// photograph it (screenshots/demoBindings.js), and what a device DOES is
+// refused (bridge/dynamic.js, DEMO_ONLY) — never answered "ok" with nothing done.
+const { buildScenes } = await import('../screenshots/scenes.js');
+const { demoBindings } = await import('../screenshots/demoBindings.js');
+const demo = demoBindings(buildScenes(JSON.parse(
+  readFileSync(new URL('../screenshots/bridge/seeds.json', import.meta.url), 'utf8'))));
+const demoModels = demo.ListSimulatorModels.map((m) => m.id);
+check('the demo offers the catalogue to make a device from', demoModels.length >= 14, demoModels.join());
+check('and lists a bench made from it, each device once',
+  demo.ListSimulatedDevices.length >= 3 &&
+  demo.ListSimulatedDevices.every((d) => demoModels.includes(d.model)) &&
+  new Set(demo.ListSimulatedDevices.map((d) => d.id)).size === demo.ListSimulatedDevices.length,
+  demo.ListSimulatedDevices.map((d) => `${d.id}:${d.model}`).join());
+// A device with no SNMPv3 user is opened on a blank one, as in the application;
+// what is checked is that the users a device HAS come with their passphrases.
+const demoOpened = demo.ListSimulatedDevices.map((d) => [d, editableDevice(d, demo.SimulatorDeviceCredentials)]);
+check('the editor opens a demo device on its identifiers, not on blank fields',
+  demoOpened.every(([d, e]) => e.community && (d.users || []).every((v) => {
+    const u = e.users.find((x) => x.user === v.name);
+    return u && u.authPass && u.privPass;
+  })) && demoOpened.some(([d]) => d.users?.length),
+  JSON.stringify(demoOpened.map(([, e]) => [e.name, e.community, e.users.map((u) => u.user)])));
+
+// The scenes' catalogue is written by hand, and the demo now shows it to
+// anyone: it has to be Go's, model for model. A bound Go computes — the PDU's
+// len(rackOutlets) — is not compared; the literals are.
+const goModelVars = new Map();
+for (const file of readdirSync(goDir).filter((f) => f.endsWith('.go') && !f.endsWith('_test.go'))) {
+  const src = readFileSync(new URL(file, goDir), 'utf8');
+  const decl = /(\w+)\s*=\s*model\{\s*ModelInfo:\s*ModelInfo\{ID:\s*"([^"]+)",\s*Category:\s*"([^"]+)"(?:,\s*Params:\s*\[\]ModelParam\{\{([^}]*)\}\})?/g;
+  for (const m of src.matchAll(decl)) {
+    const param = m[4] ? Object.fromEntries([...m[4].matchAll(/(\w+):\s*("?)([^,"]+)\2/g)].map((p) => [p[1], p[3].trim()])) : null;
+    goModelVars.set(m[1], { id: m[2], category: m[3], param });
+  }
+}
+const goOrder = (readFileSync(new URL('model.go', goDir), 'utf8').match(/var models = \[\]model\{([^}]*)\}/)?.[1] || '')
+  .split(',').map((s) => s.trim()).filter(Boolean).map((v) => goModelVars.get(v));
+const sameAsGo = (go, fx) => {
+  if (!go || !fx || go.id !== fx.id || go.category !== fx.category) return false;
+  const p = fx.params || [];
+  if (!go.param) return p.length === 0;
+  return p.length === 1 && p[0].name === go.param.Name &&
+    ['Min', 'Max', 'Default'].every((k) => !/^\d+$/.test(go.param[k]) || Number(go.param[k]) === p[0][k.toLowerCase()]);
+};
+const builtIn = demo.ListSimulatorModels.filter((m) => !m.custom);
+check("the demo's catalogue is Go's: every built-in model, in Go's order, with its category and parameters",
+  goOrder.length >= 14 && goOrder.length === builtIn.length && goOrder.every((g, i) => sameAsGo(g, builtIn[i])),
+  goOrder.map((g) => g?.id).join());
+
+const dynamicJs = readFileSync(new URL('../screenshots/bridge/dynamic.js', import.meta.url), 'utf8');
+const refusedInDemo = new Set([...(dynamicJs.match(/const DEMO_ONLY = \{([\s\S]*?)\n\};/)?.[1] || '').matchAll(/^\s+(\w+):/gm)]
+  .map((m) => m[1]));
+const simulatorCalls = new Set();
+const srcDir = new URL('../src/', import.meta.url);
+for (const file of readdirSync(srcDir, { recursive: true }).filter((f) => /\.(js|svelte)$/.test(f))) {
+  const src = readFileSync(new URL(file.replace(/\\/g, '/'), srcDir), 'utf8');
+  for (const m of src.matchAll(/import\s*\{([^}]*)\}\s*from\s*['"][^'"]*wailsjs\/go\/app\/App['"]/g)) {
+    for (const name of m[1].split(',').map((s) => s.trim().split(/\s+as\s+/)[0])) {
+      if (/Simulat/.test(name)) simulatorCalls.add(name);
+    }
+  }
+}
+// Nothing to cancel: a recording is refused before it starts.
+const harmless = new Set(['SimulatorCancelRecording']);
+const unanswered = [...simulatorCalls].filter((n) => !(n in demo) && !refusedInDemo.has(n) && !harmless.has(n));
+check('in the demo every simulator call is answered or refused, none answered "ok" with nothing done',
+  simulatorCalls.size >= 15 && refusedInDemo.has('SimulatorStartDevice') && unanswered.length === 0,
+  unanswered.join() || `${simulatorCalls.size} calls`);
+
 process.exit(failures ? 1 : 0);

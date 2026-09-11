@@ -3,6 +3,7 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { buildScenes } from './screenshots/scenes.js';
+import { demoBindings } from './screenshots/demoBindings.js';
 
 /**
  * The browser demo: the real application, with fixtures instead of a backend.
@@ -47,7 +48,11 @@ function injectDemo() {
   // right for a photograph and wrong for a person: a pinned language and a
   // pinned theme. Taking it from the catalogue rather than writing it again is
   // what stops the demo and the screenshots drifting apart.
-  const base = buildScenes(seeds).find((s) => s.name === 'operations-dark');
+  const scenes = buildScenes(seeds);
+  const base = scenes.find((s) => s.name === 'operations-dark');
+  // The simulator's answers come from the scenes that photograph it, for the
+  // same reason: see screenshots/demoBindings.js.
+  const bindings = demoBindings(scenes);
   const demoSeeds = { ...base.seeds };
   try {
     const settings = JSON.parse(demoSeeds.settings || '{}');
@@ -65,10 +70,14 @@ function injectDemo() {
     transformIndexHtml() {
       const src = readFileSync(
         fileURLToPath(new URL('./screenshots/demo.js', import.meta.url)), 'utf8',
-      ).replace('__SEEDS__', () => JSON.stringify(demoSeeds));
+      )
+        .replace('__SEEDS__', () => JSON.stringify(demoSeeds))
+        .replace('__BINDINGS__', () => JSON.stringify(bindings));
 
-      if (src.includes('__SEEDS__')) {
-        throw new Error('screenshots/demo.js still contains __SEEDS__ after substitution.');
+      for (const placeholder of ['__SEEDS__', '__BINDINGS__']) {
+        if (src.includes(placeholder)) {
+          throw new Error(`screenshots/demo.js still contains ${placeholder} after substitution.`);
+        }
       }
 
       return {
