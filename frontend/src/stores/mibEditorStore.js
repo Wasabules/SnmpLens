@@ -5,7 +5,7 @@ import {
   MibEditorSaveDraft,
   MibEditorReadDraft,
   MibEditorDiscardDraft,
-} from '../../wailsjs/go/main/App';
+} from '../../wailsjs/go/app/App';
 
 // The editor's state lives here, not in the panel component.
 //

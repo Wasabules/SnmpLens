@@ -1,19 +1,15 @@
 package main
 
 import (
-	"context"
 	"embed"
-	"log"
-	"os"
-	"path/filepath"
 
-	"SnmpLens/pkg/service"
-
-	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
+	"SnmpLens/internal/app"
 )
+
+// Everything the binary carries is embedded here and only here: //go:embed
+// cannot reach above the directory of the file it sits in, and frontend/dist,
+// mibs/, presets/ and build/ all sit at the root. The application itself is
+// internal/app.
 
 //go:embed all:frontend/dist
 var assets embed.FS
@@ -22,6 +18,7 @@ var assets embed.FS
 var mibs embed.FS
 
 // The example presets, extracted on FIRST RUN only — see ensureBundledPresets.
+//
 //go:embed presets
 var presets embed.FS
 
@@ -35,64 +32,13 @@ var iconPNG []byte
 var iconICO []byte
 
 func main() {
-	// The background-mode preferences have to be read before the window
-	// exists, so they live in a small JSON file rather than localStorage.
-	cfgDir := ""
-	if dir, err := os.UserConfigDir(); err == nil {
-		cfgDir = filepath.Join(dir, "SnmpLens")
-	}
-	svcCfg, err := service.Load(cfgDir)
-	if err != nil {
-		log.Printf("WARNING: could not read %s, using defaults: %v", service.Path(cfgDir), err)
-	}
-
-	app := NewApp(mibs, presets)
-	app.configDir = cfgDir
-	app.serviceCfg = svcCfg
-	app.trayIcons = trayIcons{png: iconPNG, ico: iconICO}
-
-	err = wails.Run(&options.App{
-		Title:  "SnmpLens",
-		Width:  1024,
-		Height: 768,
-		AssetServer: &assetserver.Options{
-			Assets: assets,
-		},
-		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
-		OnStartup:        app.startup,
-		OnShutdown:       app.shutdown,
-		// Launching straight to the tray, for a login item. If no tray
-		// materialises, startup shows the window anyway rather than leaving a
-		// process the user cannot reach.
-		StartHidden: svcCfg.StartHidden,
-		// HideWindowOnClose is deliberately NOT set. It is fixed here, before
-		// we know whether a tray icon actually appeared, and an app that
-		// refuses to close with no tray to quit from is unusable. OnBeforeClose
-		// makes the same decision later, when the answer is known.
-		OnBeforeClose: func(ctx context.Context) bool {
-			if app.hideInsteadOfClosing() {
-				wruntime.WindowHide(ctx)
-				return true // swallow the close
-			}
-			return false
-		},
-		SingleInstanceLock: &options.SingleInstanceLock{
-			UniqueId: "com.wasabules.snmplens",
-			// Relaunching is how you get back to a hidden instance when the
-			// desktop has no usable tray.
-			OnSecondInstanceLaunch: func(options.SecondInstanceData) {
-				app.RevealWindow()
-			},
-		},
-		DragAndDrop: &options.DragAndDrop{
-			EnableFileDrop:     true,
-			DisableWebViewDrop: false,
-		},
-		Bind: []interface{}{
-			app,
-		},
+	err := app.Run(app.Options{
+		Assets:  assets,
+		MIBs:    mibs,
+		Presets: presets,
+		TrayPNG: iconPNG,
+		TrayICO: iconICO,
 	})
-
 	if err != nil {
 		println("Error:", err.Error())
 	}

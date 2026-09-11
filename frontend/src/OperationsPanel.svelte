@@ -1,5 +1,5 @@
 <script>
-  import { SnmpGet, SnmpSet, SnmpSetMultiple, SnmpWalk, SnmpGetNext, SnmpGetBulk, ResolveOids } from '../wailsjs/go/main/App';
+  import { SnmpGet, SnmpSet, SnmpSetMultiple, SnmpWalk, SnmpGetNext, SnmpGetBulk, ResolveOids } from '../wailsjs/go/app/App';
   import { buildSnmpRequest, buildSetRequest, buildSetMultiRequest, buildGetBulkRequest } from './utils/snmpParams';
   import { notificationStore } from './stores/notifications';
   import { settingsStore } from './stores/settingsStore';

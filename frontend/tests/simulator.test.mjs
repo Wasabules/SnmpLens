@@ -30,7 +30,7 @@ await esbuild.build({
   plugins: [{
     name: 'alias',
     setup(b) {
-      b.onResolve({ filter: /wailsjs[/](go[/]main[/]App|runtime[/]runtime)$/ }, () => ({ path: join(dir, 'stub.js') }));
+      b.onResolve({ filter: /wailsjs[/](go[/]app[/]App|runtime[/]runtime)$/ }, () => ({ path: join(dir, 'stub.js') }));
     },
   }],
 });
@@ -467,10 +467,10 @@ check('and the picker selects the first model an import brought',
 
 // Every warning Go gives about an import has its sentence: the application's,
 // and those pkg/simulator gives about a package's walks.
-const appGo = readFileSync(new URL('../../app_simmodels.go', import.meta.url), 'utf8') +
+const appGo = readFileSync(new URL('../../internal/app/simmodels.go', import.meta.url), 'utf8') +
   readFileSync(new URL('../../pkg/simulator/package.go', import.meta.url), 'utf8');
 const warningKeys = new Set([...appGo.matchAll(/Key: "([A-Za-z]+)"/g)].map((m) => m[1]));
-check('the warnings an import gives were found in app_simmodels.go and pkg/simulator/package.go',
+check('the warnings an import gives were found in internal/app/simmodels.go and pkg/simulator/package.go',
   warningKeys.size >= 7, [...warningKeys].join());
 for (const key of warningKeys) {
   check(`en.json says simulator.models.warning.${key}`, Boolean(en.simulator?.models?.warning?.[key]));
@@ -496,7 +496,7 @@ const goTags = (src, type) => {
   const body = src.match(new RegExp(`type ${type} struct \\{([\\s\\S]*?)\\n\\}`))?.[1] || '';
   return [...body.matchAll(/json:"([^",]+)/g)].map((m) => m[1]);
 };
-const recordGo = readFileSync(new URL('../../app_simrecord.go', import.meta.url), 'utf8');
+const recordGo = readFileSync(new URL('../../internal/app/simrecord.go', import.meta.url), 'utf8');
 const paramsGo = readFileSync(new URL('../../pkg/snmp/params.go', import.meta.url), 'utf8');
 const declared = [...goTags(recordGo, 'SimulatorRecordRequest'), ...goTags(paramsGo, 'SnmpRequest')].sort();
 const recordSettings = {
@@ -538,9 +538,9 @@ check('an import of devices is reported device by device, each warning after its
   JSON.stringify(benchLines));
 
 // Every warning Go gives about a device imported has its sentence.
-const benchGo = readFileSync(new URL('../../app_simbench.go', import.meta.url), 'utf8');
+const benchGo = readFileSync(new URL('../../internal/app/simbench.go', import.meta.url), 'utf8');
 const benchKeys = new Set([...benchGo.matchAll(/Key: "([A-Za-z]+)"/g)].map((m) => m[1]));
-check('the warnings a device import gives were found in app_simbench.go', benchKeys.size >= 2, [...benchKeys].join());
+check('the warnings a device import gives were found in internal/app/simbench.go', benchKeys.size >= 2, [...benchKeys].join());
 for (const key of benchKeys) {
   check(`en.json says simulator.devices.warning.${key}`, Boolean(en.simulator?.devices?.warning?.[key]));
 }
@@ -628,7 +628,7 @@ const behaviours = [...previewGo.matchAll(/Behaviour\w+\s*=\s*"(\w+)"/g)].map((m
 check('every behaviour a preview gives a value is named in en.json',
   behaviours.length >= 6 && behaviours.every((b) => en.simulator?.data?.behaviour?.[b]), behaviours.join());
 check('and every column of the preview', PREVIEW_COLUMNS.every((c) => en.simulator?.data?.column?.[c]));
-const queryGo = readFileSync(new URL('../../app_simpreview.go', import.meta.url), 'utf8')
+const queryGo = readFileSync(new URL('../../internal/app/simpreview.go', import.meta.url), 'utf8')
   .match(/type SimulatorPreviewQuery struct \{([^}]*)\}/)?.[1] || '';
 const queryTags = [...queryGo.matchAll(/json:"(\w+)"/g)].map((m) => m[1]).sort();
 check('a preview is asked for in the fields Go reads, and no other',

@@ -1,7 +1,7 @@
 <script>
   import { _, locale } from 'svelte-i18n';
   import { SUPPORTED_LOCALES } from '../i18n/index.js';
-  import { MonitorCleanup } from '../../wailsjs/go/main/App';
+  import { MonitorCleanup } from '../../wailsjs/go/app/App';
   import Icon from '../Icon.svelte';
   import { updateStore } from '../stores/updateStore';
   import { notificationStore } from '../stores/notifications';

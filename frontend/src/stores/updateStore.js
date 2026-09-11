@@ -3,7 +3,7 @@ import {
   CheckForUpdate,
   DownloadAndApplyUpdate,
   GetAppVersion,
-} from '../../wailsjs/go/main/App';
+} from '../../wailsjs/go/app/App';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
 
 // Central state for the auto-update flow. Mirrors updater.UpdateInfo plus UI state.

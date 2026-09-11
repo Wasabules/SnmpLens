@@ -1,6 +1,6 @@
 import { writable, get } from 'svelte/store';
 import { _ } from 'svelte-i18n';
-import { StartTrapListener, StopTrapListener, UpdateTrapUsers, GetOidDetails } from '../../wailsjs/go/main/App';
+import { StartTrapListener, StopTrapListener, UpdateTrapUsers, GetOidDetails } from '../../wailsjs/go/app/App';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
 import { notificationStore } from './notifications';
 import { settingsStore, settingsReady } from './settingsStore';

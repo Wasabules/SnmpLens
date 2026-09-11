@@ -6,7 +6,7 @@
   import { settingsStore } from './stores/settingsStore';
   import { notificationStore } from './stores/notifications';
   import { onMount } from 'svelte';
-  import { TestConnection, ListPresets, IdentifyDevice } from '../wailsjs/go/main/App';
+  import { TestConnection, ListPresets, IdentifyDevice } from '../wailsjs/go/app/App';
   import { pollingStore } from './stores/pollingStore';
   import { requestTab } from './stores/tabRequest';
   import { buildTestRequest } from './utils/snmpParams';

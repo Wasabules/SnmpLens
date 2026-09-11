@@ -20,7 +20,7 @@
     MibEditorReload,
     MibEditorSymbols,
     MibEditorFixImports,
-  } from '../wailsjs/go/main/App';
+  } from '../wailsjs/go/app/App';
 
   let files = [];
   let filter = '';
