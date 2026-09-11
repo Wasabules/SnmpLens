@@ -64,6 +64,8 @@
     }
   },
   "common": {
+    "showSecret": "Afficher la valeur",
+    "hideSecret": "Masquer la valeur",
     "previous": "Précédent",
     "next": "Suivant",
     "save": "Enregistrer",

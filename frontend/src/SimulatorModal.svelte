@@ -17,6 +17,7 @@
   import ModelPicker from './simulator/ModelPicker.svelte';
   import ModelIcon from './simulator/ModelIcon.svelte';
   import FaultsPanel from './simulator/FaultsPanel.svelte';
+  import SecretInput from './SecretInput.svelte';
   import Icon from './Icon.svelte';
 
   /**
@@ -568,13 +569,13 @@
           <div class="grid communities">
             <div class="form-group">
               <label for="sim-community">{$_('simulator.field.community')}</label>
-              <input id="sim-community" type="password" autocomplete="off" bind:value={editing.community} />
+              <SecretInput id="sim-community" bind:value={editing.community} />
               {#if problems.community}<span class="problem">{$_(`simulator.problem.${problems.community}`)}</span>{/if}
             </div>
             <div class="form-group">
               <label for="sim-write-community">{$_('simulator.field.writeCommunity')}</label>
-              <input id="sim-write-community" type="password" autocomplete="off"
-                placeholder={$_('simulator.field.writeCommunityNone')} bind:value={editing.writeCommunity} />
+              <SecretInput id="sim-write-community" placeholder={$_('simulator.field.writeCommunityNone')}
+                bind:value={editing.writeCommunity} />
               {#if problems.writeCommunity}<span class="problem">{$_(`simulator.problem.${problems.writeCommunity}`)}</span>{/if}
             </div>
           </div>
@@ -595,7 +596,7 @@
               </div>
               <!-- bind:, as the settings do: UsmFields edits the object in place, and
                    without it the checks above never see a passphrase being typed. -->
-              <UsmFields bind:v3={u} idPrefix="sim-v3-{i}" problems={usmProblems[i] || {}} showContext={false} />
+              <UsmFields bind:v3={u} idPrefix="sim-v3-{i}" problems={usmProblems[i] || {}} showContext={false} revealable />
               <label class="check user-write"><input type="checkbox" bind:checked={u.write} /> {$_('simulator.field.userWrite')}</label>
             </div>
           {/each}
@@ -649,7 +650,7 @@
               {:else}
                 <div class="form-group">
                   <label for="sim-dest-{i}-community">{$_('simulator.traps.community')}</label>
-                  <input id="sim-dest-{i}-community" type="password" autocomplete="off" bind:value={dest.community} />
+                  <SecretInput id="sim-dest-{i}-community" bind:value={dest.community} />
                   {#if problems.destinations?.[i]?.community}<span class="problem">{$_(`simulator.problem.${problems.destinations[i].community}`)}</span>{/if}
                 </div>
               {/if}

@@ -64,6 +64,8 @@
     }
   },
   "common": {
+    "showSecret": "显示值",
+    "hideSecret": "隐藏值",
     "previous": "上一页",
     "next": "下一页",
     "save": "保存",
