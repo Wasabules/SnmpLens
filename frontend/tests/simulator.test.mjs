@@ -67,6 +67,12 @@ const {
   importReport,
   firstImported,
   deviceImportReport,
+  blankFaults,
+  editableFaults,
+  faultsPayload,
+  faultChips,
+  deviceGroups,
+  COUNTER_SPEEDS,
   CUSTOM_CATEGORIES,
   recordableTargets,
   recordRequest,
@@ -464,5 +470,52 @@ for (const key of ['title', 'hint', 'without', 'with', 'done']) {
 for (const key of ['imported', 'failed']) {
   check(`en.json says simulator.devices.${key}`, Boolean(en.simulator?.devices?.[key]));
 }
+
+/* --- faults ---------------------------------------------------------------- */
+
+// What the panel sends is exactly what Go's Faults reads, in bounds: a share of
+// errors only with an error, a counter speed Go accepts.
+const faultsGo = readFileSync(new URL('../../pkg/simulator/faults.go', import.meta.url), 'utf8');
+const faultTags = goTags(faultsGo, 'Faults').sort();
+const sentFaults = faultsPayload({ latencyMs: '250.4', jitterMs: 99999, lossPercent: -5, mute: 1, error: 'genErr', errorPercent: 0, counterSpeed: '100' });
+check('the faults sent are what Go reads, and nothing else',
+  faultTags.length === 7 && JSON.stringify(Object.keys(sentFaults).sort()) === JSON.stringify(faultTags),
+  `${Object.keys(sentFaults).sort()} vs ${faultTags}`);
+check('and in bounds',
+  sentFaults.latencyMs === 250 && sentFaults.jitterMs === 10000 && sentFaults.lossPercent === 0 && sentFaults.mute === true &&
+  sentFaults.errorPercent === 1 && sentFaults.counterSpeed === 100, JSON.stringify(sentFaults));
+check('no share of errors without an error, and an unknown speed is 1',
+  faultsPayload({ ...blankFaults(), errorPercent: 40, error: 'noSuchName', counterSpeed: 7 }).errorPercent === 0 &&
+  faultsPayload({ ...blankFaults(), counterSpeed: 7 }).counterSpeed === 1);
+check('the speeds offered are those Go accepts',
+  JSON.stringify(COUNTER_SPEEDS) === JSON.stringify([...faultsGo.matchAll(/counterSpeeds = \[\]int\{([^}]*)\}/g)][0][1]
+    .split(',').map((s) => Number(s.trim())).filter((n) => n > 0)));
+check('an error chosen in the panel answers every request until a share is given',
+  editableFaults({ ...blankFaults(), error: '' }).errorPercent === 100 &&
+  editableFaults({ ...blankFaults(), error: 'tooBig', errorPercent: 30 }).errorPercent === 30);
+const chips = faultChips({ latencyMs: 500, jitterMs: 100, lossPercent: 10, mute: true, error: 'tooBig', errorPercent: 20, counterSpeed: 1000 });
+check('a device doing everything wrong says so, fault by fault',
+  chips.map((c) => c.key).join() === 'mute,latencyJitter,loss,error,counters' && faultChips(blankFaults()).length === 0,
+  JSON.stringify(chips));
+for (const key of ['button', 'hint', 'mute', 'latency', 'jitter', 'loss', 'error', 'errorNone', 'counters', 'apply', 'clear', 'applied', 'cleared']) {
+  check(`en.json says simulator.faults.${key}`, Boolean(en.simulator?.faults?.[key]));
+}
+for (const key of ['mute', 'latency', 'latencyJitter', 'loss', 'error', 'counters']) {
+  check(`en.json says simulator.faults.chip.${key}`, Boolean(en.simulator?.faults?.chip?.[key]));
+}
+for (const key of ['location', 'contact', 'modelDefault', 'autoStart']) {
+  check(`en.json says simulator.field.${key}`, Boolean(en.simulator?.field?.[key]));
+}
+
+// The list files each device under its model's category, in the catalogue's
+// order, and a device of a model since deleted under "other".
+const groupModels = [{ id: 'linux-server', category: 'server' }, { id: 'cisco-catalyst-24', category: 'network' }];
+const filed = deviceGroups([
+  { id: '1', model: 'cisco-catalyst-24' }, { id: '2', model: 'custom:gone' }, { id: '3', model: 'linux-server' },
+  { id: '4', model: 'linux-server' },
+], groupModels);
+check('devices are grouped by category, in the catalogue order',
+  filed.map((g) => `${g.category}:${g.devices.map((d) => d.id).join('+')}`).join(' ') === 'server:3+4 network:1 other:2',
+  JSON.stringify(filed));
 
 process.exit(failures ? 1 : 0);

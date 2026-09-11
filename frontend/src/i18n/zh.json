@@ -1311,6 +1311,7 @@
     "duplicated": "已将“{name}”复制为“{copy}”",
     "restart": "重启此设备：运行时间和计数器从零开始，如会发送 coldStart 则发送",
     "restarted": "{name} 已重启",
+    "autoStartChip": "随 SnmpLens 启动",
     "export": {
       "title": "导出 {count, plural, other {# 台设备}}",
       "hint": "密码（团体名和口令）保存在系统钥匙串中，除非您把它们写入文件。仅在需要交付完整测试环境时才这样做：拿到文件的人都能读取它们。",
@@ -1326,6 +1327,29 @@
         "noSecrets": "{name}：文件中不含密码——启动前请为其设置团体名或口令"
       }
     },
+    "faults": {
+      "button": "故障：让此设备出现异常",
+      "hint": "立即生效，无需重启设备：故障正是针对其运行时间和计数器进行测试的。故障设置随设备保存。",
+      "mute": "静默：不响应任何请求（通知仍会发送）",
+      "latency": "延迟",
+      "jitter": "抖动",
+      "loss": "丢包",
+      "error": "错误",
+      "errorNone": "无",
+      "counters": "计数器",
+      "apply": "应用",
+      "clear": "全部清除",
+      "applied": "已应用 {name} 的故障",
+      "cleared": "{name} 已恢复正常",
+      "chip": {
+        "mute": "静默",
+        "latency": "延迟 {ms} ms",
+        "latencyJitter": "延迟 {ms} ± {jitter} ms",
+        "loss": "丢包 {percent} %",
+        "error": "{error} {percent} %",
+        "counters": "计数器 ×{speed}"
+      }
+    },
     "loopbackHint": "仅限回环地址：127.0.0.1 至 127.255.255.254，或 ::1。在 Linux 和 macOS 上，低于 1024 的端口需要管理员权限。",
     "field": {
       "name": "名称",
@@ -1334,7 +1358,11 @@
       "port": "端口",
       "versions": "SNMP 版本",
       "community": "团体名",
-      "v3": "SNMPv3 用户"
+      "v3": "SNMPv3 用户",
+      "location": "位置（sysLocation）",
+      "contact": "联系人（sysContact）",
+      "modelDefault": "使用型号的默认值",
+      "autoStart": "随 SnmpLens 启动"
     },
     "problem": {
       "nameRequired": "请为设备命名。",

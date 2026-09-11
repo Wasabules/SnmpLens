@@ -110,7 +110,7 @@ func (c counter) count(t float64) uint64 {
 }
 
 func (c counter) read(k clock) any {
-	n := c.count(elapsed(k))
+	n := c.count(counterSeconds(k))
 	switch {
 	case c.wide:
 		return n

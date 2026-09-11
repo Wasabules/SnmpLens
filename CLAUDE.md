@@ -606,7 +606,8 @@ file and the marshalled list for the secret values themselves. The two listing c
 `NewEngineID`: the model's vendor in the MAC format, the MAC drawn from the ID), and an edit keeps both, and the
 boot count, whatever the renderer sends — the engine ID is what managers localise their keys to, and the count is
 what keeps a previous run's messages out of the time window. Every start raises the count and WRITES it before
-the device answers. A running device that is edited restarts; nothing starts by itself at launch. The header's
+the device answers. A running device that is edited restarts; nothing starts by itself at launch unless it is set
+to (`AutoStart`). The header's
 status and the modal read `simulatorStore`, which Go refreshes with `simulator:changed`.
 
 **A model is a vocabulary, not prose.** `simulator.Models()` serves an ID, a category and the notifications; the
@@ -698,6 +699,18 @@ its passwords were left out has any it holds anyway ignored — what a file says
 its devices are checked by `ValidateWithoutSecrets`, everything but the secrets, and KEPT without them: starting one
 fails naming what it lacks until the editor gives it. Duplicating is the same making of a new device, from a device
 and with its passwords; restarting is a stop and a start, so the boots rise and coldStart goes out as on any start.
+
+**Faults are applied to the running agent, never by a restart** (`faults.go`). A test of reachability, of the
+overload guardrail or of the rate across a wrap watches the uptime and counters a restart would reset, so
+`SimulatorSetFaults` goes through `Fleet.SetFaults` to the live agent, and the editor's save KEEPS the faults it does
+not show. Loss and mute drop the datagram before the agent counts anything, as a lossy link would; a mute device still
+sends its notifications. Latency answers through `time.AfterFunc` rather than sleeping in the one serving goroutine,
+so a slow device stays slow without becoming a stuck one. An error is injected in `process`, the path v1, v2c and v3
+share, and counted in the snmp group like any answer. Counters sped up run through a WARP carried by the request's
+clock: the counter-seconds at the moment the speed changed, and the new speed from there — so a speed change turns a
+counter faster or slower and never makes it jump or go back, either of which a manager reads as a wrap
+(`TestCountersChangeSpeedWithoutJumping`). Gauges keep real time. A device's own location and contact take the place
+of its model's in `addSystem`, and `AutoStart` is opt-in per device, started once the secret store is open.
 
 **What only a notification carries** (`Object.NotifyOnly`). An iDRAC alert carries eleven objects its MIB makes
 accessible-for-notify (RFC 2578 7.3) — a message ID, the message, the service tag — and no request may read them.

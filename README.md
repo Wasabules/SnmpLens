@@ -395,6 +395,8 @@ The **Simulator** indicator in the header opens the simulated devices: SNMP agen
 
 A bench moves as a file. **Export all…**, or a device's export button, writes JSON, and SnmpLens asks every time whether to put the passwords in it — the communities and passphrases, which otherwise stay in the system keychain. The file says which (`"secrets": "included"` or `"omitted"`). **Import devices…** makes each device new on this machine: its own ID and engine ID, and another address when its own is taken. A device that cannot be made here — of a custom model that is not installed, say — is refused on its own; devices imported without their passwords start once they are given them in the editor.
 
+**Faults** make a device misbehave while it runs, without restarting it — its uptime and counters are what a fault is tested against: a latency (with jitter), a share of requests lost, a device that answers nothing at all, a share answered with `genErr` or `tooBig`, and counters running 10, 100 or 1000 times faster, so that a Counter32 wraps in minutes. They are what SnmpLens's reachability alerts, overload guardrail and counter-wrap arithmetic are tested against, and they are kept with the device. A device can also be given its own sysLocation and sysContact, and set to start with SnmpLens.
+
 ---
 
 ## Custom Simulator Models
