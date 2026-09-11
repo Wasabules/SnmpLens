@@ -62,6 +62,9 @@ type App struct {
 	trayLive   bool
 	trapsOn    bool
 	scheduler  *monitor.Scheduler
+
+	// sim holds and runs the simulated devices (app_simulator.go).
+	sim *simulatorService
 }
 
 // NewApp creates a new App application struct.
@@ -141,6 +144,10 @@ func (a *App) startup(ctx context.Context) {
 		a.secrets = store
 		log.Printf("Secret storage backend: %s", store.Backend())
 	}
+
+	// The simulated devices are read, not started: a device answers only once
+	// someone starts it in this session.
+	a.sim = newSimulatorService(filepath.Join(configDir, "SnmpLens"))
 
 	// 4. Load core MIBs
 	coreMibs := []string{"SNMPv2-SMI", "SNMPv2-TC"}
@@ -635,6 +642,11 @@ func (a *App) shutdown(ctx context.Context) {
 	// this function's reasoning holds.
 	if a.snmpClient != nil {
 		a.snmpClient.StopTrapListener()
+	}
+	// The simulated devices with it. They touch nothing below, but they hold
+	// sockets, and an application that is closing should stop answering.
+	if a.sim != nil {
+		a.sim.fleet.StopAll()
 	}
 
 	// Then the router: every producer is stopped, so what it has queued is all

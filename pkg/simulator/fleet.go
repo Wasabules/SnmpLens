@@ -1,0 +1,88 @@
+package simulator
+
+import (
+	"errors"
+	"sync"
+)
+
+// ErrRunning is returned for a device that is already running.
+var ErrRunning = errors.New("simulator: the device is already running")
+
+// Fleet runs simulated devices, at most one agent per device.
+//
+// It keeps nothing of its own: a device's configuration, its secrets and its
+// boot count belong to whoever calls it — which is also what lets the fleet be
+// tested without a file or a keychain.
+type Fleet struct {
+	mu     sync.Mutex
+	agents map[string]*Agent
+}
+
+// NewFleet returns a fleet running nothing.
+func NewFleet() *Fleet { return &Fleet{agents: map[string]*Agent{}} }
+
+// Start runs d. d.EngineBoots is the count for THIS run: the caller raises it
+// and keeps it before calling, since a device that starts again must come back
+// with a higher count and the fleet has nowhere to keep one.
+func (f *Fleet) Start(d Device) error {
+	if err := d.Validate(); err != nil {
+		return err
+	}
+	cfg, err := d.config()
+	if err != nil {
+		return err
+	}
+	// Outside the lock: localising the users' keys hashes a megabyte each.
+	a, err := NewAgent(cfg)
+	if err != nil {
+		return err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.agents == nil {
+		f.agents = map[string]*Agent{}
+	}
+	if f.agents[d.ID] != nil {
+		return ErrRunning
+	}
+	if err := a.Start(); err != nil {
+		return err
+	}
+	f.agents[d.ID] = a
+	return nil
+}
+
+// Stop stops a device, reporting whether it was running.
+func (f *Fleet) Stop(id string) bool {
+	f.mu.Lock()
+	a := f.agents[id]
+	delete(f.agents, id)
+	f.mu.Unlock()
+	if a == nil {
+		return false
+	}
+	a.Stop()
+	return true
+}
+
+// StopAll stops every device.
+func (f *Fleet) StopAll() {
+	f.mu.Lock()
+	agents := f.agents
+	f.agents = map[string]*Agent{}
+	f.mu.Unlock()
+	for _, a := range agents {
+		a.Stop()
+	}
+}
+
+// Status reports whether a device is running, and its counters if it is.
+func (f *Fleet) Status(id string) (Stats, bool) {
+	f.mu.Lock()
+	a := f.agents[id]
+	f.mu.Unlock()
+	if a == nil {
+		return Stats{}, false
+	}
+	return a.Stats(), true
+}

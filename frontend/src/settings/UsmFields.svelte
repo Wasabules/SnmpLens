@@ -16,6 +16,8 @@
   export let idPrefix = 'v3';
   /** Messages by field — { text, level: 'error' | 'warn' } — shown under it. */
   export let problems = {};
+  /** Whether to offer the context: a simulated device has only the default one. */
+  export let showContext = true;
 </script>
 
 <div class="usm-grid">
@@ -66,11 +68,13 @@
       bind:value={v3.privPass} disabled={!usesPriv(v3.secLevel)} />
     {#if problems.privPass}<span class="problem {problems.privPass.level}">{problems.privPass.text}</span>{/if}
   </div>
-  <div class="form-group full-width">
-    <label for="{idPrefix}-contextName">{$_('settings.snmp.contextName')}</label>
-    <input id="{idPrefix}-contextName" type="text" bind:value={v3.contextName}
-      placeholder={$_('settings.snmp.contextPlaceholder')} />
-  </div>
+  {#if showContext}
+    <div class="form-group full-width">
+      <label for="{idPrefix}-contextName">{$_('settings.snmp.contextName')}</label>
+      <input id="{idPrefix}-contextName" type="text" bind:value={v3.contextName}
+        placeholder={$_('settings.snmp.contextPlaceholder')} />
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -79,6 +83,9 @@
     grid-template-columns: 1fr 1fr;
     gap: 15px 20px;
     margin-top: 10px;
+    /* A passphrase with a message under it made the row taller, and the protocol
+       select beside it grew to match. */
+    align-items: start;
   }
 
   .form-group {

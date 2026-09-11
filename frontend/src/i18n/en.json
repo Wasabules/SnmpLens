@@ -20,7 +20,9 @@
       "trapInactive": "Listening inactive",
       "trap": "Trap",
       "trapOff": "OFF",
-      "snmpVersionTitle": "Default SNMP version"
+      "snmpVersionTitle": "Default SNMP version",
+      "simulator": "Simulator",
+      "simulatorTitle": "Simulated devices: {running} running out of {total}"
     },
     "mibDrop": {
       "overlay": "Drop MIB files here",
@@ -1278,5 +1280,47 @@
     "trapsChip": "traps",
     "trapsOnTitle": "Accepted by the trap listener — click to exclude it",
     "trapsOffTitle": "Not accepted by the trap listener — click to accept it"
+  },
+  "simulator": {
+    "title": "Simulator",
+    "intro": "Simulated devices answer SNMP on this machine only, at loopback addresses (127.x.x.x). Start one, then add it as a target to query it like real equipment.",
+    "empty": "No simulated device yet.",
+    "new": "New device",
+    "newTitle": "New simulated device",
+    "editTitle": "Edit simulated device",
+    "running": "Running",
+    "stopped": "Stopped",
+    "packets": "{count, plural, one {# request received} other {# requests received}}",
+    "addAsTarget": "Add as target",
+    "addAsTargetTitle": "Add this device to your targets, with its port and identifiers",
+    "targetAdded": "{address} added to your targets, queried in {version}",
+    "targetUpdated": "{address} was already a target: its port and identifiers now match the device ({version})",
+    "startFailed": "{name} could not start: {error}",
+    "confirmDelete": "Delete?",
+    "deleteTitle": "Delete this device",
+    "loopbackHint": "Loopback only: 127.0.0.1 to 127.255.255.254, or ::1. On Linux and macOS, a port below 1024 needs administrator rights.",
+    "field": {
+      "name": "Name",
+      "model": "Model",
+      "address": "Address",
+      "port": "Port",
+      "versions": "SNMP versions",
+      "community": "Community",
+      "v3": "SNMPv3 user"
+    },
+    "problem": {
+      "nameRequired": "Give the device a name.",
+      "port": "A port is a number from 1 to 65535.",
+      "versionRequired": "Choose at least one version.",
+      "communityRequired": "v1 and v2c need a community.",
+      "userRequired": "The SNMPv3 user needs a name.",
+      "passphraseShort": "At least 8 characters."
+    },
+    "model": {
+      "linux-server": {
+        "name": "Linux server",
+        "description": "An Ubuntu host running net-snmp: system, three interfaces, host resources. Fits the “Interfaces (IF-MIB)” and “Server (HOST-RESOURCES-MIB)” presets."
+      }
+    }
   }
 }

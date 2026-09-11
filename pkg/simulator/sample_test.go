@@ -38,6 +38,15 @@ var sampleOrder = []string{
 	".1.3.6.1.2.1.31.1.1.1.18.2",
 }
 
+// engineOrder is the snmpEngine group an agent adds to what it serves when it
+// answers v3; it walks after everything under mib-2.
+var engineOrder = []string{
+	".1.3.6.1.6.3.10.2.1.1.0",
+	".1.3.6.1.6.3.10.2.1.2.0",
+	".1.3.6.1.6.3.10.2.1.3.0",
+	".1.3.6.1.6.3.10.2.1.4.0",
+}
+
 // sampleObjects is a small device, declared interface by interface rather than
 // in the order it is walked: the system group, and two interfaces with a 32-bit
 // and a 64-bit counter each — enough for a walk to cross from one table to the

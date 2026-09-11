@@ -20,7 +20,9 @@
       "trapInactive": "监听未激活",
       "trap": "Trap",
       "trapOff": "关闭",
-      "snmpVersionTitle": "默认 SNMP 版本"
+      "snmpVersionTitle": "默认 SNMP 版本",
+      "simulator": "模拟器",
+      "simulatorTitle": "模拟设备：{total} 个中有 {running} 个在运行"
     },
     "mibDrop": {
       "overlay": "将 MIB 文件拖放到此处",
@@ -1278,5 +1280,47 @@
     "trapsChip": "Trap",
     "trapsOnTitle": "已被 Trap 监听器接受 — 点击以排除",
     "trapsOffTitle": "未被 Trap 监听器接受 — 点击以接受"
+  },
+  "simulator": {
+    "title": "模拟器",
+    "intro": "模拟设备仅在本机的回环地址（127.x.x.x）上响应 SNMP。启动一个设备，然后将其添加为目标，即可像真实设备一样查询。",
+    "empty": "尚无模拟设备。",
+    "new": "新建设备",
+    "newTitle": "新建模拟设备",
+    "editTitle": "编辑模拟设备",
+    "running": "运行中",
+    "stopped": "已停止",
+    "packets": "{count, plural, other {已收到 # 个请求}}",
+    "addAsTarget": "添加为目标",
+    "addAsTargetTitle": "将此设备连同其端口和凭据添加到目标",
+    "targetAdded": "已将 {address} 添加到目标，使用 {version} 查询",
+    "targetUpdated": "{address} 已是目标：其端口和凭据现已与设备一致（{version}）",
+    "startFailed": "{name} 未能启动：{error}",
+    "confirmDelete": "删除？",
+    "deleteTitle": "删除此设备",
+    "loopbackHint": "仅限回环地址：127.0.0.1 至 127.255.255.254，或 ::1。在 Linux 和 macOS 上，低于 1024 的端口需要管理员权限。",
+    "field": {
+      "name": "名称",
+      "model": "型号",
+      "address": "地址",
+      "port": "端口",
+      "versions": "SNMP 版本",
+      "community": "团体名",
+      "v3": "SNMPv3 用户"
+    },
+    "problem": {
+      "nameRequired": "请为设备命名。",
+      "port": "端口是 1 到 65535 之间的数字。",
+      "versionRequired": "请至少选择一个版本。",
+      "communityRequired": "v1 和 v2c 需要团体名。",
+      "userRequired": "SNMPv3 用户需要名称。",
+      "passphraseShort": "至少 8 个字符。"
+    },
+    "model": {
+      "linux-server": {
+        "name": "Linux 服务器",
+        "description": "运行 net-snmp 的 Ubuntu 主机：系统、三个接口、主机资源。适用于“Interfaces (IF-MIB)”和“Server (HOST-RESOURCES-MIB)”预设。"
+      }
+    }
   }
 }

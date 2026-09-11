@@ -19,6 +19,7 @@
   import DebugPanel from './DebugPanel.svelte';
   import Icon from './Icon.svelte';
   import UpdateBanner from './UpdateBanner.svelte';
+  import SimulatorModal from './SimulatorModal.svelte';
   import MibDiagnosis from './mib/MibDiagnosis.svelte';
   import { trapStore } from './stores/trapStore';
   import { updateStore } from './stores/updateStore';
@@ -28,6 +29,7 @@
   import { pollingStore } from './stores/pollingStore';
   import { historyStore } from './stores/historyStore';
   import { eventCounts, eventsStore } from './stores/eventsStore';
+  import { simulatorStore, runningSimulated } from './stores/simulatorStore';
   import { GetPersistentMibDirectory, ListMibFiles, ImportMibFiles, ImportPresetFiles, TraySetLabels } from '../wailsjs/go/main/App';
   import MibEditorPanel from './MibEditorPanel.svelte';
   import { mibEditorStore } from './stores/mibEditorStore';
@@ -57,6 +59,7 @@
   // for the first section, which is what the shortcut and the button open.
   let settingsTarget = null;
   let showTargets = false;
+  let showSimulator = false;
   let showDebug = false;
   let pendingSnmpAction = null;
   
@@ -357,6 +360,10 @@
     eventsStore.listen();
     eventsStore.refreshCounts();
 
+    // The simulated devices are Go's. Listed now, so the header says how many
+    // are running before anyone opens the simulator.
+    simulatorStore.init().catch(() => {});
+
     // Scan default MIB directory
     try {
       const defaultPath = await GetPersistentMibDirectory();
@@ -482,6 +489,10 @@
       on:close={() => { showSettings = false; settingsTarget = null; }} />
   {/if}
 
+  {#if showSimulator}
+    <SimulatorModal on:close={() => (showSimulator = false)} />
+  {/if}
+
   {#if showImportErrors}
     <div class="modal-backdrop" on:click={onBackdrop(() => showImportErrors = false)} role="presentation">
       <div class="import-error-modal" role="dialog" aria-modal="true" tabindex="-1">
@@ -537,6 +548,17 @@
           {$trapStore.isListening ? $settingsStore.trapPort : $_('app.status.trapOff')}
         </span>
       </div>
+      <div class="status-separator"></div>
+      <button
+        class="status-item simulator"
+        class:active={$runningSimulated > 0}
+        on:click={() => (showSimulator = true)}
+        title={$_('app.status.simulatorTitle', { values: { running: $runningSimulated, total: $simulatorStore.devices.length } })}
+      >
+        <span class="status-icon"><Icon name="server-cog" size={14} /></span>
+        <span class="status-label">{$_('app.status.simulator')}</span>
+        <span class="status-indicator" class:listening={$runningSimulated > 0}>{$runningSimulated}</span>
+      </button>
       <div class="status-separator"></div>
       <div class="version-switcher" title={$_('app.status.snmpVersionTitle')}>
         {#each ['v1', 'v2c', 'v3'] as ver}
@@ -810,6 +832,17 @@
 
   .status-item.active {
     color: var(--success-color);
+  }
+
+  /* The one status item that opens something. */
+  .status-item.simulator {
+    cursor: pointer;
+    padding: 2px 5px;
+    border-radius: 4px;
+  }
+
+  .status-item.simulator:hover {
+    background-color: var(--hover-overlay-medium);
   }
 
   .status-icon {

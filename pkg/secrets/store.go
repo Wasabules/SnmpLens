@@ -81,6 +81,11 @@ func TrapUsersRef() string { return "traps/local/usm" }
 // open them any more.
 func SettingsKeyRef() string { return "settings/local/key" }
 
+// SimulatorDeviceRef is the reference shape for a simulated device's community
+// and passphrases. The device's configuration file holds everything else and
+// none of these, because a configuration file is what gets copied and shared.
+func SimulatorDeviceRef(deviceID string) string { return "simulator/" + deviceID + "/secrets" }
+
 // keyProtector guards the data-encryption key. Each OS gets the strongest
 // mechanism available without a new dependency.
 type keyProtector interface {

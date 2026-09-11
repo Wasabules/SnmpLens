@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -138,10 +139,26 @@ func NewAgent(cfg Config) (*Agent, error) {
 			return nil, fmt.Errorf("simulator: %w", err)
 		}
 	}
-	if a.tree, err = newTree(cfg.Objects); err != nil {
+	objects := cfg.Objects
+	if a.v3 {
+		objects = slices.Concat(cfg.Objects, engineObjects(a.engineID, a.boots))
+	}
+	if a.tree, err = newTree(objects); err != nil {
 		return nil, fmt.Errorf("simulator: %w", err)
 	}
 	return a, nil
+}
+
+// engineObjects is the snmpEngine group (SNMP-FRAMEWORK-MIB): the engine's own
+// ID, boots and time, which only the agent knows. It is where a manager reads
+// back the engine it discovered.
+func engineObjects(id []byte, boots uint32) []Object {
+	return []Object{
+		{OID: "1.3.6.1.6.3.10.2.1.1.0", Type: gosnmp.OctetString, Value: Const(bytes.Clone(id))},
+		{OID: "1.3.6.1.6.3.10.2.1.2.0", Type: gosnmp.Integer, Value: Const(int(boots))},
+		{OID: "1.3.6.1.6.3.10.2.1.3.0", Type: gosnmp.Integer, Value: engineSeconds{}},
+		{OID: "1.3.6.1.6.3.10.2.1.4.0", Type: gosnmp.Integer, Value: Const(maxMessage)},
+	}
 }
 
 // Start binds the socket and starts answering.
