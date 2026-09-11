@@ -46,6 +46,9 @@ type clock struct {
 	// stats are the agent's own counters, which SNMPv2-MIB's snmp group and
 	// the USM statistics read (agentObjects); nil where no agent is answering.
 	stats *counters
+	// warp is where the counters are once a fault has changed their speed
+	// (faults.go); nil when none ever has.
+	warp *warp
 }
 
 // uptime is the time since the agent started, in hundredths of a second.

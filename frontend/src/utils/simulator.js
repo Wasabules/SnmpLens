@@ -85,6 +85,9 @@ export function blankDevice(model, suggestion) {
     community: 'public',
     users: [blankV3()],
     traps: blankTraps(),
+    location: '',
+    contact: '',
+    autoStart: false,
   };
 }
 
@@ -111,6 +114,9 @@ export function editableDevice(view, creds) {
     versions: [...(view.versions || [])],
     community: creds?.community || '',
     users: users.length ? users : [blankV3()],
+    location: view.location || '',
+    contact: view.contact || '',
+    autoStart: !!view.autoStart,
     traps: {
       destinations: (view.traps?.destinations || []).map((t) => ({
         id: t.id,
@@ -231,6 +237,9 @@ export function devicePayload(d) {
           privPass: u.privPass,
         }))
       : [],
+    location: (d.location || '').trim(),
+    contact: (d.contact || '').trim(),
+    autoStart: !!d.autoStart,
     engineId: '',
     engineBoots: 0,
     // Each destination with only what its version uses, as the users are.
@@ -397,6 +406,79 @@ export function deviceImportReport(results) {
     }
   }
   return out;
+}
+
+/** The speeds a device's counters can run at, and the longest latency, as pkg/simulator bounds them. */
+export const COUNTER_SPEEDS = [1, 10, 100, 1000];
+export const MAX_LATENCY_MS = 10000;
+
+/** A device doing nothing wrong. */
+export function blankFaults() {
+  return { latencyMs: 0, jitterMs: 0, lossPercent: 0, mute: false, error: '', errorPercent: 0, counterSpeed: 1 };
+}
+
+/**
+ * A device's faults in the panel's shape: an error, once chosen, answers every
+ * request until a share is given.
+ */
+export function editableFaults(f) {
+  return {
+    ...blankFaults(),
+    ...(f || {}),
+    counterSpeed: Math.max(Number(f?.counterSpeed) || 1, 1),
+    errorPercent: f?.error ? f.errorPercent : 100,
+  };
+}
+
+/** The faults as SimulatorSetFaults takes them: whole numbers in bounds, and no share of errors without an error. */
+export function faultsPayload(f) {
+  const whole = (v, lo, hi) => Math.min(Math.max(Math.round(Number(v) || 0), lo), hi);
+  const error = f.error === 'tooBig' || f.error === 'genErr' ? f.error : '';
+  return {
+    latencyMs: whole(f.latencyMs, 0, MAX_LATENCY_MS),
+    jitterMs: whole(f.jitterMs, 0, MAX_LATENCY_MS),
+    lossPercent: whole(f.lossPercent, 0, 100),
+    mute: !!f.mute,
+    error,
+    errorPercent: error ? whole(f.errorPercent, 1, 100) : 0,
+    counterSpeed: COUNTER_SPEEDS.includes(Number(f.counterSpeed)) ? Number(f.counterSpeed) : 1,
+  };
+}
+
+/**
+ * What a device is made to do wrong, as the chips its row shows: i18n key
+ * suffixes (simulator.faults.chip.<key>) and what each sentence quotes.
+ */
+export function faultChips(f) {
+  const out = [];
+  if (!f) return out;
+  if (f.mute) out.push({ key: 'mute', values: {} });
+  if (f.latencyMs || f.jitterMs) {
+    out.push({ key: f.jitterMs ? 'latencyJitter' : 'latency', values: { ms: f.latencyMs, jitter: f.jitterMs } });
+  }
+  if (f.lossPercent) out.push({ key: 'loss', values: { percent: f.lossPercent } });
+  if (f.error) out.push({ key: 'error', values: { error: f.error, percent: f.errorPercent } });
+  if (f.counterSpeed > 1) out.push({ key: 'counters', values: { speed: f.counterSpeed } });
+  return out;
+}
+
+/**
+ * The devices grouped by their model's category, the categories in the order
+ * the catalogue gives them; a device of a model since deleted is filed under
+ * "other".
+ */
+export function deviceGroups(devices, models) {
+  const order = categoriesOf(models);
+  const rank = (c) => (order.includes(c) ? order.indexOf(c) : order.length);
+  const groups = new Map();
+  for (const d of devices || []) {
+    const category = modelOf(models, d.model)?.category || 'other';
+    if (!groups.has(category)) groups.set(category, []);
+    groups.get(category).push(d);
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => rank(a) - rank(b))
+    .map(([category, list]) => ({ category, devices: list }));
 }
 
 /** The categories a recorded model may be filed under: Go's customCategories. */

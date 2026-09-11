@@ -10,10 +10,12 @@
     SIM_VERSIONS, MAX_EVERY, MAX_DESTINATIONS, MAX_SCHEDULES, blankDevice, blankV3, blankDestination, blankSchedule,
     editableDevice, deviceProblems, devicePayload, addDeviceAsTarget, notificationsOf, trapActivity, deliveryReport,
     modelOf, modelName, modelDescription, importReport, firstImported, recordRequest, recordableTargets, deviceImportReport,
+    deviceGroups, faultChips, categoryIcon,
   } from './utils/simulator.js';
   import UsmFields from './settings/UsmFields.svelte';
   import ModelPicker from './simulator/ModelPicker.svelte';
   import ModelIcon from './simulator/ModelIcon.svelte';
+  import FaultsPanel from './simulator/FaultsPanel.svelte';
   import Icon from './Icon.svelte';
 
   /**
@@ -386,6 +388,25 @@
       simulatorStore.refresh().catch(() => {});
     }
   }
+
+  /** The device whose faults are open, or null. */
+  let faultsOpen = null;
+
+  // Applied at once, without a restart: the device keeps its uptime and its
+  // counters, which are what a fault is tested against.
+  async function applyFaults(device, faults) {
+    busy = { ...busy, [device.id]: true };
+    try {
+      await simulatorStore.setFaults(device.id, faults);
+      const key = faultChips(faults).length ? 'simulator.faults.applied' : 'simulator.faults.cleared';
+      notificationStore.add($_(key, { values: { name: device.name } }), 'success');
+      await simulatorStore.refresh();
+    } catch (e) {
+      notificationStore.add(String(e), 'error');
+    } finally {
+      busy = { ...busy, [device.id]: false };
+    }
+  }
 </script>
 
 <svelte:window on:keydown={onWindowKey} />
@@ -435,6 +456,19 @@
           </div>
         </div>
         <p class="hint"><Icon name="shield-check" size={14} /> {$_('simulator.loopbackHint')}</p>
+        <div class="grid identity-fields">
+          <div class="form-group">
+            <label for="sim-location">{$_('simulator.field.location')}</label>
+            <input id="sim-location" type="text" maxlength="255" placeholder={$_('simulator.field.modelDefault')}
+              bind:value={editing.location} />
+          </div>
+          <div class="form-group">
+            <label for="sim-contact">{$_('simulator.field.contact')}</label>
+            <input id="sim-contact" type="text" maxlength="255" placeholder={$_('simulator.field.modelDefault')}
+              bind:value={editing.contact} />
+          </div>
+        </div>
+        <label class="check autostart"><input type="checkbox" bind:checked={editing.autoStart} /> {$_('simulator.field.autoStart')}</label>
 
         <fieldset class="versions">
           <legend>{$_('simulator.field.versions')}</legend>
@@ -617,8 +651,12 @@
             <p>{$_('simulator.empty')}</p>
           </div>
         {:else}
+          {#each deviceGroups($simulatorStore.devices, $simulatorStore.models) as group (group.category)}
+          <h4 class="category-title">
+            <Icon name={categoryIcon(group.category)} size={14} /> {$_(`simulator.category.${group.category}`)}
+          </h4>
           <ul class="devices">
-            {#each $simulatorStore.devices as d (d.id)}
+            {#each group.devices as d (d.id)}
               {@const activity = trapActivity(d.traps)}
               {@const model = modelOf($simulatorStore.models, d.model)}
               <li class="device" class:running={d.running}>
@@ -649,6 +687,10 @@
                         {/if}
                       </span>
                     {/if}
+                    {#each faultChips(d.faults) as c (c.key)}
+                      <span class="chip fault">{$_(`simulator.faults.chip.${c.key}`, { values: c.values })}</span>
+                    {/each}
+                    {#if d.autoStart}<span class="chip">{$_('simulator.autoStartChip')}</span>{/if}
                   </span>
                 </div>
                 <div class="actions">
@@ -673,6 +715,11 @@
                   <button class="btn tertiary btn-small" title={$_('simulator.addAsTargetTitle')} on:click={() => addAsTarget(d)}>
                     <Icon name="target" size={13} /> {$_('simulator.addAsTarget')}
                   </button>
+                  <button class="icon-btn" class:active={faultChips(d.faults).length > 0} aria-expanded={faultsOpen === d.id}
+                    title={$_('simulator.faults.button')} aria-label={$_('simulator.faults.button')}
+                    on:click={() => (faultsOpen = faultsOpen === d.id ? null : d.id)}>
+                    <Icon name="zap" size={14} />
+                  </button>
                   {#if d.running}
                     <button class="icon-btn" disabled={busy[d.id]} title={$_('simulator.restart')} aria-label={$_('simulator.restart')}
                       on:click={() => restart(d)}>
@@ -695,9 +742,14 @@
                     {#if confirmDelete === d.id}{$_('simulator.confirmDelete')}{:else}<Icon name="trash-2" size={14} />{/if}
                   </button>
                 </div>
+                {#if faultsOpen === d.id}
+                  <FaultsPanel faults={d.faults} idPrefix="sim-faults-{d.id}" busy={busy[d.id]}
+                    on:apply={(e) => applyFaults(d, e.detail)} on:close={() => (faultsOpen = null)} />
+                {/if}
               </li>
             {/each}
           </ul>
+          {/each}
         {/if}
       </div>
       <footer class="sim-footer">
@@ -887,6 +939,41 @@
   .icon-btn:disabled {
     cursor: not-allowed;
     opacity: 0.5;
+  }
+
+  .icon-btn.active {
+    color: var(--warning-color);
+    border-color: var(--warning-border);
+  }
+
+  .device {
+    flex-wrap: wrap;
+  }
+
+  .category-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 14px 0 8px;
+    font-size: 0.85em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+  }
+
+  .chip.fault {
+    background-color: var(--warning-subtle);
+    color: var(--warning-color);
+  }
+
+  .identity-fields {
+    margin-top: 12px;
+  }
+
+  .autostart {
+    margin-top: 10px;
+    font-size: 0.9em;
   }
 
   .export-choice {

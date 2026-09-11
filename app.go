@@ -147,9 +147,11 @@ func (a *App) startup(ctx context.Context) {
 		log.Printf("Secret storage backend: %s", store.Backend())
 	}
 
-	// The simulated devices are read, not started: a device answers only once
-	// someone starts it in this session.
+	// The simulated devices are read, and those set to start with the
+	// application are started — after the secret store, which holds their
+	// communities and passphrases. The others answer once someone starts them.
 	a.sim = newSimulatorService(filepath.Join(configDir, "SnmpLens"))
+	a.startAutoSimulated()
 
 	// The trap listener's engine ID, before initBackgroundMode can start the
 	// listener: a device sending it SNMPv3 INFORMs is configured with it.

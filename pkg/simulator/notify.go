@@ -515,6 +515,9 @@ func (nt *notifier) pick(name string) (Notification, bool) {
 func (nt *notifier) deliver(o *outbound, n Notification) error {
 	a := nt.a
 	c := clock{started: a.started, now: time.Now(), stats: &a.stats}
+	if fs := a.faults.Load(); fs != nil {
+		c.warp = fs.warp
+	}
 	g := &gosnmp.GoSNMP{
 		Target:    o.dial,
 		Port:      uint16(o.Port),

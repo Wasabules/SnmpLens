@@ -1,6 +1,7 @@
 package simulator
 
 import (
+	"cmp"
 	"slices"
 
 	"github.com/gosnmp/gosnmp"
@@ -31,6 +32,9 @@ type Identity struct {
 	// Seed decides how the device's values move, so two devices of one model
 	// do not move in step.
 	Seed uint64
+	// Location and Contact are the device's own sysLocation and sysContact,
+	// which take the place of its model's when they are given.
+	Location, Contact string
 }
 
 type model struct {
@@ -106,13 +110,14 @@ func (o *objects) addForNotify(oid string, t gosnmp.Asn1BER, r Reading) {
 
 // addSystem adds the system group (RFC 3418) as a model's agent answers it.
 // sysServices adds up the layers the device serves: 2 a bridge, 4 a router,
-// 8 end to end, 64 applications.
+// 8 end to end, 64 applications. The contact and location a device was given
+// take the place of its model's.
 func addSystem(o *objects, id Identity, descr, sysObjectID, contact, location string, services int) {
 	o.add("1.3.6.1.2.1.1.1.0", gosnmp.OctetString, Const(descr))
 	o.add("1.3.6.1.2.1.1.2.0", gosnmp.ObjectIdentifier, Const(sysObjectID))
 	o.add("1.3.6.1.2.1.1.3.0", gosnmp.TimeTicks, Uptime())
-	o.add("1.3.6.1.2.1.1.4.0", gosnmp.OctetString, Const(contact))
+	o.add("1.3.6.1.2.1.1.4.0", gosnmp.OctetString, Const(cmp.Or(id.Contact, contact)))
 	o.add("1.3.6.1.2.1.1.5.0", gosnmp.OctetString, Const(id.Name))
-	o.add("1.3.6.1.2.1.1.6.0", gosnmp.OctetString, Const(location))
+	o.add("1.3.6.1.2.1.1.6.0", gosnmp.OctetString, Const(cmp.Or(id.Location, location)))
 	o.add("1.3.6.1.2.1.1.7.0", gosnmp.Integer, Const(services))
 }
