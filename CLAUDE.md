@@ -131,7 +131,7 @@ The frontend calls Go through auto-generated bindings in `frontend/wailsjs/`, wh
 - `pkg/snmp/` — SNMP over **gosnmp**: `client.go` (connection config, v3 security-protocol mapping, concurrent fan-out via `concurrentExecute`, debug
   ring-buffer logger — scrubbed at the WRITER, because gosnmp's `SnmpPacket.SafeString` is not safe: it prints
   `Community:%s` on every SENDING PACKET and `Parsed community %s` on every receive, and the buffer is what the
-  debug panel shows), `operations.go` (GET/SET/GETNEXT/GETBULK/WALK), `trap.go` (listener + sender, traps and acknowledged INFORMs — v1 is refused rather than downgraded, since RFC 1157 has no InformRequest PDU), `discovery.go` (CIDR scan, capped at `MaxDiscoveryHosts` — the prefix sizes the allocation before a packet is
+  debug panel shows), `operations.go` (GET/SET/GETNEXT/GETBULK/WALK), `trap.go` (listener + sender, traps and acknowledged INFORMs — v1 is refused rather than downgraded, since RFC 1157 has no InformRequest PDU; the listener's engine ID comes from outside, `SetTrapEngineID`, because it cannot be discovered — see **The simulator**), `discovery.go` (CIDR scan, capped at `MaxDiscoveryHosts` — the prefix sizes the allocation before a packet is
   sent, so `10.0.0.0/8` was 16.7M strings and an IPv6 `/64` never finished expanding), `params.go` (bridge request structs).
 - `pkg/simulator/` — simulated SNMP agents: v1, v2c and v3 with the whole USM, answering from a tree of objects on
   a loopback address, so SnmpLens can be tested and shown without a device. A leaf package — gosnmp and nothing of
@@ -620,8 +620,42 @@ were added — the port is all that does. A port the target names wins over ever
 (`netaddr.SplitTarget`) and in `getEffectiveSettings`, so the override leaves it out and `TargetOverrideForm`
 shows it as the target's rather than offering a field that would be ignored. The test resolves the result through
 `getEffectiveSettings`, which every request is built from, with two devices sharing 127.0.0.1.
-`SimulatorSuggestAddress` still offers an address of its own first, finding by binding which ones exist: once
-devices send traps, their source address is what will tell them apart.
+`SimulatorSuggestAddress` still offers an address of its own first, finding by binding which ones exist: a
+device's notifications to this machine leave from that address, and it is what tells them apart in the trap list.
+
+**Notifications** (`notify.go`). A device sends traps and INFORMs in v1, v2c and v3 to up to eight destinations:
+when it starts (`coldStart`), when a request is refused (`authenticationFailure`), on schedules, and on request
+(`SimulatorSendTrap`). A destination may be anywhere — the loopback rule is about where a device ANSWERS, and one
+that could only notify its own machine could not test a collector elsewhere — so what is bounded is the RATE. A
+refused request is a datagram anything on the machine can send, and uncapped, each spoofed GET would become a
+notification sent to the network: `authenticationFailure` goes out about once a second at most, a device sends 20
+a second (burst 40), and what the cap holds back is counted (`Suppressed`), as is what a full queue drops. One
+goroutine per destination, so an INFORM waiting out its timeout holds up that receiver and no other; stopping closes
+the socket under it, because gosnmp looks at its context between two attempts and not during one.
+
+What each version carries is what an agent's does, and the tests decode it. v2c and v3 put `sysUpTime.0` and
+`snmpTrapOID.0` first — gosnmp otherwise PREPENDS a sysUpTime of its own, which is the Unix time — then the
+notification's objects read from the device's tree at that instant, so linkDown says what a GET would, then for a
+generic notification `snmpTrapEnterprise.0` with the sysObjectID, as net-snmp sends it. v1 is RFC 3584 3.2: the
+generic-trap under the sysObjectID, or enterpriseSpecific with the enterprise cut before the last arc, and before
+the zero ahead of it; a notification carrying a Counter64 has no v1 form and is not sent. A notification to this
+machine leaves from the device's own address (`LocalAddr`); to anywhere else, from the system's choice.
+
+In v3 the direction decides everything. A trap is authoritative at the SENDER, so it goes as the device's own
+engine — the keys the agent localised, its boots, its time — and the test opens it with keys localised to the
+device's engine ID. An INFORM is authoritative at the RECEIVER: it goes with the passphrases, which gosnmp localises
+to the engine ID the destination gives, or to one it discovers when none is given. SnmpLens's own listener cannot be
+discovered — gosnmp's table of users drops a message naming no user before anything could answer it — so
+`snmp.Client.SetTrapEngineID` gives it one, the app keeps it in `trap-engine-id` beside `monitoring.db` (RFC 3411's
+fifth format under enterprise 0, IANA's reserved: SnmpLens has no number of its own and must not borrow a
+vendor's), the Traps panel shows it, and the editor fills it in for "SnmpLens on this machine". gosnmp does not hold
+a sender to it: an INFORM localised to any other valid engine ID is read all the same. `TestSnmpLensHearsTheSimulator`
+drives that whole path, a v2c trap journalled and a v3 INFORM acknowledged.
+
+A destination's community is a secret like the device's, kept by destination ID in the same `DeviceSecrets`, and the
+ID is given in Go as a device's is. Notifications are shown by their MIB names — `linkDown`, `nsNotifyShutdown` —
+which no manager translates; `tests/simulator.test.mjs` requires `en.json` to answer for every problem key and every
+delivery message the renderer builds.
 
 One trap for whoever adds a model: a file named `model_linux.go` is compiled on Linux ONLY — `_linux` is a GOOS
 suffix, and the build on Windows reported the model as undefined — so the Linux model lives in `linuxserver.go`.

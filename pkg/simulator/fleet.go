@@ -76,6 +76,18 @@ func (f *Fleet) StopAll() {
 	}
 }
 
+// Notify has a running device send the notification named name now; see
+// Agent.Notify.
+func (f *Fleet) Notify(id, name string) ([]Delivery, error) {
+	f.mu.Lock()
+	a := f.agents[id]
+	f.mu.Unlock()
+	if a == nil {
+		return nil, ErrNotRunning
+	}
+	return a.Notify(name)
+}
+
 // Status reports whether a device is running, and its counters if it is.
 func (f *Fleet) Status(id string) (Stats, bool) {
 	f.mu.Lock()

@@ -7,7 +7,8 @@
   import { notificationStore } from './stores/notifications';
   import { anonMode, maskString } from './utils/anonymize';
   import {
-    SIM_VERSIONS, blankDevice, blankV3, editableDevice, deviceProblems, devicePayload, addDeviceAsTarget,
+    SIM_VERSIONS, MAX_EVERY, MAX_DESTINATIONS, MAX_SCHEDULES, blankDevice, blankV3, blankDestination, blankSchedule,
+    editableDevice, deviceProblems, devicePayload, addDeviceAsTarget, notificationsOf, trapActivity, deliveryReport,
   } from './utils/simulator.js';
   import UsmFields from './settings/UsmFields.svelte';
   import Icon from './Icon.svelte';
@@ -96,6 +97,48 @@
     editing = { ...editing, users: editing.users.filter((u, i) => i !== index) };
   }
 
+  /** The device's SNMPv3 user names, which a v3 notification is sent as. */
+  function userNames(users) {
+    return users.map((u) => (u.user || '').trim()).filter(Boolean);
+  }
+
+  function setTraps(traps) {
+    editing = { ...editing, traps: { ...editing.traps, ...traps } };
+  }
+
+  function addDestination() {
+    setTraps({ destinations: [...editing.traps.destinations, blankDestination($settingsStore.trapPort)] });
+  }
+
+  function removeDestination(index) {
+    setTraps({ destinations: editing.traps.destinations.filter((d, i) => i !== index) });
+  }
+
+  // v3 is sent as one of the device's users — the first, until another is
+  // chosen — and v1 has no INFORM.
+  function onDestinationVersion(dest) {
+    if (dest.version === 'v3' && !dest.user) dest.user = userNames(editing.users)[0] || '';
+    if (dest.version === 'v1') dest.inform = false;
+    editing = editing;
+  }
+
+  async function useListenerEngine(dest) {
+    try {
+      dest.engineId = await simulatorStore.listenerEngineId();
+      editing = editing;
+    } catch (e) {
+      notificationStore.add(String(e), 'error');
+    }
+  }
+
+  function addSchedule() {
+    setTraps({ schedules: [...editing.traps.schedules, blankSchedule()] });
+  }
+
+  function removeSchedule(index) {
+    setTraps({ schedules: editing.traps.schedules.filter((s, i) => i !== index) });
+  }
+
   async function save() {
     saving = true;
     saveError = '';
@@ -147,6 +190,29 @@
       );
     } catch (e) {
       notificationStore.add(String(e), 'error');
+    }
+  }
+
+  // The menu is a select that goes back to its prompt once used: a notification
+  // is an action, not a setting.
+  async function sendTrap(device, event) {
+    const name = event.currentTarget.value;
+    event.currentTarget.value = '';
+    if (!name) return;
+    busy = { ...busy, [device.id]: true };
+    try {
+      const deliveries = await simulatorStore.sendTrap(device.id, name);
+      for (const line of deliveryReport(name, deliveries)) {
+        const values = $anonMode && line.values.destination
+          ? { ...line.values, destination: maskString(line.values.destination) }
+          : line.values;
+        notificationStore.add($_(line.key, { values }), line.level);
+      }
+    } catch (e) {
+      notificationStore.add($_('simulator.traps.sendFailed', { values: { name, error: String(e) } }), 'error');
+    } finally {
+      busy = { ...busy, [device.id]: false };
+      simulatorStore.refresh().catch(() => {});
     }
   }
 </script>
@@ -235,6 +301,109 @@
             {#if editing.users.length > 1}<span class="users-note">{$_('simulator.firstUserTarget')}</span>{/if}
           </div>
         {/if}
+
+        <h4 class="section-title">{$_('simulator.traps.title')}</h4>
+        <p class="hint"><Icon name="radio" size={14} /> {$_('simulator.traps.hint')}</p>
+        {#each editing.traps.destinations as dest, i (i)}
+          <div class="user-block">
+            <div class="user-head">
+              <span class="user-title">{$_('simulator.traps.destinationN', { values: { n: i + 1 } })}</span>
+              <button class="icon-btn danger" title={$_('simulator.traps.removeDestination')}
+                aria-label={$_('simulator.traps.removeDestination')} on:click={() => removeDestination(i)}>
+                <Icon name="trash-2" size={14} />
+              </button>
+            </div>
+            <div class="dest-grid">
+              <div class="form-group">
+                <label for="sim-dest-{i}-host">{$_('simulator.traps.host')}</label>
+                <input id="sim-dest-{i}-host" type="text" spellcheck="false" bind:value={dest.host} />
+                {#if problems.destinations?.[i]?.host}<span class="problem">{$_(`simulator.problem.${problems.destinations[i].host}`)}</span>{/if}
+              </div>
+              <div class="form-group">
+                <label for="sim-dest-{i}-port">{$_('simulator.traps.port')}</label>
+                <input id="sim-dest-{i}-port" type="number" min="1" max="65535" bind:value={dest.port} />
+                {#if problems.destinations?.[i]?.port}<span class="problem">{$_(`simulator.problem.${problems.destinations[i].port}`)}</span>{/if}
+              </div>
+              <div class="form-group">
+                <label for="sim-dest-{i}-version">{$_('simulator.traps.version')}</label>
+                <select id="sim-dest-{i}-version" bind:value={dest.version} on:change={() => onDestinationVersion(dest)}>
+                  {#each SIM_VERSIONS as version (version)}<option value={version}>{version}</option>{/each}
+                </select>
+              </div>
+              {#if dest.version === 'v3'}
+                <div class="form-group">
+                  <label for="sim-dest-{i}-user">{$_('simulator.traps.user')}</label>
+                  <select id="sim-dest-{i}-user" bind:value={dest.user}>
+                    {#each userNames(editing.users) as userName (userName)}<option value={userName}>{userName}</option>{/each}
+                  </select>
+                  {#if problems.destinations?.[i]?.user}<span class="problem">{$_(`simulator.problem.${problems.destinations[i].user}`)}</span>{/if}
+                </div>
+              {:else}
+                <div class="form-group">
+                  <label for="sim-dest-{i}-community">{$_('simulator.traps.community')}</label>
+                  <input id="sim-dest-{i}-community" type="password" autocomplete="off" bind:value={dest.community} />
+                  {#if problems.destinations?.[i]?.community}<span class="problem">{$_(`simulator.problem.${problems.destinations[i].community}`)}</span>{/if}
+                </div>
+              {/if}
+            </div>
+            <label class="check inform">
+              <input type="checkbox" bind:checked={dest.inform} disabled={dest.version === 'v1'} />
+              {$_('simulator.traps.inform')}
+            </label>
+            {#if dest.version === 'v3' && dest.inform}
+              <div class="form-group engine">
+                <label for="sim-dest-{i}-engine">{$_('simulator.traps.engineId')}</label>
+                <div class="engine-row">
+                  <input id="sim-dest-{i}-engine" type="text" spellcheck="false"
+                    placeholder={$_('simulator.traps.engineIdPlaceholder')} bind:value={dest.engineId} />
+                  <button class="btn tertiary btn-small" on:click={() => useListenerEngine(dest)}>
+                    {$_('simulator.traps.useListener')}
+                  </button>
+                </div>
+                <span class="field-hint">{$_('simulator.traps.engineIdHint')}</span>
+                {#if problems.destinations?.[i]?.engineId}<span class="problem">{$_(`simulator.problem.${problems.destinations[i].engineId}`)}</span>{/if}
+              </div>
+            {/if}
+          </div>
+        {/each}
+        <div class="users-foot">
+          <button class="btn tertiary btn-small" disabled={editing.traps.destinations.length >= MAX_DESTINATIONS}
+            on:click={addDestination}>
+            <Icon name="plus" size={13} /> {$_('simulator.traps.addDestination')}
+          </button>
+          <span class="users-note">{$_('simulator.traps.newDestinationNote')}</span>
+        </div>
+
+        {#if editing.traps.destinations.length}
+          <div class="triggers">
+            <label class="check"><input type="checkbox" bind:checked={editing.traps.onStart} /> {$_('simulator.traps.onStart')}</label>
+            <label class="check"><input type="checkbox" bind:checked={editing.traps.onAuthFailure} /> {$_('simulator.traps.onAuthFailure')}</label>
+          </div>
+          {#each editing.traps.schedules as s, i (i)}
+            <div class="schedule">
+              <select aria-label={$_('simulator.traps.notification')} bind:value={s.notification}>
+                <option value="">{$_('simulator.traps.any')}</option>
+                {#each notificationsOf($simulatorStore.models, editing.model) as n (n.name)}
+                  <option value={n.name}>{n.name}</option>
+                {/each}
+              </select>
+              <span>{$_('simulator.traps.every')}</span>
+              <input type="number" min="1" max={MAX_EVERY} aria-label={$_('simulator.traps.seconds')} bind:value={s.every} />
+              <span>{$_('simulator.traps.seconds')}</span>
+              <label class="check"><input type="checkbox" bind:checked={s.irregular} /> {$_('simulator.traps.irregular')}</label>
+              <button class="icon-btn danger" title={$_('simulator.traps.removeSchedule')}
+                aria-label={$_('simulator.traps.removeSchedule')} on:click={() => removeSchedule(i)}>
+                <Icon name="trash-2" size={14} />
+              </button>
+              {#if problems.schedules?.[i]?.every}<span class="problem">{$_('simulator.problem.every')}</span>{/if}
+            </div>
+          {/each}
+          <div class="users-foot">
+            <button class="btn tertiary btn-small" disabled={editing.traps.schedules.length >= MAX_SCHEDULES} on:click={addSchedule}>
+              <Icon name="plus" size={13} /> {$_('simulator.traps.addSchedule')}
+            </button>
+          </div>
+        {/if}
       </div>
       <footer class="sim-footer">
         {#if saveError}<span class="save-error">{saveError}</span>{/if}
@@ -254,6 +423,7 @@
         {:else}
           <ul class="devices">
             {#each $simulatorStore.devices as d (d.id)}
+              {@const activity = trapActivity(d.traps)}
               <li class="device" class:running={d.running}>
                 <span class="state" title={d.running ? $_('simulator.running') : $_('simulator.stopped')}></span>
                 <div class="identity">
@@ -272,6 +442,15 @@
                     <span class="activity">
                       {d.running ? $_('simulator.packets', { values: { count: d.packets } }) : $_('simulator.stopped')}
                     </span>
+                    {#if d.running && d.traps?.destinations?.length}
+                      <span class="traps-activity" title={activity.lastError}>
+                        <Icon name="radio" size={12} />
+                        {$_('simulator.traps.activity', { values: { sent: activity.sent } })}
+                        {#if activity.failed}
+                          · <span class="failed">{$_('simulator.traps.activityFailed', { values: { failed: activity.failed } })}</span>
+                        {/if}
+                      </span>
+                    {/if}
                   </span>
                 </div>
                 <div class="actions">
@@ -283,6 +462,15 @@
                     <button class="btn btn-small" disabled={busy[d.id]} on:click={() => run(d, 'start')}>
                       <Icon name="play" size={13} /> {$_('common.start')}
                     </button>
+                  {/if}
+                  {#if d.running && d.traps?.destinations?.length}
+                    <select class="send-trap" title={$_('simulator.traps.sendTitle')} aria-label={$_('simulator.traps.sendTitle')}
+                      disabled={busy[d.id]} on:change={(e) => sendTrap(d, e)}>
+                      <option value="">{$_('simulator.traps.send')}</option>
+                      {#each notificationsOf($simulatorStore.models, d.model) as n (n.name)}
+                        <option value={n.name}>{n.name}</option>
+                      {/each}
+                    </select>
                   {/if}
                   <button class="btn tertiary btn-small" title={$_('simulator.addAsTargetTitle')} on:click={() => addAsTarget(d)}>
                     <Icon name="target" size={13} /> {$_('simulator.addAsTarget')}
@@ -662,9 +850,105 @@
     color: var(--error-color);
   }
 
+  .traps-activity {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .traps-activity .failed {
+    color: var(--error-color);
+  }
+
+  .send-trap {
+    height: 28px;
+    padding: 0 6px;
+    background-color: var(--bg-lighter-color);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-color);
+    font-size: 0.85em;
+  }
+
+  .dest-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 2fr;
+    gap: 10px 14px;
+    align-items: start;
+    margin-top: 6px;
+  }
+
+  .inform {
+    margin-top: 10px;
+    font-size: 0.9em;
+  }
+
+  .engine {
+    margin-top: 10px;
+  }
+
+  .engine-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .engine-row input {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .engine-row .btn {
+    white-space: nowrap;
+  }
+
+  .field-hint {
+    margin-top: 4px;
+    font-size: 0.78em;
+    color: var(--text-muted);
+  }
+
+  .triggers {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 14px;
+    font-size: 0.9em;
+  }
+
+  .schedule {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+    font-size: 0.9em;
+  }
+
+  .schedule select,
+  .schedule input[type='number'] {
+    padding: 6px 8px;
+    background-color: var(--bg-lighter-color);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-color);
+  }
+
+  .schedule input[type='number'] {
+    width: 90px;
+  }
+
+  .schedule .problem {
+    flex-basis: 100%;
+    margin-top: 0;
+  }
+
   @media (max-width: 640px) {
     .grid {
       grid-template-columns: 1fr;
+    }
+    .dest-grid {
+      grid-template-columns: 1fr 1fr;
     }
     .device {
       flex-wrap: wrap;

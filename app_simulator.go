@@ -117,7 +117,35 @@ type SimulatedDevice struct {
 	EngineBoots uint32          `json:"engineBoots"`
 	Running     bool            `json:"running"`
 	// Packets is what the device has received since it started.
-	Packets uint32 `json:"packets"`
+	Packets uint32         `json:"packets"`
+	Traps   SimulatedTraps `json:"traps"`
+}
+
+// SimulatedTraps is what a simulated device sends, as the list shows it: the
+// destinations without their communities, each with what it has been sent since
+// the device started.
+type SimulatedTraps struct {
+	Destinations  []SimulatedDestination `json:"destinations"`
+	OnStart       bool                   `json:"onStart"`
+	OnAuthFailure bool                   `json:"onAuthFailure"`
+	Schedules     []simulator.Schedule   `json:"schedules"`
+	// Suppressed counts what the device's cap held back.
+	Suppressed uint32 `json:"suppressed"`
+}
+
+// SimulatedDestination is a destination without its community.
+type SimulatedDestination struct {
+	ID        string `json:"id"`
+	Host      string `json:"host"`
+	Port      int    `json:"port"`
+	Version   string `json:"version"`
+	Inform    bool   `json:"inform"`
+	User      string `json:"user"`
+	EngineID  string `json:"engineId"`
+	Sent      uint32 `json:"sent"`
+	Failed    uint32 `json:"failed"`
+	Dropped   uint32 `json:"dropped"`
+	LastError string `json:"lastError"`
 }
 
 // SimulatedUser is an SNMPv3 user of a simulated device, without passphrases.
@@ -134,11 +162,28 @@ func (s *simulatorService) view(d simulator.Device) SimulatedDevice {
 		users[i] = SimulatedUser{Name: u.Name, SecLevel: u.SecLevel, AuthProto: u.AuthProto, PrivProto: u.PrivProto}
 	}
 	stats, running := s.fleet.Status(d.ID)
+	traps := SimulatedTraps{
+		Destinations:  make([]SimulatedDestination, len(d.Traps.Destinations)),
+		OnStart:       d.Traps.OnStart,
+		OnAuthFailure: d.Traps.OnAuthFailure,
+		Schedules:     append([]simulator.Schedule{}, d.Traps.Schedules...),
+		Suppressed:    stats.Suppressed,
+	}
+	for i, dest := range d.Traps.Destinations {
+		v := SimulatedDestination{ID: dest.ID, Host: dest.Host, Port: dest.Port, Version: dest.Version,
+			Inform: dest.Inform, User: dest.User, EngineID: dest.EngineID}
+		for _, st := range stats.Notifications {
+			if st.ID == dest.ID {
+				v.Sent, v.Failed, v.Dropped, v.LastError = st.Sent, st.Failed, st.Dropped, st.LastError
+			}
+		}
+		traps.Destinations[i] = v
+	}
 	return SimulatedDevice{
 		ID: d.ID, Name: d.Name, Model: d.Model, Address: d.Address, Port: d.Port,
 		Versions: slices.Clone(d.Versions), Users: users,
 		EngineID: d.EngineID, EngineBoots: d.EngineBoots,
-		Running: running, Packets: stats.Packets,
+		Running: running, Packets: stats.Packets, Traps: traps,
 	}
 }
 
@@ -253,6 +298,16 @@ func (a *App) SimulatorSaveDevice(d simulator.Device) (SimulatedDevice, error) {
 	}
 	d.Name = strings.TrimSpace(d.Name)
 	d.Address = strings.TrimSpace(d.Address)
+	// A destination is given its ID here, as a device is: its community is kept
+	// under it.
+	d.Traps.Destinations = slices.Clone(d.Traps.Destinations)
+	for i := range d.Traps.Destinations {
+		dest := &d.Traps.Destinations[i]
+		dest.Host = strings.TrimSpace(dest.Host)
+		if dest.ID == "" {
+			dest.ID = simulator.NewDestinationID()
+		}
+	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -369,6 +424,21 @@ func (a *App) SimulatorStopDevice(id string) error {
 		a.emitSimulatorChanged()
 	}
 	return nil
+}
+
+// SimulatorSendTrap has a running simulated device send a notification now to
+// each of its destinations, and reports what became of it at each — for an
+// INFORM, once the receiver has answered or not.
+func (a *App) SimulatorSendTrap(id, notification string) ([]simulator.Delivery, error) {
+	s := a.sim
+	if s == nil {
+		return []simulator.Delivery{}, errNoSimulator
+	}
+	out, err := s.fleet.Notify(id, notification)
+	if out == nil {
+		out = []simulator.Delivery{}
+	}
+	return out, err
 }
 
 // SimulatorDeviceCredentials returns a device's community and passphrases: for

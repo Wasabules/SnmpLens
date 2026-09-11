@@ -9,7 +9,8 @@
  *
  * The editor holds each SNMPv3 user in the shape UsmFields edits — `user`,
  * `secLevel`, the protocols and passphrases — and devicePayload turns them into
- * Go's `users` list.
+ * Go's `users` list. What the device sends, `traps`, is Go's shape already, its
+ * destinations' communities filled in from the credential store by ID.
  */
 import { usesAuth, usesPriv } from './snmpSecurity.js';
 
@@ -18,6 +19,40 @@ export const SIM_VERSIONS = ['v1', 'v2c', 'v3'];
 
 /** The shortest passphrase a simulated user may have, as pkg/simulator holds it. */
 export const MIN_PASSPHRASE = 8;
+
+/** The longest a schedule waits between two notifications, as pkg/simulator holds it: a day. */
+export const MAX_EVERY = 86400;
+
+/** How many destinations and schedules one device keeps, as pkg/simulator bounds them. */
+export const MAX_DESTINATIONS = 8;
+export const MAX_SCHEDULES = 8;
+
+/** What a new device sends: nothing, to nowhere. */
+export function blankTraps() {
+  return { destinations: [], onStart: false, onAuthFailure: false, schedules: [] };
+}
+
+/**
+ * A new destination: SnmpLens on this machine, at the port its trap listener
+ * takes, in v2c — the first place a person testing SnmpLens wants traps sent.
+ */
+export function blankDestination(trapPort) {
+  return {
+    id: '',
+    host: '127.0.0.1',
+    port: Number(trapPort) || 162,
+    version: 'v2c',
+    inform: false,
+    community: 'public',
+    user: '',
+    engineId: '',
+  };
+}
+
+/** A new schedule: a notification at random, every minute. */
+export function blankSchedule() {
+  return { notification: '', every: 60, irregular: false };
+}
 
 /** A new SNMPv3 user; `n` numbers the ones after the first. */
 export function blankV3(n = 1) {
@@ -47,6 +82,7 @@ export function blankDevice(model, suggestion) {
     versions: ['v2c'],
     community: 'public',
     users: [blankV3()],
+    traps: blankTraps(),
   };
 }
 
@@ -73,6 +109,21 @@ export function editableDevice(view, creds) {
     versions: [...(view.versions || [])],
     community: creds?.community || '',
     users: users.length ? users : [blankV3()],
+    traps: {
+      destinations: (view.traps?.destinations || []).map((t) => ({
+        id: t.id,
+        host: t.host,
+        port: t.port,
+        version: t.version,
+        inform: !!t.inform,
+        community: creds?.destinations?.[t.id] || '',
+        user: t.user || '',
+        engineId: t.engineId || '',
+      })),
+      onStart: !!view.traps?.onStart,
+      onAuthFailure: !!view.traps?.onAuthFailure,
+      schedules: (view.traps?.schedules || []).map((s) => ({ ...s })),
+    },
   };
 }
 
@@ -112,7 +163,45 @@ export function deviceProblems(d) {
     });
     if (perUser.some((p) => Object.keys(p).length)) problems.users = perUser;
   }
+  const answersV3 = versions.includes('v3');
+  const userNames = answersV3 ? (d.users || []).map((u) => (u.user || '').trim()) : [];
+  const perDestination = (d.traps?.destinations || []).map((t) => destinationProblems(t, userNames, answersV3));
+  if (perDestination.some((p) => Object.keys(p).length)) problems.destinations = perDestination;
+  const perSchedule = (d.traps?.schedules || []).map((s) => {
+    const every = Number(s.every);
+    return Number.isInteger(every) && every >= 1 && every <= MAX_EVERY ? {} : { every: 'every' };
+  });
+  if (perSchedule.some((p) => Object.keys(p).length)) problems.schedules = perSchedule;
   return problems;
+}
+
+/**
+ * What one destination would be refused for. A v3 notification is sent as one
+ * of the device's SNMPv3 users, and a device has users only when it answers v3.
+ */
+function destinationProblems(t, userNames, answersV3) {
+  const p = {};
+  if (!hostOf(t.host)) p.host = 'hostRequired';
+  const port = Number(t.port);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) p.port = 'port';
+  if (t.version === 'v3') {
+    if (!answersV3) p.user = 'trapNeedsV3';
+    else if (!userNames.includes((t.user || '').trim())) p.user = 'trapUser';
+    if (t.inform && t.engineId && !/^([0-9a-f]{2}){5,32}$/.test(engineIdOf(t.engineId))) p.engineId = 'engineId';
+  } else if (!t.community) {
+    p.community = 'communityRequired';
+  }
+  return p;
+}
+
+/** A host as Go takes it: without the brackets people put round an IPv6 literal. */
+function hostOf(host) {
+  return (host || '').trim().replace(/^\[(.*)\]$/, '$1');
+}
+
+/** An engine ID as Go takes it: hex, without a 0x, colons or spaces. */
+export function engineIdOf(s) {
+  return (s || '').trim().replace(/^0x/i, '').replace(/[\s:]/g, '').toLowerCase();
 }
 
 /**
@@ -142,7 +231,71 @@ export function devicePayload(d) {
       : [],
     engineId: '',
     engineBoots: 0,
+    // Each destination with only what its version uses, as the users are.
+    traps: {
+      destinations: (d.traps?.destinations || []).map((t) => {
+        const v3 = t.version === 'v3';
+        const inform = t.version !== 'v1' && !!t.inform;
+        return {
+          id: t.id || '',
+          host: hostOf(t.host),
+          port: Number(t.port),
+          version: t.version,
+          inform,
+          community: v3 ? '' : t.community,
+          user: v3 ? (t.user || '').trim() : '',
+          engineId: v3 && inform ? engineIdOf(t.engineId) : '',
+        };
+      }),
+      onStart: !!d.traps?.onStart,
+      onAuthFailure: !!d.traps?.onAuthFailure,
+      schedules: (d.traps?.schedules || []).map((s) => ({
+        notification: s.notification || '',
+        every: Number(s.every),
+        irregular: !!s.irregular,
+      })),
+    },
   };
+}
+
+/** What a device of the model can send, as Go lists it. */
+export function notificationsOf(models, modelId) {
+  return (models || []).find((m) => m.id === modelId)?.notifications || [];
+}
+
+/** What a running device has sent, over all its destinations. */
+export function trapActivity(traps) {
+  const out = { sent: 0, failed: 0, dropped: 0, lastError: '' };
+  for (const d of traps?.destinations || []) {
+    out.sent += d.sent || 0;
+    out.failed += d.failed || 0;
+    out.dropped += d.dropped || 0;
+    if (d.lastError) out.lastError = d.lastError;
+  }
+  return out;
+}
+
+/**
+ * What to say about one notification sent on request, as i18n keys: one line
+ * for everywhere it went, and one for each destination it did not reach — an
+ * INFORM nobody acknowledged is one of those.
+ */
+export function deliveryReport(name, deliveries) {
+  const ok = (deliveries || []).filter((d) => !d.error);
+  const out = (deliveries || [])
+    .filter((d) => d.error)
+    .map((d) => ({ key: 'simulator.traps.failed', values: { name, destination: d.destination, error: d.error }, level: 'error' }));
+  if (ok.length === 1) {
+    const d = ok[0];
+    out.unshift({
+      key: d.acknowledged ? 'simulator.traps.acknowledged' : 'simulator.traps.sent',
+      values: { name, destination: d.destination },
+      level: 'success',
+    });
+  } else if (ok.length > 1) {
+    out.unshift({ key: 'simulator.traps.sentAll', values: { name, count: ok.length }, level: 'success' });
+  }
+  return out;
 }
 
 /** The version a target reaches a device in: the most secure one it answers. */

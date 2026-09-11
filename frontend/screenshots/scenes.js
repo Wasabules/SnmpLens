@@ -335,28 +335,67 @@ const CATALOGUE = [
     tab: TABS.operations,
     height: 900,
     bindings: {
-      ListSimulatorModels: [{ id: 'linux-server', category: 'server' }],
+      ListSimulatorModels: simulatorModels(),
       ListSimulatedDevices: [
         {
           id: 'c0ffee01', name: 'srv-web-01', model: 'linux-server', address: '127.0.0.2', port: 161,
           versions: ['v2c', 'v3'], users: [{ name: 'ops', secLevel: 'AuthPriv', authProto: 'SHA256', privProto: 'AES' }],
           engineId: '80001f880302a1b2c3d4e5', engineBoots: 3, running: true, packets: 1284,
+          traps: {
+            destinations: [
+              { id: 'd1', host: '127.0.0.1', port: 162, version: 'v2c', inform: false, user: '', engineId: '',
+                sent: 42, failed: 0, dropped: 0, lastError: '' },
+              { id: 'd2', host: '192.0.2.50', port: 162, version: 'v3', inform: true, user: 'ops', engineId: '8000000005a1b2c3d4e5f60718',
+                sent: 17, failed: 1, dropped: 0, lastError: 'the INFORM was not acknowledged' },
+            ],
+            onStart: true, onAuthFailure: true, schedules: [{ notification: 'linkDown', every: 300, irregular: true }], suppressed: 0,
+          },
         },
         {
           id: 'c0ffee02', name: 'srv-db-01', model: 'linux-server', address: '127.0.0.3', port: 161,
           versions: ['v2c'], users: [], engineId: '80001f880302f6e5d4c3b2', engineBoots: 1, running: false, packets: 0,
+          traps: { destinations: [], onStart: false, onAuthFailure: false, schedules: [], suppressed: 0 },
         },
       ],
     },
     act: ['sel:.status-item.simulator|0'],
-    describe: 'The simulator: two simulated Linux servers, one answering, each one click from being a target.',
+    describe: 'The simulator: two simulated Linux servers, one answering and sending traps, each one click from being a target.',
+  },
+  {
+    base: 'simulator-traps',
+    tab: TABS.operations,
+    height: 1600,
+    bindings: {
+      ListSimulatorModels: simulatorModels(),
+      ListSimulatedDevices: [
+        {
+          id: 'c0ffee03', name: 'srv-edge-01', model: 'linux-server', address: '127.0.0.4', port: 161,
+          versions: ['v2c'], users: [], engineId: '80001f880302c3b2a1f6e5', engineBoots: 2, running: false, packets: 0,
+          traps: {
+            destinations: [
+              { id: 'd3', host: '127.0.0.1', port: 162, version: 'v2c', inform: false, user: '', engineId: '',
+                sent: 0, failed: 0, dropped: 0, lastError: '' },
+              { id: 'd4', host: '192.0.2.50', port: 162, version: 'v2c', inform: true, user: '', engineId: '',
+                sent: 0, failed: 0, dropped: 0, lastError: '' },
+            ],
+            onStart: true,
+            onAuthFailure: true,
+            schedules: [{ notification: 'linkDown', every: 300, irregular: true }, { notification: '', every: 60, irregular: false }],
+            suppressed: 0,
+          },
+        },
+      ],
+      SimulatorDeviceCredentials: { community: 'public', users: {}, destinations: { d3: 'public', d4: 'noc-traps' } },
+    },
+    act: ['sel:.status-item.simulator|0', 'sel:.device .icon-btn|0'],
+    describe: 'What a simulated device sends: traps to SnmpLens here and INFORMs to a collector on the network, at boot, on a refused request, and on a schedule.',
   },
   {
     base: 'simulator-editor',
     tab: TABS.operations,
     height: 1400,
     bindings: {
-      ListSimulatorModels: [{ id: 'linux-server', category: 'server' }],
+      ListSimulatorModels: simulatorModels(),
       ListSimulatedDevices: [],
       SimulatorSuggestAddress: { address: '127.0.0.2', port: 161 },
     },
@@ -366,6 +405,24 @@ const CATALOGUE = [
     describe: 'A new simulated device: its model, its loopback address, and who may ask it — two SNMPv3 users here.',
   },
 ];
+
+// The simulator's one model as ListSimulatorModels serves it. A function
+// declaration, so the catalogue above can call it before this line is reached.
+function simulatorModels() {
+  return [{
+    id: 'linux-server',
+    category: 'server',
+    notifications: [
+      { name: 'coldStart', oid: '.1.3.6.1.6.3.1.1.5.1' },
+      { name: 'warmStart', oid: '.1.3.6.1.6.3.1.1.5.2' },
+      { name: 'linkDown', oid: '.1.3.6.1.6.3.1.1.5.3' },
+      { name: 'linkUp', oid: '.1.3.6.1.6.3.1.1.5.4' },
+      { name: 'nsNotifyShutdown', oid: '.1.3.6.1.4.1.8072.4.0.2' },
+      { name: 'nsNotifyRestart', oid: '.1.3.6.1.4.1.8072.4.0.3' },
+      { name: 'authenticationFailure', oid: '.1.3.6.1.6.3.1.1.5.5' },
+    ],
+  }];
+}
 
 export function buildScenes(seeds) {
   const base = baseSeeds(seeds);

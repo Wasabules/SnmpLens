@@ -65,18 +65,19 @@ func TestADeviceIsHeldToTheRules(t *testing.T) {
 
 func TestTheSecretsComeApartAndGoBack(t *testing.T) {
 	d := validDevice(t)
+	d.Traps.Destinations = []Destination{{ID: "nms", Host: "192.0.2.10", Port: 162, Version: "v2c", Community: "trap-community"}}
 	bare := d.WithoutSecrets()
 	raw, err := json.Marshal(bare)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, secret := range []string{"public", "authpass-1", "privpass-1"} {
+	for _, secret := range []string{"public", "authpass-1", "privpass-1", "trap-community"} {
 		if strings.Contains(string(raw), secret) {
 			t.Errorf("%q survived WithoutSecrets: %s", secret, raw)
 		}
 	}
-	if d.Users[0].AuthPass != "authpass-1" {
-		t.Error("WithoutSecrets blanked the original's passphrase too: the two share a slice")
+	if d.Users[0].AuthPass != "authpass-1" || d.Traps.Destinations[0].Community != "trap-community" {
+		t.Error("WithoutSecrets blanked the original's secrets too: the two share a slice")
 	}
 	if back := bare.WithSecrets(d.Secrets()); !reflect.DeepEqual(back, d) {
 		t.Errorf("the round trip changed the device:\n%+v\n%+v", back, d)

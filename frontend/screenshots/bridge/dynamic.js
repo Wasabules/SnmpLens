@@ -400,6 +400,7 @@ const DEMO_ONLY = {
   SimulatorSaveDevice: 'Saving a simulated device writes it to your configuration directory, and its passwords to the system keychain.',
   SimulatorDeleteDevice: 'Removing a simulated device deletes it from your configuration directory and the system keychain.',
   SimulatorStartDevice: 'Starting a simulated device opens a UDP socket on this machine.',
+  SimulatorSendTrap: 'A simulated device sends its notifications over UDP, from this machine.',
 };
 
 for (const [name, why] of Object.entries(DEMO_ONLY)) {

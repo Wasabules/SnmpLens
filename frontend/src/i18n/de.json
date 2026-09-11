@@ -412,6 +412,8 @@
       "excludedTitle": "Für Traps nicht akzeptiert: {names}",
       "anyCommunity": "jede Community",
       "anyCommunityTitle": "Die Community eines v1- oder v2c-Traps wird nicht geprüft: Jeder wird empfangen.",
+      "engineId": "Engine-ID",
+      "engineIdTitle": "Damit wird ein Gerät konfiguriert, das SnmpLens SNMPv3-INFORMs sendet. SnmpLens kann nicht erkannt werden, also muss man sie dem Gerät mitteilen.",
       "manage": "Profile verwalten",
       "userTitle": "SNMPv3-Benutzer {user}, {level}",
       "refused": "Vom Listener abgelehnt: {reason}"
@@ -1316,7 +1318,12 @@
       "communityRequired": "v1 und v2c benötigen eine Community.",
       "userRequired": "Der SNMPv3-Benutzer braucht einen Namen.",
       "passphraseShort": "Mindestens 8 Zeichen.",
-      "userDuplicate": "Zwei Benutzer können nicht denselben Namen tragen."
+      "userDuplicate": "Zwei Benutzer können nicht denselben Namen tragen.",
+      "hostRequired": "Wohin? Geben Sie einen Host an.",
+      "trapUser": "Wählen Sie einen der SNMPv3-Benutzer des Geräts.",
+      "trapNeedsV3": "Eine v3-Benachrichtigung wird als SNMPv3-Benutzer des Geräts gesendet: Aktivieren Sie zuerst v3.",
+      "engineId": "5 bis 32 Oktette, hexadezimal.",
+      "every": "Von 1 bis 86400 Sekunden."
     },
     "model": {
       "linux-server": {
@@ -1327,6 +1334,42 @@
     "userN": "Benutzer {n}",
     "addUser": "Benutzer hinzufügen",
     "removeUser": "Diesen Benutzer entfernen",
-    "firstUserTarget": "„Als Ziel hinzufügen“ verwendet den ersten Benutzer."
+    "firstUserTarget": "„Als Ziel hinzufügen“ verwendet den ersten Benutzer.",
+    "traps": {
+      "title": "Benachrichtigungen",
+      "hint": "Wohin das Gerät seine Traps und INFORMs sendet, und wann. Anders als die Adresse, an der es antwortet, darf ein Ziel irgendwo im Netzwerk liegen.",
+      "destinationN": "Ziel {n}",
+      "host": "Host",
+      "port": "Port",
+      "version": "Version",
+      "community": "Community",
+      "user": "Gesendet als",
+      "inform": "INFORM: Der Empfänger bestätigt ihn",
+      "engineId": "Engine-ID des Empfängers",
+      "engineIdPlaceholder": "Wird ermittelt, wenn leer",
+      "engineIdHint": "SnmpLens kann nicht erkannt werden: Um ihm einen INFORM zu senden, geben Sie seine Engine-ID an.",
+      "useListener": "SnmpLens auf diesem Rechner",
+      "addDestination": "Ziel hinzufügen",
+      "removeDestination": "Dieses Ziel entfernen",
+      "newDestinationNote": "Ein neues Ziel ist SnmpLens auf diesem Rechner, an seinem Trap-Port.",
+      "onStart": "coldStart senden, wenn das Gerät startet",
+      "onAuthFailure": "authenticationFailure senden, wenn eine Anfrage abgelehnt wird (höchstens etwa einmal pro Sekunde)",
+      "notification": "Benachrichtigung",
+      "any": "Beliebig, zufällig",
+      "every": "alle",
+      "seconds": "Sekunden",
+      "irregular": "unregelmäßig",
+      "addSchedule": "Zeitplan hinzufügen",
+      "removeSchedule": "Diesen Zeitplan entfernen",
+      "send": "Trap senden…",
+      "sendTitle": "Eine der Benachrichtigungen des Geräts jetzt an seine Ziele senden",
+      "sent": "{name} an {destination} gesendet",
+      "acknowledged": "{name} von {destination} bestätigt",
+      "sentAll": "{name} an {count, plural, one {# Ziel} other {# Ziele}} gesendet",
+      "failed": "{name} an {destination}: {error}",
+      "sendFailed": "{name} wurde nicht gesendet: {error}",
+      "activity": "{sent, plural, one {# Benachrichtigung gesendet} other {# Benachrichtigungen gesendet}}",
+      "activityFailed": "{failed} fehlgeschlagen"
+    }
   }
 }

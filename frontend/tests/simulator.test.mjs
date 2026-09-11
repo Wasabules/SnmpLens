@@ -48,9 +48,14 @@ if (!globalThis.navigator) {
 const {
   blankDevice,
   blankV3,
+  blankTraps,
+  blankDestination,
+  blankSchedule,
   editableDevice,
   deviceProblems,
   devicePayload,
+  deliveryReport,
+  trapActivity,
   preferredVersion,
   targetOf,
   addDeviceAsTarget,
@@ -99,6 +104,63 @@ check("v3 alone sends no community, and every user under Go's names",
   sent3.community === '' && sent3.users.length === 2 && sent3.users[0].name === 'ops' && sent3.users[1].privPass === 'privpass-1',
   JSON.stringify(sent3.users.map((u) => u.name)));
 
+/* --- what the device sends ------------------------------------------------ */
+
+const withTraps = (traps, extra = {}) => ({ ...fresh, name: 'x', ...extra, traps: { ...blankTraps(), ...traps } });
+const local = blankDestination(1162);
+check('a new destination is SnmpLens on this machine, at its trap port, in v2c',
+  local.host === '127.0.0.1' && local.port === 1162 && local.version === 'v2c' && local.community === 'public');
+check('and asks for nothing more', !deviceProblems(withTraps({ destinations: [local] })).destinations);
+const refused = deviceProblems(withTraps({ destinations: [
+  { ...local, host: ' ' },
+  { ...local, community: '', port: 0 },
+  { ...local, version: 'v3', user: '' },
+] })).destinations || [];
+check('a destination needs a host, a port and, in v1 and v2c, a community',
+  refused[0]?.host === 'hostRequired' && refused[1]?.community === 'communityRequired' && refused[1]?.port === 'port',
+  JSON.stringify(refused));
+check('a v3 destination needs the device to answer v3', refused[2]?.user === 'trapNeedsV3');
+const v3dest = (user, extra = {}) =>
+  withTraps({ destinations: [{ ...local, version: 'v3', user, ...extra }] }, { versions: ['v3'], users: [good('ops')] });
+check("and to be sent as one of the device's users",
+  deviceProblems(v3dest('nobody')).destinations?.[0]?.user === 'trapUser' && !deviceProblems(v3dest('ops')).destinations);
+check("a receiver's engine ID is hex, 5 to 32 octets, with a 0x or colons forgiven",
+  deviceProblems(v3dest('ops', { inform: true, engineId: 'zz' })).destinations?.[0]?.engineId === 'engineId' &&
+  !deviceProblems(v3dest('ops', { inform: true, engineId: '0x80:00:00:00:05:01' })).destinations);
+check('a schedule waits 1 to 86400 seconds',
+  deviceProblems(withTraps({ schedules: [{ ...blankSchedule(), every: 0 }] })).schedules?.[0]?.every === 'every' &&
+  !deviceProblems(withTraps({ schedules: [blankSchedule()] })).schedules);
+
+const sentTraps = devicePayload(withTraps({
+  onStart: true,
+  schedules: [{ notification: 'linkDown', every: '30', irregular: 1 }],
+  destinations: [
+    { ...local, host: ' [::1] ', inform: true, user: 'stale', engineId: 'aa' },
+    { ...local, version: 'v1', inform: true },
+    { ...local, version: 'v3', user: ' ops ', community: 'stale', inform: true, engineId: '0x80:00:00:00:05:01' },
+  ],
+}, { versions: ['v2c', 'v3'], users: [good('ops')] })).traps;
+const [sentV2, sentV1, sentV3] = sentTraps.destinations;
+check('each destination is sent with what its version uses and nothing else',
+  sentV2.host === '::1' && sentV2.inform && sentV2.user === '' && sentV2.engineId === '' &&
+  !sentV1.inform && sentV3.community === '' && sentV3.user === 'ops' && sentV3.engineId === '800000000501',
+  JSON.stringify(sentTraps.destinations));
+check('and the schedules as numbers',
+  sentTraps.onStart === true && sentTraps.schedules[0].every === 30 && sentTraps.schedules[0].irregular === true);
+
+const report = deliveryReport('linkDown', [
+  { id: 'a', destination: '127.0.0.1:162', inform: false, acknowledged: false },
+  { id: 'b', destination: '192.0.2.9:162', inform: true, acknowledged: false, error: 'the INFORM was not acknowledged' },
+]);
+check('a notification sent on request is reported where it went, and where it did not',
+  report.length === 2 && report[0].key === 'simulator.traps.sent' && report[1].key === 'simulator.traps.failed' &&
+  report[1].level === 'error', JSON.stringify(report));
+check('an acknowledged INFORM says so',
+  deliveryReport('linkUp', [{ destination: 'x', inform: true, acknowledged: true }])[0].key === 'simulator.traps.acknowledged');
+check('what a device sent is added up over its destinations',
+  trapActivity({ destinations: [{ sent: 3, failed: 1, lastError: 'refused' }, { sent: 2 }] }).sent === 5 &&
+  trapActivity(undefined).sent === 0);
+
 /* --- editing brings the credentials back --------------------------------- */
 
 const view = {
@@ -108,10 +170,18 @@ const view = {
     { name: 'ops', secLevel: 'AuthPriv', authProto: 'SHA256', privProto: 'AES' },
     { name: 'monitor', secLevel: 'AuthNoPriv', authProto: 'SHA', privProto: 'AES' },
   ],
+  traps: {
+    destinations: [{ id: 'd1', host: '192.0.2.10', port: 162, version: 'v2c', inform: true, user: '', engineId: '', sent: 3 }],
+    onStart: true,
+    onAuthFailure: false,
+    schedules: [{ notification: 'linkUp', every: 60, irregular: false }],
+    suppressed: 0,
+  },
 };
 const creds = {
   community: 'c0mmunity',
   users: { ops: { authPass: 'authpass-1', privPass: 'privpass-1' }, monitor: { authPass: 'monitor-pass', privPass: '' } },
+  destinations: { d1: 'trap-community' },
 };
 const form = editableDevice(view, creds);
 check('the editor is given the community, and every user with its passphrases',
@@ -122,6 +192,14 @@ check('and editing nothing sends back the same users',
     { name: 'ops', secLevel: 'AuthPriv', authProto: 'SHA256', authPass: 'authpass-1', privProto: 'AES', privPass: 'privpass-1' },
     { name: 'monitor', secLevel: 'AuthNoPriv', authProto: 'SHA', authPass: 'monitor-pass', privProto: 'AES', privPass: '' },
   ]));
+check("a destination's community comes back by its ID, and goes back without the counters",
+  form.traps.destinations[0].community === 'trap-community' &&
+  JSON.stringify(devicePayload(form).traps) === JSON.stringify({
+    destinations: [{ id: 'd1', host: '192.0.2.10', port: 162, version: 'v2c', inform: true, community: 'trap-community', user: '', engineId: '' }],
+    onStart: true,
+    onAuthFailure: false,
+    schedules: [{ notification: 'linkUp', every: 60, irregular: false }],
+  }), JSON.stringify(devicePayload(form).traps));
 
 /* --- the port a target names --------------------------------------------- */
 
@@ -198,6 +276,12 @@ for (const file of readdirSync(goDir)) {
   for (const m of readFileSync(new URL(file, goDir), 'utf8').matchAll(/ModelInfo\{ID:\s*"([^"]+)"/g)) ids.add(m[1]);
 }
 check('the models were found in pkg/simulator', ids.size >= 1, [...ids].join(', '));
+for (const key of ['hostRequired', 'trapUser', 'trapNeedsV3', 'engineId', 'every']) {
+  check(`en.json says simulator.problem.${key}`, Boolean(en.simulator?.problem?.[key]));
+}
+for (const key of ['sent', 'acknowledged', 'sentAll', 'failed']) {
+  check(`en.json says simulator.traps.${key}`, Boolean(en.simulator?.traps?.[key]));
+}
 for (const id of ids) {
   check(`en.json names and describes the model ${id}`,
     Boolean(en.simulator?.model?.[id]?.name && en.simulator?.model?.[id]?.description));

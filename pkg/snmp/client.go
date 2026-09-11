@@ -89,6 +89,9 @@ type Client struct {
 	// the users differ.
 	trapPort  int
 	trapUsers []V3Params
+	// trapEngineID is the snmpEngineID the listener stands for
+	// (SetTrapEngineID), under trapMu.
+	trapEngineID string
 	// trapLife serialises the listener's LIFECYCLE — start, stop, and a change
 	// of users, which is a stop and a start back to back; another start or
 	// stop landing between the two would be undone by the second. Separate
