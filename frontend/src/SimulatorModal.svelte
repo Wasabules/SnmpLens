@@ -512,8 +512,8 @@
             on:change={(e) => onModel(e.detail)} on:import={importModels} on:delete={(e) => deleteModel(e.detail)}
             on:record={(e) => recordDevice(e.detail)} on:stop={stopRecording} on:export={(e) => exportModel(e.detail)} />
         {/if}
-        <div class="grid">
-          <div class="form-group">
+        <div class="grid endpoint">
+          <div class="form-group name-field">
             <label for="sim-name">{$_('simulator.field.name')}</label>
             <input id="sim-name" type="text" maxlength="64" spellcheck="false" bind:value={editing.name} />
             {#if problems.name}<span class="problem">{$_(`simulator.problem.${problems.name}`)}</span>{/if}
@@ -1273,6 +1273,12 @@
     align-items: start;
   }
 
+  /* The name and where the device answers, on one line: a port is five digits
+     and needs no half of the dialog. */
+  .endpoint {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr) minmax(5.5rem, 1fr);
+  }
+
   /* stretch, not the global .form-group's centring: labels line up on the left,
      as they do in UsmFields beside them. */
   .form-group {
@@ -1695,6 +1701,13 @@
     }
     .actions {
       padding-left: 0;
+    }
+    /* Narrow, the name takes a line and the address keeps its port beside it. */
+    .endpoint {
+      grid-template-columns: minmax(0, 1fr) 6rem;
+    }
+    .endpoint .name-field {
+      grid-column: 1 / -1;
     }
   }
 </style>
