@@ -130,8 +130,12 @@
   // recorded when this was written. What is counted is the installers and the
   // archives — and it is DOWNLOADS, never users: applying an update fetches
   // the binary again, and nothing here can tell that from a new reader.
+  // Two tests rather than one alternation: in /checksums|\.sig$/ the anchor
+  // binds to its own branch alone, so it reads as "contains checksums, or ends
+  // in .sig" and is not what the engine does — CodeQL calls that out, rightly.
   function isBinary(asset) {
-    return !/checksums|\.sig$/i.test(asset.name || '');
+    var name = asset.name || '';
+    return !/checksums/i.test(name) && !/\.sig$/i.test(name);
   }
 
   function downloads() {
