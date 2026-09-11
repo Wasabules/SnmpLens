@@ -37,7 +37,17 @@ type model struct {
 	notifications []Notification
 }
 
-var models = []model{linuxServer}
+// models is the catalogue, in the order the interface offers it; a new device
+// is made from the first. Each says which bundled presets it feeds
+// (TestEveryModelFeedsItsPresets).
+var models = []model{
+	linuxServer, windowsServer,
+	catalyst24, catalyst48, isr4331,
+	synologyNAS,
+	apcSmartUPS,
+	hpLaserJet,
+	environmentProbe,
+}
 
 // Models lists the models a device can be made from.
 func Models() []ModelInfo {
@@ -72,4 +82,17 @@ type objects []Object
 
 func (o *objects) add(oid string, t gosnmp.Asn1BER, r Reading) {
 	*o = append(*o, Object{OID: oid, Type: t, Value: r})
+}
+
+// addSystem adds the system group (RFC 3418) as a model's agent answers it.
+// sysServices adds up the layers the device serves: 2 a bridge, 4 a router,
+// 8 end to end, 64 applications.
+func addSystem(o *objects, id Identity, descr, sysObjectID, contact, location string, services int) {
+	o.add("1.3.6.1.2.1.1.1.0", gosnmp.OctetString, Const(descr))
+	o.add("1.3.6.1.2.1.1.2.0", gosnmp.ObjectIdentifier, Const(sysObjectID))
+	o.add("1.3.6.1.2.1.1.3.0", gosnmp.TimeTicks, Uptime())
+	o.add("1.3.6.1.2.1.1.4.0", gosnmp.OctetString, Const(contact))
+	o.add("1.3.6.1.2.1.1.5.0", gosnmp.OctetString, Const(id.Name))
+	o.add("1.3.6.1.2.1.1.6.0", gosnmp.OctetString, Const(location))
+	o.add("1.3.6.1.2.1.1.7.0", gosnmp.Integer, Const(services))
 }

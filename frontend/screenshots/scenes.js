@@ -352,14 +352,19 @@ const CATALOGUE = [
           },
         },
         {
-          id: 'c0ffee02', name: 'srv-db-01', model: 'linux-server', address: '127.0.0.3', port: 161,
-          versions: ['v2c'], users: [], engineId: '80001f880302f6e5d4c3b2', engineBoots: 1, running: false, packets: 0,
+          id: 'c0ffee02', name: 'sw-floor-2', model: 'cisco-catalyst-48', address: '127.0.0.3', port: 161,
+          versions: ['v2c'], users: [], engineId: '800000090302f6e5d4c3b2', engineBoots: 7, running: true, packets: 5310,
+          traps: { destinations: [], onStart: false, onAuthFailure: false, schedules: [], suppressed: 0 },
+        },
+        {
+          id: 'c0ffee04', name: 'ups-01', model: 'apc-smart-ups', address: '127.0.0.5', port: 161,
+          versions: ['v1', 'v2c'], users: [], engineId: '8000013e0302b7a6c5d4e3', engineBoots: 1, running: false, packets: 0,
           traps: { destinations: [], onStart: false, onAuthFailure: false, schedules: [], suppressed: 0 },
         },
       ],
     },
     act: ['sel:.status-item.simulator|0'],
-    describe: 'The simulator: two simulated Linux servers, one answering and sending traps, each one click from being a target.',
+    describe: 'The simulator: a Linux server sending traps, a Catalyst switch and a UPS, each one click from being a target.',
   },
   {
     base: 'simulator-traps',
@@ -406,22 +411,35 @@ const CATALOGUE = [
   },
 ];
 
-// The simulator's one model as ListSimulatorModels serves it. A function
+// The simulator's catalogue as ListSimulatorModels serves it. A function
 // declaration, so the catalogue above can call it before this line is reached.
 function simulatorModels() {
-  return [{
-    id: 'linux-server',
-    category: 'server',
-    notifications: [
-      { name: 'coldStart', oid: '.1.3.6.1.6.3.1.1.5.1' },
-      { name: 'warmStart', oid: '.1.3.6.1.6.3.1.1.5.2' },
-      { name: 'linkDown', oid: '.1.3.6.1.6.3.1.1.5.3' },
-      { name: 'linkUp', oid: '.1.3.6.1.6.3.1.1.5.4' },
+  const generic = (own = []) => [
+    { name: 'coldStart', oid: '.1.3.6.1.6.3.1.1.5.1' },
+    { name: 'warmStart', oid: '.1.3.6.1.6.3.1.1.5.2' },
+    ...own,
+    { name: 'authenticationFailure', oid: '.1.3.6.1.6.3.1.1.5.5' },
+  ];
+  const link = [
+    { name: 'linkDown', oid: '.1.3.6.1.6.3.1.1.5.3' },
+    { name: 'linkUp', oid: '.1.3.6.1.6.3.1.1.5.4' },
+  ];
+  const config = { name: 'ciscoConfigManEvent', oid: '.1.3.6.1.4.1.9.9.43.2.0.1' };
+  return [
+    { id: 'linux-server', category: 'server', notifications: generic([...link,
       { name: 'nsNotifyShutdown', oid: '.1.3.6.1.4.1.8072.4.0.2' },
-      { name: 'nsNotifyRestart', oid: '.1.3.6.1.4.1.8072.4.0.3' },
-      { name: 'authenticationFailure', oid: '.1.3.6.1.6.3.1.1.5.5' },
-    ],
-  }];
+      { name: 'nsNotifyRestart', oid: '.1.3.6.1.4.1.8072.4.0.3' }]) },
+    { id: 'windows-server', category: 'server', notifications: generic(link) },
+    { id: 'cisco-catalyst-24', category: 'network', notifications: generic([...link, config]) },
+    { id: 'cisco-catalyst-48', category: 'network', notifications: generic([...link, config]) },
+    { id: 'cisco-isr-4331', category: 'network', notifications: generic([...link,
+      { name: 'bgpEstablishedNotification', oid: '.1.3.6.1.2.1.15.0.1' },
+      { name: 'bgpBackwardTransNotification', oid: '.1.3.6.1.2.1.15.0.2' }, config]) },
+    { id: 'synology-nas', category: 'storage', notifications: generic(link) },
+    { id: 'apc-smart-ups', category: 'power', notifications: generic([{ name: 'upsTrapOnBattery', oid: '.1.3.6.1.2.1.33.2.1' }]) },
+    { id: 'hp-laserjet', category: 'printing', notifications: generic([{ name: 'printerV2Alert', oid: '.1.3.6.1.2.1.43.18.2.0.1' }]) },
+    { id: 'environment-probe', category: 'environment', notifications: generic() },
+  ];
 }
 
 export function buildScenes(seeds) {

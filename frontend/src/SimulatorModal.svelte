@@ -9,6 +9,7 @@
   import {
     SIM_VERSIONS, MAX_EVERY, MAX_DESTINATIONS, MAX_SCHEDULES, blankDevice, blankV3, blankDestination, blankSchedule,
     editableDevice, deviceProblems, devicePayload, addDeviceAsTarget, notificationsOf, trapActivity, deliveryReport,
+    modelGroups,
   } from './utils/simulator.js';
   import UsmFields from './settings/UsmFields.svelte';
   import Icon from './Icon.svelte';
@@ -65,12 +66,29 @@
     close();
   }
 
+  /** The name a new device was given, which follows its model until someone types another. */
+  let defaultName = '';
+
   async function newDevice(models, devices) {
     const model = models[0]?.id || 'linux-server';
     const suggestion = await simulatorStore.suggestAddress().catch(() => null);
     editing = blankDevice(model, suggestion);
-    editing.name = `${$_(`simulator.model.${model}.name`)} ${devices.length + 1}`;
+    defaultName = `${$_(`simulator.model.${model}.name`)} ${devices.length + 1}`;
+    editing.name = defaultName;
     saveError = '';
+  }
+
+  // A schedule naming a notification the new model does not send falls back
+  // to one at random, rather than being refused at save.
+  function onModel() {
+    if (editing.name === defaultName) {
+      defaultName = `${$_(`simulator.model.${editing.model}.name`)} ${$simulatorStore.devices.length + 1}`;
+      editing.name = defaultName;
+    }
+    const names = notificationsOf($simulatorStore.models, editing.model).map((n) => n.name);
+    editing.traps.schedules = editing.traps.schedules.map((s) =>
+      (s.notification && !names.includes(s.notification) ? { ...s, notification: '' } : s));
+    editing = editing;
   }
 
   async function edit(device) {
@@ -237,9 +255,13 @@
           </div>
           <div class="form-group">
             <label for="sim-model">{$_('simulator.field.model')}</label>
-            <select id="sim-model" bind:value={editing.model} disabled={!!editing.id}>
-              {#each $simulatorStore.models as m (m.id)}
-                <option value={m.id}>{$_(`simulator.model.${m.id}.name`)}</option>
+            <select id="sim-model" bind:value={editing.model} disabled={!!editing.id} on:change={onModel}>
+              {#each modelGroups($simulatorStore.models) as group (group.category)}
+                <optgroup label={$_(`simulator.category.${group.category}`)}>
+                  {#each group.models as m (m.id)}
+                    <option value={m.id}>{$_(`simulator.model.${m.id}.name`)}</option>
+                  {/each}
+                </optgroup>
               {/each}
             </select>
           </div>
