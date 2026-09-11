@@ -371,10 +371,13 @@ check('an import is reported model by model, each warning after its model',
 check('and the picker selects the first model an import brought',
   firstImported([{ success: false }, { success: true, modelId: 'custom:c' }]) === 'custom:c' && firstImported([]) === '');
 
-// Every warning Go gives about an import has its sentence.
-const appGo = readFileSync(new URL('../../app_simmodels.go', import.meta.url), 'utf8');
+// Every warning Go gives about an import has its sentence: the application's,
+// and those pkg/simulator gives about a package's walks.
+const appGo = readFileSync(new URL('../../app_simmodels.go', import.meta.url), 'utf8') +
+  readFileSync(new URL('../../pkg/simulator/package.go', import.meta.url), 'utf8');
 const warningKeys = new Set([...appGo.matchAll(/Key: "([A-Za-z]+)"/g)].map((m) => m[1]));
-check('the warnings an import gives were found in app_simmodels.go', warningKeys.size >= 4, [...warningKeys].join());
+check('the warnings an import gives were found in app_simmodels.go and pkg/simulator/package.go',
+  warningKeys.size >= 7, [...warningKeys].join());
 for (const key of warningKeys) {
   check(`en.json says simulator.models.warning.${key}`, Boolean(en.simulator?.models?.warning?.[key]));
 }

@@ -1,0 +1,11 @@
+{
+  "kind": "snmplens-simulator-model",
+  "formatVersion": 1,
+  "id": "acme-gateway",
+  "name": "Acme G-200 gateway",
+  "description": "A branch gateway as a walk of a real one recorded it, with its tunnels written by hand.",
+  "vendor": "Acme",
+  "category": "network",
+  "icon": "acme-gateway.png",
+  "system": { "location": "Lab rack 2" }
+}

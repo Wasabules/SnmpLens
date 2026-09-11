@@ -215,6 +215,16 @@ func ParseCustomModel(raw []byte) (CustomModel, error) {
 	if len(raw) > MaxCustomModelBytes {
 		return CustomModel{}, fmt.Errorf("a model file is at most %d KB", MaxCustomModelBytes>>10)
 	}
+	f, err := decodeModel(raw)
+	if err != nil {
+		return CustomModel{}, err
+	}
+	return f.compile(packageParts{})
+}
+
+// decodeModel reads a model file, all of it and strictly, once what it says it
+// is has been read.
+func decodeModel(raw []byte) (customFile, error) {
 	// What the file says it is comes first, and is read leniently — a preset
 	// refused for its "widgets" field would be told the wrong thing — and from
 	// the first value alone, so that what follows it is reported as that.
@@ -223,14 +233,14 @@ func ParseCustomModel(raw []byte) (CustomModel, error) {
 		FormatVersion int    `json:"formatVersion"`
 	}
 	if err := json.NewDecoder(bytes.NewReader(raw)).Decode(&head); err != nil {
-		return CustomModel{}, jsonProblem(raw, err)
+		return customFile{}, jsonProblem(raw, err)
 	}
 	if head.Kind != CustomModelKind {
-		return CustomModel{}, fmt.Errorf("this is not a simulator model: its \"kind\" is %q, and a model's is %q",
+		return customFile{}, fmt.Errorf("this is not a simulator model: its \"kind\" is %q, and a model's is %q",
 			head.Kind, CustomModelKind)
 	}
 	if head.FormatVersion != CustomModelFormat {
-		return CustomModel{}, fmt.Errorf("format version %d: this version of SnmpLens reads version %d",
+		return customFile{}, fmt.Errorf("format version %d: this version of SnmpLens reads version %d",
 			head.FormatVersion, CustomModelFormat)
 	}
 	dec := json.NewDecoder(bytes.NewReader(raw))
@@ -240,12 +250,12 @@ func ParseCustomModel(raw []byte) (CustomModel, error) {
 	dec.DisallowUnknownFields()
 	var f customFile
 	if err := dec.Decode(&f); err != nil {
-		return CustomModel{}, jsonProblem(raw, err)
+		return customFile{}, jsonProblem(raw, err)
 	}
 	if _, err := dec.Token(); err != io.EOF {
-		return CustomModel{}, errors.New("there is more after the model: a file holds one")
+		return customFile{}, errors.New("there is more after the model: a file holds one")
 	}
-	return f.compile()
+	return f, nil
 }
 
 // jsonProblem says what is wrong with a file JSON cannot read, and where.
@@ -305,7 +315,9 @@ type compiledObject struct {
 	reading    func(instance string, s Swing) Reading
 }
 
-func (f customFile) compile() (CustomModel, error) {
+// compile checks a model file, with what the rest of its package adds to it —
+// nothing, for a lone file — and makes the model.
+func (f customFile) compile(parts packageParts) (CustomModel, error) {
 	if !customIDPattern.MatchString(f.ID) {
 		return CustomModel{}, fmt.Errorf("\"id\" is 1 to 48 lower-case letters, digits and inner hyphens, not %q", f.ID)
 	}
@@ -327,7 +339,7 @@ func (f customFile) compile() (CustomModel, error) {
 	if icon != "" && (path.Base(icon) != icon || strings.ContainsAny(icon, `/\:`) || strings.HasPrefix(icon, ".") || len(icon) > 128) {
 		return CustomModel{}, fmt.Errorf("\"icon\" names a file in the archive beside the model, not a path: %q", icon)
 	}
-	sys, err := f.System.check()
+	sys, err := f.systemOf(parts)
 	if err != nil {
 		return CustomModel{}, err
 	}
@@ -339,21 +351,25 @@ func (f customFile) compile() (CustomModel, error) {
 	if err != nil {
 		return CustomModel{}, err
 	}
-	objs, err := compileObjects(f.Objects)
+	objs, err := compileObjects(slices.Concat([]objectSource{{list: f.Objects}}, parts.objects))
 	if err != nil {
 		return CustomModel{}, err
 	}
-	notes, err := checkNotifications(f.Notifications)
+	notes, err := checkNotifications(slices.Concat([]notificationSource{{list: f.Notifications}}, parts.notifications))
 	if err != nil {
 		return CustomModel{}, err
 	}
+	recorded := parts.unwritten(buildCustom(Identity{Name: "model-check", Seed: 1}, sys, ifs, objs), len(ifs) > 0)
+	uptime := parts.uptime
 
 	m := model{
 		ModelInfo: ModelInfo{ID: CustomModelPrefix + f.ID, Category: category, Custom: true,
 			Name: name, Description: strings.TrimSpace(f.Description), Vendor: strings.TrimSpace(f.Vendor)},
 		enterprise:    enterprise,
 		notifications: notes,
-		build:         func(id Identity) []Object { return buildCustom(id, sys, ifs, objs) },
+		build: func(id Identity) []Object {
+			return appendRecorded(buildCustom(id, sys, ifs, objs), id, recorded, uptime)
+		},
 	}
 
 	// Built once, as a device answering v3 will be, with what the agent adds:
@@ -475,26 +491,51 @@ func checkInterfaces(in []customInterface) ([]iface, error) {
 	return out, nil
 }
 
-func compileObjects(in []customObject) ([]compiledObject, error) {
+// objectSource is a list of objects and the file of a package it was written
+// in: none for the model file's own, whose errors read as they always have.
+type objectSource struct {
+	file string
+	list []customObject
+}
+
+// notificationSource is the same for notifications.
+type notificationSource struct {
+	file string
+	list []customNotification
+}
+
+// within is how an error names the file of a package it is about.
+func within(file string) string {
+	if file == "" {
+		return ""
+	}
+	return file + ": "
+}
+
+func compileObjects(sources []objectSource) ([]compiledObject, error) {
 	// Counted before anything is built: a thousand objects of a thousand
 	// instances is a million objects, and the bound is the point.
 	total := 0
-	for i, o := range in {
-		if len(o.Instances) > MaxCustomInstances {
-			return nil, fmt.Errorf("objects[%d]: at most %d instances", i, MaxCustomInstances)
+	for _, src := range sources {
+		for i, o := range src.list {
+			if len(o.Instances) > MaxCustomInstances {
+				return nil, fmt.Errorf("%sobjects[%d]: at most %d instances", within(src.file), i, MaxCustomInstances)
+			}
+			total += max(1, len(o.Instances))
 		}
-		total += max(1, len(o.Instances))
 	}
 	if total > MaxCustomObjects {
 		return nil, fmt.Errorf("the model makes %d objects, and a model makes at most %d", total, MaxCustomObjects)
 	}
-	out := make([]compiledObject, 0, len(in))
-	for i, o := range in {
-		c, err := o.compile()
-		if err != nil {
-			return nil, fmt.Errorf("objects[%d] (%s): %w", i, o.OID, err)
+	var out []compiledObject
+	for _, src := range sources {
+		for i, o := range src.list {
+			c, err := o.compile()
+			if err != nil {
+				return nil, fmt.Errorf("%sobjects[%d] (%s): %w", within(src.file), i, o.OID, err)
+			}
+			out = append(out, c)
 		}
-		out = append(out, c)
 	}
 	return out, nil
 }
@@ -722,15 +763,25 @@ func (c customCounter) compile(t gosnmp.Asn1BER) (func(string, Swing) Reading, e
 	return nil, fmt.Errorf("a counter is a Counter32 or a Counter64, not a %v", t)
 }
 
-func checkNotifications(in []customNotification) ([]Notification, error) {
+func checkNotifications(sources []notificationSource) ([]Notification, error) {
+	type located struct {
+		at string
+		n  customNotification
+	}
+	var in []located
+	for _, src := range sources {
+		for i, n := range src.list {
+			in = append(in, located{fmt.Sprintf("%snotifications[%d]", within(src.file), i), n})
+		}
+	}
 	if len(in) > MaxCustomNotifications {
 		return nil, fmt.Errorf("a model has at most %d notifications of its own", MaxCustomNotifications)
 	}
 	// Every device's own, which the catalogue finds by name.
 	seen := map[string]bool{coldStart.Name: true, warmStart.Name: true, authenticationFailure.Name: true}
 	out := make([]Notification, 0, len(in))
-	for i, n := range in {
-		at := fmt.Sprintf("notifications[%d]", i)
+	for _, l := range in {
+		at, n := l.at, l.n
 		if !notificationNamePattern.MatchString(n.Name) {
 			return nil, fmt.Errorf("%s: \"name\" is the notification's name in its MIB, a letter and then letters, digits or hyphens", at)
 		}

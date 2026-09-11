@@ -8,7 +8,9 @@ import (
 	"hash/crc32"
 	"image"
 	"image/png"
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -289,6 +291,8 @@ func TestAnImportIsReadWithinBounds(t *testing.T) {
 	}{
 		{"an entry larger than it may be", writeZip(t, "big.zip", zipEntry{"model.json", spaces}), "unpacks to more than", false},
 		{"an entry that lies about its size", lyingZip(t, "model.json", spaces, 100), "cannot be unpacked", false},
+		{"a walk larger than it may be", writeZip(t, "walk.zip", zipEntry{"model.json", model},
+			zipEntry{"walks/big.walk", bytes.Repeat([]byte(" "), simulator.MaxWalkBytes+1)}), "unpacks to more than", false},
 		{"too many entries", writeZip(t, "many.zip", many...), "at most 64", false},
 		{"an archive with no model", writeZip(t, "icons.zip", zipEntry{"acme-crac.png", pngIcon(t, 32)}), "holds no model", false},
 		{"neither JSON nor ZIP", writeModelFile(t, "notes.txt", []byte("hello")), "neither", false},
@@ -332,6 +336,148 @@ func TestAnArchiveNameIsNeverAPath(t *testing.T) {
 				t.Errorf("%s was written in %s", name, dir)
 			}
 		}
+	}
+}
+
+// examplePackageEntries is the package the documentation shows, as a folder of
+// an archive.
+func examplePackageEntries(t *testing.T, folder string) []zipEntry {
+	t.Helper()
+	root := filepath.Join("pkg", "simulator", "testdata", "package")
+	var out []zipEntry
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		data, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(root, p)
+		out = append(out, zipEntry{path.Join(folder, filepath.ToSlash(rel)), data})
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// A package — a folder holding model.json — is imported whole from an archive
+// that holds a lone model beside it: its files put together, the icon its
+// model names, the JSON file it does not read named, and what its walks
+// recorded of the agent left out. It is kept as one ZIP of the files it reads,
+// read back at startup, and makes a device answering what was recorded and
+// what was written.
+func TestAPackageIsImportedAndKeptAsOneFile(t *testing.T) {
+	a := modelApp(t)
+	entries := append(examplePackageEntries(t, "gateway"),
+		zipEntry{"gateway/acme-gateway.png", pngIcon(t, 48)},
+		zipEntry{"gateway/notes.json", []byte(`{"todo": "record the switch"}`)},
+		zipEntry{"gateway/README.md", []byte("# G-200")},
+		zipEntry{"crac/custom-model.json", exampleModel(t)},
+		zipEntry{"crac/acme-crac.png", pngIcon(t, 32)},
+	)
+	results := a.importSimulatorModels([]string{writeZip(t, "models.zip", entries...)})
+	if len(results) != 2 {
+		t.Fatalf("%d results: %+v", len(results), results)
+	}
+	pkg := results[0]
+	warnings := []SimulatorModelWarning{{Key: "packageIgnored", Detail: "notes.json"}, {Key: "walkAgentOwned", Detail: "6"}}
+	if !pkg.Success || !pkg.Icon || pkg.Replaced || pkg.ModelID != "custom:acme-gateway" ||
+		pkg.File != "models.zip › gateway/model.json" || !slices.Equal(pkg.Warnings, warnings) {
+		t.Fatalf("%+v", pkg)
+	}
+	if lone := results[1]; !lone.Success || !lone.Icon || lone.ModelID != "custom:acme-crac" {
+		t.Fatalf("%+v", lone)
+	}
+	want := []string{"acme-crac.json", "acme-crac.png", "acme-gateway.png", "acme-gateway.zip"}
+	if got := dirNames(t, a.sim.modelDir); !slices.Equal(got, want) {
+		t.Errorf("the model directory holds %v", got)
+	}
+	// Kept as the files it reads, by their names in the package.
+	kept, err := zip.OpenReader(filepath.Join(a.sim.modelDir, "acme-gateway.zip"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, f := range kept.File {
+		names = append(names, f.Name)
+	}
+	kept.Close()
+	if want := []string{"model.json", "oids/tunnels.json", "traps.json", "walks/gateway.snmprec", "walks/netsnmp.walk"}; !slices.Equal(names, want) {
+		t.Errorf("the package is kept as %v", names)
+	}
+
+	d := simDevice()
+	d.Name, d.Model, d.Versions, d.Users, d.Traps = "gw-01", "custom:acme-gateway", []string{"v2c"}, nil, simulator.Traps{}
+	saved := startSimulated(t, a, d)
+	for oid, want := range map[string]string{
+		".1.3.6.1.2.1.2.2.1.2.2":       "lan0",
+		".1.3.6.1.4.1.32473.5.1.1.2.2": "tunnel-2",
+		".1.3.6.1.2.1.1.5.0":           "gw-01",
+	} {
+		if v := simGet(t, saved, d.Community, oid); string(v.Value.([]byte)) != want {
+			t.Errorf("%s answers %v, want %q", oid, v.Value, want)
+		}
+	}
+
+	if err := simulator.SetCustomModels(nil); err != nil {
+		t.Fatal(err)
+	}
+	s := newSimulatorService(filepath.Dir(a.sim.path))
+	t.Cleanup(s.fleet.StopAll)
+	if len(s.models) != 2 || s.models[0].ID() != "custom:acme-crac" || s.models[1].ID() != "custom:acme-gateway" {
+		t.Fatalf("read back %d model(s)", len(s.models))
+	}
+}
+
+// A package replaces a lone model of its id and a lone model a package: the
+// directory keeps one form of a model, the newer when an import stopped
+// between the two left both, and deleting the model deletes either.
+func TestAPackageAndALoneFileReplaceEachOther(t *testing.T) {
+	a := modelApp(t)
+	onlyResult(t, a.importSimulatorModels([]string{writeModelFile(t, "crac.json", exampleModel(t))}))
+	walk := []byte("1.3.6.1.2.1.1.1.0|4|Recorded CRAC\n1.3.6.1.4.1.32473.9.1.0|4|recorded\n")
+	res := onlyResult(t, a.importSimulatorModels([]string{writeZip(t, "crac.zip",
+		zipEntry{"model.json", exampleModel(t)}, zipEntry{"walks/crac.snmprec", walk})}))
+	if !res.Success || !res.Replaced {
+		t.Fatalf("%+v", res)
+	}
+	if got := dirNames(t, a.sim.modelDir); !slices.Equal(got, []string{"acme-crac.zip"}) {
+		t.Errorf("after the package, the model directory holds %v", got)
+	}
+
+	// Both forms at once, the lone file the older: one model, not two.
+	older := filepath.Join(a.sim.modelDir, "acme-crac.json")
+	if err := os.WriteFile(older, exampleModel(t), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	past := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(older, past, past); err != nil {
+		t.Fatal(err)
+	}
+	if err := simulator.SetCustomModels(nil); err != nil {
+		t.Fatal(err)
+	}
+	s := newSimulatorService(filepath.Dir(a.sim.path))
+	t.Cleanup(s.fleet.StopAll)
+	if len(s.models) != 1 {
+		t.Fatalf("both forms kept read back as %d model(s)", len(s.models))
+	}
+
+	res = onlyResult(t, a.importSimulatorModels([]string{writeModelFile(t, "crac.json", exampleModel(t))}))
+	if !res.Success || !res.Replaced {
+		t.Fatalf("%+v", res)
+	}
+	if got := dirNames(t, a.sim.modelDir); !slices.Equal(got, []string{"acme-crac.json"}) {
+		t.Errorf("after the lone file, the model directory holds %v", got)
+	}
+	if err := a.SimulatorDeleteModel("custom:acme-crac"); err != nil {
+		t.Fatal(err)
+	}
+	if got := dirNames(t, a.sim.modelDir); len(got) != 0 {
+		t.Errorf("left behind: %v", got)
 	}
 }
 

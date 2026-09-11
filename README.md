@@ -435,6 +435,30 @@ Some OIDs are the agent's own and no model may answer them: SNMPv2-MIB's snmp gr
 
 A file is checked in full when it is imported — unknown fields, types, ranges, an OID given twice, an OID the agent keeps — and a refusal names the field or the OID. The example is `pkg/simulator/testdata/custom-model.json`; 32473 is the enterprise number RFC 5612 reserves for documentation.
 
+### Model packages
+
+A model can also be spread over the files of one folder — a **package** — so that each file says one thing, and so that a device can answer what a real one answered, recorded:
+
+```
+acme-gateway/
+├── model.json         what the device is: the format above, "system" optional once a walk records one
+├── oids.json          objects, as { "objects": [ … ] } — or several files in oids/
+├── traps.json         notifications, as { "notifications": [ … ] }
+├── walks/             what a real device answered: snmpsim .snmprec, or snmpwalk -On output
+│   └── gateway.snmprec
+└── acme-gateway.png   the icon model.json names
+```
+
+Zip the folder and import it; one archive may hold several packages and lone models. Record a walk with `snmpwalk -v2c -c public -On -Ox <host> .1.3.6.1 > walks/device.walk` — plus a walk of `.1.0.8802` if the device answers LLDP — or with snmpsim's recorder. `-On` keeps the OIDs numeric, which is how a walk is read; `-Ox` keeps an OCTET STRING's octets rather than the text a MIB's DISPLAY-HINT makes of them, so a MAC address stays six octets.
+
+Three rules put the files together:
+
+- **What is written wins over what was recorded**, OID by OID: an object in an oids file replaces the value a walk recorded at the same OID — which is how a recorded constant is made to move, or a recorded value corrected. An OID written twice is still an error. When `model.json` gives `interfaces`, IF-MIB is made from them and the walks' own is left out.
+- **The agent's own objects stay behind.** The snmp group and everything under `1.3.6.1.6.3` — the recorded device's engine, its USM users, VACM groups and community strings — are never served, and the import says how many were left out.
+- **The system group is made, never replayed.** sysName is the simulated device's name and sysUpTime its own uptime; sysDescr, sysObjectID, contact, location and services are what the walks recorded, except where `model.json`'s `system` says otherwise.
+
+**Recorded counters move.** Each starts at the value recorded and grows at the rate it had averaged since the device booted — its value over the sysUpTime recorded beside it — swinging around that rate as traffic does. hrSystemUptime and hrSystemDate are the device's own; everything else answers what was recorded. A line of a walk that cannot be read is left out and counted, and the import says where the first one was. A walk is at most 16 MB, and a package's walks record at most 65 536 objects between them. The example is `pkg/simulator/testdata/package`.
+
 ---
 
 ## Test Agent

@@ -653,6 +653,25 @@ request counted on ARRIVAL, as net-snmp does, so a GET of snmpInGetRequests coun
 request carries. Every device has them beside its model's objects, so neither a built-in model nor a file somebody
 wrote may answer them; a custom model that tries is refused at import, naming the OID.
 
+**A package is a model spread over a folder** (`package.go`, `walk.go`): `model.json` — the lone-file format, its
+`system` optional once a walk records one —, `oids.json` and `oids/*.json`, `traps.json`, and `walks/` holding what a
+real device answered, as snmpsim's `.snmprec` or `snmpwalk -On` output, told apart by the first line and never by
+the name. Three rules put the files together, each the answer to a question a lone file never raised. What is
+WRITTEN wins over what was RECORDED, OID by OID — and IF-MIB as a whole when `model.json` says `interfaces`, since a
+written ifTable mixed with recorded rows gives ifNumber two answers — while between written files an OID given twice
+is still an error. The agent's own objects stay behind: the snmp group and all of `1.3.6.1.6.3`, which in a real
+walk holds the engine ID, the USM user names, the VACM groups and the community strings; served, they would
+contradict the live counters and publish the recorded device's configuration. The system group is MADE, never
+replayed, so sysName is the device's own and sysUpTime its own uptime. A recorded counter grows at its value over
+the recorded sysUpTime — the average since boot, the uptime floored at a minute so that a device recorded just after
+booting does not count as carrying its whole traffic in seconds. A walk is read LENIENTLY where a model file is read
+strictly: it is a recording, not something written line by line, so a value that cannot be read is counted and
+located (`walkSkipped`) rather than refusing forty thousand good ones, and `FuzzReadWalk` holds that whatever IS
+read is a value the tree accepts. The application keeps a package as `<id>.zip` of the files it reads — never as a
+folder of the archive's own names — and a lone file as `<id>.json`. Importing one form removes the other AFTER
+writing, and `loadModels` takes the newer when a stopped import leaves both: two kept forms of one ID would
+otherwise fail `SetCustomModels` and take every custom model with them.
+
 **What only a notification carries** (`Object.NotifyOnly`). An iDRAC alert carries eleven objects its MIB makes
 accessible-for-notify (RFC 2578 7.3) — a message ID, the message, the service tag — and no request may read them.
 They are kept beside the tree rather than in it: a GET answers `noSuchObject`, a walk passes them by, and
