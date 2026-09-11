@@ -5,8 +5,13 @@
 //
 //	go run ./tools/updatersign keygen
 //
-// Paste the printed public key into pkg/updater/verify.go (updaterPublicKey) and
+// Add the printed public key to pkg/updater/verify.go (updaterPublicKeys) and
 // store the private key in the GitHub Actions secret UPDATER_PRIVATE_KEY.
+//
+// ADD, not replace: a copy already installed trusts only the keys embedded in
+// the binary it is running, so the release that introduces a new key must be
+// signed with the old one. See the comment on updaterPublicKeys for the order a
+// rotation happens in.
 //
 // Sign a file (done automatically by .github/workflows/release.yml):
 //
@@ -59,7 +64,7 @@ func keygen() {
 	if err != nil {
 		fatal(err)
 	}
-	fmt.Println("Public key — paste into pkg/updater/verify.go (updaterPublicKey):")
+	fmt.Println("Public key — add to pkg/updater/verify.go (updaterPublicKeys):")
 	fmt.Println("  " + base64.StdEncoding.EncodeToString(pub))
 	fmt.Println()
 	fmt.Println("Private key — add as GitHub secret UPDATER_PRIVATE_KEY (keep secret!):")
@@ -68,8 +73,8 @@ func keygen() {
 
 // pubkey prints the public half of the configured private key.
 //
-// Compare it with updaterPublicKey in pkg/updater/verify.go: if they differ,
-// the secret is not the key installed copies trust, and every signature it
+// Compare it with updaterPublicKeys in pkg/updater/verify.go: if it is none of
+// them, the secret is not a key installed copies trust, and every signature it
 // makes will be refused by the updater it is meant to satisfy.
 func pubkey() {
 	key := loadKey()
