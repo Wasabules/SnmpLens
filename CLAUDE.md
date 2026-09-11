@@ -88,12 +88,16 @@ does and reporting them takes the count from 8 to 82; and `const`, which cannot 
 NOT exempt — props are the state most likely to arrive after the first render, and forgetting that
 `ExportNamedDeclaration` wraps the declaration hid half of them.
 
-Two tests in `pkg/monitor` talk to a real agent and skip unless you point them at one:
-
-```bash
-python tools/snmp_test_agent.py --port 11611 --no-traps
-SNMPLENS_TEST_AGENT=127.0.0.1:11611 go test ./pkg/monitor/ -run Integration -v
-```
+The integration tests talk to a real agent — the simulator, run in-process by `pkg/simulator/simtest` — so they
+run on every build and every platform. They used to need the Python agent and `SNMPLENS_TEST_AGENT`, and in
+practice ran nowhere. `pkg/monitor`'s poll a simulated server, and a 32-bit counter that wraps every two seconds
+to prove the delta goes through the wrap; `pkg/snmp`'s run every operation and a discovery scan against simulated
+devices. `app_integration_test.go` follows one thing through several features at once: a model identified, a
+preset bound and polled with every OID answered; a band crossed, journalled and delivered to a webhook; a device
+going down and coming back; a switch's notifications in every version, journalled as coming from the switch and
+routed; a request SnmpLens sends with the wrong community coming back as the device's authenticationFailure; a v3
+session outliving the device's restart. What a feature does on its own is tested beside it — these are for the
+seams between features, which no package owns.
 
 Beyond that, correctness is verified by the build + `go vet` + `staticcheck` passing, and by manual testing
 against the bundled Python SNMP simulator:

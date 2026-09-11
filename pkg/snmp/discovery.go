@@ -53,14 +53,14 @@ func (c *Client) Discover(cidr, community, version string, port, timeoutSec int,
 				result.Error = err.Error()
 				result.ResponseTime = time.Since(start).Milliseconds()
 				resultsChan <- result
-				runtime.EventsEmit(c.ctx, "discoveryProgress", map[string]interface{}{"current": index + 1, "total": total, "ip": ipAddr})
+				c.discoveryProgress(index+1, total, ipAddr)
 				return
 			}
 			if err = g.Connect(); err != nil {
 				result.Error = fmt.Sprintf("connect failed: %v", err)
 				result.ResponseTime = time.Since(start).Milliseconds()
 				resultsChan <- result
-				runtime.EventsEmit(c.ctx, "discoveryProgress", map[string]interface{}{"current": index + 1, "total": total, "ip": ipAddr})
+				c.discoveryProgress(index+1, total, ipAddr)
 				return
 			}
 			defer g.Conn.Close()
@@ -77,7 +77,7 @@ func (c *Client) Discover(cidr, community, version string, port, timeoutSec int,
 			if err != nil {
 				result.Error = fmt.Sprintf("get failed: %v", err)
 				resultsChan <- result
-				runtime.EventsEmit(c.ctx, "discoveryProgress", map[string]interface{}{"current": index + 1, "total": total, "ip": ipAddr})
+				c.discoveryProgress(index+1, total, ipAddr)
 				return
 			}
 
@@ -96,7 +96,7 @@ func (c *Client) Discover(cidr, community, version string, port, timeoutSec int,
 				}
 			}
 			resultsChan <- result
-			runtime.EventsEmit(c.ctx, "discoveryProgress", map[string]interface{}{"current": index + 1, "total": total, "ip": ipAddr})
+			c.discoveryProgress(index+1, total, ipAddr)
 		}(ip, i)
 	}
 
@@ -111,6 +111,16 @@ func (c *Client) Discover(cidr, community, version string, port, timeoutSec int,
 		return compareIPs(results[i].IP, results[j].IP)
 	})
 	return results
+}
+
+// discoveryProgress tells a window how far a scan has got. Only a window: the
+// Wails runtime refuses a context it did not issue and ends the process, so a
+// client without one — a test, a headless run — scans without saying so, as
+// handleTrap receives without emitting.
+func (c *Client) discoveryProgress(current, total int, ip string) {
+	if c.ctx != nil {
+		runtime.EventsEmit(c.ctx, "discoveryProgress", map[string]interface{}{"current": current, "total": total, "ip": ip})
+	}
 }
 
 // MaxDiscoveryHosts caps a scan.

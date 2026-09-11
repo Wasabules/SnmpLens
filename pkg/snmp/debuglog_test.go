@@ -2,11 +2,13 @@ package snmp
 
 import (
 	"context"
-	"net"
 	"os"
 	"strconv"
 	"strings"
 	"testing"
+
+	"SnmpLens/pkg/simulator"
+	"SnmpLens/pkg/simulator/simtest"
 
 	"github.com/gosnmp/gosnmp"
 )
@@ -149,28 +151,20 @@ func TestScrubRedactsRawPacketDumps(t *testing.T) {
 	}
 }
 
-// End to end against the bundled simulator, when one is pointed at.
+// End to end against the simulator the application ships, run in-process.
 //
-// SNMPLENS_TEST_AGENT is the variable CLAUDE.md documents for exactly this;
-// an earlier version invented SNMPLENS_AGENT_PORT, which nothing sets, so the
-// only test of the production path never ran anywhere.
+// It used to need an external agent named by SNMPLENS_TEST_AGENT, and before
+// that by SNMPLENS_AGENT_PORT, which nothing set: the only test of the
+// production path never ran anywhere. Now it runs on every CI build.
 func TestDebugLogNeverHoldsTheCommunity(t *testing.T) {
-	addr := os.Getenv("SNMPLENS_TEST_AGENT")
-	if addr == "" {
-		t.Skip("set SNMPLENS_TEST_AGENT=127.0.0.1:11611 to run against the simulator")
-	}
-	_, portStr, err := net.SplitHostPort(addr)
-	if err != nil {
-		t.Fatalf("SNMPLENS_TEST_AGENT: %v", err)
-	}
-	port, _ := strconv.Atoi(portStr)
+	const community = "s3cr3t-community"
+	d := simtest.Start(t, simulator.Device{Community: community})
 
 	c := NewClient(context.Background())
 	c.SetDebugMode(true)
 	defer c.SetDebugMode(false)
 
-	const community = "s3cr3t-community"
-	c.Get([]string{"127.0.0.1"}, "1.3.6.1.2.1.1.1.0", community, "v2c", port, 2, 0, V3Params{})
+	c.Get([]string{d.Address}, "1.3.6.1.2.1.1.1.0", community, "v2c", d.Port, 2, 0, V3Params{})
 
 	entries := c.GetDebugLog()
 	if len(entries) == 0 {

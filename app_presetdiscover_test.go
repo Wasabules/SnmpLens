@@ -2,12 +2,13 @@ package main
 
 import (
 	"net"
-	"os"
 	"strconv"
 	"strings"
 	"testing"
 
 	"SnmpLens/pkg/preset"
+	"SnmpLens/pkg/simulator"
+	"SnmpLens/pkg/simulator/simtest"
 )
 
 // A preset that discovers its ports, of the shape the shipped ones now have:
@@ -81,16 +82,12 @@ func TestAPresetWithoutDiscoveryIsNeverWalked(t *testing.T) {
 	}
 }
 
-// The whole of discovery against a real agent: bind, and the session polls the
-// interfaces the equipment actually has, named as it names them.
-//
-// Skipped unless you point it at the bundled simulator, the way pkg/monitor's
-// integration tests are:
-//
-//	python tools/snmp_test_agent.py --port 11611 --no-traps
-//	SNMPLENS_TEST_AGENT=127.0.0.1:11611 go test . -run Integration -v
+// The whole of discovery against a real agent — the simulator, run in-process:
+// bind, and the session polls the interfaces the equipment actually has, named
+// as it names them.
 func TestPresetDiscoveryIntegration(t *testing.T) {
-	host, port := testAgent(t)
+	d := simtest.Start(t, simulator.Device{})
+	host, port := d.Address, d.Port
 	a, dir := newBindApp(t)
 	putPreset(t, dir, "ports.json", discoveringPreset)
 
@@ -146,24 +143,6 @@ func TestPresetDiscoveryIntegration(t *testing.T) {
 			t.Errorf("%s is labelled %q, which is an index rather than a name", oid, label)
 		}
 	}
-}
-
-// testAgent reads SNMPLENS_TEST_AGENT, the variable CLAUDE.md documents.
-func testAgent(t *testing.T) (string, int) {
-	t.Helper()
-	addr := os.Getenv("SNMPLENS_TEST_AGENT")
-	if addr == "" {
-		t.Skip("set SNMPLENS_TEST_AGENT=127.0.0.1:11611 to run against the bundled simulator")
-	}
-	host, portStr, err := net.SplitHostPort(addr)
-	if err != nil {
-		t.Fatalf("SNMPLENS_TEST_AGENT must be host:port, got %q: %v", addr, err)
-	}
-	port, err := strconv.Atoi(portStr)
-	if err != nil {
-		t.Fatalf("bad port in SNMPLENS_TEST_AGENT: %v", err)
-	}
-	return host, port
 }
 
 // closedUDPPort returns a loopback UDP port nothing is listening on.
