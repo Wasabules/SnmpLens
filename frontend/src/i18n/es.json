@@ -401,7 +401,19 @@
     "kindInform": "Inform (confirmado)",
     "informAcked": "Inform confirmado por {target} en {ms} ms",
     "informFailed": "Inform no confirmado: {error}",
-    "informNoAck": "sin respuesta del receptor"
+    "informNoAck": "sin respuesta del receptor",
+    "reception": {
+      "title": "Recepción de Traps",
+      "defaultUser": "predeterminado",
+      "v3None": "ningún usuario: los Traps v3 se rechazan",
+      "excluded": "{count, plural, one {# excluido} other {# excluidos}}",
+      "excludedTitle": "No aceptados para los Traps: {names}",
+      "anyCommunity": "cualquier comunidad",
+      "anyCommunityTitle": "La comunidad de un Trap v1 o v2c no se comprueba: se reciben todos.",
+      "manage": "Gestionar perfiles",
+      "userTitle": "Usuario SNMPv3 {user}, {level}",
+      "refused": "Rechazado por el receptor: {reason}"
+    }
   },
   "monitor": {
     "overrunTitle": "Cadencia insostenible.",
@@ -1200,7 +1212,7 @@
     "defaultTitle": "Credenciales predeterminadas",
     "defaultHint": "Las usa todo objetivo que no tenga un perfil propio, con la versión SNMP elegida en la cabecera.",
     "title": "Perfiles de credenciales",
-    "hint": "Credenciales con nombre que se pueden asignar a un objetivo en lugar de las predeterminadas: una comunidad para v1 y v2c, o un usuario USM de SNMPv3. Un perfil lleva su propia versión, y el receptor de Traps acepta también cada perfil v3.",
+    "hint": "Credenciales con nombre que se pueden asignar a un objetivo en lugar de las predeterminadas: una comunidad para v1 y v2c, o un usuario USM de SNMPv3. Un perfil lleva su propia versión. Los Traps SNMPv3 recibidos se autentican con cada usuario marcado para los Traps; los Traps v1 y v2c se reciben sea cual sea su comunidad.",
     "addCommunity": "Perfil de comunidad",
     "addUsm": "Usuario SNMPv3",
     "empty": "Aún no hay perfiles: todos los objetivos usan las credenciales predeterminadas.",
@@ -1259,6 +1271,12 @@
       "shortPass": "Net-SNMP y la mayoría de los agentes rechazan una frase de contraseña de menos de {min} caracteres.",
       "md5": "MD5 es débil; use SHA-256 si el agente lo admite.",
       "des": "DES es un cifrado de 56 bits; use AES si el agente lo admite."
-    }
+    },
+    "acceptTraps": "Aceptar los Traps SNMPv3 de este usuario",
+    "acceptTrapsHint": "Los Traps v3 recibidos se autentican con cada usuario marcado aquí. Desmárquelo para un usuario que solo sirve para consultar.",
+    "acceptTrapsDefaultHint": "El usuario predeterminado se acepta como cualquier perfil v3. Desmárquelo si solo sirve para consultar.",
+    "trapsChip": "Traps",
+    "trapsOnTitle": "Aceptado por el receptor de Traps — haga clic para excluirlo",
+    "trapsOffTitle": "No aceptado por el receptor de Traps — haga clic para aceptarlo"
   }
 }

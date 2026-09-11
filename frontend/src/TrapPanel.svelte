@@ -9,6 +9,9 @@
   import Trap from './Trap.svelte';
   import { escapeCSV, downloadFile } from './utils/csv';
   import { anonMode, anonymizeIp, maskString } from './utils/anonymize';
+  import Icon from './Icon.svelte';
+  import { DEFAULT_REF, trapReception } from './utils/credentialProfiles.js';
+  import { requestSettings } from './stores/settingsRequest';
 
   let searchTerm = '';
   let filterVersion = 'All';
@@ -94,6 +97,26 @@
     }
   }
 
+  // Who the listener hears: every SNMPv3 identity, and whether it is accepted.
+  $: reception = trapReception($settingsStore);
+  $: acceptedUsers = reception.filter((u) => u.accepted);
+  $: excludedUsers = reception.filter((u) => !u.accepted);
+
+  function refusalOf(u, refused) {
+    return (refused || []).find((r) => r.user === u.user) || null;
+  }
+
+  function userTitle(u, refused, anon, t) {
+    const line = t('traps.reception.userTitle', { values: { user: anon ? maskString(u.user) : u.user, level: u.secLevel } });
+    const refusal = refusalOf(u, refused);
+    return refusal ? `${line}\n${t('traps.reception.refused', { values: { reason: refusal.reason } })}` : line;
+  }
+
+  function excludedTitle(list, t) {
+    const names = list.map((u) => (u.ref === DEFAULT_REF ? t('traps.reception.defaultUser') : u.name)).join(', ');
+    return t('traps.reception.excludedTitle', { values: { names } });
+  }
+
   function handleClear() {
     if (showClearConfirm) {
       trapStore.clearTraps();
@@ -173,6 +196,39 @@
         </button>
       {/if}
     </div>
+  </div>
+
+  <!-- Who is heard. A v3 trap is authenticated against the users listed; a v1
+       or v2c trap is received whatever its community, which is not checked.
+       Saying so here is the point: a device whose v3 traps never arrive
+       otherwise looks exactly like one that sends nothing. -->
+  <div class="reception">
+    <span class="rx-title"><Icon name="radio" size={13} /> {$_('traps.reception.title')}</span>
+    <span class="rx-group">
+      <span class="rx-label">SNMPv3</span>
+      {#each acceptedUsers as u (u.ref)}
+        <span class="rx-chip" class:refused={!!refusalOf(u, $trapStore.refused)}
+          title={userTitle(u, $trapStore.refused, $anonMode, $_)}>
+          {#if refusalOf(u, $trapStore.refused)}<Icon name="triangle-alert" size={11} />{/if}
+          {u.ref === DEFAULT_REF ? $_('traps.reception.defaultUser') : u.name}
+          <span class="rx-user">{$anonMode ? maskString(u.user) : u.user}</span>
+        </span>
+      {:else}
+        <span class="rx-quiet">{$_('traps.reception.v3None')}</span>
+      {/each}
+      {#if excludedUsers.length > 0}
+        <span class="rx-excluded" title={excludedTitle(excludedUsers, $_)}>
+          {$_('traps.reception.excluded', { values: { count: excludedUsers.length } })}
+        </span>
+      {/if}
+    </span>
+    <span class="rx-group" title={$_('traps.reception.anyCommunityTitle')}>
+      <span class="rx-label">SNMPv1/v2c</span>
+      <span class="rx-quiet">{$_('traps.reception.anyCommunity')}</span>
+    </span>
+    <button class="rx-manage" on:click={() => requestSettings('snmp', 'credential-profiles')}>
+      <Icon name="key-round" size={13} /> {$_('traps.reception.manage')}
+    </button>
   </div>
 
   {#if showSendTrap}
@@ -393,6 +449,93 @@
   .header-buttons {
     display: flex;
     gap: 8px;
+  }
+
+  .reception {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    margin-bottom: 12px;
+    padding: 7px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background-color: var(--bg-lighter-color);
+    font-size: 0.82em;
+  }
+
+  .rx-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: 600;
+  }
+
+  .rx-group {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  .rx-label {
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+
+  .rx-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 1px 8px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background-color: var(--accent-subtle);
+    color: var(--accent-color);
+    font-weight: 600;
+  }
+
+  .rx-chip.refused {
+    border-color: var(--warning-color);
+    background-color: transparent;
+    color: var(--warning-color);
+  }
+
+  .rx-user {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-weight: 400;
+    opacity: 0.85;
+  }
+
+  .rx-quiet {
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  .rx-excluded {
+    color: var(--text-muted);
+    text-decoration: underline dotted;
+    cursor: help;
+  }
+
+  .rx-manage {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: auto;
+    padding: 3px 10px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-color);
+    font-size: 1em;
+    cursor: pointer;
+  }
+
+  .rx-manage:hover {
+    border-color: var(--accent-color);
+    color: var(--accent-color);
+    background-color: var(--accent-subtle-medium);
   }
 
   .filter-bar {

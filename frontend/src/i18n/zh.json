@@ -401,7 +401,19 @@
     "kindInform": "Inform（需确认）",
     "informAcked": "{target} 已在 {ms} 毫秒内确认 Inform",
     "informFailed": "Inform 未被确认：{error}",
-    "informNoAck": "接收方无响应"
+    "informNoAck": "接收方无响应",
+    "reception": {
+      "title": "Trap 接收",
+      "defaultUser": "默认",
+      "v3None": "无用户：v3 Trap 将被拒绝",
+      "excluded": "{count} 个已排除",
+      "excludedTitle": "不接受其 Trap：{names}",
+      "anyCommunity": "任意团体名",
+      "anyCommunityTitle": "v1 或 v2c Trap 的团体名不会被检查：全部都会接收。",
+      "manage": "管理配置文件",
+      "userTitle": "SNMPv3 用户 {user}，{level}",
+      "refused": "被监听器拒绝：{reason}"
+    }
   },
   "monitor": {
     "overrunTitle": "无法保持该频率。",
@@ -1200,7 +1212,7 @@
     "defaultTitle": "默认凭据",
     "defaultHint": "所有未分配配置文件的目标都使用这些凭据，并采用标题栏中选择的 SNMP 版本。",
     "title": "凭据配置文件",
-    "hint": "可代替默认凭据分配给目标的命名凭据：v1 和 v2c 使用团体名，SNMPv3 使用 USM 用户。配置文件自带版本，Trap 监听器也会接受每个 v3 配置文件。",
+    "hint": "可代替默认凭据分配给目标的命名凭据：v1 和 v2c 使用团体名，SNMPv3 使用 USM 用户。配置文件自带版本。接收到的 SNMPv3 Trap 会使用每个勾选了接收 Trap 的用户进行认证；v1 和 v2c Trap 无论团体名如何都会接收。",
     "addCommunity": "团体名配置文件",
     "addUsm": "SNMPv3 用户",
     "empty": "尚无配置文件：所有目标都使用默认凭据。",
@@ -1259,6 +1271,12 @@
       "shortPass": "Net-SNMP 和大多数代理会拒绝少于 {min} 个字符的密码短语。",
       "md5": "MD5 强度较弱；如果代理支持，请改用 SHA-256。",
       "des": "DES 是 56 位加密；如果代理支持，请改用 AES。"
-    }
+    },
+    "acceptTraps": "接受此用户发送的 SNMPv3 Trap",
+    "acceptTrapsHint": "接收到的 v3 Trap 会使用此处勾选的每个用户进行认证。仅用于轮询的用户可取消勾选。",
+    "acceptTrapsDefaultHint": "默认用户与任何 v3 配置文件一样被接受。如果它仅用于轮询，可取消勾选。",
+    "trapsChip": "Trap",
+    "trapsOnTitle": "已被 Trap 监听器接受 — 点击以排除",
+    "trapsOffTitle": "未被 Trap 监听器接受 — 点击以接受"
   }
 }

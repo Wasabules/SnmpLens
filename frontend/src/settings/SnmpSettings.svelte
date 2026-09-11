@@ -8,6 +8,7 @@
   import Icon from '../Icon.svelte';
   import UsmFields from './UsmFields.svelte';
   import CredentialProfiles from './CredentialProfiles.svelte';
+  import TrapAcceptToggle from './TrapAcceptToggle.svelte';
   import { credentialState, credentialBackend } from '../utils/crypto';
   import { findProfile, withProfile } from '../utils/credentialProfiles.js';
 
@@ -102,6 +103,7 @@
   <fieldset>
     <legend>{$_('settings.snmp.v3Title')}</legend>
     <UsmFields bind:v3={settings.v3} idPrefix="v3" />
+    <TrapAcceptToggle bind:checked={settings.traps.acceptDefaultUser} hint={$_('profiles.acceptTrapsDefaultHint')} />
   </fieldset>
 </section>
 

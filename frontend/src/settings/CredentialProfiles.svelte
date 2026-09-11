@@ -2,6 +2,7 @@
   import { _ } from 'svelte-i18n';
   import Icon from '../Icon.svelte';
   import UsmFields from './UsmFields.svelte';
+  import TrapAcceptToggle from './TrapAcceptToggle.svelte';
   import { onBackdrop } from '../utils/modal';
   import { anonMode, anonymizeIp, maskString, maskSysDescr } from '../utils/anonymize';
   import { TestConnection } from '../../wailsjs/go/main/App';
@@ -59,7 +60,7 @@
     // Both shapes are kept while editing, so v2c → v3 → v2c does not throw
     // away what was typed. normaliseProfile drops the unused one on Apply.
     editing = {
-      draft: { community: '', ...draft, v3: { ...blankProfile('v3').v3, ...(draft.v3 || {}) } },
+      draft: { community: '', acceptTraps: true, ...draft, v3: { ...blankProfile('v3').v3, ...(draft.v3 || {}) } },
       isNew,
       assigned,
     };
@@ -94,6 +95,13 @@
     if (next.has(address)) next.delete(address);
     else next.add(address);
     editing.assigned = next;
+  }
+
+  // The quick switch on a profile's row: heard by the trap listener or not. It
+  // edits the dialog's working copy like everything else here, so it takes
+  // effect when the settings are saved.
+  function toggleTraps(id) {
+    settings.credentialProfiles = profiles.map((p) => (p.id === id ? { ...p, acceptTraps: p.acceptTraps === false } : p));
   }
 
   function apply() {
@@ -205,7 +213,7 @@
 
 <svelte:window on:keydown|capture={onWindowKey} />
 
-<section class="profiles">
+<section class="profiles" id="credential-profiles">
   <div class="sec-head">
     <h4><Icon name="key-round" size={15} /> {$_('profiles.title')}</h4>
     <div class="add-row">
@@ -227,6 +235,17 @@
           <span class="detail" title={summary(p, $anonMode, $_)}>{summary(p, $anonMode, $_)}</span>
           {#if isWeak(p)}
             <span class="chip-flag">{$_('profiles.weak')}</span>
+          {:else}
+            <span></span>
+          {/if}
+          <!-- Only a v3 profile is accepted or refused by the trap listener: the
+               community of a v1 or v2c trap is not checked. -->
+          {#if p.version === 'v3'}
+            <button class="trap-chip" class:off={p.acceptTraps === false} aria-pressed={p.acceptTraps !== false}
+              title={p.acceptTraps === false ? $_('profiles.trapsOffTitle') : $_('profiles.trapsOnTitle')}
+              on:click={() => toggleTraps(p.id)}>
+              <Icon name="radio" size={12} /> {$_('profiles.trapsChip')}
+            </button>
           {:else}
             <span></span>
           {/if}
@@ -288,6 +307,7 @@
           <fieldset>
             <legend>{$_('profiles.usm')}</legend>
             <UsmFields bind:v3={editing.draft.v3} idPrefix="profile" {problems} />
+            <TrapAcceptToggle bind:checked={editing.draft.acceptTraps} hint={$_('profiles.acceptTrapsHint')} />
           </fieldset>
         {:else}
           <label class="fld">
@@ -441,7 +461,7 @@
 
   .list li {
     display: grid;
-    grid-template-columns: auto minmax(90px, 1fr) minmax(0, 2fr) auto auto auto auto auto;
+    grid-template-columns: auto minmax(90px, 1fr) minmax(0, 2fr) auto auto auto auto auto auto;
     align-items: center;
     gap: 8px;
     padding: 6px 10px;
@@ -489,6 +509,28 @@
     color: var(--warning-color);
     border: 1px solid var(--warning-color);
     white-space: nowrap;
+  }
+
+  .trap-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 7px;
+    border: 1px solid var(--accent-color);
+    border-radius: 9px;
+    background-color: var(--accent-subtle);
+    color: var(--accent-color);
+    font-size: 0.78em;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .trap-chip.off {
+    border-color: var(--border-color);
+    background-color: transparent;
+    color: var(--text-muted);
+    text-decoration: line-through;
   }
 
   .usage {

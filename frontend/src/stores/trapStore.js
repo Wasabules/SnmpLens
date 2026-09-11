@@ -82,16 +82,21 @@ function createTrapStore() {
     traps: initialTraps,
     isPanelVisible: false,
     isWindowFocused: true,
+    // The SNMPv3 users Go refused last time it was handed them, with its
+    // reasons — the Traps tab marks them.
+    refused: [],
   });
 
   // The SNMPv3 users last handed to Go, as JSON, so an unchanged set is not
   // sent again on every save of an unrelated setting.
   let appliedUsers = null;
 
-  // A user Go would not take is said once, by name and with Go's reason —
-  // never dropped in silence, since a device sending as that user would look
-  // exactly like a device sending nothing.
-  function reportRefused(info) {
+  // A user Go would not take is kept for the Traps tab and, when it matters,
+  // said once by name with Go's reason — never dropped in silence, since a
+  // device sending as that user would look exactly like one sending nothing.
+  function reportRefused(info, announce = true) {
+    update((s) => ({ ...s, refused: info?.refused || [] }));
+    if (!announce) return;
     const t = get(_);
     for (const r of info?.refused || []) {
       notificationStore.add(t('profiles.trapUserRefused', { values: { user: r.user, reason: r.reason } }), 'warning');
@@ -230,7 +235,7 @@ function createTrapStore() {
       }
       // Refusals matter to a listener that is running; reporting them on every
       // start of a window whose listener is off would be noise about nothing.
-      if (info?.restarted || get(trapStore).isListening) reportRefused(info);
+      reportRefused(info, !!(info?.restarted || get(trapStore).isListening));
     } catch (err) {
       update(store => ({ ...store, isListening: false }));
       notificationStore.add(t('traps.listenerError', { values: { error: err } }), 'error');

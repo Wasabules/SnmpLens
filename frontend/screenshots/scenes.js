@@ -91,8 +91,9 @@ function scene(base, name, { tab, theme = 'dark', width = 1600, height = 1000, s
  * The estate the target and credential scenes share, so the profile named in
  * one picture is the profile used in the other: the two edge routers migrated
  * to an SNMPv3 user of their own, a UPS that only speaks v1 on a port of its
- * own, and a lab still on MD5 and DES — which the list flags. Passphrases are
- * blank for the reason given on the settings scene.
+ * own, and a lab still on MD5 and DES — which the list flags — that is only
+ * polled, so it is kept out of the trap listener. Passphrases are blank for the
+ * reason given on the settings scene.
  */
 const PROFILED_ESTATE = {
   targets: [
@@ -112,7 +113,7 @@ const PROFILED_ESTATE = {
     },
     { id: 'p-ups00001', name: 'UPS (legacy v1)', version: 'v1', community: 'ups-ro' },
     {
-      id: 'p-lab00001', name: 'Lab', version: 'v3',
+      id: 'p-lab00001', name: 'Lab', version: 'v3', acceptTraps: false,
       v3: { user: 'lab', secLevel: 'AuthPriv', authProto: 'MD5', authPass: '', privProto: 'DES', privPass: '', contextName: '' },
     },
   ],
@@ -200,6 +201,9 @@ const CATALOGUE = [
   {
     base: 'trap-listener',
     tab: TABS.traps,
+    // Who the listener hears is named above the traps: the default user, the
+    // edge routers' own, and the lab kept out.
+    settings: { ...PROFILED_ESTATE, v3: { user: 'noc-ro', secLevel: 'AuthPriv', authProto: 'SHA256', privProto: 'AES' } },
     // "with their varbinds, the listener running" was true of neither: every
     // row was collapsed behind its chevron and the header said the listener was
     // stopped, next to a Start Listening button nobody had pressed.

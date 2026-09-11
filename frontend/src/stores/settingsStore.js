@@ -28,6 +28,9 @@ const defaults = {
     persist: false,
     maxCount: 1000,
     nativeNotifications: true,
+    // Whether the trap listener accepts SNMPv3 notifications from the default
+    // identifiers' user. A v3 profile has its own switch (`acceptTraps`).
+    acceptDefaultUser: true,
   },
   polling: {
     retentionDays: 30,

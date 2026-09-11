@@ -401,7 +401,19 @@
     "kindInform": "Inform (avec accusé)",
     "informAcked": "Inform acquitté par {target} en {ms} ms",
     "informFailed": "Inform non acquitté : {error}",
-    "informNoAck": "aucune réponse du récepteur"
+    "informNoAck": "aucune réponse du récepteur",
+    "reception": {
+      "title": "Réception des traps",
+      "defaultUser": "défaut",
+      "v3None": "aucun utilisateur : les traps v3 sont refusés",
+      "excluded": "{count, plural, one {# exclu} other {# exclus}}",
+      "excludedTitle": "Non acceptés pour les traps : {names}",
+      "anyCommunity": "toute communauté",
+      "anyCommunityTitle": "La communauté d’un trap v1 ou v2c n’est pas vérifiée : tous sont reçus.",
+      "manage": "Gérer les profils",
+      "userTitle": "Utilisateur SNMPv3 {user}, {level}",
+      "refused": "Refusé par l’écoute : {reason}"
+    }
   },
   "monitor": {
     "overrunTitle": "Cadence intenable.",
@@ -1200,7 +1212,7 @@
     "defaultTitle": "Identifiants par défaut",
     "defaultHint": "Utilisés par toute cible qui n’a pas de profil, dans la version SNMP choisie dans l’en-tête.",
     "title": "Profils d’identification",
-    "hint": "Des identifiants nommés à donner à une cible à la place de ceux par défaut : une communauté pour v1 et v2c, ou un utilisateur USM SNMPv3. Un profil porte sa propre version, et l’écoute des traps accepte aussi chaque profil v3.",
+    "hint": "Des identifiants nommés à donner à une cible à la place de ceux par défaut : une communauté pour v1 et v2c, ou un utilisateur USM SNMPv3. Un profil porte sa propre version. Les traps SNMPv3 reçus sont authentifiés avec chaque utilisateur coché pour les traps ; les traps v1 et v2c sont reçus quelle que soit leur communauté.",
     "addCommunity": "Profil de communauté",
     "addUsm": "Utilisateur SNMPv3",
     "empty": "Aucun profil pour l’instant : toutes les cibles utilisent les identifiants par défaut.",
@@ -1259,6 +1271,12 @@
       "shortPass": "Net-SNMP et la plupart des agents refusent une phrase secrète de moins de {min} caractères.",
       "md5": "MD5 est faible : préférez SHA-256 si l’agent le prend en charge.",
       "des": "DES est un chiffrement à 56 bits : préférez AES si l’agent le prend en charge."
-    }
+    },
+    "acceptTraps": "Accepter les traps SNMPv3 de cet utilisateur",
+    "acceptTrapsHint": "Les traps v3 reçus sont authentifiés avec chaque utilisateur coché ici. Décochez-le pour un utilisateur qui ne sert qu’à interroger.",
+    "acceptTrapsDefaultHint": "L’utilisateur par défaut est accepté comme n’importe quel profil v3. Décochez-le s’il ne sert qu’à interroger.",
+    "trapsChip": "traps",
+    "trapsOnTitle": "Accepté par l’écoute des traps — cliquer pour l’exclure",
+    "trapsOffTitle": "Non accepté par l’écoute des traps — cliquer pour l’accepter"
   }
 }

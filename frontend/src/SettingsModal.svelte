@@ -1,5 +1,5 @@
 <script>
-  import { createEventDispatcher, onMount } from 'svelte';
+  import { createEventDispatcher, onMount, tick } from 'svelte';
   import { GetPersistentMibDirectory } from '../wailsjs/go/main/App';
   import { onBackdrop } from './utils/modal';
   import { _ } from 'svelte-i18n';
@@ -18,6 +18,13 @@
 
   export let showDebug = false;
 
+  /**
+   * Where to open: `{ section, anchor }`, or null for the first section. Set
+   * through requestSettings — the Traps tab's "Manage profiles" opens the SNMP
+   * section at the credential profiles.
+   */
+  export let initial = null;
+
   // The sections, declared once instead of six times.
   //
   // They were six hand-written buttons, and the seventh was going to be a
@@ -33,7 +40,7 @@
     { id: 'service', icon: 'server-cog' },
   ];
 
-  let activeTab = 'general';
+  let activeTab = SECTIONS.some((s) => s.id === initial?.section) ? initial.section : 'general';
   let settings;
   let defaultMibPath = '';
 
@@ -42,6 +49,10 @@
   });
 
   onMount(async () => {
+    if (initial?.anchor) {
+      await tick();
+      document.getElementById(initial.anchor)?.scrollIntoView({ block: 'start' });
+    }
     try {
       defaultMibPath = await GetPersistentMibDirectory();
     } catch (e) {

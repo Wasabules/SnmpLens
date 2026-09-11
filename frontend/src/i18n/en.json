@@ -401,7 +401,19 @@
     "kindInform": "Inform (acknowledged)",
     "informAcked": "Inform acknowledged by {target} in {ms} ms",
     "informFailed": "Inform not acknowledged: {error}",
-    "informNoAck": "no response from the receiver"
+    "informNoAck": "no response from the receiver",
+    "reception": {
+      "title": "Trap reception",
+      "defaultUser": "default",
+      "v3None": "no user: v3 traps are refused",
+      "excluded": "{count} excluded",
+      "excludedTitle": "Not accepted for traps: {names}",
+      "anyCommunity": "any community",
+      "anyCommunityTitle": "The community of a v1 or v2c trap is not checked: every one is received.",
+      "manage": "Manage profiles",
+      "userTitle": "SNMPv3 user {user}, {level}",
+      "refused": "Refused by the listener: {reason}"
+    }
   },
   "monitor": {
     "overrunTitle": "Cannot keep up.",
@@ -1200,7 +1212,7 @@
     "defaultTitle": "Default identifiers",
     "defaultHint": "Used by every target that has no profile of its own, in the SNMP version chosen in the header.",
     "title": "Credential profiles",
-    "hint": "Named identifiers a target can be given instead of the defaults: a community for v1 and v2c, or an SNMPv3 USM user. A profile carries its own version, and the trap listener accepts every v3 profile as well.",
+    "hint": "Named identifiers a target can be given instead of the defaults: a community for v1 and v2c, or an SNMPv3 USM user. A profile carries its own version. Received SNMPv3 traps are authenticated against every user ticked for traps; v1 and v2c traps are received whatever their community.",
     "addCommunity": "Community profile",
     "addUsm": "SNMPv3 user",
     "empty": "No profile yet: every target uses the default identifiers.",
@@ -1259,6 +1271,12 @@
       "shortPass": "Net-SNMP and most agents refuse a passphrase shorter than {min} characters.",
       "md5": "MD5 is weak; prefer SHA-256 when the agent supports it.",
       "des": "DES is a 56-bit cipher; prefer AES when the agent supports it."
-    }
+    },
+    "acceptTraps": "Accept SNMPv3 traps from this user",
+    "acceptTrapsHint": "Received v3 traps are authenticated against every user ticked here. Untick it for a user that is only used to poll.",
+    "acceptTrapsDefaultHint": "The default user is accepted like any v3 profile. Untick it if it is only used to poll.",
+    "trapsChip": "traps",
+    "trapsOnTitle": "Accepted by the trap listener — click to exclude it",
+    "trapsOffTitle": "Not accepted by the trap listener — click to accept it"
   }
 }

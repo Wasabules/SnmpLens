@@ -307,4 +307,34 @@ const base = {
   check('an unknown id leaves the defaults', P.withProfile(base, 'p-none0001').community === 'public');
 }
 
+/* --- which users the trap listener accepts -------------------------------- */
+{
+  const quiet = { ...core, id: 'p-quiet001', name: 'Polled only', acceptTraps: false, v3: { ...core.v3, user: 'poller' } };
+  const optedOut = { ...base, traps: { acceptDefaultUser: false }, credentialProfiles: [core, quiet, edge] };
+  const users = P.trapUsers(optedOut).map((u) => u.user);
+  check('a profile opted out of traps is not accepted', !users.includes('poller'), users.join());
+  check('nor is the default user once unticked', !users.includes('default-user'), users.join());
+  check('a profile that says nothing is accepted: opting out is written on purpose', users.includes('ops'), users.join());
+
+  const rx = P.trapReception(optedOut);
+  check('the reception lists every v3 identity, accepted or not',
+    rx.map((u) => `${u.ref}:${u.accepted}`).join() === `${P.DEFAULT_REF}:false,${core.id}:true,${quiet.id}:false`,
+    rx.map((u) => `${u.ref}:${u.accepted}`).join());
+  check('a community profile is no part of it: its traps are received whatever the community',
+    !rx.some((u) => u.ref === edge.id));
+  check('an identity with no user name is not listed',
+    P.trapReception({ ...base, v3: { ...base.v3, user: '' }, credentialProfiles: [] }).length === 0);
+
+  check('a new v3 profile accepts traps', P.blankProfile('v3').acceptTraps === true);
+  check('a stored v3 profile without the field accepts traps',
+    P.normaliseProfile({ id: 'p-abcd1234', name: 'x', version: 'v3', v3: {} }).acceptTraps === true);
+  check('one that opted out stays out', P.normaliseProfile({ ...core, acceptTraps: false }).acceptTraps === false);
+  check('a community profile has no such switch', !('acceptTraps' in P.normaliseProfile({ ...edge, acceptTraps: false })));
+
+  const toggled = JSON.parse(JSON.stringify(base));
+  toggled.credentialProfiles[0].acceptTraps = false;
+  check('opting a profile out of traps is not a credential change: no session restarts for it',
+    P.changedCredentialRefs(base, toggled).size === 0);
+}
+
 process.exit(failures ? 1 : 0);

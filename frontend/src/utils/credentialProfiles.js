@@ -85,8 +85,12 @@ export function newProfileId(profiles = []) {
 /** A profile ready for the editor. */
 export function blankProfile(version, profiles = []) {
   const p = { id: newProfileId(profiles), name: '', version: PROFILE_VERSIONS.includes(version) ? version : 'v2c' };
-  if (p.version === 'v3') p.v3 = { ...NEW_V3 };
-  else p.community = '';
+  if (p.version === 'v3') {
+    p.v3 = { ...NEW_V3 };
+    p.acceptTraps = true;
+  } else {
+    p.community = '';
+  }
   return p;
 }
 
@@ -122,6 +126,11 @@ export function normaliseProfile(raw) {
     privPass: usesPriv(secLevel) ? str(v.privPass) : '',
     contextName: str(v.contextName),
   };
+  // Whether the trap listener accepts notifications from this user. Absent
+  // means yes, so opting out is written on purpose. Only an SNMPv3 profile has
+  // it: the community of a v1 or v2c notification is not checked, so a
+  // community profile has nothing to accept or refuse.
+  out.acceptTraps = raw.acceptTraps !== false;
   return out;
 }
 
@@ -274,7 +283,8 @@ export function validateProfile(profile, profiles = []) {
 
 /**
  * Every SNMPv3 user the trap listener should accept: the default identifiers'
- * v3 block when it names a user, then every v3 profile.
+ * v3 block when it names a user, then every v3 profile — each unless it was
+ * opted out (`settings.traps.acceptDefaultUser`, `profile.acceptTraps`).
  *
  * Reduced to what RECEIVING uses — no context name, nothing above the security
  * level — which is pkg/snmp's trapUser rule, so that the list compared here
@@ -301,9 +311,32 @@ export function trapUsers(settings) {
     seen.add(key);
     out.push(u);
   };
-  add(settings?.v3);
+  if (settings?.traps?.acceptDefaultUser !== false) add(settings?.v3);
   for (const p of settings?.credentialProfiles || []) {
-    if (p && p.version === 'v3') add(p.v3);
+    if (p && p.version === 'v3' && p.acceptTraps !== false) add(p.v3);
+  }
+  return out;
+}
+
+/**
+ * Who the trap listener hears, for the screens that say so: every SNMPv3
+ * identity there is — the default user, then each v3 profile — with whether it
+ * is accepted. One without a user name is left out, having nothing a
+ * notification could be matched against. Community profiles are not listed:
+ * a v1 or v2c notification is received whatever its community.
+ */
+export function trapReception(settings) {
+  const out = [];
+  const v3 = settings?.v3;
+  if (v3?.user) {
+    out.push({
+      ref: DEFAULT_REF, name: '', user: v3.user, secLevel: v3.secLevel || '',
+      accepted: settings?.traps?.acceptDefaultUser !== false,
+    });
+  }
+  for (const p of settings?.credentialProfiles || []) {
+    if (!p || p.version !== 'v3' || !p.v3?.user) continue;
+    out.push({ ref: p.id, name: p.name, user: p.v3.user, secLevel: p.v3.secLevel || '', accepted: p.acceptTraps !== false });
   }
   return out;
 }

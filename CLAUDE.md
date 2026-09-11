@@ -261,8 +261,8 @@ so a device with a profile — or merely a community of its own — was asked wi
 was an error that looked exactly like an unreachable device. The version picked in the Monitor form applies to the
 targets on the defaults.
 
-**The trap listener accepts every SNMPv3 user at once** — the default v3 block and every v3 profile — through
-gosnmp's `SnmpV3SecurityParametersTable` (`pkg/snmp/usm.go`). It used to take one user, so a device sending as any
+**The trap listener accepts every SNMPv3 user at once** — the default v3 block and every v3 profile, each unless
+it was opted out — through gosnmp's `SnmpV3SecurityParametersTable` (`pkg/snmp/usm.go`). It used to take one user, so a device sending as any
 other was dropped with nothing on screen. Three facts about gosnmp v1.43.2 decide the shape:
 
 - `listenUDP` asserts `Params.SecurityParameters` to `*UsmSecurityParameters` for EVERY v3 packet to compare engine
@@ -284,6 +284,15 @@ the listener can be started at login with no window to hand them over: `app_serv
 there, so a background listener dropped every v3 notification whatever the settings said. The renderer pushes the
 set once the stored credentials are open (`settingsReady` — before that the store holds sealed strings) and again
 whenever it changes.
+
+**Who is heard is the operator's choice, and the Traps tab says so.** A v3 profile carries `acceptTraps` and the
+default user `settings.traps.acceptDefaultUser`, ticked by default in the settings and switchable from a profile's
+row. Both are absent-means-yes, so opting out is written on purpose, and neither is a credential change: excluding
+a profile from traps restarts no session. A community profile has no such switch, because gosnmp does not check the
+community of a v1 or v2c notification — there is nothing to accept or refuse, and the Traps tab says "any
+community" rather than implying otherwise. That tab lists who is heard (`trapReception`), marks a user Go refused
+with its reason, and opens Settings at the profiles through `settingsRequest`, the sibling of `tabRequest` that
+carries a section and an anchor.
 
 gosnmp re-localises the keys to the SENDER's engine ID on receipt, which is what lets one table entry serve every
 device configured with that user. `pkg/snmp/usm_test.go` drives it end to end — a real sender with an engine of its
