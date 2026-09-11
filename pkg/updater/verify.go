@@ -57,13 +57,18 @@ func signatureEnforced() bool {
 	return false
 }
 
-// verifyManifestSignature checks that sigBase64 is a valid Ed25519 signature of
+// VerifySignature is exported because the release workflow verifies with THIS
+// function rather than a second implementation: a pipeline that checks
+// differently from the application can publish a release the application then
+// refuses, which is the one failure the signature exists to prevent.
+//
+// VerifySignature checks that sigBase64 is a valid Ed25519 signature of
 // manifest under ONE of the embedded public keys.
 //
 // A malformed entry is passed over rather than fatal: it must not be able to
 // refuse a manifest the next key would have accepted, and a list where no entry
 // is usable at all is the one case that reads as a broken build.
-func verifyManifestSignature(manifest, sigBase64 []byte) error {
+func VerifySignature(manifest, sigBase64 []byte) error {
 	sig, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(sigBase64)))
 	if err != nil {
 		return fmt.Errorf("decoding signature: %w", err)

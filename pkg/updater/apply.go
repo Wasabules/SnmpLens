@@ -173,7 +173,7 @@ func (s *Service) verifiedChecksum(ctx context.Context, checksumURL, sigURL, ass
 		if err != nil {
 			return "", fmt.Errorf("fetching signature: %w", err)
 		}
-		if err := verifyManifestSignature(manifest, sig); err != nil {
+		if err := VerifySignature(manifest, sig); err != nil {
 			return "", err
 		}
 		// AFTER the signature, not before: an unsigned manifest's version line

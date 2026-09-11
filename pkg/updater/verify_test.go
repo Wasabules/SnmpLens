@@ -49,14 +49,14 @@ func TestSignatureIsCheckedAgainstTheEmbeddedKey(t *testing.T) {
 	if !signatureEnforced() {
 		t.Fatal("a configured key must make the signature mandatory")
 	}
-	if err := verifyManifestSignature(manifest, sig); err != nil {
+	if err := VerifySignature(manifest, sig); err != nil {
 		t.Errorf("a manifest signed with the matching key must verify: %v", err)
 	}
 
 	// One byte of the manifest, changed after signing.
 	tampered := append([]byte{}, manifest...)
 	tampered[0] ^= 0x01
-	if err := verifyManifestSignature(tampered, sig); err == nil {
+	if err := VerifySignature(tampered, sig); err == nil {
 		t.Error("a modified manifest verified against its old signature")
 	}
 
@@ -65,7 +65,7 @@ func TestSignatureIsCheckedAgainstTheEmbeddedKey(t *testing.T) {
 	if otherPub == pub {
 		t.Fatal("two generated keys collided")
 	}
-	if err := verifyManifestSignature(manifest, otherSig); err == nil {
+	if err := VerifySignature(manifest, otherSig); err == nil {
 		t.Error("a signature from another key was accepted")
 	}
 }
@@ -84,13 +84,13 @@ func TestARotationTrustsTheOldKeyAndTheNewOne(t *testing.T) {
 	}
 	withKeys(t, arriving, retiring)
 
-	if err := verifyManifestSignature(manifest, retiringSig); err != nil {
+	if err := VerifySignature(manifest, retiringSig); err != nil {
 		t.Errorf("the transition release, signed with the retiring key, must verify: %v", err)
 	}
-	if err := verifyManifestSignature(manifest, arrivingSig); err != nil {
+	if err := VerifySignature(manifest, arrivingSig); err != nil {
 		t.Errorf("the release after it, signed with the arriving key, must verify: %v", err)
 	}
-	if err := verifyManifestSignature(manifest, strangerSig); err == nil {
+	if err := VerifySignature(manifest, strangerSig); err == nil {
 		t.Error("trusting two keys must not amount to trusting any key")
 	}
 }
@@ -105,7 +105,7 @@ func TestAMalformedEntryDoesNotStopTheOthers(t *testing.T) {
 	if !signatureEnforced() {
 		t.Fatal("a configured key must make the signature mandatory")
 	}
-	if err := verifyManifestSignature(manifest, sig); err != nil {
+	if err := VerifySignature(manifest, sig); err != nil {
 		t.Errorf("a manifest signed with a listed key must verify: %v", err)
 	}
 }
