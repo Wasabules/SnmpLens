@@ -1454,8 +1454,5 @@
     .device {
       flex-wrap: wrap;
     }
-    .community {
-      max-width: none;
-    }
   }
 </style>
