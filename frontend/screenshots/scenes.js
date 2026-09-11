@@ -88,6 +88,43 @@ function scene(base, name, { tab, theme = 'dark', width = 1600, height = 1000, s
 }
 
 /**
+ * The estate the target and credential scenes share, so the profile named in
+ * one picture is the profile used in the other: the two edge routers migrated
+ * to an SNMPv3 user of their own, a UPS that only speaks v1 on a port of its
+ * own, and a lab still on MD5 and DES — which the list flags — that is only
+ * polled, so it is kept out of the trap listener. Passphrases are blank for the
+ * reason given on the settings scene.
+ */
+const PROFILED_ESTATE = {
+  targets: [
+    '10.20.0.1 # core-sw-01',
+    '10.20.0.2 # core-sw-02',
+    '10.20.4.11 # dist-sw-2f',
+    '10.20.4.12 # dist-sw-3f',
+    '10.20.4.23 # dist-sw-4f',
+    '10.20.8.1 # edge-rtr-01',
+    '10.20.8.2 # edge-rtr-02',
+    '192.168.30.5 # ups-server-room',
+  ].join('\n'),
+  credentialProfiles: [
+    {
+      id: 'p-edge0001', name: 'Edge routers', version: 'v3',
+      v3: { user: 'noc-edge', secLevel: 'AuthPriv', authProto: 'SHA256', authPass: '', privProto: 'AES256C', privPass: '', contextName: '' },
+    },
+    { id: 'p-ups00001', name: 'UPS (legacy v1)', version: 'v1', community: 'ups-ro' },
+    {
+      id: 'p-lab00001', name: 'Lab', version: 'v3', acceptTraps: false,
+      v3: { user: 'lab', secLevel: 'AuthPriv', authProto: 'MD5', authPass: '', privProto: 'DES', privPass: '', contextName: '' },
+    },
+  ],
+  targetOverrides: {
+    '10.20.8.1': { profile: 'p-edge0001' },
+    '10.20.8.2': { profile: 'p-edge0001' },
+    '192.168.30.5': { profile: 'p-ups00001', port: 1161 },
+  },
+};
+
+/**
  * The catalogue, theme-independent. `base` is the file stem; the emitted scene
  * names — and therefore the file names — are `<base>-dark` and `<base>-light`.
  */
@@ -164,6 +201,9 @@ const CATALOGUE = [
   {
     base: 'trap-listener',
     tab: TABS.traps,
+    // Who the listener hears is named above the traps: the default user, the
+    // edge routers' own, and the lab kept out.
+    settings: { ...PROFILED_ESTATE, v3: { user: 'noc-ro', secLevel: 'AuthPriv', authProto: 'SHA256', privProto: 'AES' } },
     // "with their varbinds, the listener running" was true of neither: every
     // row was collapsed behind its chevron and the header said the listener was
     // stopped, next to a Start Listening button nobody had pressed.
@@ -213,20 +253,12 @@ const CATALOGUE = [
     // Framed to the dialog. At 1100 the lower half was empty backdrop, which
     // makes a documentation image about a dialog mostly about nothing.
     height: 940,
-    // A real estate rather than two devices: three groups, and per-device
-    // overrides on the two that were migrated to v3 while the rest were not,
-    // which is the situation the feature exists for.
+    // A real estate rather than two devices: three groups, the two edge
+    // routers migrated to a v3 credential profile while the rest were not, and
+    // a UPS that only speaks v1 on a port of its own — the situation profiles
+    // and overrides exist for.
     settings: {
-      targets: [
-        '10.20.0.1 # core-sw-01',
-        '10.20.0.2 # core-sw-02',
-        '10.20.4.11 # dist-sw-2f',
-        '10.20.4.12 # dist-sw-3f',
-        '10.20.4.23 # dist-sw-4f',
-        '10.20.8.1 # edge-rtr-01',
-        '10.20.8.2 # edge-rtr-02',
-        '192.168.30.5 # ups-server-room',
-      ].join('\n'),
+      ...PROFILED_ESTATE,
       targetGroups: [
         { id: 'default', name: 'Default' },
         { id: 'core', name: 'Core switches' },
@@ -238,28 +270,37 @@ const CATALOGUE = [
         '10.20.4.11': 'dist', '10.20.4.12': 'dist', '10.20.4.23': 'dist',
         '10.20.8.1': 'edge', '10.20.8.2': 'edge',
       },
-      targetOverrides: {
-        '10.20.8.1': { snmpVersion: 'v3', v3: { user: 'noc-ro', authProto: 'SHA-256', privProto: 'AES-256' } },
-        '10.20.8.2': { snmpVersion: 'v3', v3: { user: 'noc-ro', authProto: 'SHA-256', privProto: 'AES-256' } },
-        '192.168.30.5': { snmpVersion: 'v1', port: 1161 },
-      },
     },
     act: ['Target'],
-    describe: 'Managing targets: groups, per-device overrides, reachability.',
+    describe: 'Managing targets: groups, credential profiles, per-device overrides, reachability.',
   },
   {
     base: 'settings-snmp',
     tab: TABS.operations,
-    height: 1100,
+    height: 1500,
     // A named v3 user, with the passphrases BLANK — which is not an oversight.
     // The interface never receives a stored credential back from the backend,
     // so an empty field beside a filled username is what a configured
     // installation actually looks like.
+    //
+    // The values are the ones the selects hold, not their labels: this said
+    // 'authPriv', 'SHA-256' and 'AES-256', which match no option, so the
+    // picture showed three EMPTY selects under a comment describing a
+    // configured user.
     settings: {
-      v3: { user: 'noc-ro', secLevel: 'authPriv', authProto: 'SHA-256', privProto: 'AES-256' },
+      ...PROFILED_ESTATE,
+      v3: { user: 'noc-ro', secLevel: 'AuthPriv', authProto: 'SHA256', privProto: 'AES' },
     },
     act: ['key:,', 'SNMP'],
-    describe: 'SNMP defaults and the v3 credentials, with the store named.',
+    describe: 'The default identifiers, the credential profiles, and the store named.',
+  },
+  {
+    base: 'settings-profile',
+    tab: TABS.operations,
+    height: 1100,
+    settings: PROFILED_ESTATE,
+    act: ['key:,', 'SNMP', 'sel:.profiles .list li .btn-copy-small|0'],
+    describe: 'One credential profile: its SNMPv3 user, the targets given it, and a test.',
   },
   {
     base: 'settings-service',

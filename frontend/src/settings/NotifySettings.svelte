@@ -284,11 +284,16 @@
 
 <!-- Escape on the window, not on the overlay: a keydown starts at whatever
      has focus — a field inside the dialog — and the box below stops clicks,
-     which used to stop keys with them. The overlay handler never ran. -->
-<svelte:window on:keydown={(e) => {
+     which used to stop keys with them. The overlay handler never ran.
+
+     In the CAPTURE phase, and stopped once it has closed an editor. The
+     settings dialog around this one also closes on an Escape reaching the
+     window, while bubbling, so one key used to close both — the sink editor
+     and the whole settings dialog, with every unsaved change in it. -->
+<svelte:window on:keydown|capture={(e) => {
   if (e.key !== 'Escape') return;
-    if (editingSink) { editingSink = null; return; }
-    if (editingRoute) editingRoute = null;
+  if (editingSink) { editingSink = null; e.stopPropagation(); return; }
+  if (editingRoute) { editingRoute = null; e.stopPropagation(); }
 }} />
 
 <div class="notify-settings">

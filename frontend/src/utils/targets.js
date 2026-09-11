@@ -1,4 +1,5 @@
 import { anonymizeIp } from './anonymize';
+import { DEFAULT_REF, findProfile, hasCustomCredentials, profileIdentity } from './credentialProfiles.js';
 
 /**
  * Parse the multi-line targets string from settings into an array of IPs.
@@ -12,6 +13,33 @@ export function getTargetsAsArray(targetsString) {
     .map(t => t.trim())
     .filter(t => t.length > 0 && !t.startsWith('//'))
     .map(t => t.split('#')[0].trim());
+}
+
+/**
+ * Every configured target — enabled or not — with its label, once per address.
+ *
+ * A read-only view for the places that list targets without editing the text
+ * they live in: the credential profiles editor, where a disabled target can
+ * still be given a profile.
+ * @param {string} targetsString
+ * @returns {{ address: string, label: string, enabled: boolean }[]}
+ */
+export function parseTargetLines(targetsString) {
+  if (!targetsString) return [];
+  const out = [];
+  const seen = new Set();
+  for (const raw of targetsString.split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    const enabled = !line.startsWith('//');
+    const body = enabled ? line : line.slice(2).trim();
+    const hash = body.indexOf('#');
+    const address = (hash < 0 ? body : body.slice(0, hash)).trim();
+    if (!address || seen.has(address)) continue;
+    seen.add(address);
+    out.push({ address, label: hash < 0 ? '' : body.slice(hash + 1).trim(), enabled });
+  }
+  return out;
 }
 
 /**
@@ -68,38 +96,70 @@ export function targetTitle(address, anon) {
 }
 
 /**
- * Get effective settings for a specific target, merging global settings with per-target overrides.
+ * The settings a request to one target is built from.
+ *
+ * Identity first — who the request says it is — then transport. The identity
+ * comes from exactly one place, in this order: the target's credential profile,
+ * its own overrides (community, version, v3), or the default identifiers. A
+ * profile id that names nothing — deleted while something still held the id —
+ * falls back to the defaults, which is what the target would have had it never
+ * been given one.
+ *
+ * `credentialRef` says which of the three it was, so a monitoring session can
+ * record it and follow the profile afterwards: 'default', a profile id, or ''
+ * for the target's own overrides.
+ *
  * @param {object} settings - The full $settingsStore value
  * @param {string} address - Target address
  * @returns {object} Merged settings
  */
 export function getEffectiveSettings(settings, address) {
   const overrides = settings.targetOverrides?.[address];
-  if (!overrides) return settings;
+  if (!overrides) return { ...settings, credentialRef: DEFAULT_REF };
+
+  const profile = findProfile(settings, overrides.profile);
+  let identity;
+  if (profile) {
+    identity = { ...profileIdentity(profile), credentialRef: profile.id };
+  } else if (hasCustomCredentials(overrides)) {
+    identity = {
+      ...(overrides.community !== undefined && { community: overrides.community }),
+      ...(overrides.snmpVersion !== undefined && { snmpVersion: overrides.snmpVersion }),
+      v3: { ...settings.v3, ...(overrides.v3 || {}) },
+      credentialRef: '',
+    };
+  } else {
+    identity = { credentialRef: DEFAULT_REF };
+  }
+
   return {
     ...settings,
-    ...(overrides.community !== undefined && { community: overrides.community }),
-    ...(overrides.snmpVersion !== undefined && { snmpVersion: overrides.snmpVersion }),
+    ...identity,
     ...(overrides.port !== undefined && { port: overrides.port }),
     ...(overrides.timeout !== undefined && { timeout: overrides.timeout }),
     ...(overrides.retries !== undefined && { retries: overrides.retries }),
-    v3: { ...settings.v3, ...(overrides.v3 || {}) },
   };
 }
 
 /**
- * Group enabled targets by their effective SNMP config.
- * Returns groups that can each be sent as a single backend request.
+ * Group addresses by the connection a request to each would use, so that each
+ * group can be sent as one backend request.
+ *
+ * The identity reference is part of the key, not only the values it resolves
+ * to: two profiles holding the same credentials are still two groups, because a
+ * monitoring session records which one it follows.
+ *
  * @param {object} settings - The full $settingsStore value
+ * @param {string[]} addresses
  * @returns {{ targets: string[], effectiveSettings: object }[]}
  */
-export function groupTargetsByConfig(settings) {
-  const addresses = getTargetsAsArray(settings.targets);
+export function groupTargets(settings, addresses) {
   const groups = new Map();
 
   for (const addr of addresses) {
     const eff = getEffectiveSettings(settings, addr);
     const key = JSON.stringify({
+      ref: eff.credentialRef,
       community: eff.community,
       snmpVersion: eff.snmpVersion,
       port: eff.port,
@@ -114,4 +174,23 @@ export function groupTargetsByConfig(settings) {
   }
 
   return [...groups.values()];
+}
+
+/**
+ * Whether any of these targets authenticates with something other than the
+ * default identifiers — a profile or overrides of its own.
+ * @param {object} settings
+ * @param {string[]} addresses
+ */
+export function usesOwnIdentifiers(settings, addresses) {
+  return addresses.some((address) => getEffectiveSettings(settings, address).credentialRef !== DEFAULT_REF);
+}
+
+/**
+ * Group the enabled targets by their effective SNMP config.
+ * @param {object} settings - The full $settingsStore value
+ * @returns {{ targets: string[], effectiveSettings: object }[]}
+ */
+export function groupTargetsByConfig(settings) {
+  return groupTargets(settings, getTargetsAsArray(settings.targets));
 }

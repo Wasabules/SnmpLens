@@ -10,13 +10,16 @@ import {
   MonitorLoadSessionData,
   MonitorDeleteSession,
   MonitorAcceptSlow,
+  MonitorUpdateConnection,
   PresetBind,
 } from '../../wailsjs/go/main/App';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
 import { settingsStore } from './settingsStore';
 import { notificationStore } from './notifications';
 import { buildMonitorConnection } from '../utils/snmpParams';
-import { getEffectiveSettings } from '../utils/targets';
+import { getEffectiveSettings, groupTargets } from '../utils/targets';
+import { DEFAULT_REF, changedCredentialRefs, findProfile, profileIdentity } from '../utils/credentialProfiles.js';
+import { getState } from '../utils/crypto';
 
 // In-memory scope buffer, per (target x OID) series. The chart draws a sliding
 // window over this buffer and lets you travel back through it, so it has to be
@@ -123,6 +126,16 @@ function createPollingStore() {
   // `oid` accepts a single OID or a list: a session can watch several at once,
   // each rendered as its own small multiple (different OIDs have different
   // scales, so they must never share one plot).
+  //
+  // Each target is polled with ITS OWN identifiers — its credential profile,
+  // its overrides, or the defaults. This used the global settings for every
+  // target, so a device with a profile or a community of its own was asked with
+  // the default one and every reading came back an error, looking exactly like
+  // an unreachable device. A Go session holds one connection, so targets that
+  // authenticate differently get a session each. `snmpVersion` is the version
+  // of the targets on the default identifiers; a profile carries its own.
+  //
+  // Returns the ids of the sessions created: one, unless it had to split.
   async function startPolling(oid, targets, intervalMs, thresholds = null, snmpVersion = 'v2c', name = '') {
     // Deduplicate: the same OID twice would poll twice, draw two identical
     // curves and collide as a key in the channel picker.
@@ -151,42 +164,70 @@ function createPollingStore() {
     // The connection is persisted WITH the session: a background poll has no
     // renderer to ask for it, and after a restart there is no renderer at all.
     const settings = get(settingsStore);
-    const conn = buildMonitorConnection({ ...settings, snmpVersion });
+    const groups = groupTargets({ ...settings, snmpVersion }, targets);
+    const split = groups.length > 1;
+    const t = get(_);
+    const baseName = (name || '').trim();
+    const ids = [];
 
-    let id;
-    try {
-      id = await MonitorCreateSession(oidKey, targets, intervalMs, snmpVersion, thresholdsPayload, name, conn);
-    } catch (e) {
-      notificationStore.add(String(e), 'error');
-      throw e;
+    for (const group of groups) {
+      const effective = group.effectiveSettings;
+      const version = effective.snmpVersion || snmpVersion;
+      const conn = buildMonitorConnection({ ...effective, snmpVersion: version });
+      const sessionName = split
+        ? [baseName, groupLabel(group, settings, t)].filter(Boolean).join(' · ')
+        : baseName;
+
+      let id;
+      try {
+        id = await MonitorCreateSession(oidKey, group.targets, intervalMs, version, thresholdsPayload, sessionName, conn);
+      } catch (e) {
+        notificationStore.add(String(e), 'error');
+        throw e;
+      }
+
+      // Built through the SAME function as a session restored from Go. It used
+      // to be a second object literal here, and it had already drifted: it
+      // never set needsConnection, so the field consumers test was simply
+      // absent on every session created in this window and present on every
+      // restored one.
+      update((sessions) => [...sessions, {
+        ...sessionFromBackend({
+          id,
+          name: sessionName,
+          oid: oidKey,
+          targets: group.targets,
+          intervalMs,
+          snmpVersion: version,
+          startedAt: new Date().toISOString(),
+          thresholds: thresholdsPayload || {},
+          conn,
+        }),
+        running: true,
+      }]);
+
+      try {
+        await MonitorStart(id);
+      } catch (e) {
+        notificationStore.add(String(e), 'error');
+        markRunning(id, false);
+      }
+      ids.push(id);
     }
 
-    // Built through the SAME function as a session restored from Go. It used
-    // to be a second object literal here, and it had already drifted: it never
-    // set needsConnection, so the field consumers test was simply absent on
-    // every session created in this window and present on every restored one.
-    update((sessions) => [...sessions, {
-      ...sessionFromBackend({
-        id,
-        name: (name || '').trim(),
-        oid: oidKey,
-        targets,
-        intervalMs,
-        snmpVersion,
-        startedAt: new Date().toISOString(),
-        thresholds: thresholdsPayload || {},
-        conn,
-      }),
-      running: true,
-    }]);
-
-    try {
-      await MonitorStart(id);
-    } catch (e) {
-      notificationStore.add(String(e), 'error');
-      markRunning(id, false);
+    if (split) {
+      notificationStore.add(t('profiles.pollingSplit', { values: { count: ids.length } }), 'info');
     }
-    return id;
+    return ids;
+  }
+
+  // What tells the sessions of one split apart: the profile's name, the
+  // default identifiers, or the targets' own.
+  function groupLabel(group, settings, t) {
+    const ref = group.effectiveSettings.credentialRef;
+    if (ref === DEFAULT_REF) return t('profiles.defaultShort');
+    const profile = findProfile(settings, ref);
+    return profile ? profile.name : t('profiles.customShort');
   }
 
   function markRunning(sessionId, running) {
@@ -262,6 +303,14 @@ function createPollingStore() {
       // from Go; the UI offers to re-arm it with the current settings rather
       // than failing silently.
       needsConnection: !s.conn,
+      // Which identifiers the session was built from — 'default', a credential
+      // profile's id, or '' — so it can follow them when they change; and how
+      // it reaches its targets, which following them must not change. Read
+      // from the stored connection, which holds an id and nothing secret. The
+      // connection itself is NOT kept: the one startPolling passes in still
+      // carries the community and the passphrases.
+      credentialRef: s.conn?.profile || '',
+      transport: s.conn ? { port: s.conn.port, timeoutSec: s.conn.timeoutSec, retries: s.conn.retries } : null,
       // The dashboard layout this session was bound with, or null. A SNAPSHOT:
       // Go took it when the preset was bound, so editing the file afterwards
       // changes nothing here.
@@ -410,12 +459,11 @@ function createPollingStore() {
    * Bind a preset to one equipment: Go creates the session, stores it and
    * starts it, and this takes the result into the store.
    *
-   * The connection comes from THAT TARGET's effective settings, not from the
-   * global ones. startPolling uses the global settings because one session can
-   * span several equipments and there is no single answer; a preset is bound to
-   * exactly one, so there is — and using the global community against a device
-   * that has an override means every reading is an error, reported far from the
-   * cause and looking like an unreachable device.
+   * The connection comes from THAT TARGET's effective settings — its profile,
+   * its overrides or the defaults — never from the global ones: using the
+   * global community against a device that has its own means every reading is
+   * an error, reported far from the cause and looking like an unreachable
+   * device.
    */
   async function bindPreset(file, address, settings) {
     const effective = getEffectiveSettings(settings, address);
@@ -425,11 +473,71 @@ function createPollingStore() {
     return adoptSession(session);
   }
 
+  /**
+   * Make every session follow the identifiers it was built from, after the
+   * settings changed.
+   *
+   * A session is a SNAPSHOT of its connection — Go keeps its credentials in the
+   * OS store and polls with them windowless — so rotating a profile's
+   * passphrase used to leave every session built from that profile failing
+   * authentication until somebody rebound it by hand. Each session whose
+   * profile, or the default identifiers, changed now gets the new credentials
+   * and keeps its own transport: what changed is who it says it is, not how it
+   * reaches the device. A running session is restarted by Go to take them.
+   *
+   * Only while the stored credentials are open: with a locked keychain the
+   * passphrases are blank in memory, and this would replace working sessions'
+   * credentials with nothing.
+   *
+   * @returns {Promise<number>} how many sessions were updated
+   */
+  async function followCredentials(before, after) {
+    if (getState() !== 'ok') return 0;
+    const refs = changedCredentialRefs(before, after);
+    if (refs.size === 0) return 0;
+
+    let updated = 0;
+    for (const s of get({ subscribe })) {
+      if (!s.credentialRef || !refs.has(s.credentialRef) || !s.transport) continue;
+
+      let identity;
+      if (s.credentialRef === DEFAULT_REF) {
+        // The defaults carry no version of their own — it is picked when a
+        // session starts — so the session keeps the one it has.
+        identity = { snmpVersion: s.snmpVersion, community: after.community, v3: after.v3 };
+      } else {
+        const profile = findProfile(after, s.credentialRef);
+        if (!profile) continue;
+        identity = profileIdentity(profile);
+      }
+
+      const conn = {
+        ...buildMonitorConnection({ ...after, ...identity, credentialRef: s.credentialRef }),
+        port: s.transport.port,
+        timeoutSec: s.transport.timeoutSec,
+        retries: s.transport.retries,
+      };
+      try {
+        await MonitorUpdateConnection(s.id, identity.snmpVersion, conn);
+        updated++;
+        update((sessions) => sessions.map((x) => (x.id === s.id ? { ...x, snmpVersion: identity.snmpVersion } : x)));
+      } catch (e) {
+        notificationStore.add(String(e), 'error');
+      }
+    }
+
+    if (updated > 0) {
+      notificationStore.add(get(_)('profiles.sessionsUpdated', { values: { count: updated } }), 'info');
+    }
+    return updated;
+  }
+
   return {
     subscribe,
     acceptSlow,
     adoptSession,
     bindPreset,
+    followCredentials,
     startPolling,
     resumeSession,
     stopPolling,

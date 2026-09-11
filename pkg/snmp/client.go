@@ -84,6 +84,17 @@ type Client struct {
 	trapListener *gosnmp.TrapListener
 	trapBound    chan struct{} // closed once the socket is bound
 	trapDone     chan struct{} // closed once Listen has returned
+	// trapPort and trapUsers are what the running listener was started with,
+	// under trapMu: UpdateTrapUsers restarts on the same port, and only when
+	// the users differ.
+	trapPort  int
+	trapUsers []V3Params
+	// trapLife serialises the listener's LIFECYCLE — start, stop, and a change
+	// of users, which is a stop and a start back to back; another start or
+	// stop landing between the two would be undone by the second. Separate
+	// from trapMu because a stop waits for the listen goroutine, and that
+	// goroutine takes trapMu to clear the field.
+	trapLife     sync.Mutex
 	debugEnabled bool
 	debugLog     []DebugEntry
 	debugMu      sync.Mutex
@@ -170,43 +181,13 @@ func (c *Client) newGoSNMP(target, community, version string, port, timeoutSec, 
 		g.Version = gosnmp.Version3
 		g.ContextName = v3.ContextName
 
-		secLevel, err := getSecurityLevel(v3.SecLevel)
+		usm, secLevel, err := usmFor(v3)
 		if err != nil {
 			return nil, err
 		}
-		authProto, err := getAuthProtocol(v3.AuthProto)
-		if err != nil {
-			return nil, err
-		}
-		privProto, err := getPrivProtocol(v3.PrivProto)
-		if err != nil {
-			return nil, err
-		}
-
-		// Privacy only applies at AuthPriv, authentication only at Auth* levels.
-		// The UI keeps its default protocols even when the corresponding fields
-		// are disabled, so a stale PrivProto (DES by default) — or AuthProto —
-		// can be sent with a lower security level. gosnmp then rejects the
-		// request ("PrivacyPassphrase is required when a privacy protocol is
-		// specified"), which surfaced as SNMPv3 auth failures. Force the
-		// protocols to match the security level. Fixes #3 (reported by
-		// @JessonJiang).
-		if secLevel != gosnmp.AuthPriv {
-			privProto = gosnmp.NoPriv
-		}
-		if secLevel == gosnmp.NoAuthNoPriv {
-			authProto = gosnmp.NoAuth
-		}
-
 		g.SecurityModel = gosnmp.UserSecurityModel
 		g.MsgFlags = secLevel
-		g.SecurityParameters = &gosnmp.UsmSecurityParameters{
-			UserName:                 v3.User,
-			AuthenticationProtocol:   authProto,
-			AuthenticationPassphrase: v3.AuthPass,
-			PrivacyProtocol:          privProto,
-			PrivacyPassphrase:        v3.PrivPass,
-		}
+		g.SecurityParameters = usm
 	default:
 		return nil, fmt.Errorf("unsupported SNMP version: %s", version)
 	}

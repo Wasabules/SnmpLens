@@ -98,6 +98,26 @@ function fields(settings) {
       }
     }
   }
+  // Credential profiles, keyed by the profile's ID — never its position and
+  // never its name — for the reason the override keys are addresses: a profile
+  // added, renamed or deleted while the store was locked must still get ITS
+  // OWN sealed values back. Only the fields a profile has: normaliseProfile has
+  // already dropped the credential of the other kind.
+  const profiles = Array.isArray(settings.credentialProfiles) ? settings.credentialProfiles : [];
+  for (const p of profiles) {
+    if (!p || typeof p.id !== 'string') continue;
+    if ('community' in p) {
+      out.push({ key: `p:${p.id}.community`, get: () => p.community, set: (v) => { p.community = v; } });
+    }
+    if (p.v3) {
+      if ('authPass' in p.v3) {
+        out.push({ key: `p:${p.id}.v3.authPass`, get: () => p.v3.authPass, set: (v) => { p.v3.authPass = v; } });
+      }
+      if ('privPass' in p.v3) {
+        out.push({ key: `p:${p.id}.v3.privPass`, get: () => p.v3.privPass, set: (v) => { p.v3.privPass = v; } });
+      }
+    }
+  }
   return out;
 }
 

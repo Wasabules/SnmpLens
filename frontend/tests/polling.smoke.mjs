@@ -11,11 +11,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const calls = { created: [], started: [], stopped: [], saved: [], accepted: [], bound: [] };
+const calls = { created: [], started: [], stopped: [], saved: [], accepted: [], bound: [], updated: [] };
 const handlers = {};
 
 globalThis.__stub = {
-  MonitorCreateSession: async (...a) => { calls.created.push(a); return 'sess-1'; },
+  // A distinct id per session: targets that authenticate differently get one
+  // session each, and two sessions sharing an id would be one in the store.
+  MonitorCreateSession: async (...a) => { calls.created.push(a); return 'sess-' + calls.created.length; },
   MonitorStart: async (id) => { calls.started.push(id); },
   MonitorStop: async (id) => { calls.stopped.push(id); },
   MonitorRunning: async () => calls.started.filter((id) => !calls.stopped.includes(id)),
@@ -24,6 +26,7 @@ globalThis.__stub = {
   MonitorLoadSessionData: async () => [],
   MonitorDeleteSession: async () => {},
   MonitorAcceptSlow: async (id) => { calls.accepted.push(id); },
+  MonitorUpdateConnection: async (...a) => { calls.updated.push(a); },
   PresetBind: async (file, target, snmpVersion, conn) => {
     calls.bound.push({ file, target, snmpVersion, conn });
     return {
@@ -55,6 +58,7 @@ export const MonitorLoadSessions = (...a) => s.MonitorLoadSessions(...a);
 export const MonitorLoadSessionData = (...a) => s.MonitorLoadSessionData(...a);
 export const MonitorDeleteSession = (...a) => s.MonitorDeleteSession(...a);
 export const MonitorAcceptSlow = (...a) => s.MonitorAcceptSlow(...a);
+export const MonitorUpdateConnection = (...a) => s.MonitorUpdateConnection(...a);
 export const PresetBind = (...a) => s.PresetBind(...a);
 export const EventsOn = (...a) => s.EventsOn(...a);
 export const ListMibFiles = async () => [];
@@ -75,7 +79,7 @@ const alias = {
   },
 };
 
-const entry = new URL('../src/stores/pollingStore.js', import.meta.url).pathname.replace(/^[/]([A-Za-z]:)/, '$1');
+const entry = new URL('./fixtures/polling-entry.js', import.meta.url).pathname.replace(/^[/]([A-Za-z]:)/, '$1');
 const out = join(dir, 'bundle.mjs');
 await esbuild.build({
   entryPoints: [entry],
@@ -95,7 +99,7 @@ if (!globalThis.navigator) {
   Object.defineProperty(globalThis, 'navigator', { value: { language: 'en' }, configurable: true });
 }
 
-const { pollingStore, normalisePoint } = await import(pathToFileURL(out).href);
+const { pollingStore, normalisePoint, settingsStore, addMessages, initI18n } = await import(pathToFileURL(out).href);
 const { get } = await import('svelte/store');
 
 let failures = 0;
@@ -107,7 +111,7 @@ const check = (name, ok, extra = '') => {
 const OIDS = ['1.3.6.1.2.1.1.3.0', '1.3.6.1.2.1.2.2.1.10.1'];
 const TARGETS = ['10.0.0.1', '10.0.0.2'];
 
-const id = await pollingStore.startPolling(
+const [id] = await pollingStore.startPolling(
   OIDS, TARGETS, 5000,
   { [OIDS[0]]: { min: 0, max: 5, forSeconds: 30 } }, 'v2c', 'smoke',
 );
@@ -281,13 +285,10 @@ check('the session reads as stopped', !!s && s.running === false);
     pollingStore.adoptSession({ id: 'legacy-1', oid: '1.1', targets: ['x'], intervalMs: 1000 }).needsConnection === true);
 }
 
-// Binding a preset uses THAT TARGET's settings, not the global ones.
-//
-// startPolling uses the global settings because one session can span several
-// equipments and there is no single answer. A preset is bound to exactly one,
-// so there is — and polling a device that has an override with the global
-// community makes every reading an error, reported far from the cause and
-// looking exactly like an unreachable device.
+// Binding a preset uses THAT TARGET's settings, not the global ones: polling a
+// device that has an override with the global community makes every reading an
+// error, reported far from the cause and looking exactly like an unreachable
+// device.
 {
   const withOverride = {
     community: 'global-community',
@@ -339,6 +340,74 @@ check('the session reads as stopped', !!s && s.running === false);
   check('an unknown address has nothing bound', boundPresetsFor(sessions, '10.9.9.9').length === 0);
   check('and it survives what the store really holds',
     boundPresetsFor(undefined, '10.0.0.1').length === 0 && boundPresetsFor(sessions, '').length === 0);
+}
+
+// Credential profiles.
+//
+// A target given a profile is polled WITH it — its version, its user — and a
+// session over targets that authenticate differently is split, one per set of
+// identifiers, since one Go session holds one connection. And a session FOLLOWS
+// its profile: a rotated passphrase reaches the sessions built from it instead
+// of leaving them failing authentication until somebody rebinds them.
+{
+  // The application's i18n module writes the locale onto <html lang>, and
+  // there is no document under node.
+  globalThis.document ??= { documentElement: { setAttribute() {} } };
+  addMessages('en', JSON.parse(readFileSync(new URL('../src/i18n/en.json', import.meta.url), 'utf8')));
+  initI18n({ fallbackLocale: 'en', initialLocale: 'en' });
+
+  const core = {
+    id: 'p-core1234', name: 'Core', version: 'v3',
+    v3: { user: 'ops', secLevel: 'AuthPriv', authProto: 'SHA', authPass: 'core-auth-123',
+      privProto: 'AES', privPass: 'core-priv-123', contextName: '' },
+  };
+  settingsStore.save({
+    ...get(settingsStore),
+    community: 'public-default',
+    targets: '10.1.0.1\n10.1.0.2',
+    credentialProfiles: [core],
+    targetOverrides: { '10.1.0.2': { profile: core.id, port: 1161 } },
+  });
+
+  const createdBefore = calls.created.length;
+  const ids = await pollingStore.startPolling(['1.3.6.1.2.1.1.3.0'], ['10.1.0.1', '10.1.0.2'], 5000, null, 'v2c', 'wan');
+  const made = calls.created.slice(createdBefore);
+
+  check('targets that authenticate differently get a session each', ids.length === 2 && made.length === 2,
+    `${ids.length} ids, ${made.length} created`);
+  const plain = made.find((a) => a[1].join() === '10.1.0.1');
+  const profiled = made.find((a) => a[1].join() === '10.1.0.2');
+  check('the default target keeps the version picked for the session', plain?.[3] === 'v2c', plain?.[3]);
+  check('and the default community', plain?.[6]?.community === 'public-default', plain?.[6]?.community);
+  check('the profiled target speaks its profile’s version', profiled?.[3] === 'v3', profiled?.[3]);
+  check('as its profile’s user', profiled?.[6]?.v3?.User === 'ops', profiled?.[6]?.v3?.User);
+  check('without the default community riding along', profiled?.[6]?.community === '', profiled?.[6]?.community);
+  check('on its own port', profiled?.[6]?.port === 1161, String(profiled?.[6]?.port));
+  check('and the session records the profile it follows', profiled?.[6]?.profile === core.id, profiled?.[6]?.profile);
+  check('the two sessions are told apart by name',
+    plain?.[5] !== profiled?.[5] && String(profiled?.[5]).includes('Core'), `${plain?.[5]} / ${profiled?.[5]}`);
+
+  // Rotate the profile's passphrase.
+  const now = get(settingsStore);
+  const rotated = JSON.parse(JSON.stringify(now));
+  rotated.credentialProfiles[0].v3.authPass = 'rotated-auth-456';
+  const updatedBefore = calls.updated.length;
+  const n = await pollingStore.followCredentials(now, rotated);
+  const updates = calls.updated.slice(updatedBefore);
+  const profiledId = ids[made.indexOf(profiled)];
+
+  check('a rotated passphrase reaches the session built from the profile',
+    updates.some(([sid, , conn]) => sid === profiledId && conn.v3.AuthPass === 'rotated-auth-456'),
+    JSON.stringify(updates.map(([sid]) => sid)));
+  check('and only that one', n === 1 && updates.length === 1, `${n} updated`);
+  check('keeping its own transport', updates[0]?.[2]?.port === 1161, String(updates[0]?.[2]?.port));
+  check('and its profile’s version', updates[0]?.[1] === 'v3', updates[0]?.[1]);
+
+  // A restart throws away the samples deltas and rates are derived from, so
+  // nothing that did not change may cause one.
+  const quiet = calls.updated.length;
+  await pollingStore.followCredentials(rotated, JSON.parse(JSON.stringify(rotated)));
+  check('an unchanged profile restarts nothing', calls.updated.length === quiet);
 }
 
 process.exit(failures ? 1 : 0);

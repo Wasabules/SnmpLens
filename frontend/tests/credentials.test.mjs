@@ -389,4 +389,69 @@ for (const scenario of [
   check('reset removes the legacy key too', store.getItem('_snmplens_ek') === null);
 }
 
+// --- credential profiles ---
+//
+// A profile's secrets are sealed and opened like every other credential, and
+// they are KEYED BY THE PROFILE'S ID: a profile renamed, reordered, added or
+// deleted while the store was locked must get its own sealed values back,
+// never a neighbour's.
+const withProfiles = () => ({
+  ...settings(),
+  credentialProfiles: [
+    { id: 'p-aaaa1111', name: 'Edge', version: 'v2c', community: 'enc:EDGE-COMMUNITY' },
+    { id: 'p-bbbb2222', name: 'Core', version: 'v3',
+      v3: { user: 'ops', secLevel: 'AuthPriv', authProto: 'SHA', authPass: 'enc:CORE-AUTH',
+        privProto: 'AES', privPass: 'enc:CORE-PRIV', contextName: '' } },
+  ],
+});
+
+{
+  const m = await load(working, makeStorage());
+  const s = withProfiles();
+  await m.decryptSettings(s);
+  check('a profile community is opened', s.credentialProfiles[0].community === 'EDGE-COMMUNITY',
+    s.credentialProfiles[0].community);
+  check('a profile passphrase is opened',
+    s.credentialProfiles[1].v3.authPass === 'CORE-AUTH' && s.credentialProfiles[1].v3.privPass === 'CORE-PRIV');
+  check('a user name is not a secret and is left alone', s.credentialProfiles[1].v3.user === 'ops');
+
+  const sealed = await m.encryptSettings(s);
+  check('profile secrets are sealed',
+    sealed.credentialProfiles[0].community.startsWith('enc:') &&
+    sealed.credentialProfiles[1].v3.privPass.startsWith('enc:'));
+  check('and nothing a profile does not have is invented', !('community' in sealed.credentialProfiles[1]),
+    JSON.stringify(Object.keys(sealed.credentialProfiles[1])));
+}
+
+{
+  const store = makeStorage({ settings: JSON.stringify(withProfiles()) });
+  const m = await load({
+    ...working,
+    SettingsKeyStatus: async () => ({ backend: 'windows-dpapi', available: true, hasKey: true }),
+    SettingsOpen: async () => { throw new Error('cannot be decrypted with the stored key'); },
+  }, store);
+  await waitFor(() => m.getState() === 'locked', 'state locked');
+
+  let current;
+  const stop = m.settingsStore.subscribe((v) => { current = v; });
+  await m.settingsStore.save({
+    ...current,
+    credentialProfiles: [
+      { ...current.credentialProfiles[1], name: 'Core (renamed)' },
+      { id: 'p-cccc3333', name: 'New', version: 'v2c', community: 'typed-while-locked' },
+      current.credentialProfiles[0],
+    ],
+  });
+  stop();
+
+  const raw = store.getItem('settings');
+  const byId = Object.fromEntries(JSON.parse(raw).credentialProfiles.map((p) => [p.id, p]));
+  check('[locked] a moved profile keeps ITS sealed passphrase',
+    byId['p-bbbb2222']?.v3?.authPass === 'enc:CORE-AUTH', JSON.stringify(byId['p-bbbb2222']?.v3?.authPass));
+  check('[locked] and its neighbour keeps its own',
+    byId['p-aaaa1111']?.community === 'enc:EDGE-COMMUNITY', JSON.stringify(byId['p-aaaa1111']?.community));
+  check('[locked] a profile added while locked is not written in the clear', !raw.includes('typed-while-locked'));
+  check('[locked] the rename, which is not a secret, still persisted', byId['p-bbbb2222']?.name === 'Core (renamed)');
+}
+
 process.exit(failures ? 1 : 0);

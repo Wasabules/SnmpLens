@@ -47,9 +47,14 @@ type DiscoverRequest struct {
 }
 
 // TrapListenerRequest holds parameters for starting a trap listener.
+//
+// Users is every SNMPv3 USM user the listener accepts: the default identifiers'
+// v3 block when it names a user, then every v3 credential profile. A list,
+// because one listener hears every device at once and devices are configured
+// with different users.
 type TrapListenerRequest struct {
-	Port int      `json:"port"`
-	V3   V3Params `json:"v3"`
+	Port  int        `json:"port"`
+	Users []V3Params `json:"users"`
 }
 
 // SetMultiRequest writes several varbinds in one PDU, which is what creating

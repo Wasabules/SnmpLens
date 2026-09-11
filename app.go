@@ -395,11 +395,6 @@ func (a *App) SendTrap(target string, port int, community, version, trapOid stri
 	return a.snmpClient.SendTrap(target, port, community, version, trapOid, variables)
 }
 
-// StartTrapListener starts listening for SNMP traps.
-func (a *App) StartTrapListener(req snmp.TrapListenerRequest) error {
-	return a.snmpClient.StartTrapListener(req.Port, req.V3)
-}
-
 // StopTrapListener stops the active trap listener.
 func (a *App) StopTrapListener() {
 	a.snmpClient.StopTrapListener()

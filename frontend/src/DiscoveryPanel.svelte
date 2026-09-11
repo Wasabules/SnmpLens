@@ -10,6 +10,7 @@
   import { anonMode, anonymizeIp, anonymizeHost, maskSysDescr, anonymizeCidr } from './utils/anonymize';
   import { targetLabels } from './stores/targetLabels';
   import { displayTarget, targetTitle } from './utils/targets';
+  import { assignProfile, findProfile, withProfile } from './utils/credentialProfiles.js';
 
   let activeSubTab = 'discovery'; // 'discovery' | 'ping' | 'traceroute'
 
@@ -19,6 +20,19 @@
   let results = [];
   let progress = { current: 0, total: 0, ip: '' };
   let showOnlyReachable = false;
+
+  // The identifiers the scan asks with: '' for the defaults, or a credential
+  // profile's id. A device found this way is added WITH that profile — it
+  // answered to those identifiers, and to nothing else we know of.
+  let scanProfile = '';
+  $: if (scanProfile && !findProfile($settingsStore, scanProfile)) scanProfile = '';
+
+  function withScanProfile(overrides, addresses) {
+    let next = overrides || {};
+    if (!scanProfile) return next;
+    for (const address of addresses) next = assignProfile(next, address, scanProfile);
+    return next;
+  }
 
   // Ping state
   let pingTarget = '';
@@ -50,7 +64,7 @@
     });
 
     try {
-      results = await SnmpDiscover(buildDiscoverRequest($settingsStore, cidr.trim(), scanTimeout));
+      results = await SnmpDiscover(buildDiscoverRequest(withProfile($settingsStore, scanProfile), cidr.trim(), scanTimeout));
       notificationStore.add(t('discovery.scanComplete', { values: { count: reachableCount, total: results.length } }), 'success');
     } catch (err) {
       notificationStore.add(t('discovery.scanFailed', { values: { error: err } }), 'error');
@@ -69,7 +83,11 @@
       return;
     }
     lines.push(ip);
-    settingsStore.save({ ...$settingsStore, targets: lines.join('\n') });
+    settingsStore.save({
+      ...$settingsStore,
+      targets: lines.join('\n'),
+      targetOverrides: withScanProfile($settingsStore.targetOverrides, [ip]),
+    });
     notificationStore.add(t('discovery.addedToTargets', { values: { ip } }), 'success');
   }
 
@@ -77,15 +95,19 @@
     const t = get(_);
     const current = $settingsStore.targets || '';
     const lines = current.split('\n').map(l => l.trim()).filter(l => l);
-    let added = 0;
+    const added = [];
     for (const r of results) {
       if (r.reachable && !lines.includes(r.ip)) {
         lines.push(r.ip);
-        added++;
+        added.push(r.ip);
       }
     }
-    if (added > 0) {
-      settingsStore.save({ ...$settingsStore, targets: lines.join('\n') });
+    if (added.length > 0) {
+      settingsStore.save({
+        ...$settingsStore,
+        targets: lines.join('\n'),
+        targetOverrides: withScanProfile($settingsStore.targetOverrides, added),
+      });
       notificationStore.add(t('discovery.addedMultiple', { values: { count: added } }), 'success');
     } else {
       notificationStore.add(t('discovery.allAlreadyInTargets'), 'info');
@@ -160,6 +182,15 @@
           <input id="discovery-cidr" type="text" bind:value={cidr} placeholder={$_('discovery.cidrPlaceholder')} />
         </div>
         <div class="form-row">
+          <div class="form-group compact">
+            <label for="discovery-profile">{$_('profiles.identifiers')}</label>
+            <select id="discovery-profile" bind:value={scanProfile}>
+              <option value="">{$_('profiles.useDefault')}</option>
+              {#each $settingsStore.credentialProfiles || [] as p (p.id)}
+                <option value={p.id}>{p.name} · {p.version}</option>
+              {/each}
+            </select>
+          </div>
           <div class="form-group compact">
             <label for="discovery-timeout">{$_('discovery.timeoutLabel')}</label>
             <select id="discovery-timeout" bind:value={scanTimeout}>

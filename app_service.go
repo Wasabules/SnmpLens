@@ -7,7 +7,6 @@ import (
 	"SnmpLens/pkg/autostart"
 	"SnmpLens/pkg/events"
 	"SnmpLens/pkg/service"
-	"SnmpLens/pkg/snmp"
 	"SnmpLens/pkg/tray"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -58,13 +57,20 @@ func (a *App) initBackgroundMode() {
 
 	if a.serviceCfg.AutoStartTrapListener {
 		port := a.serviceCfg.TrapPort
-		if err := a.snmpClient.StartTrapListener(port, snmp.V3Params{}); err != nil {
+		// The users last applied from the renderer. This runs before any
+		// window exists, and without them a background start used to hear v1
+		// and v2c and drop every v3 notification.
+		info, err := a.snmpClient.StartTrapListener(port, a.loadTrapUsers())
+		if err != nil {
 			log.Printf("WARNING: could not auto-start the trap listener on port %d: %v", port, err)
 			a.recordSystemEvent(events.KindSystemInfo, "major",
 				"The trap listener could not bind its port at startup: "+err.Error())
 		} else {
 			a.trapsOn = true
-			log.Printf("trap listener auto-started on port %d", port)
+			log.Printf("trap listener auto-started on port %d with %d SNMPv3 users", port, info.Users)
+			for _, r := range info.Refused {
+				log.Printf("WARNING: the trap listener did not take SNMPv3 user %q: %s", r.User, r.Reason)
+			}
 		}
 	}
 
@@ -148,7 +154,7 @@ type ServiceStatus struct {
 	// it to explain why background mode is not in effect.
 	TrayAvailable bool `json:"trayAvailable"`
 	// TrapListenerRunning reflects the auto-started listener.
-	TrapListenerRunning bool `json:"trapListenerRunning"`
+	TrapListenerRunning bool   `json:"trapListenerRunning"`
 	Platform            string `json:"platform"`
 }
 

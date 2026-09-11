@@ -82,7 +82,7 @@ type SessionPreset struct {
 	Name string `json:"name,omitempty"`
 	// FormatVersion is the version that was READ, so a session bound by an
 	// older release is recognisable rather than reinterpreted.
-	FormatVersion int `json:"formatVersion"`
+	FormatVersion int    `json:"formatVersion"`
 	BoundAt       string `json:"boundAt,omitempty"`
 	// Widgets is the layout, exactly as the file declared it.
 	Widgets []preset.Widget `json:"widgets"`
@@ -104,6 +104,9 @@ type SessionConn struct {
 	V3PrivProto   string `json:"v3PrivProtocol,omitempty"`
 	V3SecLevel    string `json:"v3SecurityLevel,omitempty"`
 	V3ContextName string `json:"v3ContextName,omitempty"`
+	// Profile is the credential profile the connection was built from:
+	// "default", a profile id, or empty. An id, never a credential.
+	Profile string `json:"profile,omitempty"`
 }
 
 // Thresholds is the alert band for ONE monitored OID. Different OIDs on the
@@ -477,13 +480,15 @@ func (s *Storage) UpdateSession(id string, active bool, stoppedAt string) error 
 	return err
 }
 
-// UpdateSessionConn replaces the stored connection profile of a session.
-func (s *Storage) UpdateSessionConn(id string, conn *SessionConn) error {
+// UpdateSessionConn replaces the stored connection of a session, and its SNMP
+// version when one is given; an empty version keeps the one it has.
+func (s *Storage) UpdateSessionConn(id, snmpVersion string, conn *SessionConn) error {
 	var connJSON []byte
 	if conn != nil {
 		connJSON, _ = json.Marshal(conn)
 	}
-	_, err := s.db.Exec(`UPDATE sessions SET conn = ? WHERE id = ?`, nullableString(connJSON), id)
+	_, err := s.db.Exec(`UPDATE sessions SET conn = ?, snmp_version = COALESCE(NULLIF(?, ''), snmp_version) WHERE id = ?`,
+		nullableString(connJSON), snmpVersion, id)
 	return err
 }
 
