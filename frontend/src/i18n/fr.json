@@ -1341,6 +1341,7 @@
       "clear": "Tout effacer",
       "applied": "Pannes de {name} appliquées",
       "cleared": "{name} ne dysfonctionne plus",
+      "saveFirst": "Les pannes s’appliquent à un appareil enregistré, immédiatement et pendant qu’il tourne : enregistrez-le d’abord.",
       "chip": {
         "mute": "muet",
         "latency": "latence {ms} ms",
@@ -1353,7 +1354,35 @@
     "tab": {
       "identity": "Appareil",
       "access": "Accès",
-      "traps": "Notifications"
+      "traps": "Notifications",
+      "data": "Données",
+      "faults": "Pannes"
+    },
+    "param": {
+      "ports": "Ports d’accès",
+      "disks": "Disques",
+      "outlets": "Prises",
+      "cpus": "Processeurs"
+    },
+    "data": {
+      "params": "Taille du modèle",
+      "range": "De {min} à {max} — {default} si le champ reste vide",
+      "overrides": "Valeurs propres",
+      "overridesHint": "Chaque valeur remplace celle du modèle à son OID, ou ajoute une instance que le modèle n’a pas. Gardées avec l’appareil ; l’enregistrer le redémarre s’il tourne, comme toute modification.",
+      "addOverride": "Ajouter une valeur",
+      "removeOverride": "Retirer cette valeur",
+      "oid": "OID",
+      "type": "Type",
+      "value": "Valeur",
+      "name": "Nom",
+      "hexTitle": "La valeur est donnée en octets hexadécimaux, deux-points et espaces permis",
+      "preview": "Aperçu",
+      "previewHint": "Ce que l’appareil répondrait dès son démarrage, d’après les réglages ci-dessus — enregistrés ou non. Ses propres compteurs (groupe snmp, moteur) sont omis.",
+      "subtree": "Sous-arbre",
+      "subtreePlaceholder": "Tous les OID — ou un sous-arbre, p. ex. 1.3.6.1.2.1.2",
+      "refresh": "Relire",
+      "previewCount": "{shown} sur {total, plural, one {# objet} other {# objets}}",
+      "previewEmpty": "Rien sous ce sous-arbre."
     },
     "tabProblem": "Quelque chose est à corriger dans cet onglet",
     "writeHint": "Un SET envoyé avec la communauté d’écriture, ou par un utilisateur autorisé à écrire, change ce que l’appareil répond jusqu’à son redémarrage — comme une configuration en cours tant qu’elle n’est pas enregistrée. Les lignes se créent et se suppriment par leur RowStatus, telles que les décrivent les MIB chargées. Ce que l’agent compte lui-même — ses statistiques SNMP, son moteur — ne s’écrit jamais.",
@@ -1390,7 +1419,12 @@
       "trapNeedsV3": "Une notification v3 part au nom d’un utilisateur SNMPv3 de l’appareil : activez d’abord la v3.",
       "engineId": "5 à 32 octets, en hexadécimal.",
       "every": "De 1 à 86400 secondes.",
-      "writeSameAsRead": "La communauté d’écriture doit différer de celle de lecture : sinon, tout gestionnaire qui lit écrit aussi."
+      "writeSameAsRead": "La communauté d’écriture doit différer de celle de lecture : sinon, tout gestionnaire qui lit écrit aussi.",
+      "paramRange": "De {min} à {max}.",
+      "overrideOid": "Un OID : des nombres séparés par des points, p. ex. 1.3.6.1.2.1.1.1.0.",
+      "overrideAgent": "L’agent compte cette valeur lui-même : elle ne peut pas être imposée.",
+      "overrideDuplicate": "Cet OID figure deux fois.",
+      "overrideNumber": "Un nombre entier."
     },
     "category": {
       "server": "Serveurs",

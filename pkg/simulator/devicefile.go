@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 )
@@ -49,17 +50,19 @@ type DeviceFile struct {
 // boots, which a device imported is given anew. Two imports of one file are
 // two devices, with two engines no manager confuses.
 type FileDevice struct {
-	Name           string   `json:"name"`
-	Model          string   `json:"model"`
-	Address        string   `json:"address"`
-	Port           int      `json:"port"`
-	Versions       []string `json:"versions"`
-	Community      string   `json:"community,omitempty"`
-	WriteCommunity string   `json:"writeCommunity,omitempty"`
-	Users          []User   `json:"users,omitempty"`
-	Traps          Traps    `json:"traps"`
-	Location       string   `json:"location,omitempty"`
-	Contact        string   `json:"contact,omitempty"`
+	Name           string         `json:"name"`
+	Model          string         `json:"model"`
+	Address        string         `json:"address"`
+	Port           int            `json:"port"`
+	Versions       []string       `json:"versions"`
+	Community      string         `json:"community,omitempty"`
+	WriteCommunity string         `json:"writeCommunity,omitempty"`
+	Users          []User         `json:"users,omitempty"`
+	Traps          Traps          `json:"traps"`
+	Location       string         `json:"location,omitempty"`
+	Contact        string         `json:"contact,omitempty"`
+	Params         map[string]int `json:"params,omitempty"`
+	Overrides      []Override     `json:"overrides,omitempty"`
 }
 
 // ExportDevices is the file holding devices, their secrets in it or not.
@@ -83,7 +86,7 @@ func ExportDevices(devices []Device, withSecrets bool) ([]byte, error) {
 		f.Devices[i] = FileDevice{Name: d.Name, Model: d.Model, Address: d.Address, Port: d.Port,
 			Versions: slices.Clone(d.Versions), Community: d.Community, WriteCommunity: d.WriteCommunity,
 			Users: slices.Clone(d.Users), Traps: traps,
-			Location: d.Location, Contact: d.Contact}
+			Location: d.Location, Contact: d.Contact, Params: maps.Clone(d.Params), Overrides: slices.Clone(d.Overrides)}
 	}
 	raw, err := json.MarshalIndent(f, "", "  ")
 	if err != nil {
@@ -136,7 +139,8 @@ func (fd FileDevice) Device() Device {
 	return Device{Name: strings.TrimSpace(fd.Name), Model: fd.Model, Address: strings.TrimSpace(fd.Address),
 		Port: fd.Port, Versions: slices.Clone(fd.Versions), Community: fd.Community, WriteCommunity: fd.WriteCommunity,
 		Users: slices.Clone(fd.Users), Traps: fd.Traps.clone(),
-		Location: strings.TrimSpace(fd.Location), Contact: strings.TrimSpace(fd.Contact)}
+		Location: strings.TrimSpace(fd.Location), Contact: strings.TrimSpace(fd.Contact),
+		Params: maps.Clone(fd.Params), Overrides: slices.Clone(fd.Overrides)}
 }
 
 // ValidateWithoutSecrets is Validate for a device whose secrets are yet to be

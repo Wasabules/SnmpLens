@@ -1341,6 +1341,7 @@
       "clear": "Clear all",
       "applied": "Faults of {name} applied",
       "cleared": "{name} does nothing wrong any more",
+      "saveFirst": "Faults are applied to a saved device, at once and while it runs: save it first.",
       "chip": {
         "mute": "mute",
         "latency": "latency {ms} ms",
@@ -1353,7 +1354,35 @@
     "tab": {
       "identity": "Device",
       "access": "Access",
-      "traps": "Notifications"
+      "traps": "Notifications",
+      "data": "Data",
+      "faults": "Faults"
+    },
+    "param": {
+      "ports": "Access ports",
+      "disks": "Disks",
+      "outlets": "Outlets",
+      "cpus": "Processors"
+    },
+    "data": {
+      "params": "Size of the model",
+      "range": "{min} to {max} — {default} when left empty",
+      "overrides": "Values of its own",
+      "overridesHint": "Each value takes the place of the model’s at its OID, or adds an instance the model does not have. Kept with the device; saving restarts it if it is running, as any change does.",
+      "addOverride": "Add a value",
+      "removeOverride": "Remove this value",
+      "oid": "OID",
+      "type": "Type",
+      "value": "Value",
+      "name": "Name",
+      "hexTitle": "The value is the octets in hex, colons and spaces allowed",
+      "preview": "Preview",
+      "previewHint": "What the device would answer the moment it starts, from the settings above — saved or not. Its own counters (the snmp group, the engine) are left out.",
+      "subtree": "Subtree",
+      "subtreePlaceholder": "Every OID — or a subtree, e.g. 1.3.6.1.2.1.2",
+      "refresh": "Read again",
+      "previewCount": "{shown} of {total, plural, one {# object} other {# objects}}",
+      "previewEmpty": "Nothing under this subtree."
     },
     "tabProblem": "Something on this tab needs fixing",
     "writeHint": "A SET from the write community, or from a user who can write, changes what the device answers until it restarts — as a running configuration does until it is saved. Rows are created and destroyed through their RowStatus, as the loaded MIBs describe them. What the agent counts itself — its SNMP statistics, its engine — is never written.",
@@ -1390,7 +1419,12 @@
       "trapNeedsV3": "A v3 notification is sent as one of the device's SNMPv3 users: answer v3 first.",
       "engineId": "5 to 32 octets, in hex.",
       "every": "From 1 to 86400 seconds.",
-      "writeSameAsRead": "The write community must differ from the read community: otherwise every manager that reads also writes."
+      "writeSameAsRead": "The write community must differ from the read community: otherwise every manager that reads also writes.",
+      "paramRange": "From {min} to {max}.",
+      "overrideOid": "An OID: numbers separated by dots, e.g. 1.3.6.1.2.1.1.1.0.",
+      "overrideAgent": "The agent counts this itself: it cannot be set.",
+      "overrideDuplicate": "This OID is given twice.",
+      "overrideNumber": "A whole number."
     },
     "category": {
       "server": "Servers",

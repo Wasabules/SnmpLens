@@ -79,12 +79,51 @@ export const EDITOR_TABS = [
   { id: 'identity', fields: ['name', 'port'] },
   { id: 'access', fields: ['versions', 'community', 'writeCommunity', 'noUser', 'users'] },
   { id: 'traps', fields: ['destinations', 'schedules'] },
+  { id: 'data', fields: ['params', 'overrides'] },
+  { id: 'faults', fields: [] },
 ];
 
 /** The tabs holding at least one of a device's problems. */
 export function tabsWithProblems(problems) {
   const keys = Object.keys(problems || {});
   return EDITOR_TABS.filter((t) => t.fields.some((f) => keys.includes(f))).map((t) => t.id);
+}
+
+/**
+ * The types a value of a device's own may be given, by the SMI's names — the
+ * ones pkg/simulator reads in a model file (customTypes), less its aliases.
+ */
+export const OVERRIDE_TYPES = [
+  'OctetString', 'Integer', 'Counter32', 'Gauge32', 'TimeTicks', 'Counter64', 'ObjectIdentifier', 'IpAddress', 'Opaque',
+];
+
+/** How many values of its own one device keeps, as pkg/simulator bounds them. */
+export const MAX_OVERRIDES = 64;
+
+/** The agent's own subtrees, which no value of a device's own may be under (pkg/simulator's agentSubtrees). */
+export const AGENT_SUBTREES = ['1.3.6.1.2.1.11', '1.3.6.1.6.3'];
+
+const NUMERIC_TYPES = ['Integer', 'Counter32', 'Gauge32', 'TimeTicks', 'Counter64'];
+
+/** A new value of a device's own. */
+export function blankOverride() {
+  return { oid: '', type: 'OctetString', value: '', hex: false };
+}
+
+/** An OID as Go reads it — dotted numbers, a leading dot allowed — or '' when it is not one. */
+export function normalOid(s) {
+  const t = String(s || '').trim().replace(/^\./, '');
+  return /^\d+(\.\d+)+$/.test(t) ? t : '';
+}
+
+/** The parameters given, as numbers: an empty field is the model's own, and is not sent. */
+function paramsPayload(params) {
+  const out = {};
+  for (const [name, v] of Object.entries(params || {})) {
+    if (v === '' || v === null || v === undefined) continue;
+    out[name] = Number(v);
+  }
+  return out;
 }
 
 /**
@@ -108,6 +147,9 @@ export function blankDevice(model, suggestion) {
     location: '',
     contact: '',
     autoStart: false,
+    // The model as the catalogue describes it, and nothing of its own.
+    params: {},
+    overrides: [],
   };
 }
 
@@ -142,6 +184,8 @@ export function editableDevice(view, creds) {
     location: view.location || '',
     contact: view.contact || '',
     autoStart: !!view.autoStart,
+    params: { ...(view.params || {}) },
+    overrides: (view.overrides || []).map((o) => ({ oid: o.oid, type: o.type, value: o.value, hex: !!o.hex })),
     traps: {
       destinations: (view.traps?.destinations || []).map((t) => ({
         id: t.id,
@@ -167,9 +211,9 @@ const usesCommunity = (versions) => versions.includes('v1') || versions.includes
  * (simulator.problem.<key>): by field, and under `users`, one entry per SNMPv3
  * user — present only when one of them has something wrong. Mirrors
  * Device.Validate for what a form can get wrong; Go still checks all of it, and
- * the address.
+ * the address. `model`, the device's as Go lists it, bounds its parameters.
  */
-export function deviceProblems(d) {
+export function deviceProblems(d, model) {
   const problems = {};
   const versions = d.versions || [];
   if (!d.name?.trim()) problems.name = 'nameRequired';
@@ -209,6 +253,26 @@ export function deviceProblems(d) {
     return Number.isInteger(every) && every >= 1 && every <= MAX_EVERY ? {} : { every: 'every' };
   });
   if (perSchedule.some((p) => Object.keys(p).length)) problems.schedules = perSchedule;
+  const perParam = {};
+  for (const p of model?.params || []) {
+    const v = d.params?.[p.name];
+    if (v === '' || v === null || v === undefined) continue;
+    const n = Number(v);
+    if (!Number.isInteger(n) || n < p.min || n > p.max) perParam[p.name] = 'paramRange';
+  }
+  if (Object.keys(perParam).length) problems.params = perParam;
+  const oids = (d.overrides || []).map((o) => normalOid(o.oid));
+  const perOverride = (d.overrides || []).map((o, i) => {
+    const p = {};
+    const oid = oids[i];
+    if (!oid) p.oid = 'overrideOid';
+    else if (AGENT_SUBTREES.some((s) => oid === s || oid.startsWith(`${s}.`))) p.oid = 'overrideAgent';
+    else if (oids.indexOf(oid) !== i) p.oid = 'overrideDuplicate';
+    const value = String(o.value ?? '').trim();
+    if (NUMERIC_TYPES.includes(o.type) && !(o.type === 'Integer' ? /^-?\d+$/ : /^\d+$/).test(value)) p.value = 'overrideNumber';
+    return p;
+  });
+  if (perOverride.some((p) => Object.keys(p).length)) problems.overrides = perOverride;
   return problems;
 }
 
@@ -271,6 +335,13 @@ export function devicePayload(d) {
     location: (d.location || '').trim(),
     contact: (d.contact || '').trim(),
     autoStart: !!d.autoStart,
+    params: paramsPayload(d.params),
+    overrides: (d.overrides || []).map((o) => ({
+      oid: String(o.oid || '').trim(),
+      type: o.type,
+      value: String(o.value ?? ''),
+      hex: o.type === 'OctetString' && !!o.hex,
+    })),
     engineId: '',
     engineBoots: 0,
     // Each destination with only what its version uses, as the users are.
@@ -297,6 +368,21 @@ export function devicePayload(d) {
         irregular: !!s.irregular,
       })),
     },
+  };
+}
+
+/**
+ * The device as SimulatorPreview takes it: what makes its answers, and not one
+ * secret — a preview needs none, so none crosses the bridge for it.
+ */
+export function previewPayload(d) {
+  const p = devicePayload(d);
+  return {
+    ...p,
+    community: '',
+    writeCommunity: '',
+    users: p.users.map((u) => ({ ...u, authPass: '', privPass: '' })),
+    traps: { ...p.traps, destinations: p.traps.destinations.map((t) => ({ ...t, community: '' })) },
   };
 }
 

@@ -23,6 +23,8 @@ type ModelInfo struct {
 	Name        string `json:"name,omitempty"`
 	Description string `json:"description,omitempty"`
 	Vendor      string `json:"vendor,omitempty"`
+	// Params are the numbers a device of the model may be given (params.go).
+	Params []ModelParam `json:"params"`
 }
 
 // Identity is what makes one device differ from another of the same model.
@@ -35,6 +37,9 @@ type Identity struct {
 	// Location and Contact are the device's own sysLocation and sysContact,
 	// which take the place of its model's when they are given.
 	Location, Contact string
+	// Params are the numbers the device was given, by ModelParam name; a
+	// number it was not given is its model's (Identity.count).
+	Params map[string]int
 }
 
 type model struct {

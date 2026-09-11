@@ -10,7 +10,8 @@
     SIM_VERSIONS, MAX_EVERY, MAX_DESTINATIONS, MAX_SCHEDULES, blankDevice, blankV3, blankDestination, blankSchedule,
     editableDevice, deviceProblems, devicePayload, addDeviceAsTarget, notificationsOf, trapActivity, deliveryReport,
     modelOf, modelName, modelDescription, importReport, firstImported, recordRequest, recordableTargets, deviceImportReport,
-    deviceGroups, faultChips, categoryIcon, EDITOR_TABS, tabsWithProblems,
+    deviceGroups, faultChips, categoryIcon, EDITOR_TABS, tabsWithProblems, OVERRIDE_TYPES, MAX_OVERRIDES,
+    blankOverride, previewPayload,
   } from './utils/simulator.js';
   import UsmFields from './settings/UsmFields.svelte';
   import ModelPicker from './simulator/ModelPicker.svelte';
@@ -40,15 +41,58 @@
     simulatorStore.refresh().catch((e) => notificationStore.add(String(e), 'error'));
     simulatorStore.refreshModels().catch((e) => notificationStore.add(String(e), 'error'));
     const timer = setInterval(() => simulatorStore.refresh().catch(() => {}), 2000);
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      clearTimeout(previewTimer);
+    };
   });
 
-  $: problems = editing ? deviceProblems(editing) : {};
+  /** The model of the device being edited, whose parameters it may be given. */
+  $: editedModel = editing ? modelOf($simulatorStore.models, editing.model) : null;
+  /** The device being edited as the list shows it — running, faults and all — once it is saved. */
+  $: listed = editing?.id ? $simulatorStore.devices.find((d) => d.id === editing.id) || null : null;
+  $: problems = editing ? deviceProblems(editing, editedModel) : {};
   $: usmProblems = usmMessages(problems, $_);
 
   /** The editor's tab, and the tabs holding something to fix. */
   let tab = 'identity';
   $: flagged = tabsWithProblems(problems);
+
+  /** What the device as edited would answer, under the subtree asked for. */
+  let previewSubtree = '';
+  let preview = null;
+  let previewError = '';
+  let previewBusy = false;
+  let previewTimer = null;
+  let previewSeq = 0;
+
+  // The preview follows the editor: a parameter, a value of its own or the
+  // name changes what the device answers, so it is asked again a moment after.
+  $: if (tab === 'data' && editing) schedulePreview(editing, previewSubtree);
+
+  function schedulePreview() {
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(runPreview, 400);
+  }
+
+  // Answers overlap while someone types, and nothing orders them: only the
+  // last one asked is shown.
+  async function runPreview() {
+    if (!editing) return;
+    const seq = ++previewSeq;
+    previewBusy = true;
+    try {
+      const page = await simulatorStore.preview(previewPayload(editing), previewSubtree.trim());
+      if (seq === previewSeq) {
+        preview = page;
+        previewError = '';
+      }
+    } catch (e) {
+      if (seq === previewSeq) previewError = String(e);
+    } finally {
+      if (seq === previewSeq) previewBusy = false;
+    }
+  }
 
   /** The editor's SNMPv3 problems, one set per user, in the shape UsmFields shows them. */
   function usmMessages(p, t) {
@@ -110,6 +154,8 @@
     const names = notificationsOf($simulatorStore.models, id).map((n) => n.name);
     editing.traps.schedules = editing.traps.schedules.map((s) =>
       (s.notification && !names.includes(s.notification) ? { ...s, notification: '' } : s));
+    // A number is its model's to take: another model's does not follow.
+    editing.params = {};
     editing = editing;
   }
 
@@ -252,6 +298,14 @@
 
   function removeSchedule(index) {
     setTraps({ schedules: editing.traps.schedules.filter((s, i) => i !== index) });
+  }
+
+  function addOverride() {
+    editing = { ...editing, overrides: [...editing.overrides, blankOverride()] };
+  }
+
+  function removeOverride(index) {
+    editing = { ...editing, overrides: editing.overrides.filter((o, i) => i !== index) };
   }
 
   async function save() {
@@ -657,6 +711,98 @@
               <Icon name="plus" size={13} /> {$_('simulator.traps.addSchedule')}
             </button>
           </div>
+        {/if}
+        {/if}
+
+        {#if tab === 'data'}
+        {#if editedModel?.params?.length}
+          <h4 class="section-title first">{$_('simulator.data.params')}</h4>
+          <div class="grid params">
+            {#each editedModel.params as p (p.name)}
+              <div class="form-group">
+                <label for="sim-param-{p.name}">{$_(`simulator.param.${p.name}`)}</label>
+                <input id="sim-param-{p.name}" type="number" min={p.min} max={p.max} placeholder={String(p.default)}
+                  bind:value={editing.params[p.name]} />
+                <span class="field-hint">{$_('simulator.data.range', { values: { min: p.min, max: p.max, default: p.default } })}</span>
+                {#if problems.params?.[p.name]}
+                  <span class="problem">{$_(`simulator.problem.${problems.params[p.name]}`, { values: { min: p.min, max: p.max } })}</span>
+                {/if}
+              </div>
+            {/each}
+          </div>
+        {/if}
+        <h4 class="section-title" class:first={!editedModel?.params?.length}>{$_('simulator.data.overrides')}</h4>
+        <p class="hint first"><Icon name="pencil" size={14} /> {$_('simulator.data.overridesHint')}</p>
+        {#each editing.overrides as ov, i (i)}
+          <div class="override">
+            <input class="ov-oid" type="text" spellcheck="false" aria-label={$_('simulator.data.oid')}
+              placeholder="1.3.6.1.2.1.1.1.0" bind:value={ov.oid} />
+            <select aria-label={$_('simulator.data.type')} bind:value={ov.type}>
+              {#each OVERRIDE_TYPES as t (t)}<option value={t}>{t}</option>{/each}
+            </select>
+            <input class="ov-value" type="text" spellcheck="false" aria-label={$_('simulator.data.value')} bind:value={ov.value} />
+            {#if ov.type === 'OctetString'}
+              <label class="check" title={$_('simulator.data.hexTitle')}><input type="checkbox" bind:checked={ov.hex} /> hex</label>
+            {/if}
+            <button class="icon-btn danger" title={$_('simulator.data.removeOverride')} aria-label={$_('simulator.data.removeOverride')}
+              on:click={() => removeOverride(i)}>
+              <Icon name="trash-2" size={14} />
+            </button>
+            {#if problems.overrides?.[i]?.oid}<span class="problem">{$_(`simulator.problem.${problems.overrides[i].oid}`)}</span>{/if}
+            {#if problems.overrides?.[i]?.value}<span class="problem">{$_(`simulator.problem.${problems.overrides[i].value}`)}</span>{/if}
+          </div>
+        {/each}
+        <div class="users-foot">
+          <button class="btn tertiary btn-small" disabled={editing.overrides.length >= MAX_OVERRIDES} on:click={addOverride}>
+            <Icon name="plus" size={13} /> {$_('simulator.data.addOverride')}
+          </button>
+        </div>
+
+        <h4 class="section-title">{$_('simulator.data.preview')}</h4>
+        <p class="hint first">{$_('simulator.data.previewHint')}</p>
+        <div class="preview-bar">
+          <input type="text" spellcheck="false" aria-label={$_('simulator.data.subtree')}
+            placeholder={$_('simulator.data.subtreePlaceholder')} bind:value={previewSubtree} />
+          <button class="icon-btn" disabled={previewBusy} title={$_('simulator.data.refresh')} aria-label={$_('simulator.data.refresh')}
+            on:click={runPreview}>
+            <Icon name="refresh-cw" size={14} />
+          </button>
+          {#if preview}
+            <span class="preview-count">
+              {$_('simulator.data.previewCount', { values: { shown: preview.rows.length, total: preview.total } })}
+            </span>
+          {/if}
+        </div>
+        {#if previewError}<span class="problem">{previewError}</span>{/if}
+        {#if preview?.rows.length}
+          <div class="preview-wrap">
+            <table class="preview">
+              <thead>
+                <tr>
+                  <th>{$_('simulator.data.oid')}</th>
+                  <th>{$_('simulator.data.name')}</th>
+                  <th>{$_('simulator.data.type')}</th>
+                  <th>{$_('simulator.data.value')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each preview.rows as r (r.oid)}
+                  <tr><td><code>{r.oid}</code></td><td>{r.name}</td><td>{r.type}</td><td class="value">{r.value}</td></tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        {:else if preview}
+          <p class="hint">{$_('simulator.data.previewEmpty')}</p>
+        {/if}
+        {/if}
+
+        {#if tab === 'faults'}
+        {#if listed}
+          <FaultsPanel faults={listed.faults} idPrefix="sim-edit-faults" busy={busy[listed.id]}
+            on:apply={(e) => applyFaults(listed, e.detail)} on:close={() => (tab = 'identity')} />
+        {:else}
+          <p class="hint first"><Icon name="zap" size={14} /> {$_('simulator.faults.saveFirst')}</p>
         {/if}
         {/if}
         </div>
@@ -1283,6 +1429,95 @@
   .engine-boots {
     font-size: 0.92em;
     color: var(--text-muted);
+  }
+
+  .params {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    margin-top: 10px;
+  }
+
+  .override {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .override input[type='text'],
+  .override select,
+  .preview-bar input {
+    padding: 6px 8px;
+    background-color: var(--bg-lighter-color);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-color);
+  }
+
+  .override .ov-oid {
+    flex: 2 1 180px;
+    min-width: 0;
+  }
+
+  .override .ov-value {
+    flex: 3 1 160px;
+    min-width: 0;
+  }
+
+  .override .problem {
+    flex-basis: 100%;
+  }
+
+  .preview-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .preview-bar input {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .preview-count {
+    font-size: 0.82em;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  .preview-wrap {
+    max-height: 320px;
+    overflow: auto;
+    margin-top: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+  }
+
+  .preview {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82em;
+  }
+
+  .preview th,
+  .preview td {
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--border-color);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .preview th {
+    position: sticky;
+    top: 0;
+    background-color: var(--bg-color);
+    color: var(--text-light);
+    font-weight: 600;
+  }
+
+  .preview .value {
+    overflow-wrap: anywhere;
   }
 
   .section-title {

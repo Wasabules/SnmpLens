@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"slices"
 	"strconv"
@@ -52,6 +53,11 @@ type Device struct {
 	// Faults are what the device is made to do wrong: changed while it runs
 	// (Fleet.SetFaults), and kept with it.
 	Faults Faults `json:"faults"`
+	// Params are the numbers its model was given — ports, disks, outlets —
+	// and Overrides the values it answers in place of its model's. Neither is
+	// a secret.
+	Params    map[string]int `json:"params,omitempty"`
+	Overrides []Override     `json:"overrides,omitempty"`
 }
 
 // Listen is the address the device answers on, in the form CheckListen reads.
@@ -136,6 +142,21 @@ func (d Device) Validate() error {
 	if err := d.Faults.Check(); err != nil {
 		return fmt.Errorf("faults: %w", err)
 	}
+	if err := m.checkParams(d.Params); err != nil {
+		return err
+	}
+	// Where a value of its own sits is known once the model is built for the
+	// device: under another instance, or with one under it, it could not be
+	// answered, and that is said now rather than when the device starts.
+	if len(d.Overrides) > 0 {
+		objs, err := d.objects()
+		if err != nil {
+			return err
+		}
+		if _, err := newTree(objs); err != nil {
+			return err
+		}
+	}
 	if id, err := hex.DecodeString(d.EngineID); err != nil || len(id) < 5 || len(id) > 32 {
 		return errors.New("a device's engine ID is 5 to 32 octets, in hex")
 	}
@@ -190,6 +211,7 @@ func (d Device) WithoutSecrets() Device {
 	for i := range d.Traps.Destinations {
 		d.Traps.Destinations[i].Community = ""
 	}
+	d.Params, d.Overrides = maps.Clone(d.Params), slices.Clone(d.Overrides)
 	return d
 }
 
@@ -206,6 +228,7 @@ func (d Device) WithSecrets(s DeviceSecrets) Device {
 	for i := range d.Traps.Destinations {
 		d.Traps.Destinations[i].Community = s.Destinations[d.Traps.Destinations[i].ID]
 	}
+	d.Params, d.Overrides = maps.Clone(d.Params), slices.Clone(d.Overrides)
 	return d
 }
 
@@ -242,6 +265,29 @@ func deviceSeed(deviceID string) uint64 {
 	return binary.BigEndian.Uint64(h[:8])
 }
 
+// identity is what makes d differ from another device of its model.
+func (d Device) identity() Identity {
+	return Identity{Name: strings.TrimSpace(d.Name), Seed: deviceSeed(d.ID),
+		Location: strings.TrimSpace(d.Location), Contact: strings.TrimSpace(d.Contact), Params: d.Params}
+}
+
+// objects is what d answers from: its model built for it, with its parameters,
+// and its own values in place of the model's.
+func (d Device) objects() ([]Object, error) {
+	m, ok := findModel(d.Model)
+	if !ok {
+		return nil, fmt.Errorf("%q is not a device model", d.Model)
+	}
+	if err := m.checkParams(d.Params); err != nil {
+		return nil, err
+	}
+	own, err := compileOverrides(d.Overrides)
+	if err != nil {
+		return nil, err
+	}
+	return withOverrides(m.build(d.identity()), own), nil
+}
+
 // config is the agent d runs as.
 func (d Device) config() (Config, error) {
 	m, ok := findModel(d.Model)
@@ -252,6 +298,10 @@ func (d Device) config() (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("engine ID: %w", err)
 	}
+	objs, err := d.objects()
+	if err != nil {
+		return Config{}, err
+	}
 	return Config{
 		Listen:         d.Listen(),
 		Versions:       d.Versions,
@@ -260,10 +310,9 @@ func (d Device) config() (Config, error) {
 		Users:          d.Users,
 		EngineID:       engineID,
 		EngineBoots:    d.EngineBoots,
-		Objects: m.build(Identity{Name: strings.TrimSpace(d.Name), Seed: deviceSeed(d.ID),
-			Location: strings.TrimSpace(d.Location), Contact: strings.TrimSpace(d.Contact)}),
-		Notifications: m.catalogue(),
-		Traps:         d.Traps.clone(),
-		Faults:        d.Faults,
+		Objects:        objs,
+		Notifications:  m.catalogue(),
+		Traps:          d.Traps.clone(),
+		Faults:         d.Faults,
 	}, nil
 }

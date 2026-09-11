@@ -12,8 +12,11 @@ import (
 // sysObjectID is net-snmp's Linux one, as a real DiskStation's is — with
 // Synology's own system, disk and RAID tables beside the host resources, UCD's
 // memory and disks, and a file server's sockets: SMB, AFP, NFS, DSM.
+// It has four disks unless it is given another number: one to nine, which is
+// what a DS920+ holds with a DX517 expansion unit beside it.
 var synologyNAS = model{
-	ModelInfo:     ModelInfo{ID: "synology-nas", Category: "storage"},
+	ModelInfo: ModelInfo{ID: "synology-nas", Category: "storage",
+		Params: []ModelParam{{Name: "disks", Min: 1, Max: 9, Default: 4}}},
 	enterprise:    8072, // net-snmp
 	build:         buildSynologyNAS,
 	notifications: []Notification{linkNotification(false, 3), linkNotification(true, 2)},
@@ -50,6 +53,20 @@ func buildSynologyNAS(id Identity) []Object {
 	})
 
 	const mem, swap = 4194304, 4194304
+	// The volume is SHR over the disks: one disk's worth goes to redundancy
+	// from two disks on, and the sizes below are those of four 8 TB disks,
+	// scaled to how many hold data.
+	disks := id.count("disks", 4)
+	scale := float64(max(disks-1, 1)) / 3
+	devices := []hrDevice{
+		{index: 262145, kind: hrDeviceNetwork, descr: "network interface lo", ifIndex: 1},
+		{index: 262146, kind: hrDeviceNetwork, descr: "network interface eth0", ifIndex: 2},
+		{index: 262147, kind: hrDeviceNetwork, descr: "network interface eth1", ifIndex: 3},
+	}
+	for d := range disks {
+		devices = append(devices, hrDevice{index: 393216 + 16*d, kind: hrDeviceDiskStorage,
+			descr: fmt.Sprintf("SCSI disk (/dev/sata%d)", d+1), diskKB: 7814026584})
+	}
 	addHostResources(&o, id.Seed, hostResources{
 		memoryKiB: mem,
 		users:     [2]float64{0, 1},
@@ -60,7 +77,7 @@ func buildSynologyNAS(id Identity) []Object {
 			{7, hrStorageOther, "Cached memory", 1024, mem, 0.3, 0.38, 25 * time.Minute},
 			{10, hrStorageVirtualMemory, "Swap space", 1024, swap, 0.01, 0.03, time.Hour},
 			{31, hrStorageFixedDisk, "/", 4096, 614400, 0.55, 0.56, 6 * time.Hour},
-			{51, hrStorageFixedDisk, "/volume1", 65536, 332640000, 0.37, 0.38, 12 * time.Hour},
+			{51, hrStorageFixedDisk, "/volume1", 65536, int(332640000 * scale), 0.37, 0.38, 12 * time.Hour},
 		},
 		processors: []int{196608, 196609, 196610, 196611},
 		cpuLo:      2,
@@ -68,15 +85,7 @@ func buildSynologyNAS(id Identity) []Object {
 		cpu:        "GenuineIntel: Intel(R) Celeron(R) J4125 CPU @ 2.00GHz",
 		boot:       393216,
 		bootParams: "root=/dev/md0 netif_num=2 syno_hw_version=DS920+ console=ttyS0,115200n8",
-		devices: []hrDevice{
-			{index: 262145, kind: hrDeviceNetwork, descr: "network interface lo", ifIndex: 1},
-			{index: 262146, kind: hrDeviceNetwork, descr: "network interface eth0", ifIndex: 2},
-			{index: 262147, kind: hrDeviceNetwork, descr: "network interface eth1", ifIndex: 3},
-			{index: 393216, kind: hrDeviceDiskStorage, descr: "SCSI disk (/dev/sata1)", diskKB: 7814026584},
-			{index: 393232, kind: hrDeviceDiskStorage, descr: "SCSI disk (/dev/sata2)", diskKB: 7814026584},
-			{index: 393248, kind: hrDeviceDiskStorage, descr: "SCSI disk (/dev/sata3)", diskKB: 7814026584},
-			{index: 393264, kind: hrDeviceDiskStorage, descr: "SCSI disk (/dev/sata4)", diskKB: 7814026584},
-		},
+		devices:    devices,
 		fs: []hrFS{
 			{"/", hrFSLinuxExt2, 31, true},
 			{"/volume1", hrFSOther, 51, false},
@@ -89,7 +98,7 @@ func buildSynologyNAS(id Identity) []Object {
 		load: [2]float64{0.3, 1.8}, user: [2]float64{2, 22}, system: [2]float64{1, 8},
 		disks: []ucdDisk{
 			{"/", "/dev/md0", 2455568, [2]float64{0.55, 0.56}},
-			{"/volume1", "/dev/mapper/cachedev_0", 21288960000, [2]float64{0.37, 0.38}},
+			{"/volume1", "/dev/mapper/cachedev_0", 21288960000 * scale, [2]float64{0.37, 0.38}},
 		},
 	})
 
@@ -107,8 +116,8 @@ func buildSynologyNAS(id Identity) []Object {
 	o.add(syno+"1.5.4.0", gosnmp.Integer, Const(2)) // upgradeAvailable: unavailable
 	o.add(syno+"1.6.0", gosnmp.Integer, Const(0))   // controllerNumber
 
-	// Four disks, numbered from 0 as DSM numbers them.
-	for disk := 0; disk < 4; disk++ {
+	// The disks, numbered from 0 as DSM numbers them.
+	for disk := range disks {
 		col := func(c int) string { return fmt.Sprintf(syno+"2.1.1.%d.%d", c, disk) }
 		o.add(col(1), gosnmp.Integer, Const(disk))
 		o.add(col(2), gosnmp.OctetString, Const(fmt.Sprintf("Disk %d", disk+1)))
@@ -125,14 +134,14 @@ func buildSynologyNAS(id Identity) []Object {
 		o.add(col(13), gosnmp.Integer, Const(1)) // diskHealthStatus
 	}
 
-	// One volume over the four disks, SHR: 21.8 TB, 62% free. The sizes are
-	// Counter64 in the MIB, so SNMPv1 does not see them.
+	// One volume over the disks, SHR: 21.8 TB over four, 62% free. The sizes
+	// are Counter64 in the MIB, so SNMPv1 does not see them.
 	raid := func(c int) string { return fmt.Sprintf(syno+"3.1.1.%d.0", c) }
 	o.add(raid(1), gosnmp.Integer, Const(0))
 	o.add(raid(2), gosnmp.OctetString, Const("Volume 1"))
 	o.add(raid(3), gosnmp.Integer, Const(1)) // raidStatus
-	o.add(raid(4), gosnmp.Counter64, Const(uint64(13_516_000_000_000)))
-	o.add(raid(5), gosnmp.Counter64, Const(uint64(21_800_000_000_000)))
+	o.add(raid(4), gosnmp.Counter64, Const(uint64(13_516_000_000_000*scale)))
+	o.add(raid(5), gosnmp.Counter64, Const(uint64(21_800_000_000_000*scale)))
 	o.add(raid(6), gosnmp.Integer, Const(0)) // hot spares
 	return o
 }
