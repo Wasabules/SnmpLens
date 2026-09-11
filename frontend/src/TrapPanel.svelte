@@ -5,7 +5,7 @@
   import { trapStore } from './stores/trapStore';
   import { settingsStore } from './stores/settingsStore';
   import { notificationStore } from './stores/notifications';
-  import { SendTrap, SendInform } from '../wailsjs/go/main/App';
+  import { SendTrap, SendInform, TrapListenerEngineID } from '../wailsjs/go/main/App';
   import Trap from './Trap.svelte';
   import { escapeCSV, downloadFile } from './utils/csv';
   import { anonMode, anonymizeIp, maskString } from './utils/anonymize';
@@ -88,6 +88,13 @@
   // Inform the store when this panel is visible/hidden
   onMount(() => trapStore.setPanelVisibility(true));
   onDestroy(() => trapStore.setPanelVisibility(false));
+
+  // What a device sending this machine SNMPv3 INFORMs is configured with: the
+  // listener cannot be discovered, so it has to be told.
+  let listenerEngineId = '';
+  onMount(() => {
+    TrapListenerEngineID().then((id) => (listenerEngineId = id || '')).catch(() => {});
+  });
 
   function toggleListener() {
     if ($trapStore.isListening) {
@@ -226,6 +233,12 @@
       <span class="rx-label">SNMPv1/v2c</span>
       <span class="rx-quiet">{$_('traps.reception.anyCommunity')}</span>
     </span>
+    {#if listenerEngineId}
+      <span class="rx-group" title={$_('traps.reception.engineIdTitle')}>
+        <span class="rx-label">{$_('traps.reception.engineId')}</span>
+        <code class="rx-engine">{$anonMode ? maskString(listenerEngineId) : listenerEngineId}</code>
+      </span>
+    {/if}
     <button class="rx-manage" on:click={() => requestSettings('snmp', 'credential-profiles')}>
       <Icon name="key-round" size={13} /> {$_('traps.reception.manage')}
     </button>
@@ -499,6 +512,12 @@
     border-color: var(--warning-color);
     background-color: transparent;
     color: var(--warning-color);
+  }
+
+  .rx-engine {
+    font-size: 0.92em;
+    color: var(--text-muted);
+    user-select: all;
   }
 
   .rx-user {

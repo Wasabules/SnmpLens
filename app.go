@@ -65,6 +65,8 @@ type App struct {
 
 	// sim holds and runs the simulated devices (app_simulator.go).
 	sim *simulatorService
+	// trapEngineID is the trap listener's snmpEngineID (app_trapengine.go).
+	trapEngineID []byte
 }
 
 // NewApp creates a new App application struct.
@@ -148,6 +150,11 @@ func (a *App) startup(ctx context.Context) {
 	// The simulated devices are read, not started: a device answers only once
 	// someone starts it in this session.
 	a.sim = newSimulatorService(filepath.Join(configDir, "SnmpLens"))
+
+	// The trap listener's engine ID, before initBackgroundMode can start the
+	// listener: a device sending it SNMPv3 INFORMs is configured with it.
+	a.trapEngineID = loadTrapEngineID(filepath.Join(configDir, "SnmpLens"))
+	a.snmpClient.SetTrapEngineID(a.trapEngineID)
 
 	// 4. Load core MIBs
 	coreMibs := []string{"SNMPv2-SMI", "SNMPv2-TC"}

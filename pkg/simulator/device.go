@@ -38,6 +38,8 @@ type Device struct {
 	// EngineBoots counts the device's starts. Whoever starts it raises the
 	// count and keeps it (Fleet.Start).
 	EngineBoots uint32 `json:"engineBoots"`
+	// Traps is what the device sends, where to and when.
+	Traps Traps `json:"traps"`
 }
 
 // Listen is the address the device answers on, in the form CheckListen reads.
@@ -53,7 +55,8 @@ func (d Device) Validate() error {
 	if name == "" || utf8.RuneCountInString(name) > MaxDeviceName {
 		return fmt.Errorf("a device's name is 1 to %d characters", MaxDeviceName)
 	}
-	if _, ok := findModel(d.Model); !ok {
+	m, ok := findModel(d.Model)
+	if !ok {
 		return fmt.Errorf("%q is not a device model", d.Model)
 	}
 	if d.Port < 1 || d.Port > 65535 {
@@ -96,6 +99,15 @@ func (d Device) Validate() error {
 			seen[u.Name] = true
 		}
 	}
+	// A device's users exist only when it answers v3, so a v3 destination
+	// needs that as well.
+	var users []User
+	if v3 {
+		users = d.Users
+	}
+	if err := d.Traps.check(users, m.catalogue()); err != nil {
+		return err
+	}
 	if id, err := hex.DecodeString(d.EngineID); err != nil || len(id) < 5 || len(id) > 32 {
 		return errors.New("a device's engine ID is 5 to 32 octets, in hex")
 	}
@@ -105,11 +117,13 @@ func (d Device) Validate() error {
 	return nil
 }
 
-// DeviceSecrets is what a Device holds that no file may: the community, and
-// each user's passphrases by user name.
+// DeviceSecrets is what a Device holds that no file may: the community, each
+// user's passphrases by user name, and each destination's community by
+// destination ID.
 type DeviceSecrets struct {
-	Community string                 `json:"community"`
-	Users     map[string]UserSecrets `json:"users"`
+	Community    string                 `json:"community"`
+	Users        map[string]UserSecrets `json:"users"`
+	Destinations map[string]string      `json:"destinations"`
 }
 
 // UserSecrets are one user's passphrases.
@@ -120,9 +134,16 @@ type UserSecrets struct {
 
 // Secrets is d's secrets and nothing else.
 func (d Device) Secrets() DeviceSecrets {
-	s := DeviceSecrets{Community: d.Community, Users: make(map[string]UserSecrets, len(d.Users))}
+	s := DeviceSecrets{
+		Community:    d.Community,
+		Users:        make(map[string]UserSecrets, len(d.Users)),
+		Destinations: make(map[string]string, len(d.Traps.Destinations)),
+	}
 	for _, u := range d.Users {
 		s.Users[u.Name] = UserSecrets{AuthPass: u.AuthPass, PrivPass: u.PrivPass}
+	}
+	for _, dest := range d.Traps.Destinations {
+		s.Destinations[dest.ID] = dest.Community
 	}
 	return s
 }
@@ -134,6 +155,10 @@ func (d Device) WithoutSecrets() Device {
 	d.Users = slices.Clone(d.Users)
 	for i := range d.Users {
 		d.Users[i].AuthPass, d.Users[i].PrivPass = "", ""
+	}
+	d.Traps = d.Traps.clone()
+	for i := range d.Traps.Destinations {
+		d.Traps.Destinations[i].Community = ""
 	}
 	return d
 }
@@ -147,6 +172,10 @@ func (d Device) WithSecrets(s DeviceSecrets) Device {
 		p := s.Users[d.Users[i].Name]
 		d.Users[i].AuthPass, d.Users[i].PrivPass = p.AuthPass, p.PrivPass
 	}
+	d.Traps = d.Traps.clone()
+	for i := range d.Traps.Destinations {
+		d.Traps.Destinations[i].Community = s.Destinations[d.Traps.Destinations[i].ID]
+	}
 	return d
 }
 
@@ -157,6 +186,9 @@ func NewDeviceID() string {
 	rand.Read(b) // never fails since Go 1.24
 	return hex.EncodeToString(b)
 }
+
+// NewDestinationID is a new destination's ID, random as a device's is.
+func NewDestinationID() string { return NewDeviceID() }
 
 // NewEngineID is the engine ID a new device of a model is created with: the MAC
 // format of EngineID, carrying the model's vendor and a MAC drawn from the
@@ -191,12 +223,14 @@ func (d Device) config() (Config, error) {
 		return Config{}, fmt.Errorf("engine ID: %w", err)
 	}
 	return Config{
-		Listen:      d.Listen(),
-		Versions:    d.Versions,
-		Community:   d.Community,
-		Users:       d.Users,
-		EngineID:    engineID,
-		EngineBoots: d.EngineBoots,
-		Objects:     m.build(Identity{Name: strings.TrimSpace(d.Name), Seed: deviceSeed(d.ID)}),
+		Listen:        d.Listen(),
+		Versions:      d.Versions,
+		Community:     d.Community,
+		Users:         d.Users,
+		EngineID:      engineID,
+		EngineBoots:   d.EngineBoots,
+		Objects:       m.build(Identity{Name: strings.TrimSpace(d.Name), Seed: deviceSeed(d.ID)}),
+		Notifications: m.catalogue(),
+		Traps:         d.Traps.clone(),
 	}, nil
 }

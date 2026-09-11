@@ -412,6 +412,8 @@
       "excludedTitle": "No aceptados para los Traps: {names}",
       "anyCommunity": "cualquier comunidad",
       "anyCommunityTitle": "La comunidad de un Trap v1 o v2c no se comprueba: se reciben todos.",
+      "engineId": "Engine ID",
+      "engineIdTitle": "Lo que se configura en un dispositivo que envía INFORM SNMPv3 a SnmpLens. SnmpLens no se puede descubrir, así que hay que indicárselo al dispositivo.",
       "manage": "Gestionar perfiles",
       "userTitle": "Usuario SNMPv3 {user}, {level}",
       "refused": "Rechazado por el receptor: {reason}"
@@ -1316,7 +1318,12 @@
       "communityRequired": "v1 y v2c necesitan una comunidad.",
       "userRequired": "El usuario SNMPv3 necesita un nombre.",
       "passphraseShort": "Al menos 8 caracteres.",
-      "userDuplicate": "Dos usuarios no pueden compartir un nombre."
+      "userDuplicate": "Dos usuarios no pueden compartir un nombre.",
+      "hostRequired": "¿Adónde? Indique un host.",
+      "trapUser": "Elija uno de los usuarios SNMPv3 del dispositivo.",
+      "trapNeedsV3": "Una notificación v3 se envía como uno de los usuarios SNMPv3 del dispositivo: active primero la v3.",
+      "engineId": "De 5 a 32 octetos, en hexadecimal.",
+      "every": "De 1 a 86400 segundos."
     },
     "model": {
       "linux-server": {
@@ -1327,6 +1334,42 @@
     "userN": "Usuario {n}",
     "addUser": "Añadir un usuario",
     "removeUser": "Quitar este usuario",
-    "firstUserTarget": "«Añadir como destino» usa el primer usuario."
+    "firstUserTarget": "«Añadir como destino» usa el primer usuario.",
+    "traps": {
+      "title": "Notificaciones",
+      "hint": "Adónde envía el dispositivo sus Traps e INFORM, y cuándo. A diferencia de la dirección en la que responde, un destino puede estar en cualquier lugar de la red.",
+      "destinationN": "Destino {n}",
+      "host": "Host",
+      "port": "Puerto",
+      "version": "Versión",
+      "community": "Comunidad",
+      "user": "Enviado como",
+      "inform": "INFORM: el receptor confirma su recepción",
+      "engineId": "Engine ID del receptor",
+      "engineIdPlaceholder": "Se descubre si está vacío",
+      "engineIdHint": "SnmpLens no se puede descubrir: para enviarle un INFORM, indique su Engine ID.",
+      "useListener": "SnmpLens en este equipo",
+      "addDestination": "Añadir un destino",
+      "removeDestination": "Quitar este destino",
+      "newDestinationNote": "Un destino nuevo es SnmpLens en este equipo, en su puerto de traps.",
+      "onStart": "Enviar coldStart cuando el dispositivo arranca",
+      "onAuthFailure": "Enviar authenticationFailure cuando se rechaza una petición (como mucho una vez por segundo, aproximadamente)",
+      "notification": "Notificación",
+      "any": "Cualquiera, al azar",
+      "every": "cada",
+      "seconds": "segundos",
+      "irregular": "irregular",
+      "addSchedule": "Añadir una programación",
+      "removeSchedule": "Quitar esta programación",
+      "send": "Enviar un Trap…",
+      "sendTitle": "Enviar ahora una de las notificaciones del dispositivo a sus destinos",
+      "sent": "{name} enviado a {destination}",
+      "acknowledged": "{name} confirmado por {destination}",
+      "sentAll": "{name} enviado a {count, plural, one {# destino} other {# destinos}}",
+      "failed": "{name} a {destination}: {error}",
+      "sendFailed": "{name} no se envió: {error}",
+      "activity": "{sent, plural, one {# notificación enviada} other {# notificaciones enviadas}}",
+      "activityFailed": "{failed} fallidas"
+    }
   }
 }

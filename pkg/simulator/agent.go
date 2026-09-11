@@ -45,6 +45,11 @@ type Config struct {
 	EngineBoots uint32
 	// Objects are what the agent answers for.
 	Objects []Object
+	// Notifications are what the agent can send: its model's catalogue, or
+	// without one the generic notifications every agent has.
+	Notifications []Notification
+	// Traps is where the agent sends them, and when.
+	Traps Traps
 }
 
 // Stats counts what an agent did with what it received — most of all what it
@@ -66,6 +71,12 @@ type Stats struct {
 	UnknownContexts       uint32 // snmpUnknownContexts
 	UnknownPDUHandlers    uint32 // snmpUnknownPDUHandlers
 	Faults                uint32 // a message that crashed a decoder, or an answer that would not encode
+
+	// Notifications is what the agent sent, per destination, in the order they
+	// are configured.
+	Notifications []DestinationStats
+	// Suppressed counts the notifications the agent's cap held back.
+	Suppressed uint32
 }
 
 type counters struct {
@@ -88,10 +99,15 @@ type Agent struct {
 	boots       uint32
 	tree        *tree
 	maxSize     int
+	// notify sends the agent's notifications; nil when it has nowhere to.
+	notify *notifier
 
 	mu   sync.Mutex
 	conn *net.UDPConn
 	done chan struct{}
+	// started is when the agent started answering: its sysUpTime and its
+	// snmpEngineTime count from it.
+	started time.Time
 
 	stats counters
 }
@@ -146,6 +162,9 @@ func NewAgent(cfg Config) (*Agent, error) {
 	if a.tree, err = newTree(objects); err != nil {
 		return nil, fmt.Errorf("simulator: %w", err)
 	}
+	if a.notify, err = newNotifier(a, cfg); err != nil {
+		return nil, fmt.Errorf("simulator: %w", err)
+	}
 	return a, nil
 }
 
@@ -178,11 +197,16 @@ func (a *Agent) Start() error {
 	}
 	a.conn = conn
 	a.done = make(chan struct{})
-	go a.serve(conn, time.Now(), a.done)
+	a.started = time.Now()
+	go a.serve(conn, a.started, a.done)
+	if a.notify != nil {
+		a.notify.start()
+	}
 	return nil
 }
 
-// Stop closes the socket and waits for the message in hand to be answered.
+// Stop closes the socket, waits for the message in hand to be answered, and
+// ends the notifications — one waiting for its acknowledgement included.
 func (a *Agent) Stop() {
 	a.mu.Lock()
 	conn, done := a.conn, a.done
@@ -192,6 +216,9 @@ func (a *Agent) Stop() {
 	}
 	conn.Close()
 	<-done
+	if a.notify != nil {
+		a.notify.stop()
+	}
 }
 
 // Addr is the address the agent answers on, with the port it was given when it
@@ -209,7 +236,7 @@ func (a *Agent) Addr() netip.AddrPort {
 // Stats returns the agent's counters as they stand.
 func (a *Agent) Stats() Stats {
 	s := &a.stats
-	return Stats{
+	st := Stats{
 		Packets:               s.packets.Load(),
 		ParseErrors:           s.parseErrors.Load(),
 		BadVersions:           s.badVersions.Load(),
@@ -226,6 +253,11 @@ func (a *Agent) Stats() Stats {
 		UnknownPDUHandlers:    s.unknownPDUHandlers.Load(),
 		Faults:                s.faults.Load(),
 	}
+	if nt := a.notify; nt != nil {
+		st.Notifications = nt.stats()
+		st.Suppressed = nt.suppressed.Load()
+	}
+	return st
 }
 
 // serve answers datagrams one at a time until the socket closes. One at a time
@@ -292,6 +324,7 @@ func (a *Agent) answerCommunity(ver gosnmp.SnmpVersion, msg []byte, c clock) []b
 	// In constant time: the community is the only secret v1 and v2c have.
 	if subtle.ConstantTimeCompare([]byte(req.Community), a.community) != 1 {
 		a.stats.badCommunities.Add(1)
+		a.authFailed()
 		return nil
 	}
 	switch req.PDUType {

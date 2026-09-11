@@ -228,6 +228,7 @@ func (a *Agent) answerV3(msg []byte, c clock) []byte {
 	}
 	u := a.users[h.user]
 	if u == nil {
+		a.authFailed()
 		return a.report(h, nil, gosnmp.NoAuthNoPriv, h.requestID, oidUnknownUserNames, &a.stats.unknownUserNames, c)
 	}
 	if level > u.level {
@@ -322,6 +323,7 @@ func (a *Agent) refuse(h *v3Header, u *user, level gosnmp.SnmpV3MsgFlags, msg []
 		return nil
 	}
 	if _, err := a.decoder(u, level).SnmpDecodePacket(bytes.Clone(msg)); err == nil {
+		a.authFailed()
 		return a.report(h, nil, gosnmp.NoAuthNoPriv, h.requestID, oidWrongDigests, &a.stats.wrongDigests, c)
 	}
 	if level == gosnmp.AuthPriv {

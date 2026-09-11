@@ -412,6 +412,8 @@
       "excludedTitle": "Not accepted for traps: {names}",
       "anyCommunity": "any community",
       "anyCommunityTitle": "The community of a v1 or v2c trap is not checked: every one is received.",
+      "engineId": "Engine ID",
+      "engineIdTitle": "What a device sending SnmpLens SNMPv3 INFORMs is configured with. SnmpLens cannot be discovered, so the device has to be told.",
       "manage": "Manage profiles",
       "userTitle": "SNMPv3 user {user}, {level}",
       "refused": "Refused by the listener: {reason}"
@@ -1316,7 +1318,12 @@
       "communityRequired": "v1 and v2c need a community.",
       "userRequired": "The SNMPv3 user needs a name.",
       "passphraseShort": "At least 8 characters.",
-      "userDuplicate": "Two users cannot share a name."
+      "userDuplicate": "Two users cannot share a name.",
+      "hostRequired": "Where to? Give a host.",
+      "trapUser": "Choose one of the device's SNMPv3 users.",
+      "trapNeedsV3": "A v3 notification is sent as one of the device's SNMPv3 users: answer v3 first.",
+      "engineId": "5 to 32 octets, in hex.",
+      "every": "From 1 to 86400 seconds."
     },
     "model": {
       "linux-server": {
@@ -1327,6 +1334,42 @@
     "userN": "User {n}",
     "addUser": "Add a user",
     "removeUser": "Remove this user",
-    "firstUserTarget": "Add as target uses the first user."
+    "firstUserTarget": "Add as target uses the first user.",
+    "traps": {
+      "title": "Notifications",
+      "hint": "Where the device sends its traps and INFORMs, and when. Unlike where it answers, a destination may be anywhere on the network.",
+      "destinationN": "Destination {n}",
+      "host": "Host",
+      "port": "Port",
+      "version": "Version",
+      "community": "Community",
+      "user": "Sent as",
+      "inform": "INFORM: the receiver acknowledges it",
+      "engineId": "Receiver's engine ID",
+      "engineIdPlaceholder": "Discovered when empty",
+      "engineIdHint": "SnmpLens cannot be discovered: to send it an INFORM, give its engine ID.",
+      "useListener": "SnmpLens on this machine",
+      "addDestination": "Add a destination",
+      "removeDestination": "Remove this destination",
+      "newDestinationNote": "A new destination is SnmpLens on this machine, at its trap port.",
+      "onStart": "Send coldStart when the device starts",
+      "onAuthFailure": "Send authenticationFailure when a request is refused (about once a second at most)",
+      "notification": "Notification",
+      "any": "Any, at random",
+      "every": "every",
+      "seconds": "seconds",
+      "irregular": "irregular",
+      "addSchedule": "Add a schedule",
+      "removeSchedule": "Remove this schedule",
+      "send": "Send a trap…",
+      "sendTitle": "Send one of the device's notifications to its destinations now",
+      "sent": "{name} sent to {destination}",
+      "acknowledged": "{name} acknowledged by {destination}",
+      "sentAll": "{name} sent to {count, plural, one {# destination} other {# destinations}}",
+      "failed": "{name} to {destination}: {error}",
+      "sendFailed": "{name} was not sent: {error}",
+      "activity": "{sent, plural, one {# notification sent} other {# notifications sent}}",
+      "activityFailed": "{failed} failed"
+    }
   }
 }

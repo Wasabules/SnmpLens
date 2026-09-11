@@ -8,6 +8,8 @@ import {
   SimulatorStopDevice,
   SimulatorDeviceCredentials,
   SimulatorSuggestAddress,
+  SimulatorSendTrap,
+  TrapListenerEngineID,
 } from '../../wailsjs/go/main/App';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
 
@@ -47,8 +49,12 @@ function createSimulatorStore() {
     remove: (id) => SimulatorDeleteDevice(id),
     start: (id) => SimulatorStartDevice(id),
     stop: (id) => SimulatorStopDevice(id),
-    credentials: async (id) => (await SimulatorDeviceCredentials(id)) || { community: '', users: {} },
+    credentials: async (id) => (await SimulatorDeviceCredentials(id)) || { community: '', users: {}, destinations: {} },
     suggestAddress: () => SimulatorSuggestAddress(),
+    /** Sends a notification now; resolves to what became of it at each destination. */
+    sendTrap: async (id, name) => (await SimulatorSendTrap(id, name)) || [],
+    /** The engine ID SnmpLens's own trap listener stands for, in hex. */
+    listenerEngineId: async () => (await TrapListenerEngineID()) || '',
   };
 }
 

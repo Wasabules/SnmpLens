@@ -412,6 +412,8 @@
       "excludedTitle": "不接受其 Trap：{names}",
       "anyCommunity": "任意团体名",
       "anyCommunityTitle": "v1 或 v2c Trap 的团体名不会被检查：全部都会接收。",
+      "engineId": "Engine ID",
+      "engineIdTitle": "向 SnmpLens 发送 SNMPv3 INFORM 的设备需要配置此值。SnmpLens 无法被发现，因此必须告知设备。",
       "manage": "管理配置文件",
       "userTitle": "SNMPv3 用户 {user}，{level}",
       "refused": "被监听器拒绝：{reason}"
@@ -1316,7 +1318,12 @@
       "communityRequired": "v1 和 v2c 需要团体名。",
       "userRequired": "SNMPv3 用户需要名称。",
       "passphraseShort": "至少 8 个字符。",
-      "userDuplicate": "两个用户不能同名。"
+      "userDuplicate": "两个用户不能同名。",
+      "hostRequired": "发往何处？请填写主机。",
+      "trapUser": "请选择设备的一个 SNMPv3 用户。",
+      "trapNeedsV3": "v3 通知以设备的某个 SNMPv3 用户身份发送：请先启用 v3。",
+      "engineId": "5 到 32 个八位组，十六进制。",
+      "every": "1 到 86400 秒。"
     },
     "model": {
       "linux-server": {
@@ -1327,6 +1334,42 @@
     "userN": "用户 {n}",
     "addUser": "添加用户",
     "removeUser": "删除此用户",
-    "firstUserTarget": "“添加为目标”使用第一个用户。"
+    "firstUserTarget": "“添加为目标”使用第一个用户。",
+    "traps": {
+      "title": "通知",
+      "hint": "设备向何处、在何时发送 Trap 和 INFORM。与设备应答的地址不同，目标可以位于网络上的任何位置。",
+      "destinationN": "目标 {n}",
+      "host": "主机",
+      "port": "端口",
+      "version": "版本",
+      "community": "团体名",
+      "user": "发送身份",
+      "inform": "INFORM：接收方会确认",
+      "engineId": "接收方的 Engine ID",
+      "engineIdPlaceholder": "留空则自动发现",
+      "engineIdHint": "SnmpLens 无法被发现：要向它发送 INFORM，请填写它的 Engine ID。",
+      "useListener": "本机上的 SnmpLens",
+      "addDestination": "添加目标",
+      "removeDestination": "删除此目标",
+      "newDestinationNote": "新目标默认为本机上的 SnmpLens，使用其 Trap 端口。",
+      "onStart": "设备启动时发送 coldStart",
+      "onAuthFailure": "请求被拒绝时发送 authenticationFailure（最多约每秒一次）",
+      "notification": "通知",
+      "any": "任意，随机",
+      "every": "每",
+      "seconds": "秒",
+      "irregular": "不规则",
+      "addSchedule": "添加计划",
+      "removeSchedule": "删除此计划",
+      "send": "发送 Trap…",
+      "sendTitle": "立即将设备的某个通知发送到其目标",
+      "sent": "{name} 已发送到 {destination}",
+      "acknowledged": "{name} 已被 {destination} 确认",
+      "sentAll": "{name} 已发送到 {count, plural, other {# 个目标}}",
+      "failed": "{name} 发往 {destination}：{error}",
+      "sendFailed": "{name} 未发送：{error}",
+      "activity": "{sent, plural, other {已发送 # 条通知}}",
+      "activityFailed": "{failed} 条失败"
+    }
   }
 }

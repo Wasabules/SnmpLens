@@ -1,14 +1,21 @@
 package simulator
 
-import "github.com/gosnmp/gosnmp"
+import (
+	"slices"
+
+	"github.com/gosnmp/gosnmp"
+)
 
 // ModelInfo is a device model as the interface lists it. It carries no prose:
 // the interface names and describes a model from its ID, in five languages
 // (simulator.model.<id>), the way preset.WidgetKinds serves i18n key suffixes
-// rather than sentences.
+// rather than sentences. A notification is shown by its MIB name, which no
+// manager translates.
 type ModelInfo struct {
 	ID       string `json:"id"`
 	Category string `json:"category"`
+	// Notifications are what a device of the model can send.
+	Notifications []NotificationInfo `json:"notifications"`
 }
 
 // Identity is what makes one device differ from another of the same model.
@@ -25,6 +32,9 @@ type model struct {
 	// enterprise is the vendor's number, which the engine ID carries.
 	enterprise uint32
 	build      func(Identity) []Object
+	// notifications are the model's own, beside the generic ones every device
+	// sends.
+	notifications []Notification
 }
 
 var models = []model{linuxServer}
@@ -33,9 +43,19 @@ var models = []model{linuxServer}
 func Models() []ModelInfo {
 	out := make([]ModelInfo, len(models))
 	for i, m := range models {
-		out[i] = m.ModelInfo
+		info := m.ModelInfo
+		for _, n := range m.catalogue() {
+			info.Notifications = append(info.Notifications, NotificationInfo{Name: n.Name, OID: n.OID})
+		}
+		out[i] = info
 	}
 	return out
+}
+
+// catalogue is every notification a device of m can send: the generic ones
+// every agent has, and m's own.
+func (m model) catalogue() []Notification {
+	return slices.Concat([]Notification{coldStart, warmStart}, m.notifications, []Notification{authenticationFailure})
 }
 
 func findModel(id string) (model, bool) {

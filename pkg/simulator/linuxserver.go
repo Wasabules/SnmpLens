@@ -20,6 +20,14 @@ var linuxServer = model{
 	ModelInfo:  ModelInfo{ID: "linux-server", Category: "server"},
 	enterprise: 8072, // net-snmp
 	build:      buildLinuxServer,
+	notifications: []Notification{
+		linkNotification(false, 3), // eth1, cabled and down
+		linkNotification(true, 2),  // eth0, the uplink
+		// NET-SNMP-AGENT-MIB: what snmpd sends as it stops, and when it
+		// restarts on a SIGHUP.
+		{Name: "nsNotifyShutdown", OID: ".1.3.6.1.4.1.8072.4.0.2"},
+		{Name: "nsNotifyRestart", OID: ".1.3.6.1.4.1.8072.4.0.3"},
+	},
 }
 
 type linuxInterface struct {

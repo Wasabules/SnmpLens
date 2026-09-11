@@ -81,6 +81,8 @@ func (c *Client) startTrapListener(port int, users []V3Params) (TrapListenerInfo
 		params.Version = gosnmp.Version3
 		params.SecurityModel = gosnmp.UserSecurityModel
 		params.MsgFlags = sec.flags
+		// The engine a message is compared with; see SetTrapEngineID.
+		sec.first.AuthoritativeEngineID = c.trapEngineID
 		// Both, never the table alone: see trapSecurity.first.
 		params.SecurityParameters = sec.first
 		params.TrapSecurityParametersTable = sec.table
@@ -150,6 +152,26 @@ func (c *Client) startTrapListener(port int, users []V3Params) (TrapListenerInfo
 	c.trapPort = port
 	c.trapUsers = sec.info.accepted
 	return sec.info, nil
+}
+
+// SetTrapEngineID gives the trap listener the snmpEngineID it stands for, from
+// its next start.
+//
+// The receiver of an SNMPv3 INFORM is the authoritative engine for it (RFC 3414
+// 1.5.1), and gosnmp's listener never answers the discovery a sender would learn
+// the ID from: a message naming no engine names no user either, and the table
+// of users drops it before anything could report. So a sender has to be TOLD
+// the ID, and one that changed at every start is one nobody could configure —
+// which is why the application keeps this one and shows it.
+//
+// gosnmp does not hold a sender to it. An INFORM localised to any other valid
+// engine ID is read all the same, its listener taking RFC 3414 3.2.3a's
+// "continue processing" literally; a sender configured before this existed
+// keeps working.
+func (c *Client) SetTrapEngineID(id []byte) {
+	c.trapMu.Lock()
+	defer c.trapMu.Unlock()
+	c.trapEngineID = string(id)
 }
 
 // StopTrapListener stops the active trap listener.

@@ -31,10 +31,38 @@ func simDevice() simulator.Device {
 		Versions: []string{"v2c", "v3"}, Community: "s3cr3t-community",
 		Users: []simulator.User{{Name: "ops", SecLevel: "AuthPriv",
 			AuthProto: "SHA256", AuthPass: "auth-s3cr3t", PrivProto: "AES", PrivPass: "priv-s3cr3t"}},
+		Traps: simulator.Traps{Destinations: []simulator.Destination{
+			{Host: "127.0.0.1", Port: 1162, Version: "v2c", Community: "trap-s3cr3t"}}},
 	}
 }
 
-var simSecrets = []string{"s3cr3t-community", "auth-s3cr3t", "priv-s3cr3t"}
+var simSecrets = []string{"s3cr3t-community", "auth-s3cr3t", "priv-s3cr3t", "trap-s3cr3t"}
+
+// startSimulated saves d at 127.0.0.1 on a free port and starts it. A port
+// found free can be taken before the device binds it, since `go test ./...`
+// runs every package at once; another is tried.
+func startSimulated(t *testing.T, a *App, d simulator.Device) SimulatedDevice {
+	t.Helper()
+	var saved SimulatedDevice
+	var err error
+	for attempt := 0; attempt < 5; attempt++ {
+		c, lerr := net.ListenPacket("udp", "127.0.0.1:0")
+		if lerr != nil {
+			t.Skipf("no UDP socket: %v", lerr)
+		}
+		d.ID = saved.ID
+		d.Address, d.Port = "127.0.0.1", c.LocalAddr().(*net.UDPAddr).Port
+		c.Close()
+		if saved, err = a.SimulatorSaveDevice(d); err != nil {
+			t.Fatal(err)
+		}
+		if err = a.SimulatorStartDevice(saved.ID); err == nil {
+			return saved
+		}
+	}
+	t.Fatalf("the device would not start: %v", err)
+	return saved
+}
 
 // The device file never holds a secret, and neither does the list the renderer
 // is given; the credential store holds them all, and gives them back only by
@@ -70,6 +98,13 @@ func TestASimulatedDevicesSecretsStayInTheStore(t *testing.T) {
 	creds, err := a.SimulatorDeviceCredentials(saved.ID)
 	if err != nil || creds.Community != "s3cr3t-community" || creds.Users["ops"].PrivPass != "priv-s3cr3t" {
 		t.Errorf("credentials: %+v, %v", creds, err)
+	}
+	// A new destination is given its ID, and its community is kept under it.
+	if len(saved.Traps.Destinations) != 1 || saved.Traps.Destinations[0].ID == "" {
+		t.Fatalf("a new destination was not given an ID: %+v", saved.Traps)
+	}
+	if got := creds.Destinations[saved.Traps.Destinations[0].ID]; got != "trap-s3cr3t" {
+		t.Errorf("the destination's community came back as %q", got)
 	}
 
 	again := newSimulatorService(filepath.Dir(a.sim.path))
@@ -151,29 +186,7 @@ func TestDeletingADeviceForgetsItsSecrets(t *testing.T) {
 // with the community the store holds.
 func TestEveryStartRaisesTheBoots(t *testing.T) {
 	a, _ := simApp(t)
-	var saved SimulatedDevice
-	var err error
-	// A port found free can be taken before the device binds it, since
-	// `go test ./...` runs every package at once; try another.
-	for attempt := 0; attempt < 5; attempt++ {
-		c, lerr := net.ListenPacket("udp", "127.0.0.1:0")
-		if lerr != nil {
-			t.Skipf("no UDP socket: %v", lerr)
-		}
-		d := simDevice()
-		d.ID = saved.ID
-		d.Address, d.Port = "127.0.0.1", c.LocalAddr().(*net.UDPAddr).Port
-		c.Close()
-		if saved, err = a.SimulatorSaveDevice(d); err != nil {
-			t.Fatal(err)
-		}
-		if err = a.SimulatorStartDevice(saved.ID); err == nil {
-			break
-		}
-	}
-	if err != nil {
-		t.Fatalf("the device would not start: %v", err)
-	}
+	saved := startSimulated(t, a, simDevice())
 
 	g := &gosnmp.GoSNMP{Target: saved.Address, Port: uint16(saved.Port), Community: "s3cr3t-community",
 		Version: gosnmp.Version2c, Timeout: 2 * time.Second}
@@ -207,6 +220,47 @@ func TestEveryStartRaisesTheBoots(t *testing.T) {
 	}
 	if !a.ListSimulatedDevices()[0].Running {
 		t.Error("a started device is listed as stopped")
+	}
+}
+
+// A running device sends a notification when asked, with the community the
+// credential store holds for its destination, and counts it.
+func TestASimulatedDeviceSendsATrapWhenAsked(t *testing.T) {
+	a, _ := simApp(t)
+	rx, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Skipf("no UDP socket: %v", err)
+	}
+	defer rx.Close()
+	d := simDevice()
+	d.Traps.Destinations[0].Port = rx.LocalAddr().(*net.UDPAddr).Port
+	saved := startSimulated(t, a, d)
+
+	got, err := a.SimulatorSendTrap(saved.ID, "linkDown")
+	if err != nil || len(got) != 1 || got[0].Error != "" {
+		t.Fatalf("sending: %+v, %v", got, err)
+	}
+	buf := make([]byte, 4096)
+	rx.SetReadDeadline(time.Now().Add(2 * time.Second))
+	n, _, err := rx.ReadFrom(buf)
+	if err != nil {
+		t.Fatalf("nothing arrived: %v", err)
+	}
+	p, err := (&gosnmp.GoSNMP{Version: gosnmp.Version2c}).SnmpDecodePacket(buf[:n])
+	if err != nil || p.Community != "trap-s3cr3t" {
+		t.Errorf("received %+v, %v", p, err)
+	}
+	if list := a.ListSimulatedDevices(); list[0].Traps.Destinations[0].Sent != 1 {
+		t.Errorf("counted %+v", list[0].Traps.Destinations)
+	}
+	if _, err := a.SimulatorSendTrap(saved.ID, "linkSideways"); err == nil {
+		t.Error("a notification the model does not have was sent")
+	}
+	if err := a.SimulatorStopDevice(saved.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.SimulatorSendTrap(saved.ID, "linkDown"); !errors.Is(err, simulator.ErrNotRunning) {
+		t.Errorf("a stopped device: %v, want ErrNotRunning", err)
 	}
 }
 
