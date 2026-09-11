@@ -74,8 +74,12 @@
   let previewSeq = 0;
   /** When the Data tab was opened: values are read as if the device had run since. */
   let previewOpenedAt = 0;
-  /** The preview's column widths in pixels, which a header's edge is dragged to change. */
-  let previewWidths = { oid: 200, name: 210, type: 110, behaviour: 110, value: 260 };
+  /**
+   * The preview's column widths in pixels, which a header's edge is dragged to
+   * change. They start at the dialog's own width, so nothing is cut before
+   * anyone has asked for a wider column.
+   */
+  let previewWidths = { oid: 165, name: 185, type: 100, behaviour: 85, value: 185 };
   $: previewTableWidth = PREVIEW_COLUMNS.reduce((sum, c) => sum + previewWidths[c], 0);
 
   // The preview follows the editor: a parameter, a value of its own or the

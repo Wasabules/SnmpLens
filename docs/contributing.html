@@ -187,14 +187,20 @@ cd frontend && npm test</code></pre>
 
   <h2>Testing without hardware</h2>
   <p>
-    <code>tools/snmp_test_agent.py</code> is a pure-Python SNMP agent covering v1, v2c and
-    full v3, with moving counters and periodic traps. The
-    <a href="documentation.html#test-agent">documentation</a> lists its credentials.
+    SnmpLens simulates its own devices (<code>pkg/simulator</code>), and those are what to try
+    a change against by hand: the <strong>Simulator</strong> in the header runs SNMP agents on
+    loopback addresses, answering v1, v2c and full v3 from fourteen models, with counters that
+    move and notifications on demand. The <a href="documentation.html#test-agent">documentation</a>
+    shows how to have one answering in two clicks.
   </p>
-  <pre><code>python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
-  <p>Two tests in <code>pkg/monitor</code> talk to a real agent and skip unless you point them at one:</p>
-  <pre><code>python tools/snmp_test_agent.py --port 11611 --no-traps
-SNMPLENS_TEST_AGENT=127.0.0.1:11611 go test ./pkg/monitor/ -run Integration -v</code></pre>
+  <p>
+    The tests use the same agents, in-process: <code>pkg/simulator/simtest</code> starts a
+    simulated device inside any Go test, so the integration tests — a server polled, a
+    counter wrapping, every operation and a discovery scan, a notification followed from the
+    device to a webhook — run on every build and every platform, with nothing to install and
+    nothing to point them at.
+  </p>
+  <pre><code>go test ./pkg/simulator/... ./pkg/monitor/ ./pkg/snmp/</code></pre>
 
   <h2>Reporting a bug</h2>
   <p>What makes a report actionable, roughly in order of usefulness:</p>

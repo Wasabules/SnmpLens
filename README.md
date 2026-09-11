@@ -31,6 +31,20 @@
 
 ---
 
+## Guides
+
+- [Try it without a device](#try-it-without-a-device) — a simulated server or switch on this machine, in two minutes
+- [Credential profiles](#credential-profiles) — named SNMP identifiers, given to targets instead of the defaults
+- [Writing a dashboard preset](#writing-a-dashboard-preset) — what to poll on one kind of equipment, and how to draw it
+- [Message templates](#message-templates) — the subject and body an alert is sent with
+- [Adding MIBs](#adding-mibs) — importing, enabling, diagnosing and editing MIB modules
+- [Simulated devices](#simulated-devices) and [custom simulator models](#custom-simulator-models) — the simulator in full
+- [Configuration](#configuration) — the settings, and every file SnmpLens writes
+
+The same, with screenshots, is on the [documentation site](https://snmplens.com/documentation.html).
+
+---
+
 ## Screenshots
 
 <p align="center">
@@ -62,6 +76,14 @@
   <tr>
     <td width="50%"><img src="docs/assets/img/anonymous-mode-dark-1200.webp" alt="Anonymous Mode" width="100%" /><br /><em>Anonymous Mode — addresses and credentials masked for safe screenshots</em></td>
     <td width="50%"><img src="docs/assets/img/operations-light-1200.webp" alt="Light Theme" width="100%" /><br /><em>Light theme</em></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/assets/img/simulator-dark-1200.webp" alt="Simulated devices" width="100%" /><br /><em>Simulated devices on this machine: a server sending traps, a switch made to misbehave, a UPS</em></td>
+    <td width="50%"><img src="docs/assets/img/simulator-data-dark-1200.webp" alt="A simulated device's data" width="100%" /><br /><em>A simulated switch given twelve ports and values of its own, and a live preview named from the MIBs</em></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/assets/img/simulator-access-dark-1200.webp" alt="Who may read and write a simulated device" width="100%" /><br /><em>Who may read and write a simulated device: communities, and SNMPv3 users allowed to SET or not</em></td>
+    <td width="50%"><img src="docs/assets/img/settings-profile-dark-1200.webp" alt="A credential profile" width="100%" /><br /><em>A credential profile: an SNMPv3 user, the targets given it, and a test</em></td>
   </tr>
 </table>
 
@@ -97,6 +119,17 @@
 - **Several equipments on one dashboard** — one monitoring session per equipment, drawn together as a group
 - **A snapshot, not a link** — editing or deleting a preset never changes a dashboard already bound; binding again adopts the new version
 - **Six example presets** — IF-MIB interfaces, switch ports, Cisco, a HOST-RESOURCES server, a UPS (RFC 1628), and a 24-port switch drawn as its front panel
+
+### Simulator
+
+- **Simulated devices on this machine** — SNMP agents on loopback addresses, answering v1, v2c and v3 (the whole USM) from fourteen models: Linux and Windows servers, an iDRAC, Catalyst switches, a router, a MikroTik, a FortiGate, a UniFi access point, a Synology NAS, UPSs, a rack PDU, a printer and an environment probe
+- **A whole agent's walk** — IF-MIB, IP, TCP, UDP, ENTITY, BRIDGE, LLDP, HOST-RESOURCES, UCD and each vendor's own MIBs, agreeing with each other, with counters that move and wrap
+- **Notifications** — traps and INFORMs in every version, to SnmpLens or anywhere on the network: at boot, on a refused request, on a schedule, or on demand
+- **Writable** — a write community, or SNMPv3 users allowed to SET; `RowStatus` rows created and destroyed as the loaded MIBs describe them
+- **Faults** — latency, loss, a device that goes silent, `genErr` or `tooBig`, and counters running up to 1000× faster
+- **Shaped data** — a model's size (ports, disks, outlets, processors), values of its own OID by OID, and a live preview of what it answers
+- **Your own models** — a JSON file, a package carrying recorded walks, or a real device recorded from SnmpLens
+- **A bench as a file** — devices exported with or without their passwords, and imported on another machine
 
 ### MIB Browser
 
@@ -162,6 +195,7 @@
 - **Target Groups** for organizing devices
 - **Labels** — a device's label appears in operations, traps, history and events, with the address on hover
 - **Per-target Overrides** — custom SNMP version, community, port per device
+- **Credential profiles** — named communities and SNMPv3 users, each with its version, given to targets instead of the defaults — see [the guide](#credential-profiles)
 - **Connection Testing** — verify reachability before operations
 - **Bind a preset** — choose a dashboard preset when you add an equipment, or bind one later
 
@@ -389,6 +423,235 @@ Everything SnmpLens writes lives in the user config directory:
 
 ---
 
+## Try It Without a Device
+
+SnmpLens carries its own SNMP agents, so everything in this README can be tried against devices running on your own machine — nothing to install and no equipment to touch.
+
+1. Click **Simulator** in the header, then **New device**.
+2. Pick a model — the Linux server comes first — and keep the address SnmpLens suggests: a loopback address of the device's own, such as `127.0.0.2`. Loopback is the only kind of address a simulated device may answer on.
+3. **Save**, then **Start**. The device answers v2c with the community `public` until you give it other identifiers in the editor's **Access** tab.
+4. **Add as target** puts it in your target list, with its port and its identifiers, in the most secure version it answers.
+5. In **Operations** (`Ctrl + 1`), pick `ifTable` in the MIB tree and **WALK** it.
+
+To see notifications arrive, start the listener in the **Traps** tab (`Ctrl + 2`), give the device a destination in its **Notifications** tab — a new one is SnmpLens on this machine, at the listener's port — and send any of its notifications from its menu in the list. The **Data** tab previews everything the device answers, before it is even started.
+
+macOS answers on `127.0.0.1` alone unless aliases are added, so there devices are told apart by port: `127.0.0.1:1161` is a target of its own. The rest of the simulator — faults, writing, bench files, your own models — is under [Simulated devices](#simulated-devices).
+
+---
+
+## Credential Profiles
+
+A **credential profile** is a named set of SNMP identifiers that targets are given instead of the defaults: a community for v1 or v2c, or an SNMPv3 user — name, security level, protocols and passphrases. A profile carries its SNMP version, because "this switch speaks v3 as `ops-ro`" is one statement.
+
+**Creating one.** *Settings → SNMP → Credential profiles*, then **Community profile** or **SNMPv3 user**. Name it, fill in the identifiers, and tick the targets that use it under **Targets using this profile**. **Test these identifiers** tries them against one of your targets first; **Apply** keeps the profile, and saving the settings stores it.
+
+**From a target.** A target that has identifiers of its own can turn them into a profile: in its overrides, **Save as a profile** creates one and gives it to the target.
+
+**Which identifiers a target uses** comes from exactly one place, in this order:
+
+1. its profile, when it has one — a profile *replaces* the target's own identifiers rather than being layered under them;
+2. otherwise its own overrides — a community, a version, an SNMPv3 user;
+3. otherwise the default identifiers (*Settings → SNMP*), in the version chosen in the header.
+
+Transport stays per target: the port, the timeout and the retries are never part of a profile. Deleting a profile sends its targets back to the default identifiers.
+
+**Monitoring follows.** A monitoring session keeps the identifiers it was started with, and it is updated when the profile they came from changes: a rotated passphrase reaches every session built from the profile when the settings are saved, with nothing to rebind. Polling several targets that do not authenticate the same way starts one session per set of identifiers, and says so.
+
+**Traps.** The trap listener authenticates received SNMPv3 notifications against the default user and every SNMPv3 profile at once — except those whose **Accept SNMPv3 traps from this user** is unticked, for a user only used to poll. The **Traps** tab lists who is heard, and marks a user the listener refused with the reason. v1 and v2c notifications are received whatever their community: there is nothing to accept or refuse.
+
+**Where they are kept.** Communities and passphrases are sealed with a key the operating system holds — DPAPI on Windows, the Keychain on macOS, a file only your account can read on Linux — each profile's under its own ID, so renaming or reordering profiles never mixes them up. A profile still on MD5 or DES is flagged as using weak algorithms.
+
+---
+
+## Writing a Dashboard Preset
+
+A **preset** is one JSON file describing what to poll on one kind of equipment and how to draw it. It picks from a fixed vocabulary — six widget kinds, four map shapes, numeric OIDs — and cannot describe anything of its own, which is what makes a preset written by someone else safe to open. The six examples SnmpLens writes out on first run are in [`presets/`](presets/); reading one is the quickest way to start your own.
+
+This one watches an access switch: two tiles on the left, a wall of its ports — discovered when it is bound — beside them, and the uplink traffic across the bottom.
+
+```json
+{
+  "formatVersion": 1,
+  "name": "Access switch",
+  "author": "you",
+  "description": "Port states and uplink traffic. The ports are discovered when you bind it.",
+  "match": { "vendor": "Cisco", "sysObjectIdPrefix": ["1.3.6.1.4.1.9"] },
+  "intervalSec": 60,
+  "widgets": [
+    { "kind": "value", "title": "Uptime", "oids": ["1.3.6.1.2.1.1.3.0"],
+      "layout": { "x": 0, "y": 0, "w": 3 } },
+    { "kind": "value", "title": "Interfaces", "oids": ["1.3.6.1.2.1.2.1.0"],
+      "layout": { "x": 0, "y": 1, "w": 3 } },
+    { "kind": "grid", "title": "Ports",
+      "oids": ["1.3.6.1.2.1.2.2.1.8.{#}"],
+      "discover": { "walk": "1.3.6.1.2.1.2.2.1.2" },
+      "labels": { "1": "up", "2": "down" },
+      "layout": { "x": 3, "y": 0, "w": 9, "h": 2 } },
+    { "kind": "chart", "title": "Uplink traffic", "unit": "bit/s",
+      "oids": ["1.3.6.1.2.1.2.2.1.10.1", "1.3.6.1.2.1.2.2.1.16.1"],
+      "layout": { "x": 0, "y": 2, "w": 12, "h": 2 } }
+  ]
+}
+```
+
+| Field | Required | What it is |
+| ----- | -------- | ---------- |
+| `formatVersion` | yes | Always `1`. A file from a newer version is refused with a sentence rather than misread |
+| `name` | yes | What the library shows, up to 120 characters |
+| `author`, `description` | no | The description can run to 600 characters |
+| `match` | no | `vendor` and `sysObjectIdPrefix`: the equipment it is written for, which **Detect** uses to put it first |
+| `intervalSec` | yes | How often to poll, from 5 to 86400 seconds |
+| `widgets` | yes | From 1 to 40 of them |
+
+### Widgets
+
+| Field | What it is |
+| ----- | ---------- |
+| `kind` | One of the six below |
+| `title`, `unit` | What the widget is called, and what its readings are in — `bit/s`, `%` |
+| `oids` | Numeric OIDs, never names — at most 500 across the whole preset |
+| `labels` | A state number to a word, for `status`, `grid` and `map`: `{"1": "up", "2": "down"}` |
+| `discover` | `walk`, the column to walk, and optionally `max`; the OIDs then carry `{#}` where the instance goes |
+| `layout` | `x` 0–11, `y` 0–64, `w` 1–12 and `h` 1–12, in cells of a twelve-column grid; `h` defaults to 1 |
+| `threshold` | `min`, `max`, `forSeconds` and `alertEnabled` — see below |
+| `map` | The drawing, for a `map` widget only — see below |
+
+| Kind | Draws | Readings |
+| ---- | ----- | -------- |
+| `value` | The latest reading | 1 |
+| `rate` | A counter's per-second rate, corrected for wraps | 1 |
+| `chart` | Readings over time | 8 |
+| `status` | One reading as a state, named by the labels | 1 |
+| `grid` | One cell per reading — a switch's port panel | 96 |
+| `map` | A drawing whose shapes are readings | 96 |
+
+**Discovery.** A widget can say *where* its instances come from instead of listing them: its OIDs carry `{#}`, and `discover.walk` names the column to walk — usually `ifDescr`. The walk happens once, when the preset is bound, and also names each instance, so a discovered port reads `Gi0/1` rather than `8`. A discovering widget takes at most 128 instances, or as many as its kind can draw, whichever is smaller. If the walk fails — the wrong community, an access list — the bind is refused and the message names the column.
+
+**Layout.** Widgets are placed on a twelve-column grid, which divides into halves, thirds and quarters; widgets that are not placed find room on their own. A layout past the twelfth column, or two widgets on the same cells, is refused. Below 900 pixels the dashboard collapses to one column, in the author's order: top to bottom, then left to right.
+
+**Thresholds.** A widget can carry a band, and binding the preset fills it in on the monitoring session as if you had typed it — yours to edit afterwards:
+
+```json
+{ "kind": "status", "title": "Battery", "oids": ["1.3.6.1.2.1.33.1.2.1.0"],
+  "labels": { "1": "unknown", "2": "normal", "3": "low", "4": "depleted" },
+  "threshold": { "max": 2 } }
+```
+
+```json
+{ "kind": "value", "title": "Charge", "unit": "%", "oids": ["1.3.6.1.2.1.33.1.2.4.0"],
+  "threshold": { "min": 30, "forSeconds": 300 } }
+```
+
+The first is true on the first sample; the second has to hold for five minutes, so a UPS self-test raises nothing. With `alertEnabled` left out a band is evaluated; set to `false`, it is only drawn as a reference line. A band cannot go on a `rate` widget — it is compared with the raw reading, and a counter only goes up — and a reading carries one band at most.
+
+**Maps.** A map is a drawing whose parts are readings — boxes, lines, labels and dots, placed in percentages of the widget, each optionally bound to one of the widget's own OIDs and coloured by what it reads. Deliberately not SVG: a preset picks among four shapes and cannot draw anything else.
+
+```json
+{ "kind": "map", "title": "Front panel",
+  "oids": ["1.3.6.1.2.1.2.2.1.8.1", "1.3.6.1.2.1.2.2.1.8.2"],
+  "labels": { "1": "up", "2": "down" },
+  "map": {
+    "background": "rack-a.png",
+    "aspect": 6,
+    "shapes": [
+      { "type": "rect", "x": 5, "y": 30, "w": 10, "h": 40, "oid": "1.3.6.1.2.1.2.2.1.8.1", "text": "1" },
+      { "type": "rect", "x": 17, "y": 30, "w": 10, "h": 40, "oid": "1.3.6.1.2.1.2.2.1.8.2", "text": "2" },
+      { "type": "line", "x": 27, "y": 50, "x2": 60, "y2": 50 },
+      { "type": "label", "x": 70, "y": 50, "text": "Core" }
+    ]
+  } }
+```
+
+| Shape | Fields |
+| ----- | ------ |
+| `rect` | `x`, `y` for its top left, `w` and `h` for its size |
+| `line` | From `x`, `y` to `x2`, `y2` |
+| `label` | `x`, `y` and the `text`, centred on the point |
+| `dot` | `x`, `y` — a marker for something too small to draw |
+
+Coordinates are percentages from the top left, 0 to 100, and nothing may run off the edge; a drawing holds up to 200 shapes. `aspect` is its width over its height, 0.2 to 12 — a rack front panel wants about eight to one. `background` is a file name, never a path: the picture itself is added in *Settings → Presets* — PNG, JPEG or GIF, up to 4 MiB — and stays on your machine.
+
+### Adding and binding it
+
+1. *Settings → Presets*: add the file, or drop it on the window. A preset with problems is kept and listed with them — each with the path to its field, such as `widgets[2].layout` — and cannot be bound until they are fixed. The library states what a preset will cost before it runs: OIDs, cadence, requests and values a day, and how many readings carry a threshold.
+2. In the target manager, pick the preset when you add an equipment, or **Bind** it to one already there. **Detect** asks the equipment for its `sysObjectID` and puts the presets whose `match` names it first — advice, not a filter.
+3. Binding starts one monitoring session per equipment, polled with that equipment's own identifiers, and the **Dashboard** (`Ctrl + 8`) draws it. Bind one preset to several equipments and the dashboard can draw them together.
+
+A bound dashboard is a **snapshot**: editing or deleting the file afterwards changes nothing already bound, and binding again adopts a new version. A preset file is at most 1 MiB, and lives in `presets/` in the configuration directory.
+
+---
+
+## Message Templates
+
+Each alert destination (*Settings → Notifications*) can carry its own subject and body, written as a template over a fixed vocabulary. The editor lists every variable with an example, and previews the result through the same path the destination uses.
+
+| Syntax | Renders |
+| ------ | ------- |
+| `{{variable}}` | The variable's value, or nothing |
+| `{{variable\|default}}` | The value, or `default` when it is empty |
+| `{{#variable}}…{{/variable}}` | What is between, only when the variable has a value |
+| `{{lb}}` | Two literal opening braces |
+
+| Variable | What it is | Example |
+| -------- | ---------- | ------- |
+| `severity` | Severity name (info, warning, minor, major, critical) | `major` |
+| `severityUpper` | Severity in capitals, for a subject line | `MAJOR` |
+| `severityNumber` | Severity as a number from 1 to 5 | `4` |
+| `category` | Event family: trap, threshold, reachability, system | `threshold` |
+| `kind` | Exact event kind, stable across versions | `threshold.opened` |
+| `state` | `oneshot`, `open` or `resolved` | `open` |
+| `summary` | The one-line description SnmpLens writes | `ifInOctets above 900 on 10.0.0.1` |
+| `source` | Address of the device concerned | `10.0.0.1` |
+| `oid` | OID concerned, when there is one | `1.3.6.1.2.1.2.2.1.10.1` |
+| `value` | Measured value, when the event carries one | `912.5` |
+| `sessionName`, `sessionId` | The monitoring session, by the name you gave it and by its identifier | `WAN Paris` |
+| `dedupKey`, `corrId` | What recognises a repeat of the same incident, and ties a resolution to its alert | |
+| `id`, `seq` | The event's unique identifier, and its number in the journal | `1042` |
+| `ts`, `tsLocal` | The time in UTC (ISO 8601), and in this machine's time zone | `2026-09-01T09:12:44Z` |
+| `hostname`, `appVersion` | The machine running SnmpLens, and its version | `workstation` |
+| `sinkName` | The destination this message is going to | `NOC mail` |
+
+A subject and a body for email:
+
+```text
+[{{severityUpper}}] {{summary}}
+```
+
+```text
+{{summary}}
+Source: {{source}}
+{{#oid}}OID: {{oid}}
+{{/oid}}{{#value}}Value: {{value}}
+{{/value}}Session: {{sessionName|none}}
+{{tsLocal}} — SnmpLens {{appVersion}} on {{hostname}}
+```
+
+**A webhook's payload can be the template itself**, which is how SnmpLens talks to Slack, Teams or Alertmanager. Values are then escaped as JSON string fragments while your own punctuation is left alone — a trap's OID arrives from the network, and one quote in it would otherwise make a different document — and the result is checked as JSON before it is posted, and against a sample of every kind of event when you save. For Slack:
+
+```json
+{ "text": "*{{severityUpper}}* {{summary}}\n{{source}} · {{tsLocal}}" }
+```
+
+**No credential goes in a template**: `secret`, `password`, `token`, `community`, `authpass`, `privpass` and `apikey` are reserved names. A destination's one secret — the SMTP password, the bearer token, the syslog client key — is drawn into a header value or the URL with `{{secret}}`, which is how the address of a Slack or Teams webhook, which *is* its credential, stays in the keychain rather than in the configuration.
+
+Two rules keep a template safe: substituted text is never scanned again, so a trap OID reading `{{secret}}` comes out as those characters; and masking is applied to the event before the template sees it.
+
+---
+
+## Adding MIBs
+
+The standard MIBs are bundled and extracted on first run; vendor MIBs are yours to add.
+
+- **Import** — in *Settings → MIBs*, or by dropping the files on the window. A file that is not a MIB at all — an HTML page saved by mistake, a PDF, a ZIP, a file in UTF-16 — is named as such rather than reported as a failed load.
+- **Enable and disable** — any module can be switched off without being deleted; **Enable All** and **Disable All** do the lot. What is loaded is what the MIB tree shows, and what names OIDs everywhere else.
+- **Dependencies** — *Missing dependencies* names each module that one you loaded imports and that is not there, with the symbols that were needed from it; the dependency tree shows what imports what.
+- **Diagnose** — when a MIB does not load, SnmpLens says why: the stage it stopped at (read, content, parse, imports, build, semantic), the line and column with an excerpt, and the chain followed to its root when a dependency fails too. A module can also load *and* be broken — an import you do not have resolves to nothing — which is why **Diagnose** is offered on successes too.
+- **Edit** — the MIB editor (`Ctrl + 7`) edits the MIBs in your directory, or opens one from anywhere and saves it in, with highlighting, syntax and semantic checks as you type, an outline, and fixes for missing IMPORTS. A bundled MIB is backed up before it is overwritten and can be restored.
+
+MIBs live in `mibs/` in the configuration directory, which is the single source of truth once SnmpLens has started.
+
+---
+
 ## Simulated Devices
 
 The **Simulator** indicator in the header opens the simulated devices: SNMP agents running on this machine, at loopback addresses only — `127.x.x.x` or `::1` — answering v1, v2c and v3 (the whole USM) from a catalogue of models, or from your own (below). A device can be started and stopped, **restarted** (uptime and counters from zero, and `coldStart` if it sends one on starting), **duplicated**, made to send any of its notifications on demand, and **added as a target** in one click, with its port and identifiers.
@@ -478,36 +741,6 @@ Three rules put the files together:
 **Record a device…** in the model picker walks a real device — `.1.3.6.1`, then `.1.0.8802` for LLDP — with the identifiers its target uses, and keeps what it answered as a package: a model like any other, from which a device answers what the real one did, its counters moving. The recorded device's own agent — its snmp group, engine, USM users, VACM groups and community table — is never written. A recording can be stopped, and then keeps nothing; a device answering more than 65 536 objects is refused rather than cut short.
 
 **Export** (beside a custom model's delete button) writes any custom model to a ZIP as a package folder, with its icon. It is how a recording is edited — add an `oids.json` beside its walk to make a recorded constant move, or a `traps.json` to give it notifications — and imported again, or passed on.
-
----
-
-## Test Agent
-
-A built-in Python SNMP agent simulator is provided in `tools/snmp_test_agent.py` for testing without real network equipment. It requires no external dependencies beyond `pycryptodome` (for SNMPv3 AES).
-
-```bash
-pip install pycryptodome
-python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10
-```
-
-### Features
-
-- Pure Python — no pysnmp dependency, works on Python 3.10+
-- SNMPv1, v2c, and full v3 support (discovery, authentication, encryption)
-- 5 simulated interfaces with dynamic traffic counters
-- Realistic OIDs: system, ifTable, ifXTable, IP, SNMP stats, hrSystem, hrStorage
-- Periodic trap sending (v2c and v3) with linkDown, linkUp, coldStart, customAlert
-
-### Credentials
-
-| Version | User | Auth | Priv |
-| ------- | ---- | ---- | ---- |
-| v1/v2c | — | community `public` | — |
-| v3 | `snmplens` | SHA / `authpass123` | AES-128 / `privpass123` |
-| v3 | `sha256user` | SHA-256 / `authpass123` | AES-128 / `privpass123` |
-| v3 | `sha512user` | SHA-512 / `authpass123` | AES-256 / `privpass123` |
-| v3 | `authonly` | SHA / `authpass123` | — |
-| v3 | `noauthuser` | — | — |
 
 ---
 

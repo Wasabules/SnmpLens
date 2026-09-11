@@ -100,14 +100,11 @@ session outliving the device's restart. What a feature does on its own is tested
 seams between features, which no package owns.
 
 Beyond that, correctness is verified by the build + `go vet` + `staticcheck` passing, and by manual testing
-against the bundled Python SNMP simulator:
-
-```bash
-pip install pycryptodome
-python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10
-```
-
-The simulator serves v1/v2c/v3 with realistic OIDs and periodic traps; credentials are documented in `README.md` (community `public`; v3 user `snmplens` / SHA `authpass123` / AES-128 `privpass123`, plus other users).
+against the application's own simulated devices — the **Simulator** in the header, see **The simulator**: a
+Linux server on `127.0.0.2` answering v2c `public` is one click, **Add as target** the next, and its Data tab
+previews every OID it answers. The Python agent that used to be `tools/snmp_test_agent.py` is gone: it served
+five interfaces where one simulated Catalyst serves thousands of objects that agree with each other, and since the
+integration tests moved to `simtest` nothing ran it.
 
 ## The Wails bridge (most important architectural fact)
 
@@ -1284,7 +1281,7 @@ drive the REAL application rather than a mock-up, because a picture drawn separa
 from the product the first time anything changes.
 
 ```bash
-node tools/screenshots.mjs          # 24 stills (12 scenes x dark/light) + their WebP
+node tools/screenshots.mjs          # 42 stills (21 scenes x dark/light) + their WebP
 node tools/record.mjs               # 8 clips (4 x dark/light), MP4
 node tools/demo.mjs                 # the browser demo, into docs/demo/
 node tools/changelog-snapshot.mjs   # bake the release list into changelog.html
