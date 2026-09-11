@@ -632,7 +632,8 @@
     "presetDeviceMasked": "Equipment identified",
     "presetBind": "Bind",
     "presetBindTooltip": "Bind a dashboard preset to this equipment",
-    "presetAlreadyBound": "Already bound: {names}. Binding another adds a second poll clock."
+    "presetAlreadyBound": "Already bound: {names}. Binding another adds a second poll clock.",
+    "portInAddress": "set by the target"
   },
   "update": {
     "available": "SnmpLens {version} is available",
@@ -1306,7 +1307,7 @@
       "port": "Port",
       "versions": "SNMP versions",
       "community": "Community",
-      "v3": "SNMPv3 user"
+      "v3": "SNMPv3 users"
     },
     "problem": {
       "nameRequired": "Give the device a name.",
@@ -1314,13 +1315,18 @@
       "versionRequired": "Choose at least one version.",
       "communityRequired": "v1 and v2c need a community.",
       "userRequired": "The SNMPv3 user needs a name.",
-      "passphraseShort": "At least 8 characters."
+      "passphraseShort": "At least 8 characters.",
+      "userDuplicate": "Two users cannot share a name."
     },
     "model": {
       "linux-server": {
         "name": "Linux server",
         "description": "An Ubuntu host running net-snmp: system, three interfaces, host resources. Fits the “Interfaces (IF-MIB)” and “Server (HOST-RESOURCES-MIB)” presets."
       }
-    }
+    },
+    "userN": "User {n}",
+    "addUser": "Add a user",
+    "removeUser": "Remove this user",
+    "firstUserTarget": "Add as target uses the first user."
   }
 }

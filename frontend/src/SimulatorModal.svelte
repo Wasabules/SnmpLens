@@ -5,8 +5,9 @@
   import { simulatorStore } from './stores/simulatorStore';
   import { settingsStore } from './stores/settingsStore';
   import { notificationStore } from './stores/notifications';
+  import { anonMode, maskString } from './utils/anonymize';
   import {
-    SIM_VERSIONS, blankDevice, editableDevice, deviceProblems, devicePayload, addDeviceAsTarget,
+    SIM_VERSIONS, blankDevice, blankV3, editableDevice, deviceProblems, devicePayload, addDeviceAsTarget,
   } from './utils/simulator.js';
   import UsmFields from './settings/UsmFields.svelte';
   import Icon from './Icon.svelte';
@@ -38,13 +39,15 @@
   $: problems = editing ? deviceProblems(editing) : {};
   $: usmProblems = usmMessages(problems, $_);
 
-  /** The editor's SNMPv3 problems, in the shape UsmFields shows them. */
+  /** The editor's SNMPv3 problems, one set per user, in the shape UsmFields shows them. */
   function usmMessages(p, t) {
-    const out = {};
-    for (const key of ['user', 'authPass', 'privPass']) {
-      if (p[key]) out[key] = { text: t(`simulator.problem.${p[key]}`), level: 'error' };
-    }
-    return out;
+    return (p.users || []).map((u) => {
+      const out = {};
+      for (const key of ['user', 'authPass', 'privPass']) {
+        if (u[key]) out[key] = { text: t(`simulator.problem.${u[key]}`), level: 'error' };
+      }
+      return out;
+    });
   }
 
   function close() {
@@ -83,6 +86,14 @@
       ? editing.versions.filter((v) => v !== version)
       : [...editing.versions, version];
     editing = { ...editing, versions };
+  }
+
+  function addUser() {
+    editing = { ...editing, users: [...editing.users, blankV3(editing.users.length + 1)] };
+  }
+
+  function removeUser(index) {
+    editing = { ...editing, users: editing.users.filter((u, i) => i !== index) };
   }
 
   async function save() {
@@ -128,10 +139,10 @@
   async function addAsTarget(device) {
     try {
       const creds = await simulatorStore.credentials(device.id);
-      const { settings, added, version } = addDeviceAsTarget($settingsStore, device, creds);
+      const { settings, added, version, target } = addDeviceAsTarget($settingsStore, device, creds);
       await settingsStore.save(settings);
       notificationStore.add(
-        $_(added ? 'simulator.targetAdded' : 'simulator.targetUpdated', { values: { address: device.address, version } }),
+        $_(added ? 'simulator.targetAdded' : 'simulator.targetUpdated', { values: { address: target, version } }),
         'success',
       );
     } catch (e) {
@@ -200,9 +211,29 @@
 
         {#if editing.versions.includes('v3')}
           <h4 class="section-title">{$_('simulator.field.v3')}</h4>
-          <!-- bind:, as the settings do: UsmFields edits the object in place, and
-               without it the checks above never see a passphrase being typed. -->
-          <UsmFields bind:v3={editing.v3} idPrefix="sim-v3" problems={usmProblems} showContext={false} />
+          {#each editing.users as u, i (i)}
+            <div class="user-block">
+              <div class="user-head">
+                <span class="user-title">{$_('simulator.userN', { values: { n: i + 1 } })}</span>
+                {#if editing.users.length > 1}
+                  <button class="icon-btn danger" title={$_('simulator.removeUser')} aria-label={$_('simulator.removeUser')}
+                    on:click={() => removeUser(i)}>
+                    <Icon name="trash-2" size={14} />
+                  </button>
+                {/if}
+              </div>
+              <!-- bind:, as the settings do: UsmFields edits the object in place, and
+                   without it the checks above never see a passphrase being typed. -->
+              <UsmFields bind:v3={u} idPrefix="sim-v3-{i}" problems={usmProblems[i] || {}} showContext={false} />
+            </div>
+          {/each}
+          {#if problems.noUser}<span class="problem">{$_(`simulator.problem.${problems.noUser}`)}</span>{/if}
+          <div class="users-foot">
+            <button class="btn tertiary btn-small" on:click={addUser}>
+              <Icon name="plus" size={13} /> {$_('simulator.addUser')}
+            </button>
+            {#if editing.users.length > 1}<span class="users-note">{$_('simulator.firstUserTarget')}</span>{/if}
+          </div>
         {/if}
       </div>
       <footer class="sim-footer">
@@ -232,6 +263,12 @@
                   </span>
                   <span class="meta">
                     {#each d.versions as version (version)}<span class="chip">{version}</span>{/each}
+                    {#if d.users?.length}
+                      <span class="users">
+                        <Icon name="key-round" size={12} />
+                        {$anonMode ? maskString(d.users[0].name) : d.users.map((u) => u.name).join(', ')}
+                      </span>
+                    {/if}
                     <span class="activity">
                       {d.running ? $_('simulator.packets', { values: { count: d.packets } }) : $_('simulator.stopped')}
                     </span>
@@ -566,6 +603,51 @@
   .section-title {
     margin: 16px 0 0;
     font-size: 0.95em;
+  }
+
+  .user-block {
+    margin-top: 10px;
+    padding: 10px 12px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+  }
+
+  .user-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-height: 28px;
+  }
+
+  .user-title {
+    font-size: 0.88em;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+
+  .users-foot {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  .users-foot .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .users-note {
+    font-size: 0.82em;
+    color: var(--text-muted);
+  }
+
+  .users {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
   }
 
   .problem {

@@ -517,8 +517,11 @@ func (c *Client) SendInform(target string, port int, community, version, trapOid
 }
 
 func (c *Client) sendNotification(target string, port int, community, version, trapOid string, variables []TrapVariable, inform bool) (bool, error) {
+	// A destination may name its own port, which then wins over the port field,
+	// as it does for every request (netaddr.SplitTarget).
+	host, port := netaddr.SplitTarget(target, port)
 	g := &gosnmp.GoSNMP{
-		Target:    netaddr.NormaliseTarget(target),
+		Target:    host,
 		Port:      normalisePort(port, DefaultTrapPort),
 		Community: community,
 		Timeout:   5 * time.Second,

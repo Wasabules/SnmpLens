@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 )
 
@@ -19,8 +20,7 @@ import (
 // which names neither the brackets nor the target. Measured against a live
 // agent before this function existed; the unbracketed form worked all along.
 //
-// A host:port pair is deliberately NOT split: the port is its own field in the
-// UI, and quietly overriding what someone typed there is worse than an error.
+// It does not read a port: SplitTarget does, and every dial goes through it.
 func NormaliseTarget(target string) string {
 	t := strings.TrimSpace(target)
 	if len(t) >= 2 && t[0] == '[' && t[len(t)-1] == ']' {
@@ -29,6 +29,30 @@ func NormaliseTarget(target string) string {
 		}
 	}
 	return t
+}
+
+// SplitTarget reads the port a target names, if it names one: "10.0.0.5:1161",
+// "switch-01:1161" and "[2001:db8::5]:1161" are that host at that port. Anything
+// else — an address, a host name, a bare IPv6 literal, whose colons are not a
+// port — is the host at the port given.
+//
+// A port the target names wins over the port field. This package used to refuse
+// to split one, reasoning that the port is its own field and that overriding
+// what someone typed there is worse than an error. What changed it: simulated
+// devices on macOS all answer on 127.0.0.1, the one loopback address it
+// configures, and differ by port alone — and a target is what tells devices
+// apart. A port in the target is also the more specific of the two.
+func SplitTarget(target string, port int) (string, int) {
+	t := strings.TrimSpace(target)
+	host, p, err := net.SplitHostPort(t)
+	if err != nil || host == "" {
+		return NormaliseTarget(t), port
+	}
+	n, err := strconv.Atoi(p)
+	if err != nil || n < 1 || n > 65535 {
+		return NormaliseTarget(t), port
+	}
+	return host, n
 }
 
 // IsIPLiteral reports whether s is an IP address, zone and all.

@@ -2,6 +2,7 @@
   import { createEventDispatcher } from 'svelte';
   import { _ } from 'svelte-i18n';
   import { anonMode, maskString } from './utils/anonymize';
+  import { portOf } from './utils/targets';
   import { AUTH_PROTOCOLS, PRIV_PROTOCOLS } from './utils/snmpSecurity.js';
   import {
     blankProfile,
@@ -70,7 +71,9 @@
 
   function transport() {
     const result = {};
-    if (enabled.port && local.port !== '') result.port = Number(local.port);
+    // A target that names its port has no use for an override of it: the one in
+    // the target wins, in Go and in getEffectiveSettings.
+    if (enabled.port && local.port !== '' && !portOf(address)) result.port = Number(local.port);
     if (enabled.timeout && local.timeout !== '') result.timeout = Number(local.timeout);
     if (enabled.retries && local.retries !== '') result.retries = Number(local.retries);
     return result;
@@ -257,14 +260,19 @@
 
   <div class="override-grid transport">
     <div class="override-field">
-      <label class="override-toggle">
-        <input type="checkbox" bind:checked={enabled.port} />
-        <span>Port</span>
-      </label>
-      {#if enabled.port}
-        <input type="number" bind:value={local.port} placeholder={String(globalSettings.port)} />
+      {#if portOf(address)}
+        <span class="override-toggle"><span>Port</span></span>
+        <span class="default-value">{portOf(address)} · {$_('targets.portInAddress')}</span>
       {:else}
-        <span class="default-value">{globalSettings.port}</span>
+        <label class="override-toggle">
+          <input type="checkbox" bind:checked={enabled.port} />
+          <span>Port</span>
+        </label>
+        {#if enabled.port}
+          <input type="number" bind:value={local.port} placeholder={String(globalSettings.port)} />
+        {:else}
+          <span class="default-value">{globalSettings.port}</span>
+        {/if}
       {/if}
     </div>
 

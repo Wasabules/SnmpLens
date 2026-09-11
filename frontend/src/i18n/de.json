@@ -632,7 +632,8 @@
     "presetDeviceMasked": "Gerät erkannt",
     "presetBind": "Binden",
     "presetBindTooltip": "Eine Dashboard-Vorlage an dieses Gerät binden",
-    "presetAlreadyBound": "Bereits gebunden: {names}. Eine weitere fügt eine zweite Abfrageuhr hinzu."
+    "presetAlreadyBound": "Bereits gebunden: {names}. Eine weitere fügt eine zweite Abfrageuhr hinzu.",
+    "portInAddress": "vom Ziel festgelegt"
   },
   "update": {
     "available": "SnmpLens {version} ist verfügbar",
@@ -1314,13 +1315,18 @@
       "versionRequired": "Wählen Sie mindestens eine Version.",
       "communityRequired": "v1 und v2c benötigen eine Community.",
       "userRequired": "Der SNMPv3-Benutzer braucht einen Namen.",
-      "passphraseShort": "Mindestens 8 Zeichen."
+      "passphraseShort": "Mindestens 8 Zeichen.",
+      "userDuplicate": "Zwei Benutzer können nicht denselben Namen tragen."
     },
     "model": {
       "linux-server": {
         "name": "Linux-Server",
         "description": "Ein Ubuntu-Host mit net-snmp: System, drei Schnittstellen, Host-Ressourcen. Passt zu den Presets „Interfaces (IF-MIB)“ und „Server (HOST-RESOURCES-MIB)“."
       }
-    }
+    },
+    "userN": "Benutzer {n}",
+    "addUser": "Benutzer hinzufügen",
+    "removeUser": "Diesen Benutzer entfernen",
+    "firstUserTarget": "„Als Ziel hinzufügen“ verwendet den ersten Benutzer."
   }
 }

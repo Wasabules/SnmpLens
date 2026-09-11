@@ -1,10 +1,11 @@
-// The simulator's renderer-side rules: the device form, and how a device
-// becomes a target.
+// The simulator's renderer-side rules: the device form, with its SNMPv3 users,
+// and how a device becomes a target.
 //
 // The second is the part only the renderer can get wrong — a target lives in
 // the settings — so it is checked THROUGH getEffectiveSettings, which is what
 // every request is built from: a device added as a target must resolve to its
-// own port and identifiers, in the most secure version it answers.
+// own port and identifiers. On macOS every device shares 127.0.0.1, so that
+// takes a target that names its port.
 import * as esbuild from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -46,12 +47,15 @@ if (!globalThis.navigator) {
 
 const {
   blankDevice,
+  blankV3,
   editableDevice,
   deviceProblems,
   devicePayload,
   preferredVersion,
+  targetOf,
   addDeviceAsTarget,
   getEffectiveSettings,
+  portOf,
 } = await import(pathToFileURL(bundle).href);
 
 let failures = 0;
@@ -69,12 +73,20 @@ check('its one problem is its missing name',
   JSON.stringify(deviceProblems(fresh)) === JSON.stringify({ name: 'nameRequired' }),
   JSON.stringify(deviceProblems(fresh)));
 
-const v3only = { ...fresh, name: 'x', versions: ['v3'], v3: { ...fresh.v3, authPass: 'short', privPass: 'short' } };
-const p3 = deviceProblems(v3only);
-check('a v3 user with short passphrases is refused on both', p3.authPass === 'passphraseShort' && p3.privPass === 'passphraseShort');
-check('and v3 alone needs no community', !p3.community);
-const authOnly = { ...v3only, v3: { ...v3only.v3, secLevel: 'AuthNoPriv', authPass: 'long-enough' } };
-check('a passphrase the level does not use is not asked for', !deviceProblems(authOnly).privPass);
+const v3With = (users) => ({ ...fresh, name: 'x', versions: ['v3'], users });
+const good = (name) => ({ ...blankV3(), user: name, authPass: 'authpass-1', privPass: 'privpass-1' });
+
+const short = deviceProblems(v3With([{ ...blankV3(), authPass: 'short', privPass: 'short' }]));
+check('a v3 user with short passphrases is refused on both',
+  short.users?.[0]?.authPass === 'passphraseShort' && short.users?.[0]?.privPass === 'passphraseShort');
+check('and v3 alone needs no community', !short.community);
+check('a passphrase the level does not use is not asked for',
+  !deviceProblems(v3With([{ ...good('ops'), secLevel: 'AuthNoPriv', privPass: '' }])).users);
+check('two well-formed users are no problem', !deviceProblems(v3With([good('ops'), good('monitor')])).users);
+const dup = deviceProblems(v3With([good('ops'), good(' ops ')]));
+check('two users with one name are both told so',
+  dup.users?.[0]?.user === 'userDuplicate' && dup.users?.[1]?.user === 'userDuplicate');
+check('v3 with no user is refused', deviceProblems(v3With([])).noUser === 'userRequired');
 
 /* --- what is sent -------------------------------------------------------- */
 
@@ -82,25 +94,49 @@ const sent = devicePayload({ ...fresh, name: ' srv ' });
 check('v2c alone sends no user, and the name trimmed',
   sent.users.length === 0 && sent.community === 'public' && sent.name === 'srv');
 check("the engine is not the renderer's to send", sent.engineId === '' && sent.engineBoots === 0);
-const sent3 = devicePayload({ ...v3only, v3: { ...v3only.v3, authPass: 'authpass-1', privPass: 'privpass-1' } });
-check("v3 alone sends no community, and the user under Go's names",
-  sent3.community === '' && sent3.users[0].name === 'simulator' && sent3.users[0].privPass === 'privpass-1',
-  JSON.stringify(sent3.users));
+const sent3 = devicePayload(v3With([good(' ops '), good('monitor')]));
+check("v3 alone sends no community, and every user under Go's names",
+  sent3.community === '' && sent3.users.length === 2 && sent3.users[0].name === 'ops' && sent3.users[1].privPass === 'privpass-1',
+  JSON.stringify(sent3.users.map((u) => u.name)));
 
 /* --- editing brings the credentials back --------------------------------- */
 
 const view = {
   id: 'a1', name: 'srv', model: 'linux-server', address: '127.0.0.2', port: 161,
-  versions: ['v2c', 'v3'], users: [{ name: 'ops', secLevel: 'AuthPriv', authProto: 'SHA256', privProto: 'AES' }],
+  versions: ['v2c', 'v3'],
+  users: [
+    { name: 'ops', secLevel: 'AuthPriv', authProto: 'SHA256', privProto: 'AES' },
+    { name: 'monitor', secLevel: 'AuthNoPriv', authProto: 'SHA', privProto: 'AES' },
+  ],
 };
-const creds = { community: 'c0mmunity', users: { ops: { authPass: 'authpass-1', privPass: 'privpass-1' } } };
+const creds = {
+  community: 'c0mmunity',
+  users: { ops: { authPass: 'authpass-1', privPass: 'privpass-1' }, monitor: { authPass: 'monitor-pass', privPass: '' } },
+};
 const form = editableDevice(view, creds);
-check('the editor is given the community and the passphrases',
-  form.community === 'c0mmunity' && form.v3.user === 'ops' && form.v3.privPass === 'privpass-1');
-check('and editing nothing sends back the same user',
-  JSON.stringify(devicePayload(form).users[0]) === JSON.stringify({
-    name: 'ops', secLevel: 'AuthPriv', authProto: 'SHA256', authPass: 'authpass-1', privProto: 'AES', privPass: 'privpass-1',
-  }));
+check('the editor is given the community, and every user with its passphrases',
+  form.community === 'c0mmunity' && form.users.length === 2 &&
+  form.users[0].privPass === 'privpass-1' && form.users[1].authPass === 'monitor-pass');
+check('and editing nothing sends back the same users',
+  JSON.stringify(devicePayload(form).users) === JSON.stringify([
+    { name: 'ops', secLevel: 'AuthPriv', authProto: 'SHA256', authPass: 'authpass-1', privProto: 'AES', privPass: 'privpass-1' },
+    { name: 'monitor', secLevel: 'AuthNoPriv', authProto: 'SHA', authPass: 'monitor-pass', privProto: 'AES', privPass: '' },
+  ]));
+
+/* --- the port a target names --------------------------------------------- */
+
+check('a target names its port in each form a person writes one',
+  portOf('10.0.0.5:1161') === 1161 && portOf('switch-01:1161') === 1161 &&
+  portOf('[2001:db8::5]:1161') === 1161 && portOf(' 127.0.0.1:1162 ') === 1162);
+check('an address, a name or a bare IPv6 literal names none',
+  portOf('10.0.0.5') === null && portOf('switch-01') === null && portOf('::1') === null &&
+  portOf('2001:db8::5') === null && portOf('[::1]') === null);
+check('what is not a port is not read as one',
+  portOf('10.0.0.5:0') === null && portOf('10.0.0.5:70000') === null && portOf(':1161') === null);
+check("a device's target carries its port unless it is 161",
+  targetOf({ address: '127.0.0.2', port: 161 }) === '127.0.0.2' &&
+  targetOf({ address: '127.0.0.1', port: 1162 }) === '127.0.0.1:1162' &&
+  targetOf({ address: '::1', port: 1161 }) === '[::1]:1161');
 
 /* --- a device as a target, resolved as every request resolves it ---------- */
 
@@ -119,24 +155,38 @@ const settings = {
   v3: { user: 'default-user', authPass: '', authProto: 'SHA', privPass: '', privProto: 'AES', secLevel: 'NoAuthNoPriv', contextName: '' },
 };
 
-const v2cDevice = { ...view, versions: ['v2c'], users: [], port: 1161 };
-const first = addDeviceAsTarget(settings, v2cDevice, creds);
-const eff1 = getEffectiveSettings(first.settings, '127.0.0.2');
-check('the device joins the targets, named after it',
-  first.added && first.settings.targets.split('\n').includes('127.0.0.2 # srv'));
-check('the targets already there stay', first.settings.targets.startsWith('10.0.0.1 # router'));
-check('it resolves to its own port and community, in v2c',
-  eff1.port === 1161 && eff1.community === 'c0mmunity' && eff1.snmpVersion === 'v2c',
-  JSON.stringify({ port: eff1.port, community: eff1.community, version: eff1.snmpVersion }));
+// Windows and Linux: an address of its own, at 161.
+const own = addDeviceAsTarget(settings, view, creds);
+const effOwn = getEffectiveSettings(own.settings, own.target);
+check('a device at 161 is a target by its address, named after it',
+  own.added && own.target === '127.0.0.2' && own.settings.targets.split('\n').includes('127.0.0.2 # srv'));
+check('the targets already there stay', own.settings.targets.startsWith('10.0.0.1 # router'));
+check("it resolves to the device's first SNMPv3 user, at its port",
+  effOwn.snmpVersion === 'v3' && effOwn.v3.user === 'ops' && effOwn.v3.secLevel === 'AuthPriv' &&
+  effOwn.v3.privPass === 'privpass-1' && effOwn.port === 161,
+  JSON.stringify({ version: effOwn.snmpVersion, user: effOwn.v3.user, port: effOwn.port }));
+const again = addDeviceAsTarget(own.settings, view, creds);
+check('a device added twice is listed once',
+  !again.added && again.settings.targets.split('\n').filter((l) => l.startsWith('127.0.0.2')).length === 1);
 
-const second = addDeviceAsTarget(first.settings, view, creds);
-const eff2 = getEffectiveSettings(second.settings, '127.0.0.2');
-check('an address already listed is not listed twice',
-  !second.added && second.settings.targets.split('\n').filter((l) => l.startsWith('127.0.0.2')).length === 1);
-check("and it takes the device's SNMPv3 identity",
-  eff2.snmpVersion === 'v3' && eff2.v3.user === 'ops' && eff2.v3.secLevel === 'AuthPriv' &&
-  eff2.v3.privPass === 'privpass-1' && eff2.port === 161,
-  JSON.stringify({ version: eff2.snmpVersion, user: eff2.v3.user, port: eff2.port }));
+// macOS: every device on 127.0.0.1, told apart by port alone.
+const mac1 = { ...view, id: 'm1', name: 'mac-1', address: '127.0.0.1', port: 1161, versions: ['v2c'], users: [] };
+const mac2 = { ...mac1, id: 'm2', name: 'mac-2', port: 1162 };
+const r1 = addDeviceAsTarget(settings, mac1, creds);
+const r2 = addDeviceAsTarget(r1.settings, mac2, { community: 'other', users: {} });
+const e1 = getEffectiveSettings(r2.settings, '127.0.0.1:1161');
+const e2 = getEffectiveSettings(r2.settings, '127.0.0.1:1162');
+check('two devices sharing 127.0.0.1 are two targets',
+  r1.added && r2.added && r2.settings.targets.split('\n').length === 3, r2.settings.targets);
+check('each resolving to its own port and community',
+  e1.port === 1161 && e1.community === 'c0mmunity' && e2.port === 1162 && e2.community === 'other',
+  JSON.stringify({ one: [e1.port, e1.community], two: [e2.port, e2.community] }));
+check('with no override of a port the target already names',
+  r2.settings.targetOverrides['127.0.0.1:1162'].port === undefined);
+
+const overruled = { ...settings, targetOverrides: { '127.0.0.1:1162': { port: 9999 } } };
+check("a port the target names wins over an override's", getEffectiveSettings(overruled, '127.0.0.1:1162').port === 1162);
+check('and over the default, with no override at all', getEffectiveSettings(settings, '127.0.0.1:1163').port === 1163);
 
 /* --- every model Go serves is named and described ------------------------ */
 
