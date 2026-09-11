@@ -357,6 +357,9 @@ const CATALOGUE = [
           id: 'c0ffee02', name: 'sw-floor-2', model: 'cisco-catalyst-48', address: '127.0.0.3', port: 161,
           versions: ['v2c'], users: [], engineId: '800000090302f6e5d4c3b2', engineBoots: 7, running: true, packets: 5310,
           traps: { destinations: [], onStart: false, onAuthFailure: false, schedules: [], suppressed: 0 },
+          // Made to misbehave while it runs, which the list says on the device.
+          faults: { latencyMs: 250, jitterMs: 50, lossPercent: 5, mute: false, error: '', errorPercent: 0, counterSpeed: 100 },
+          autoStart: true,
         },
         {
           id: 'c0ffee04', name: 'ups-01', model: 'apc-smart-ups', address: '127.0.0.5', port: 161,
@@ -366,7 +369,7 @@ const CATALOGUE = [
       ],
     },
     act: ['sel:.status-item.simulator|0'],
-    describe: 'The simulator: a Linux server sending traps, a Catalyst switch and a UPS, each one click from being a target.',
+    describe: 'The simulator: a Linux server sending traps, a Catalyst switch made to misbehave and a UPS, each one click from being a target.',
   },
   {
     base: 'simulator-traps',
@@ -394,26 +397,106 @@ const CATALOGUE = [
       ],
       SimulatorDeviceCredentials: { community: 'public', users: {}, destinations: { d3: 'public', d4: 'noc-traps' } },
     },
-    act: ['sel:.status-item.simulator|0', 'sel:.device .icon-btn|0'],
+    // By its label: the first of a device's icon buttons is its faults, and the
+    // editor opens on the device's own tab, not on what it sends.
+    act: ['sel:.status-item.simulator|0', 'sel:.device .icon-btn[aria-label="Edit"]|0', 'sel:#sim-tab-traps'],
     describe: 'What a simulated device sends: traps to SnmpLens here and INFORMs to a collector on the network, at boot, on a refused request, and on a schedule.',
   },
   {
     base: 'simulator-editor',
     tab: TABS.operations,
-    height: 1400,
+    height: 1300,
     bindings: {
       ListSimulatorModels: simulatorModels(),
       ListSimulatorModelIcons: [{ id: 'custom:acme-crac', icon: ACME_CRAC_ICON }],
       ListSimulatedDevices: [],
       SimulatorSuggestAddress: { address: '127.0.0.2', port: 161 },
     },
-    // The model picker, a custom model with its icon among the catalogue; v3
-    // ticked after v2c, and a second user added: both identities, and the
-    // passphrases not yet typed.
-    act: ['sel:.status-item.simulator|0', 'New device', 'sel:.versions input|2', 'Add a user'],
-    describe: 'A new simulated device: its model, its loopback address, and who may ask it — two SNMPv3 users here.',
+    // The model picker, a custom model with its icon among the catalogue, on the
+    // editor's first tab: what the device is and where it answers.
+    act: ['sel:.status-item.simulator|0', 'New device'],
+    describe: 'A new simulated device: its model — a custom one among the catalogue, with its icon — its name and its loopback address.',
+  },
+  {
+    base: 'simulator-access',
+    tab: TABS.operations,
+    height: 1250,
+    bindings: {
+      ListSimulatorModels: simulatorModels(),
+      ListSimulatorModelIcons: [{ id: 'custom:acme-crac', icon: ACME_CRAC_ICON }],
+      ListSimulatedDevices: [],
+      SimulatorSuggestAddress: { address: '127.0.0.2', port: 161 },
+    },
+    // v3 ticked beside v2c, a write community, a second user allowed to SET,
+    // and every passphrase typed, so the tab has nothing left to fix.
+    act: [
+      'sel:.status-item.simulator|0', 'New device', 'sel:#sim-tab-access', 'sel:.versions input|2', 'Add a user',
+      'type:#sim-write-community|private-rw',
+      'type:#sim-v3-0-authPass|auth-pass-one', 'type:#sim-v3-0-privPass|priv-pass-one',
+      'type:#sim-v3-1-authPass|auth-pass-two', 'type:#sim-v3-1-privPass|priv-pass-two',
+      'sel:.user-write input|1',
+    ],
+    describe: 'Who may ask a simulated device, and who may write to it: a read and a write community, and two SNMPv3 users — the second allowed to SET.',
+  },
+  {
+    base: 'simulator-data',
+    tab: TABS.operations,
+    height: 1650,
+    bindings: {
+      ListSimulatorModels: simulatorModels(),
+      ListSimulatedDevices: [
+        {
+          id: 'c0ffee05', name: 'sw-lab-12', model: 'cisco-catalyst-24', address: '127.0.0.6', port: 161,
+          versions: ['v2c'], users: [], engineId: '800000090302a7b6c5d4e3', engineBoots: 4, running: true, packets: 912,
+          traps: { destinations: [], onStart: false, onAuthFailure: false, schedules: [], suppressed: 0 },
+          params: { ports: 12 },
+          overrides: [
+            { oid: '.1.3.6.1.2.1.1.4.0', type: 'OctetString', value: 'noc@example.net', hex: false },
+            { oid: '.1.3.6.1.4.1.9.2.1.58.0', type: 'Integer', value: '37', hex: false },
+          ],
+        },
+      ],
+      SimulatorDeviceCredentials: { community: 'public', writeCommunity: 'private-rw', users: {}, destinations: {} },
+      SimulatorPreview: simulatorPreview(),
+    },
+    // Twelve ports on a 24-port model, a contact and a CPU figure of its own,
+    // and below them what the device answers — named from the loaded MIBs,
+    // each value saying whether it moves.
+    act: ['sel:.status-item.simulator|0', 'sel:.device .icon-btn[aria-label="Edit"]|0', 'sel:#sim-tab-data'],
+    describe: 'A simulated switch given twelve ports and values of its own, and a preview of what it answers — each object named from the MIBs, each value saying whether it moves.',
   },
 ];
+
+// What SimulatorPreview answers for the Catalyst above: the system group and
+// its first ports, as the loaded MIBs name them — and the two Cisco objects no
+// bundled MIB describes, which keep their OID alone.
+function simulatorPreview() {
+  const row = (oid, name, type, value, behaviour = 'static') => ({ oid, name, type, value, behaviour });
+  const rows = [
+    row('.1.3.6.1.2.1.1.1.0', 'SNMPv2-MIB::sysDescr.0', 'OctetString',
+      'Cisco IOS Software, C2960 Software (C2960-LANBASEK9-M), Version 15.0(2)SE11, RELEASE SOFTWARE (fc3)'),
+    row('.1.3.6.1.2.1.1.2.0', 'SNMPv2-MIB::sysObjectID.0', 'ObjectIdentifier', '.1.3.6.1.4.1.9.1.716'),
+    row('.1.3.6.1.2.1.1.3.0', 'SNMPv2-MIB::sysUpTime.0', 'TimeTicks', '1843', 'uptime'),
+    row('.1.3.6.1.2.1.1.4.0', 'SNMPv2-MIB::sysContact.0', 'OctetString', 'noc@example.net'),
+    row('.1.3.6.1.2.1.1.5.0', 'SNMPv2-MIB::sysName.0', 'OctetString', 'sw-lab-12'),
+    row('.1.3.6.1.2.1.1.6.0', 'SNMPv2-MIB::sysLocation.0', 'OctetString', 'Wiring closet, floor 2'),
+    row('.1.3.6.1.2.1.2.1.0', 'IF-MIB::ifNumber.0', 'Integer', '15'),
+  ];
+  for (const [i, descr, speed, up] of [[1, 'FastEthernet0/1', 100000000, true], [2, 'FastEthernet0/2', 100000000, true],
+    [3, 'FastEthernet0/3', 100000000, false], [25, 'GigabitEthernet0/1', 1000000000, true]]) {
+    rows.push(
+      row(`.1.3.6.1.2.1.2.2.1.2.${i}`, `IF-MIB::ifDescr.${i}`, 'OctetString', descr),
+      row(`.1.3.6.1.2.1.2.2.1.5.${i}`, `IF-MIB::ifSpeed.${i}`, 'Gauge32', String(speed)),
+      row(`.1.3.6.1.2.1.2.2.1.8.${i}`, `IF-MIB::ifOperStatus.${i}`, 'Integer', up ? '1' : '2'),
+      row(`.1.3.6.1.2.1.2.2.1.10.${i}`, `IF-MIB::ifInOctets.${i}`, 'Counter32', up ? String(1662931 * i) : '0', up ? 'counter' : 'static'),
+    );
+  }
+  rows.push(
+    row('.1.3.6.1.4.1.9.2.1.58.0', '', 'Integer', '37'),
+    row('.1.3.6.1.4.1.9.9.109.1.1.1.1.8.1', '', 'Gauge32', '23', 'gauge'),
+  );
+  return { rows, total: 3894 };
+}
 
 // The simulator's catalogue as ListSimulatorModels serves it, in Go's order, and
 // one custom model after it. A function declaration, so the catalogue above can
@@ -431,14 +514,17 @@ function simulatorModels() {
   ];
   const config = { name: 'ciscoConfigManEvent', oid: '.1.3.6.1.4.1.9.9.43.2.0.1' };
   return [
-    { id: 'linux-server', category: 'server', notifications: generic([...link,
-      { name: 'nsNotifyShutdown', oid: '.1.3.6.1.4.1.8072.4.0.2' },
-      { name: 'nsNotifyRestart', oid: '.1.3.6.1.4.1.8072.4.0.3' }]) },
+    { id: 'linux-server', category: 'server', params: [{ name: 'cpus', min: 1, max: 64, default: 2 }],
+      notifications: generic([...link,
+        { name: 'nsNotifyShutdown', oid: '.1.3.6.1.4.1.8072.4.0.2' },
+        { name: 'nsNotifyRestart', oid: '.1.3.6.1.4.1.8072.4.0.3' }]) },
     { id: 'windows-server', category: 'server', notifications: generic(link) },
     { id: 'dell-idrac9', category: 'server', notifications: generic([
       { name: 'alertTemperatureProbeWarning', oid: '.1.3.6.1.4.1.674.10892.5.3.2.1.0.2162' }]) },
-    { id: 'cisco-catalyst-24', category: 'network', notifications: generic([...link, config]) },
-    { id: 'cisco-catalyst-48', category: 'network', notifications: generic([...link, config]) },
+    { id: 'cisco-catalyst-24', category: 'network', params: [{ name: 'ports', min: 2, max: 24, default: 24 }],
+      notifications: generic([...link, config]) },
+    { id: 'cisco-catalyst-48', category: 'network', params: [{ name: 'ports', min: 2, max: 48, default: 48 }],
+      notifications: generic([...link, config]) },
     { id: 'cisco-isr-4331', category: 'network', notifications: generic([...link,
       { name: 'bgpEstablishedNotification', oid: '.1.3.6.1.2.1.15.0.1' },
       { name: 'bgpBackwardTransNotification', oid: '.1.3.6.1.2.1.15.0.2' }, config]) },
@@ -448,9 +534,10 @@ function simulatorModels() {
       { name: 'fnTrapCpuThreshold', oid: '.1.3.6.1.4.1.12356.100.1.3.0.101' },
       { name: 'fnTrapMemThreshold', oid: '.1.3.6.1.4.1.12356.100.1.3.0.102' }]) },
     { id: 'unifi-u6-pro', category: 'wireless', notifications: generic([link[1]]) },
-    { id: 'synology-nas', category: 'storage', notifications: generic(link) },
+    { id: 'synology-nas', category: 'storage', params: [{ name: 'disks', min: 1, max: 9, default: 4 }],
+      notifications: generic(link) },
     { id: 'apc-smart-ups', category: 'power', notifications: generic([{ name: 'upsTrapOnBattery', oid: '.1.3.6.1.2.1.33.2.1' }]) },
-    { id: 'apc-rack-pdu', category: 'power', notifications: generic([
+    { id: 'apc-rack-pdu', category: 'power', params: [{ name: 'outlets', min: 8, max: 24, default: 8 }], notifications: generic([
       { name: 'rPDUOutletOff', oid: '.1.3.6.1.4.1.318.0.269' },
       { name: 'rPDUNearOverload', oid: '.1.3.6.1.4.1.318.0.274' }]) },
     { id: 'hp-laserjet', category: 'printing', notifications: generic([{ name: 'printerV2Alert', oid: '.1.3.6.1.2.1.43.18.2.0.1' }]) },

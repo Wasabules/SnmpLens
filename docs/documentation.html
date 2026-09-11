@@ -169,6 +169,7 @@ try {
     <a href="#operations">Operations</a>
     <a href="#versions">Versions and credentials</a>
     <a href="#targets">Targets and overrides</a>
+    <a href="#profiles">Credential profiles</a>
     <a href="#tables">Conceptual tables</a>
 
     <strong>MIBs</strong>
@@ -189,6 +190,11 @@ try {
     <a href="#sinks">Destinations</a>
     <a href="#templates">Message templates</a>
     <a href="#outbox">Delivery and retries</a>
+
+    <strong>Simulator</strong>
+    <a href="#simulator">Simulated devices</a>
+    <a href="#simulator-models">Writing a simulator model</a>
+    <a href="#simulator-packages">Packages and recordings</a>
 
     <strong>Rest</strong>
     <a href="#discovery">Discovery and network tools</a>
@@ -256,34 +262,39 @@ try {
     <section id="test-agent">
       <h2>A device to practise on</h2>
       <p>
-        The repository carries a Python SNMP agent so you can use everything here without
-        touching production equipment. It needs Python 3.10 or newer, and
-        <code>pycryptodome</code> only if you want v3 privacy.
+        SnmpLens carries its own SNMP agents, so everything on this page can be tried against
+        devices running on your own machine — nothing to install and no equipment to touch.
       </p>
-      <pre><code>pip install pycryptodome
-python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
+      <ol>
+        <li>Click <strong>Simulator</strong> in the header, then <strong>New device</strong>.</li>
+        <li>Keep the model — the Linux server comes first — and the address SnmpLens suggests:
+          a loopback address of the device's own, such as <code>127.0.0.2</code>.</li>
+        <li><strong>Save</strong>, then <strong>Start</strong>. The device answers v2c with the
+          community <code>public</code> until you give it other identifiers.</li>
+        <li><strong>Add as target</strong> puts it in your target list with its port and
+          identifiers; a walk of <code>ifTable</code> then answers what a real server would.</li>
+      </ol>
       <p>
-        It serves realistic OIDs — <code>system</code>, <code>ifTable</code>,
-        <code>ifXTable</code>, IP, SNMP statistics, <code>hrSystem</code>,
-        <code>hrStorage</code> — with five interfaces whose counters actually move, and it
-        sends periodic traps.
+        Fourteen models are built in — servers, switches, a router, a firewall, an access point,
+        a NAS, UPSs, a PDU, a printer, a probe — and you can write your own or record a real
+        device. The <a href="#simulator">simulated devices</a> section has the rest. On macOS,
+        which answers on <code>127.0.0.1</code> alone unless aliases are added, devices are told
+        apart by port: <code>127.0.0.1:1161</code> is a target of its own.
       </p>
-      <div class="table-scroll">
-        <table>
-          <caption class="visually-hidden">Credentials accepted by the test agent</caption>
-          <thead>
-            <tr><th scope="col">Version</th><th scope="col">User</th><th scope="col">Authentication</th><th scope="col">Privacy</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>v1 / v2c</td><td>—</td><td>community <code>public</code></td><td>—</td></tr>
-            <tr><td>v3</td><td><code>snmplens</code></td><td>SHA / <code>authpass123</code></td><td>AES-128 / <code>privpass123</code></td></tr>
-            <tr><td>v3</td><td><code>sha256user</code></td><td>SHA-256 / <code>authpass123</code></td><td>AES-128 / <code>privpass123</code></td></tr>
-            <tr><td>v3</td><td><code>sha512user</code></td><td>SHA-512 / <code>authpass123</code></td><td>AES-256 / <code>privpass123</code></td></tr>
-            <tr><td>v3</td><td><code>authonly</code></td><td>SHA / <code>authpass123</code></td><td>none</td></tr>
-            <tr><td>v3</td><td><code>noauthuser</code></td><td>none</td><td>none</td></tr>
-          </tbody>
-        </table>
-      </div>
+      <figure class="shot" style="margin-top:1.5rem">
+        <img class="shot-light" src="assets/img/simulator-light-1200.webp"
+             srcset="assets/img/simulator-light-1200.webp 1200w, assets/img/simulator-light-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="The SnmpLens simulator: a Linux server sending traps, a Catalyst switch made to misbehave and a stopped UPS, grouped by category, each with its start, target and edit buttons." width="1600" height="900"
+             loading="lazy" decoding="async" />
+        <img class="shot-dark" src="assets/img/simulator-dark-1200.webp"
+             srcset="assets/img/simulator-dark-1200.webp 1200w, assets/img/simulator-dark-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="The SnmpLens simulator: a Linux server sending traps, a Catalyst switch made to misbehave and a stopped UPS, grouped by category, each with its start, target and edit buttons." width="1600" height="900"
+             loading="lazy" decoding="async" />
+        <figcaption>Three simulated devices: a server sending traps, a switch given a latency, a
+          loss and fast counters, and a UPS not yet started — each one click from being a target.</figcaption>
+      </figure>
     </section>
 
     <hr />
@@ -424,6 +435,82 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
              loading="lazy" decoding="async" />
         <figcaption>Groups down the top, and the marker beside an address means that device
           overrides the defaults — here two routers on v3 and a UPS still on v1.</figcaption>
+      </figure>
+    </section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section id="profiles">
+      <h2>Credential profiles</h2>
+      <p>
+        A <strong>credential profile</strong> is a named set of identifiers that targets are
+        given instead of the defaults: a community for v1 or v2c, or an SNMPv3 user — its name,
+        security level, protocols and passphrases. A profile carries its SNMP version, because
+        “this switch speaks v3 as <code>ops-ro</code>” is one statement, and keeping the version
+        apart from the user is how a v3 user ends up sent as a v2c community.
+      </p>
+
+      <h3>Creating one</h3>
+      <p>
+        In <em>Settings &gt; SNMP</em>, under <strong>Credential profiles</strong>, choose
+        <strong>Community profile</strong> or <strong>SNMPv3 user</strong>. Name it, fill in the
+        identifiers, and tick the targets that use it under <strong>Targets using this
+        profile</strong>. <strong>Test these identifiers</strong> tries them against one of your
+        targets first; <strong>Apply</strong> keeps the profile, and saving the settings stores
+        it. A target that already has identifiers of its own can turn them into a profile from its
+        overrides, with <strong>Save as a profile</strong>.
+      </p>
+
+      <h3>Which identifiers a target uses</h3>
+      <p>Exactly one place answers, in this order:</p>
+      <ol>
+        <li>its profile, when it has one — a profile <em>replaces</em> the target's own
+          identifiers rather than being layered under them, since two answers to “what does this
+          target authenticate with” is one too many;</li>
+        <li>otherwise its own overrides — a community, a version, an SNMPv3 user;</li>
+        <li>otherwise the default identifiers, in the version chosen in the header.</li>
+      </ol>
+      <p>
+        Transport stays per target: the port, the timeout and the retries are never part of a
+        profile. A request carries only the credential its version uses — a v3 target is not sent
+        a community beside its user. A profile that is deleted sends its targets back to the
+        defaults.
+      </p>
+
+      <h3>Monitoring and traps follow</h3>
+      <p>
+        A monitoring session keeps the identifiers it was started with, because it polls without
+        the window open. When the profile they came from changes, the session is updated as the
+        settings are saved: a rotated passphrase reaches every session built from it, with
+        nothing to rebind. Polling several targets that do not authenticate the same way starts
+        one session per set of identifiers, and says so.
+      </p>
+      <p>
+        The trap listener authenticates received SNMPv3 notifications against the default user
+        and every SNMPv3 profile at once, except those whose <strong>Accept SNMPv3 traps from
+        this user</strong> is unticked — a user only used to poll. The <a href="#traps">Traps</a>
+        tab lists who is heard, and marks a user the listener refused with its reason. v1 and
+        v2c notifications are received whatever their community: there is nothing to accept or
+        refuse.
+      </p>
+      <p class="muted small">
+        Each profile's community and passphrases are sealed under the profile's ID, never its
+        name or its place in the list, so a profile renamed, reordered or deleted while the
+        credential store was locked gets its own ciphertext back. A profile still on MD5 or DES is
+        flagged as using weak algorithms.
+      </p>
+      <figure class="shot" style="margin-top:1.5rem">
+        <img class="shot-light" src="assets/img/settings-profile-light-1200.webp"
+             srcset="assets/img/settings-profile-light-1200.webp 1200w, assets/img/settings-profile-light-2000.webp 2000w"
+             sizes="(max-width: 1180px) 100vw, 1140px"
+             alt="A credential profile open in the SnmpLens settings: an SNMPv3 user with its protocols, the targets given the profile, and a test." width="1600" height="1100"
+             loading="lazy" decoding="async" />
+        <img class="shot-dark" src="assets/img/settings-profile-dark-1200.webp"
+             srcset="assets/img/settings-profile-dark-1200.webp 1200w, assets/img/settings-profile-dark-2000.webp 2000w"
+             sizes="(max-width: 1180px) 100vw, 1140px"
+             alt="A credential profile open in the SnmpLens settings: an SNMPv3 user with its protocols, the targets given the profile, and a test." width="1600" height="1100"
+             loading="lazy" decoding="async" />
+        <figcaption>One profile — the edge routers' SNMPv3 user — with the targets it is given,
+          and the button that tries it before anything is saved.</figcaption>
       </figure>
     </section>
 
@@ -1286,6 +1373,301 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
     <hr />
 
     <!-- ---------------------------------------------------------------- -->
+    <section id="simulator">
+      <h2>Simulated devices</h2>
+      <p>
+        The <strong>Simulator</strong> in the header runs SNMP agents on your own machine:
+        devices answering v1, v2c and v3 — the whole USM, discovery, reports and time windows
+        included — from a catalogue of fourteen models or from models of your own. Each answers a
+        whole agent's walk — IF-MIB, IP, TCP, UDP, ENTITY, BRIDGE, LLDP, HOST-RESOURCES, UCD and
+        the vendor's own MIBs — built from one description of the device, so that they agree with
+        each other the way a real agent's do, with counters that move and wrap.
+      </p>
+      <p>
+        A simulated device answers on a <strong>loopback address only</strong>,
+        <code>127.x.x.x</code> or <code>::1</code>. That is a rule of the backend, checked when a
+        device is saved and again on the socket it actually binds — not a default of the form,
+        since a bench file is JSON somebody else may have written. Where it <em>sends</em>
+        notifications may be anywhere.
+      </p>
+      <p>
+        The list groups the devices by category. A device is started and stopped,
+        <strong>restarted</strong> — uptime and counters from zero, and <code>coldStart</code> if
+        it sends one —, <strong>duplicated</strong>, made to send any of its notifications on the
+        spot, and <strong>added as a target</strong> in one click, with its port and the
+        identifiers of the most secure version it answers. Nothing starts by itself at launch
+        unless a device is set to start with SnmpLens.
+      </p>
+
+      <h3>The editor</h3>
+      <p>Five tabs, and a tab holding something to fix is marked with a dot:</p>
+      <ul>
+        <li><strong>Device</strong> — the model, the name (its sysName), the address and the
+          port, its own sysLocation and sysContact, and whether it starts with SnmpLens. A saved
+          device shows its engine ID, given once and never changed: managers localise their
+          SNMPv3 keys to it.</li>
+        <li><strong>Access</strong> — the versions it answers, its read and write communities,
+          and its SNMPv3 users.</li>
+        <li><strong>Notifications</strong> — where it sends traps and INFORMs, and when.</li>
+        <li><strong>Data</strong> — the model's size, values of its own, and a preview of
+          everything it answers.</li>
+        <li><strong>Faults</strong> — what it is made to do wrong, applied at once to a saved
+          device.</li>
+      </ul>
+      <p>
+        A running device that is saved restarts, so it answers as configured. Its communities
+        and passphrases are kept in the system's credential store, never in
+        <code>simulator.json</code>; in the editor they are masked, and the eye beside each shows
+        it — except in Anonymous Mode.
+      </p>
+      <figure class="shot" style="margin-top:1.5rem">
+        <img class="shot-light" src="assets/img/simulator-editor-light-1200.webp"
+             srcset="assets/img/simulator-editor-light-1200.webp 1200w, assets/img/simulator-editor-light-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="A new simulated device in SnmpLens: the model picker by category with a custom model and its icon, then the name, the loopback address and the port." width="1600" height="1300"
+             loading="lazy" decoding="async" />
+        <img class="shot-dark" src="assets/img/simulator-editor-dark-1200.webp"
+             srcset="assets/img/simulator-editor-dark-1200.webp 1200w, assets/img/simulator-editor-dark-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="A new simulated device in SnmpLens: the model picker by category with a custom model and its icon, then the name, the loopback address and the port." width="1600" height="1300"
+             loading="lazy" decoding="async" />
+        <figcaption>A new device: its model — a custom one among the catalogue, with its icon —
+          its name, and the loopback address SnmpLens suggested.</figcaption>
+      </figure>
+
+      <h3>Who may read, and who may write</h3>
+      <p>
+        v1 and v2c read with the community. Give the device a <strong>write community</strong>
+        as well and a SET with it changes what the device answers; an SNMPv3 user writes when
+        <strong>Can write (SET)</strong> is ticked. What is written holds until the device
+        restarts, as a running configuration does until it is saved.
+      </p>
+      <p>
+        Every varbind is checked before any is applied, so a SET is applied whole or not at all.
+        An instance nothing answered is created where one can sit, and a table row is created
+        and destroyed through its <code>RowStatus</code> — <code>createAndGo</code>,
+        <code>createAndWait</code>, <code>destroy</code> — as the MIBs loaded in SnmpLens
+        describe it, so the <a href="#tables">row editor</a> works against a simulated device as
+        it does against a real one. A manager that only reads is answered
+        <code>noAccess</code>, and the agent's own counters, engine and users are never written.
+      </p>
+      <figure class="shot" style="margin-top:1.5rem">
+        <img class="shot-light" src="assets/img/simulator-access-light-1200.webp"
+             srcset="assets/img/simulator-access-light-1200.webp 1200w, assets/img/simulator-access-light-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="The Access tab of a simulated device: a read and a write community, masked with an eye to show them, and two SNMPv3 users, the second allowed to SET." width="1600" height="1250"
+             loading="lazy" decoding="async" />
+        <img class="shot-dark" src="assets/img/simulator-access-dark-1200.webp"
+             srcset="assets/img/simulator-access-dark-1200.webp 1200w, assets/img/simulator-access-dark-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="The Access tab of a simulated device: a read and a write community, masked with an eye to show them, and two SNMPv3 users, the second allowed to SET." width="1600" height="1250"
+             loading="lazy" decoding="async" />
+        <figcaption>A read and a write community, and two SNMPv3 users — the second allowed to SET.</figcaption>
+      </figure>
+
+      <h3>What it sends</h3>
+      <p>
+        Up to eight destinations, in v1, v2c or v3, as traps or acknowledged INFORMs: when the
+        device starts, when a request is refused, on schedules — a named notification or any at
+        random, regular or not — and on request from the list. A new destination is SnmpLens on
+        this machine, at the trap listener's port. An SNMPv3 INFORM needs the receiver's engine
+        ID, and the editor fills in SnmpLens's own. A device sends twenty notifications a second
+        at most, so a flood of refused requests cannot become a flood on the network.
+      </p>
+      <figure class="shot" style="margin-top:1.5rem">
+        <img class="shot-light" src="assets/img/simulator-traps-light-1200.webp"
+             srcset="assets/img/simulator-traps-light-1200.webp 1200w, assets/img/simulator-traps-light-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="The Notifications tab of a simulated device: traps to SnmpLens on this machine and INFORMs to a collector on the network, sent at start, on a refused request and on two schedules." width="1600" height="1600"
+             loading="lazy" decoding="async" />
+        <img class="shot-dark" src="assets/img/simulator-traps-dark-1200.webp"
+             srcset="assets/img/simulator-traps-dark-1200.webp 1200w, assets/img/simulator-traps-dark-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="The Notifications tab of a simulated device: traps to SnmpLens on this machine and INFORMs to a collector on the network, sent at start, on a refused request and on two schedules." width="1600" height="1600"
+             loading="lazy" decoding="async" />
+        <figcaption>Traps to SnmpLens here, INFORMs to a collector on the network — at start, on a
+          refused request, and on two schedules.</figcaption>
+      </figure>
+
+      <h3>Faults</h3>
+      <p>
+        The lightning button in the list, or the <strong>Faults</strong> tab, makes a device
+        misbehave while it runs, without restarting it — its uptime and counters are what a fault
+        is tested against: a latency with jitter, a share of requests lost, a device that answers
+        nothing (and still sends its notifications), a share answered with <code>genErr</code> or
+        <code>tooBig</code>, and counters running 10, 100 or 1000 times faster, so that a
+        Counter32 wraps in minutes. They are what the reachability alerts, the
+        <a href="#overrun">overload guardrail</a> and the counter-wrap arithmetic are tested
+        against, and they are kept with the device.
+      </p>
+
+      <h3>Shaping its data</h3>
+      <p>
+        Some models take a size: the Catalyst's ports — 2 up to 24 or 48, its uplinks keeping
+        their index so that its notifications still name them —, the Synology's disks (1 to 9),
+        the rack PDU's outlets (8 to 24) and the Linux server's processors (1 to 64). Any device
+        takes <strong>values of its own</strong>, OID by OID, in the types a model file uses:
+        each takes the place of the model's object at its OID, or adds an instance the model does
+        not have. One that would sit under another instance is refused when the device is saved.
+      </p>
+      <p>
+        The <strong>preview</strong> shows what the device would answer, from the settings on
+        screen — saved or not —, read as if it had run since the tab was opened and read again
+        every five seconds, so that what moves is seen moving. Each row says how its value
+        behaves — static, counter, gauge, uptime, clock, computed — and can be narrowed to what
+        moves. Each object is named from the loaded MIBs, <code>IF-MIB::ifDescr.3</code>, and the
+        filter takes an OID subtree or a name. The columns keep the width they are dragged to, or
+        stepped to with the arrow keys.
+      </p>
+      <figure class="shot" style="margin-top:1.5rem">
+        <img class="shot-light" src="assets/img/simulator-data-light-1200.webp"
+             srcset="assets/img/simulator-data-light-1200.webp 1200w, assets/img/simulator-data-light-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="The Data tab of a simulated switch: twelve ports on a 24-port model, two values of its own, and a preview table of OIDs with their MIB names, types, behaviour and values." width="1600" height="1650"
+             loading="lazy" decoding="async" />
+        <img class="shot-dark" src="assets/img/simulator-data-dark-1200.webp"
+             srcset="assets/img/simulator-data-dark-1200.webp 1200w, assets/img/simulator-data-dark-2000.webp 2000w"
+             sizes="(max-width: 900px) 100vw, 820px"
+             alt="The Data tab of a simulated switch: twelve ports on a 24-port model, two values of its own, and a preview table of OIDs with their MIB names, types, behaviour and values." width="1600" height="1650"
+             loading="lazy" decoding="async" />
+        <figcaption>A 24-port switch given twelve ports, a contact and a CPU figure of its own —
+          and what it answers, named from the MIBs, each value saying whether it moves.</figcaption>
+      </figure>
+
+      <h3>A bench as a file</h3>
+      <p>
+        <strong>Export all…</strong>, or a device's own export button, writes the devices as
+        JSON, and asks every time whether to put their passwords in: the file then says which,
+        with <code>"secrets": "included"</code> or <code>"omitted"</code>. <strong>Import
+        devices…</strong> makes each device new on this machine — its own ID and engine, and
+        another address when its own is taken. A device that cannot be made here, of a custom
+        model that is not installed say, is refused on its own; devices imported without their
+        passwords start once they are given them in the editor.
+      </p>
+    </section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section id="simulator-models">
+      <h2>Writing a simulator model</h2>
+      <p>
+        The catalogue can be extended with models of your own: a JSON file saying what a device
+        answers, imported from the model picker with <strong>Import models…</strong> on its own,
+        or in a ZIP that also carries the model's icon — PNG, JPEG or GIF, up to 512&nbsp;×&nbsp;512
+        pixels. An archive may hold several models, and a model imported again replaces the one
+        kept and restarts the devices made from it.
+      </p>
+      <pre><code>{
+  "kind": "snmplens-simulator-model",
+  "formatVersion": 1,
+  "id": "acme-crac",
+  "name": "Acme CRAC-40 cooling unit",
+  "vendor": "Acme",
+  "category": "environment",
+  "icon": "acme-crac.png",
+  "system": { "descr": "Acme CRAC-40 controller, firmware 3.2.1", "objectId": "1.3.6.1.4.1.32473.1.40" },
+  "interfaces": [{ "descr": "eth0", "speedMbps": 100, "up": true, "inOctetsPerSec": 400, "outOctetsPerSec": 900 }],
+  "objects": [
+    { "oid": "1.3.6.1.4.1.32473.2.2.1.1.{#}", "instances": [1, 2, 3], "type": "Integer32", "value": "{#}" },
+    { "oid": "1.3.6.1.4.1.32473.2.2.1.2.{#}", "instances": [1, 2, 3], "type": "OctetString", "value": "Sensor {#}" },
+    { "oid": "1.3.6.1.4.1.32473.2.2.1.3.{#}", "instances": [1, 2, 3], "type": "Integer32", "gauge": { "min": 180, "max": 260 } },
+    { "oid": "1.3.6.1.4.1.32473.2.4.0", "type": "Counter64", "counter": { "perSecond": 1, "start": 31536000 } },
+    { "oid": "1.3.6.1.4.1.32473.3.1.0", "type": "OctetString", "value": "Return air above 27 °C", "notifyOnly": true }
+  ],
+  "notifications": [
+    { "name": "acmeHighTemperature", "oid": "1.3.6.1.4.1.32473.0.1",
+      "objects": ["1.3.6.1.4.1.32473.2.2.1.3.2", "1.3.6.1.4.1.32473.3.1.0"] }
+  ]
+}</code></pre>
+      <div class="table-scroll">
+        <table>
+          <caption class="visually-hidden">The fields of a simulator model file</caption>
+          <thead><tr><th scope="col">Field</th><th scope="col">What it says</th></tr></thead>
+          <tbody>
+            <tr><td><code>id</code></td><td>Lower-case letters, digits and hyphens; the model is listed as <code>custom:&lt;id&gt;</code>, so it can never take a built-in model's place</td></tr>
+            <tr><td><code>category</code></td><td><code>server</code>, <code>network</code>, <code>security</code>, <code>wireless</code>, <code>storage</code>, <code>power</code>, <code>printing</code>, <code>environment</code> or <code>other</code></td></tr>
+            <tr><td><code>icon</code></td><td>A file in the same ZIP; a model imported alone keeps the icon it already had</td></tr>
+            <tr><td><code>system</code></td><td><code>descr</code> and <code>objectId</code> (sysDescr, sysObjectID) are required; <code>contact</code>, <code>location</code> and <code>services</code> are not. sysName is the device's own name</td></tr>
+            <tr><td><code>interfaces</code></td><td>IF-MIB's tables: <code>descr</code>, <code>name</code>, <code>alias</code>, <code>type</code> (IANAifType), <code>mtu</code>, <code>speedMbps</code>, <code>up</code>, <code>adminDown</code>, and the rates <code>inOctetsPerSec</code>, <code>outOctetsPerSec</code>, <code>errorsPerSec</code> the counters move at</td></tr>
+            <tr><td><code>objects[].type</code></td><td><code>Integer32</code>, <code>OctetString</code>, <code>ObjectIdentifier</code>, <code>IpAddress</code>, <code>Counter32</code>, <code>Gauge32</code>, <code>Unsigned32</code>, <code>TimeTicks</code>, <code>Counter64</code>, <code>Opaque</code></td></tr>
+            <tr><td>behaviour</td><td>Exactly one of <code>value</code>, <code>hex</code> (octets), <code>uptime</code>, <code>secondsUp</code>, <code>gauge</code> (<code>min</code>, <code>max</code>, <code>periodSec</code>) and <code>counter</code> (<code>perSecond</code>, <code>start</code>, <code>swing</code>, <code>periodSec</code>)</td></tr>
+            <tr><td><code>instances</code></td><td>A table's rows: <code>{#}</code> in the OID — and in a string value — becomes each; <code>"value": "{#}"</code> is the row's own index</td></tr>
+            <tr><td><code>notifyOnly</code></td><td>An accessible-for-notify object: carried by notifications, never answered to a request</td></tr>
+            <tr><td><code>notifications</code></td><td>The model's own, beside <code>coldStart</code>, <code>warmStart</code> and <code>authenticationFailure</code>, which every device sends</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        A file is read the way a preset is: what it says it is first, then all of it, strictly —
+        a field the format does not define is refused rather than ignored, since a misspelt
+        <code>vaule</code> would otherwise be an object with no value. The model is then built
+        once, so an OID given twice, one under another, or a value its type cannot carry is
+        refused at import, naming the field or the OID. Some OIDs are the agent's own and no
+        model may answer them: SNMPv2-MIB's snmp group on every device, and for SNMPv3
+        snmpEngine, the MPD and USM statistics — read live from what the agent counts as it
+        answers.
+      </p>
+      <p class="muted small">
+        The example is <code>pkg/simulator/testdata/custom-model.json</code> in the repository;
+        32473 is the enterprise number RFC 5612 reserves for documentation.
+      </p>
+    </section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section id="simulator-packages">
+      <h2>Packages and recordings</h2>
+      <p>
+        A model can also be spread over the files of one folder — a <strong>package</strong> —
+        so that each file says one thing, and so that a device can answer what a real one
+        answered, recorded:
+      </p>
+      <pre><code>acme-gateway/
+├── model.json         what the device is: the format above, "system" optional once a walk records one
+├── oids.json          objects, as { "objects": [ … ] } — or several files in oids/
+├── traps.json         notifications, as { "notifications": [ … ] }
+├── walks/             what a real device answered: snmpsim .snmprec, or snmpwalk -On output
+│   └── gateway.snmprec
+└── acme-gateway.png   the icon model.json names</code></pre>
+      <p>
+        Zip the folder and import it; one archive may hold several packages and lone models.
+        Record a walk with <code>snmpwalk -v2c -c public -On -Ox &lt;host&gt; .1.3.6.1</code> — and
+        <code>.1.0.8802</code> if the device answers LLDP — or with snmpsim's recorder:
+        <code>-On</code> keeps the OIDs numeric, and <code>-Ox</code> keeps an OCTET STRING's
+        octets rather than the text a DISPLAY-HINT makes of them.
+      </p>
+      <ul>
+        <li><strong>What is written wins over what was recorded</strong>, OID by OID — which is
+          how a recorded constant is made to move, or a recorded value corrected. When
+          <code>model.json</code> gives <code>interfaces</code>, IF-MIB is made from them and the
+          walks' own is left out.</li>
+        <li><strong>The agent's own objects stay behind.</strong> The snmp group and everything
+          under <code>1.3.6.1.6.3</code> — the recorded device's engine, USM users, VACM groups
+          and community strings — are never served, and the import says how many were left out.</li>
+        <li><strong>The system group is made, never replayed.</strong> sysName is the simulated
+          device's name and sysUpTime its own uptime; the rest is what the walks recorded, unless
+          <code>model.json</code> says otherwise.</li>
+        <li><strong>Recorded counters move</strong>, each from the value recorded at the rate it
+          had averaged since the device booted, swinging around it as traffic does.</li>
+      </ul>
+      <h3>Recording a device</h3>
+      <p>
+        <strong>Record a device…</strong> in the model picker walks a real device — with the
+        identifiers its target uses — and keeps what it answered as a package: a model like any
+        other, from which a simulated device answers what the real one did. The recorded agent's
+        own subtree, with its user names and community table, is never written. A recording can
+        be stopped, and then keeps nothing. <strong>Export</strong>, beside a custom model, writes
+        it back out as a package folder with its icon — which is how a recording is edited: add an
+        <code>oids.json</code> beside its walk, or a <code>traps.json</code>, and import it again.
+      </p>
+      <p class="muted small">
+        A walk is at most 16&nbsp;MB, and a package's walks record at most 65&nbsp;536 objects
+        between them. A line of a walk that cannot be read is left out and counted, and the import
+        says where the first one was.
+      </p>
+    </section>
+
+    <hr />
+
+    <!-- ---------------------------------------------------------------- -->
     <section id="discovery">
       <h2>Discovery and network tools</h2>
       <p>
@@ -1368,6 +1750,8 @@ python tools/snmp_test_agent.py --trap-port 1162 --trap-interval 10</code></pre>
             <tr><td><code>assets/</code></td><td>The map backgrounds you added</td></tr>
             <tr><td><code>monitoring.db</code></td><td>SQLite: history, events, sessions, rules, destinations, the outbox</td></tr>
             <tr><td><code>service.json</code></td><td>The few preferences that must be read before the window exists</td></tr>
+            <tr><td><code>simulator.json</code></td><td>The simulated devices — their communities and passphrases are in the credential store</td></tr>
+            <tr><td><code>simulator-models/</code></td><td>Custom simulator models and packages, and their icons</td></tr>
           </tbody>
         </table>
       </div>

@@ -190,6 +190,26 @@ try {
     bound, the library states what it will cost and whether it can raise an incident.
   </p>
 
+  <h3>The simulator</h3>
+  <p>
+    Simulated devices answer on a loopback address only — <code>127.0.0.0/8</code> or
+    <code>::1</code>. That is enforced by the backend, not by the form: an address is refused
+    when a device is saved, a host name is never resolved (<code>localhost</code> excepted), and
+    the socket a device actually bound is checked again before it answers, because an address
+    left empty binds every interface. A bench file somebody else wrote is held to the same rule.
+    Where a device <em>sends</em> notifications is not restricted, so what is bounded there is
+    the rate: a refused request is a datagram anything on the machine can send, and a device
+    sends twenty notifications a second at most, and an <code>authenticationFailure</code> about
+    once a second.
+  </p>
+  <p>
+    A simulated device's communities and passphrases are kept in the credential store, never in
+    <code>simulator.json</code>, and a bench file carries them only when you say so at export —
+    the file then says that it does. Recording a real device never writes that device's own
+    SNMP subtree: its user names, its access groups and its community table stay out of the
+    package.
+  </p>
+
   <h3>Releases</h3>
   <p>
     Each release carries a SHA-256 manifest and an Ed25519 signature over it. The application
