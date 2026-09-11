@@ -1441,7 +1441,7 @@
       "noMatch": "Aucun modèle ne correspond à « {query} ».",
       "custom": "Personnalisé",
       "import": "Importer des modèles…",
-      "importTitle": "Ajouter des modèles depuis un fichier JSON, ou depuis un ZIP qui contient leurs icônes",
+      "importTitle": "Ajouter des modèles depuis un fichier JSON, ou depuis un ZIP qui contient leurs icônes ou des paquets complets avec des walks enregistrés",
       "deleteModel": "Supprimer ce modèle personnalisé",
       "inUse": "{count, plural, one {# appareil est fait de ce modèle : supprimez-le d’abord} other {# appareils sont faits de ce modèle : supprimez-les d’abord}}"
     },
@@ -1454,7 +1454,10 @@
         "iconSkipped": "{name} : son icône « {detail} » n’a pas été importée — une icône voyage dans un ZIP, à côté de son modèle",
         "iconMissing": "{name} : l’archive ne contient pas « {detail} », le modèle n’a donc pas d’icône",
         "iconRefused": "{name} : son icône a été refusée ({detail})",
-        "restartFailed": "{name} : un appareil n’a pas redémarré — {detail}"
+        "restartFailed": "{name} : un appareil n’a pas redémarré — {detail}",
+        "walkSkipped": "{name} : des valeurs enregistrées illisibles ont été écartées ({detail})",
+        "walkAgentOwned": "{name} : {detail} objets enregistrés appartiennent à l’agent lui-même — ses compteurs SNMP, son moteur, ses utilisateurs, ses groupes et ses communautés — et ont été écartés",
+        "packageIgnored": "{name} : « {detail} » n’est pas un fichier que lit un paquet, et a été écarté"
       }
     }
   }

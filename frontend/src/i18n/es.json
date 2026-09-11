@@ -1441,7 +1441,7 @@
       "noMatch": "Ningún modelo coincide con «{query}».",
       "custom": "Personalizado",
       "import": "Importar modelos…",
-      "importTitle": "Añadir modelos desde un archivo JSON, o desde un ZIP que incluya sus iconos",
+      "importTitle": "Añadir modelos desde un archivo JSON, o desde un ZIP con sus iconos o paquetes completos con walks grabados",
       "deleteModel": "Eliminar este modelo personalizado",
       "inUse": "{count, plural, one {# dispositivo se basa en este modelo: elimínelo primero} other {# dispositivos se basan en este modelo: elimínelos primero}}"
     },
@@ -1454,7 +1454,10 @@
         "iconSkipped": "{name}: su icono «{detail}» no se importó — un icono viaja en un ZIP, junto a su modelo",
         "iconMissing": "{name}: el archivo no contiene «{detail}», así que el modelo no tiene icono",
         "iconRefused": "{name}: su icono fue rechazado ({detail})",
-        "restartFailed": "{name}: un dispositivo no se reinició — {detail}"
+        "restartFailed": "{name}: un dispositivo no se reinició — {detail}",
+        "walkSkipped": "{name}: se omitieron valores grabados que no se pudieron leer ({detail})",
+        "walkAgentOwned": "{name}: {detail} objetos grabados pertenecen al propio agente — sus contadores SNMP, su motor, sus usuarios, grupos y comunidades — y se omitieron",
+        "packageIgnored": "{name}: «{detail}» no es un archivo que lea un paquete, y se omitió"
       }
     }
   }

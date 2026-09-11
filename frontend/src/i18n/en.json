@@ -1441,7 +1441,7 @@
       "noMatch": "No model matches “{query}”.",
       "custom": "Custom",
       "import": "Import models…",
-      "importTitle": "Add models from a JSON file, or from a ZIP that carries their icons",
+      "importTitle": "Add models from a JSON file, or from a ZIP holding their icons or whole packages with recorded walks",
       "deleteModel": "Delete this custom model",
       "inUse": "{count, plural, one {# device is made from this model: delete it first} other {# devices are made from this model: delete them first}}"
     },
@@ -1454,7 +1454,10 @@
         "iconSkipped": "{name}: its icon “{detail}” was not imported — an icon travels in a ZIP, beside its model",
         "iconMissing": "{name}: the archive holds no “{detail}”, so the model has no icon",
         "iconRefused": "{name}: its icon was refused ({detail})",
-        "restartFailed": "{name}: a device did not restart — {detail}"
+        "restartFailed": "{name}: a device did not restart — {detail}",
+        "walkSkipped": "{name}: recorded values that could not be read were left out ({detail})",
+        "walkAgentOwned": "{name}: {detail} recorded objects belong to the agent itself — its SNMP counters, engine, users, groups and communities — and were left out",
+        "packageIgnored": "{name}: “{detail}” is not a file a package reads, and was left out"
       }
     }
   }

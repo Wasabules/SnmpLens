@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"SnmpLens/pkg/imagegate"
 	"SnmpLens/pkg/simulator"
@@ -21,14 +22,18 @@ import (
 )
 
 // Custom simulator models: model files somebody else wrote (pkg/simulator,
-// ParseCustomModel), imported from a JSON file, or from a ZIP that carries their
-// icons beside them.
+// ParseCustomModel), imported from a JSON file or from a ZIP that carries their
+// icons beside them, and packages (ParseCustomPackage) — a model spread over the
+// files of one folder of a ZIP, the walks a real device answered among them.
 //
 // They are kept in simulator-models/, a SIBLING of simulator.json, mibs/ and
 // presets/ and never inside one of them, for the reason assets/ is: whatever
 // lists those directories would read a model as a broken MIB or preset. A model
-// is filed under its own id — `<id>.json`, and its icon `<id>.png`, `.jpg` or
-// `.gif` — never under a name the file or the archive chose.
+// is filed under its own id — `<id>.json` for a lone file, `<id>.zip` for a
+// package, and its icon `<id>.png`, `.jpg` or `.gif` — never under a name the
+// file or the archive chose. A package is kept as a ZIP of the files it reads,
+// written here, rather than as a folder of them: one file to replace and one to
+// delete, and nothing from the archive lands on disk under a name of its own.
 //
 // Only the dialog is bound. The renderer never names a path here: a method that
 // took one would read any file the renderer asked for, and a JSON parser's
@@ -41,12 +46,24 @@ const simulatorModelSubdir = "simulator-models"
 const (
 	maxModelArchiveBytes = 8 << 20
 	maxArchiveEntries    = 64
-	maxArchiveUnpacked   = 16 << 20
-	maxModelIconBytes    = 256 << 10
+	// maxArchiveUnpacked leaves room for a package's walks, each of them up to
+	// simulator.MaxWalkBytes.
+	maxArchiveUnpacked = 40 << 20
+	// maxKeptPackageBytes bounds a package as it is kept: compressed again
+	// here, it may come out a little larger than it arrived.
+	maxKeptPackageBytes = 2 * maxModelArchiveBytes
+	maxModelIconBytes   = 256 << 10
 	// maxModelIconSide is far more than a picker draws; the bound is what
 	// keeps the icons the model list carries small.
 	maxModelIconSide = 512
 	maxCustomModels  = 64
+)
+
+// The forms a model is kept in: a lone file as itself, a package as the ZIP of
+// the files it reads.
+const (
+	keptFile    = ".json"
+	keptPackage = ".zip"
 )
 
 // iconExtensions are what an icon is kept as, by the format imagegate decoded —
@@ -55,10 +72,10 @@ var iconExtensions = map[string]string{"png": ".png", "jpeg": ".jpg", "gif": ".g
 
 var utf8BOM = []byte("\xef\xbb\xbf")
 
-// SimulatorModelImportResult is what became of one model file.
+// SimulatorModelImportResult is what became of one model file or package.
 type SimulatorModelImportResult struct {
 	// File is what was read: the file picked and, for a model in a ZIP, the
-	// entry in it.
+	// entry in it — a package's model.json, for a package.
 	File     string `json:"file"`
 	ModelID  string `json:"modelId,omitempty"`
 	Name     string `json:"name,omitempty"`
@@ -89,42 +106,91 @@ type modelIcon struct {
 	ext  string
 }
 
+// iconLookup finds the icon a model names, or says why it has none.
+type iconLookup func(icon string) (*modelIcon, *SimulatorModelWarning)
+
 // loadModels reads the custom models from their directory and makes them the
 // simulator's. A file that no longer reads — edited by hand, or written by a
 // later version — is logged and left where it is; a device of its model says
 // which model it lacks when it is started.
 func (s *simulatorService) loadModels() {
-	var list []simulator.CustomModel
 	entries, err := os.ReadDir(s.modelDir)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		log.Printf("simulator: cannot list %s: %v", s.modelDir, err)
 	}
+	type kept struct {
+		m        simulator.CustomModel
+		modified time.Time
+	}
+	bySlug := map[string]kept{}
 	for _, e := range entries {
 		name := e.Name()
-		if e.IsDir() || !strings.EqualFold(filepath.Ext(name), ".json") {
+		form := filepath.Ext(name)
+		if e.IsDir() || (form != keptFile && form != keptPackage) {
 			continue
 		}
-		raw, err := readAtMost(filepath.Join(s.modelDir, name), simulator.MaxCustomModelBytes)
-		if err != nil {
-			log.Printf("simulator: model %s: %v", name, err)
-			continue
-		}
-		m, err := simulator.ParseCustomModel(bytes.TrimPrefix(raw, utf8BOM))
+		m, err := readKept(filepath.Join(s.modelDir, name), form)
 		if err != nil {
 			log.Printf("simulator: model %s no longer reads: %v", name, err)
 			continue
 		}
-		if m.Slug()+".json" != name {
+		if m.Slug()+form != name {
 			log.Printf("simulator: %s says it is %q; a model is kept under its own id", name, m.Slug())
 			continue
 		}
-		list = append(list, m)
+		var modified time.Time
+		if info, err := e.Info(); err == nil {
+			modified = info.ModTime()
+		}
+		// Both forms at once are an import that stopped between writing one
+		// and removing the other: the one written last is the model.
+		if other, ok := bySlug[m.Slug()]; ok && !modified.After(other.modified) {
+			continue
+		}
+		bySlug[m.Slug()] = kept{m, modified}
 	}
+	list := make([]simulator.CustomModel, 0, len(bySlug))
+	for _, k := range bySlug {
+		list = append(list, k.m)
+	}
+	slices.SortFunc(list, func(a, b simulator.CustomModel) int { return strings.Compare(a.Slug(), b.Slug()) })
 	if err := simulator.SetCustomModels(list); err != nil {
 		log.Printf("simulator: the custom models: %v", err)
 		return
 	}
 	s.models = list
+}
+
+// readKept reads a model the directory keeps, in the form it is kept in.
+func readKept(name, form string) (simulator.CustomModel, error) {
+	if form == keptFile {
+		raw, err := readAtMost(name, simulator.MaxCustomModelBytes)
+		if err != nil {
+			return simulator.CustomModel{}, err
+		}
+		return simulator.ParseCustomModel(bytes.TrimPrefix(raw, utf8BOM))
+	}
+	data, err := readAtMost(name, maxKeptPackageBytes)
+	if err != nil {
+		return simulator.CustomModel{}, err
+	}
+	ar, err := openArchive(data)
+	if err != nil {
+		return simulator.CustomModel{}, err
+	}
+	var files []simulator.PackageFile
+	for _, f := range ar.files {
+		if !simulator.PackageReads(f.Name) {
+			continue
+		}
+		b, err := ar.read(f, packageFileLimit(f.Name))
+		if err != nil {
+			return simulator.CustomModel{}, err
+		}
+		files = append(files, simulator.PackageFile{Name: f.Name, Data: b})
+	}
+	m, _, err := simulator.ParseCustomPackage(files)
+	return m, err
 }
 
 // emitSimulatorModelsChanged tells the renderer to list the models again.
@@ -193,7 +259,7 @@ func checkIcon(data []byte) (imagegate.Info, error) {
 }
 
 // ImportSimulatorModelsDialog asks for model files — JSON, or ZIP archives with
-// icons — and imports them.
+// icons and packages — and imports them.
 func (a *App) ImportSimulatorModelsDialog() ([]SimulatorModelImportResult, error) {
 	if a.ctx == nil {
 		return nil, fmt.Errorf("no window")
@@ -275,114 +341,265 @@ func (s *simulatorService) importModelFile(src string) []SimulatorModelImportRes
 	return []SimulatorModelImportResult{s.importModel(name, data, skipped)}
 }
 
-// importModelArchive imports every model in a ZIP, each with the icon it names
-// from the same archive. Nothing in the archive is ever written under the name
-// it has there.
-func (s *simulatorService) importModelArchive(name string, data []byte) []SimulatorModelImportResult {
-	fail := func(format string, args ...any) []SimulatorModelImportResult {
-		return []SimulatorModelImportResult{{File: name, Error: fmt.Sprintf(format, args...), Warnings: []SimulatorModelWarning{}}}
-	}
+// archive is a ZIP read within bounds: every entry through a limit, and what
+// is unpacked counted as it is read.
+type archive struct {
+	files    []*zip.File
+	unpacked int64
+}
+
+// openArchive lists what a ZIP holds, less its folders, dotfiles and the
+// resource forks macOS adds.
+func openArchive(data []byte) (*archive, error) {
 	// An entry named ../x is harmless here, since no entry is written by its
 	// name; Go reports one as ErrInsecurePath beside a reader that works.
 	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil && !errors.Is(err, zip.ErrInsecurePath) {
-		return fail("this ZIP archive cannot be read: %v", err)
+		return nil, fmt.Errorf("this ZIP archive cannot be read: %v", err)
 	}
-	var files []*zip.File
+	ar := &archive{}
 	for _, f := range zr.File {
 		base := path.Base(f.Name)
 		if f.FileInfo().IsDir() || strings.HasPrefix(f.Name, "__MACOSX/") || strings.HasPrefix(base, ".") {
 			continue
 		}
-		files = append(files, f)
+		ar.files = append(ar.files, f)
 	}
-	if len(files) > maxArchiveEntries {
-		return fail("the archive holds %d files, and an import reads at most %d", len(files), maxArchiveEntries)
+	if len(ar.files) > maxArchiveEntries {
+		return nil, fmt.Errorf("the archive holds %d files, and an import reads at most %d", len(ar.files), maxArchiveEntries)
 	}
+	return ar, nil
+}
 
-	var unpacked int64
-	read := func(f *zip.File, limit int64) ([]byte, error) {
-		if f.UncompressedSize64 > uint64(limit) {
-			return nil, fmt.Errorf("%s unpacks to more than %d KB", path.Base(f.Name), limit>>10)
+// read unpacks one entry, refusing one that unpacks to more than limit.
+func (ar *archive) read(f *zip.File, limit int64) ([]byte, error) {
+	if f.UncompressedSize64 > uint64(limit) {
+		return nil, fmt.Errorf("%s unpacks to more than %d KB", path.Base(f.Name), limit>>10)
+	}
+	rc, err := f.Open()
+	if err != nil {
+		return nil, fmt.Errorf("%s cannot be unpacked: %w", path.Base(f.Name), err)
+	}
+	defer rc.Close()
+	// archive/zip stops at the size an entry declares, and the limit is the
+	// bound on what it may declare.
+	b, err := io.ReadAll(io.LimitReader(rc, limit+1))
+	if err != nil {
+		return nil, fmt.Errorf("%s cannot be unpacked: %w", path.Base(f.Name), err)
+	}
+	if int64(len(b)) > limit {
+		return nil, fmt.Errorf("%s unpacks to more than %d KB", path.Base(f.Name), limit>>10)
+	}
+	if ar.unpacked += int64(len(b)); ar.unpacked > maxArchiveUnpacked {
+		return nil, fmt.Errorf("the archive unpacks to more than %d MB", maxArchiveUnpacked>>20)
+	}
+	return b, nil
+}
+
+// exhausted reports whether the archive has unpacked all an import may.
+func (ar *archive) exhausted() bool { return ar.unpacked > maxArchiveUnpacked }
+
+// icon reads the icon a model names from the archive, through the gate; found
+// is nil when the archive holds none of that name.
+func (ar *archive) icon(found *zip.File, name string) (*modelIcon, *SimulatorModelWarning) {
+	if found == nil {
+		return nil, &SimulatorModelWarning{Key: "iconMissing", Detail: name}
+	}
+	data, err := ar.read(found, maxModelIconBytes)
+	if err != nil {
+		return nil, &SimulatorModelWarning{Key: "iconRefused", Detail: err.Error()}
+	}
+	meta, err := checkIcon(data)
+	if err != nil {
+		return nil, &SimulatorModelWarning{Key: "iconRefused", Detail: err.Error()}
+	}
+	return &modelIcon{data: data, ext: iconExtensions[meta.Format]}, nil
+}
+
+// packageFileLimit is how much one file of a package may unpack to: a walk is
+// the recording of a whole agent, and the rest is JSON.
+func packageFileLimit(name string) int64 {
+	if strings.HasPrefix(strings.ToLower(name), "walks/") {
+		return simulator.MaxWalkBytes
+	}
+	return simulator.MaxCustomModelBytes
+}
+
+// importModelArchive imports what a ZIP holds: every package — a folder that
+// holds model.json, and everything under it — and every other model file,
+// each with the icon it names from the same archive. Nothing in the archive is
+// ever written under the name it has there.
+func (s *simulatorService) importModelArchive(name string, data []byte) []SimulatorModelImportResult {
+	fail := func(format string, args ...any) []SimulatorModelImportResult {
+		return []SimulatorModelImportResult{{File: name, Error: fmt.Sprintf(format, args...), Warnings: []SimulatorModelWarning{}}}
+	}
+	ar, err := openArchive(data)
+	if err != nil {
+		return fail("%v", err)
+	}
+	// A file belongs to the deepest package folder above it, if one is.
+	var roots []string
+	for _, f := range ar.files {
+		if root := path.Dir(f.Name); strings.EqualFold(path.Base(f.Name), simulator.PackageModelFile) && !slices.Contains(roots, root) {
+			roots = append(roots, root)
 		}
-		rc, err := f.Open()
-		if err != nil {
-			return nil, fmt.Errorf("%s cannot be unpacked: %w", path.Base(f.Name), err)
+	}
+	packageOf := func(file string) (string, bool) {
+		best, found := "", false
+		for _, r := range roots {
+			if (r == "." || strings.HasPrefix(file, r+"/")) && (!found || len(r) > len(best)) {
+				best, found = r, true
+			}
 		}
-		defer rc.Close()
-		// archive/zip stops at the size an entry declares, and the limit is the
-		// bound on what it may declare.
-		b, err := io.ReadAll(io.LimitReader(rc, limit+1))
-		if err != nil {
-			return nil, fmt.Errorf("%s cannot be unpacked: %w", path.Base(f.Name), err)
-		}
-		if int64(len(b)) > limit {
-			return nil, fmt.Errorf("%s unpacks to more than %d KB", path.Base(f.Name), limit>>10)
-		}
-		if unpacked += int64(len(b)); unpacked > maxArchiveUnpacked {
-			return nil, fmt.Errorf("the archive unpacks to more than %d MB", maxArchiveUnpacked>>20)
-		}
-		return b, nil
+		return best, found
 	}
 
 	results := []SimulatorModelImportResult{}
-	for _, f := range files {
-		if !strings.EqualFold(path.Ext(f.Name), ".json") {
-			continue
+	imported := map[string]bool{}
+	for _, f := range ar.files {
+		if ar.exhausted() {
+			break
 		}
-		entry := name + " › " + clipText(f.Name, 120)
-		raw, err := read(f, simulator.MaxCustomModelBytes)
-		if err != nil {
-			results = append(results, SimulatorModelImportResult{File: entry, Error: err.Error(), Warnings: []SimulatorModelWarning{}})
-			if unpacked > maxArchiveUnpacked {
-				break
-			}
-			continue
-		}
-		dir := path.Dir(f.Name)
-		lookup := func(icon string) (*modelIcon, *SimulatorModelWarning) {
-			// Beside the model first: two models of one archive may each call
-			// theirs icon.png.
-			var found *zip.File
-			for _, g := range files {
-				if path.Base(g.Name) == icon && (found == nil || path.Dir(g.Name) == dir) {
-					found = g
+		root, inPackage := packageOf(f.Name)
+		switch {
+		case inPackage && !imported[root]:
+			imported[root] = true
+			var members []*zip.File
+			for _, g := range ar.files {
+				if r, ok := packageOf(g.Name); ok && r == root {
+					members = append(members, g)
 				}
 			}
-			if found == nil {
-				return nil, &SimulatorModelWarning{Key: "iconMissing", Detail: icon}
-			}
-			data, err := read(found, maxModelIconBytes)
-			if err != nil {
-				return nil, &SimulatorModelWarning{Key: "iconRefused", Detail: err.Error()}
-			}
-			meta, err := checkIcon(data)
-			if err != nil {
-				return nil, &SimulatorModelWarning{Key: "iconRefused", Detail: err.Error()}
-			}
-			return &modelIcon{data: data, ext: iconExtensions[meta.Format]}, nil
+			results = append(results, s.importPackage(name, ar, root, members))
+		case !inPackage && strings.EqualFold(path.Ext(f.Name), ".json"):
+			results = append(results, s.importArchivedModel(name, ar, f))
 		}
-		results = append(results, s.importModel(entry, bytes.TrimPrefix(raw, utf8BOM), lookup))
 	}
 	if len(results) == 0 {
-		return fail("the archive holds no model: a model is a .json file in it")
+		return fail("the archive holds no model: a model is a .json file in it, or a folder holding model.json")
 	}
 	return results
 }
 
-// importModel checks one model file and keeps it, with the icon it names when
-// iconFor finds one. A model imported without an icon keeps the one it had:
-// someone editing the JSON alone should not lose what the archive brought.
-func (s *simulatorService) importModel(file string, raw []byte, iconFor func(string) (*modelIcon, *SimulatorModelWarning)) SimulatorModelImportResult {
+// importArchivedModel imports a lone model file of an archive, with the icon
+// it names — looked for beside it first, since two models of one archive may
+// each call theirs icon.png.
+func (s *simulatorService) importArchivedModel(archiveName string, ar *archive, f *zip.File) SimulatorModelImportResult {
+	entry := archiveName + " › " + clipText(f.Name, 120)
+	raw, err := ar.read(f, simulator.MaxCustomModelBytes)
+	if err != nil {
+		return SimulatorModelImportResult{File: entry, Error: err.Error(), Warnings: []SimulatorModelWarning{}}
+	}
+	dir := path.Dir(f.Name)
+	lookup := func(icon string) (*modelIcon, *SimulatorModelWarning) {
+		var found *zip.File
+		for _, g := range ar.files {
+			if path.Base(g.Name) == icon && (found == nil || path.Dir(g.Name) == dir) {
+				found = g
+			}
+		}
+		return ar.icon(found, icon)
+	}
+	return s.importModel(entry, bytes.TrimPrefix(raw, utf8BOM), lookup)
+}
+
+// importPackage imports the package in one folder of an archive: the files it
+// reads, and the icon its model.json names, looked for beside model.json first
+// and then anywhere in the folder. A JSON file the package does not read is
+// named rather than passed over: traps.json misspelt would otherwise leave a
+// device with no notifications, and nothing saying why.
+func (s *simulatorService) importPackage(archiveName string, ar *archive, root string, members []*zip.File) SimulatorModelImportResult {
+	res := SimulatorModelImportResult{File: archiveName + " › " + clipText(path.Join(root, simulator.PackageModelFile), 120),
+		Warnings: []SimulatorModelWarning{}}
+	inPackage := func(f *zip.File) string {
+		if root == "." {
+			return f.Name
+		}
+		return strings.TrimPrefix(f.Name, root+"/")
+	}
+	var files []simulator.PackageFile
+	for _, f := range members {
+		rel := inPackage(f)
+		if !simulator.PackageReads(rel) {
+			if strings.EqualFold(path.Ext(rel), ".json") {
+				res.Warnings = append(res.Warnings, SimulatorModelWarning{Key: "packageIgnored", Detail: clipText(rel, 120)})
+			}
+			continue
+		}
+		data, err := ar.read(f, packageFileLimit(rel))
+		if err != nil {
+			res.Error = err.Error()
+			return res
+		}
+		files = append(files, simulator.PackageFile{Name: rel, Data: data})
+	}
+	m, warnings, err := simulator.ParseCustomPackage(files)
+	if err != nil {
+		res.Error = err.Error()
+		return res
+	}
+	for _, w := range warnings {
+		res.Warnings = append(res.Warnings, SimulatorModelWarning{Key: w.Key, Detail: w.Detail})
+	}
+	packed, err := repack(files)
+	if err != nil {
+		res.Error = fmt.Sprintf("could not pack the package: %v", err)
+		return res
+	}
+	lookup := func(icon string) (*modelIcon, *SimulatorModelWarning) {
+		var found *zip.File
+		for _, f := range members {
+			if path.Base(f.Name) == icon && (found == nil || inPackage(f) == icon) {
+				found = f
+			}
+		}
+		return ar.icon(found, icon)
+	}
+	return s.keepModel(res, m, lookup, keptPackage, packed)
+}
+
+// repack is the ZIP a package is kept as: the files it reads and nothing else,
+// by their names in the package.
+func repack(files []simulator.PackageFile) ([]byte, error) {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for _, f := range files {
+		w, err := zw.CreateHeader(&zip.FileHeader{Name: f.Name, Method: zip.Deflate})
+		if err != nil {
+			return nil, err
+		}
+		if _, err := w.Write(f.Data); err != nil {
+			return nil, err
+		}
+	}
+	if err := zw.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// importModel checks one lone model file and keeps it.
+func (s *simulatorService) importModel(file string, raw []byte, iconFor iconLookup) SimulatorModelImportResult {
 	res := SimulatorModelImportResult{File: file, Warnings: []SimulatorModelWarning{}}
 	m, err := simulator.ParseCustomModel(raw)
 	if err != nil {
 		res.Error = err.Error()
 		return res
 	}
+	return s.keepModel(res, m, iconFor, keptFile, raw)
+}
+
+// keepModel keeps a model that passed its checks, in the form it came in,
+// under the model's own id, with the icon it names when iconFor finds one. A
+// model imported without an icon keeps the one it had: someone editing the
+// JSON alone should not lose what the archive brought. A model kept in the
+// other form is replaced by this one.
+func (s *simulatorService) keepModel(res SimulatorModelImportResult, m simulator.CustomModel, iconFor iconLookup,
+	form string, data []byte) SimulatorModelImportResult {
 	res.ModelID, res.Name = m.ID(), m.Name()
-	jsonPath := filepath.Join(s.modelDir, m.Slug()+".json")
-	if _, err := os.Stat(jsonPath); err == nil {
+	keptAs := filepath.Join(s.modelDir, m.Slug()+form)
+	other := filepath.Join(s.modelDir, m.Slug()+otherForm(form))
+	if isFile(keptAs) || isFile(other) {
 		res.Replaced = true
 	} else if s.countModelFiles() >= maxCustomModels {
 		res.Error = fmt.Sprintf("SnmpLens keeps at most %d custom models", maxCustomModels)
@@ -420,12 +637,30 @@ func (s *simulatorService) importModel(file string, raw []byte, iconFor func(str
 	if warning != nil {
 		res.Warnings = append(res.Warnings, *warning)
 	}
-	if err := writeFileAtomic(jsonPath, raw); err != nil {
+	if err := writeFileAtomic(keptAs, data); err != nil {
 		res.Error = fmt.Sprintf("could not keep the model: %v", err)
 		return res
 	}
+	// Removed once the new form is written: stopped in between, the directory
+	// holds both, and loadModels takes the newer.
+	if err := os.Remove(other); err != nil && !errors.Is(err, os.ErrNotExist) {
+		log.Printf("simulator: model %s: the %s it replaces stays: %v", m.Slug(), filepath.Base(other), err)
+	}
 	res.Success = true
 	return res
+}
+
+// otherForm is the form a model is not kept in when it is kept in form.
+func otherForm(form string) string {
+	if form == keptFile {
+		return keptPackage
+	}
+	return keptFile
+}
+
+func isFile(name string) bool {
+	st, err := os.Stat(name)
+	return err == nil && !st.IsDir()
 }
 
 // countModelFiles is how many models the directory holds now, imports of this
@@ -435,13 +670,13 @@ func (s *simulatorService) countModelFiles() int {
 	if err != nil {
 		return 0
 	}
-	n := 0
+	slugs := map[string]bool{}
 	for _, e := range entries {
-		if !e.IsDir() && strings.EqualFold(filepath.Ext(e.Name()), ".json") {
-			n++
+		if form := filepath.Ext(e.Name()); !e.IsDir() && (form == keptFile || form == keptPackage) {
+			slugs[strings.TrimSuffix(e.Name(), form)] = true
 		}
 	}
-	return n
+	return len(slugs)
 }
 
 // SimulatorDeleteModel deletes a custom model and its icon.
@@ -469,7 +704,7 @@ func (a *App) SimulatorDeleteModel(id string) error {
 		return fmt.Errorf("%d simulated device(s) are made from this model (%s): delete them first",
 			len(users), strings.Join(users, ", "))
 	}
-	for _, ext := range slices.Concat([]string{".json"}, []string{".png", ".jpg", ".gif"}) {
+	for _, ext := range []string{keptFile, keptPackage, ".png", ".jpg", ".gif"} {
 		if err := os.Remove(filepath.Join(s.modelDir, slug+ext)); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("deleting the model: %w", err)
 		}

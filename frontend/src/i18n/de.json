@@ -1441,7 +1441,7 @@
       "noMatch": "Kein Modell passt zu „{query}“.",
       "custom": "Eigenes",
       "import": "Modelle importieren…",
-      "importTitle": "Modelle aus einer JSON-Datei hinzufügen oder aus einem ZIP, das ihre Symbole enthält",
+      "importTitle": "Modelle aus einer JSON-Datei hinzufügen oder aus einem ZIP mit ihren Symbolen oder ganzen Paketen samt aufgezeichneten Walks",
       "deleteModel": "Dieses eigene Modell löschen",
       "inUse": "{count, plural, one {# Gerät basiert auf diesem Modell: zuerst löschen} other {# Geräte basieren auf diesem Modell: zuerst löschen}}"
     },
@@ -1454,7 +1454,10 @@
         "iconSkipped": "{name}: Das Symbol „{detail}“ wurde nicht importiert — ein Symbol kommt in einem ZIP neben seinem Modell",
         "iconMissing": "{name}: Das Archiv enthält kein „{detail}“, das Modell hat also kein Symbol",
         "iconRefused": "{name}: Das Symbol wurde abgelehnt ({detail})",
-        "restartFailed": "{name}: Ein Gerät wurde nicht neu gestartet — {detail}"
+        "restartFailed": "{name}: Ein Gerät wurde nicht neu gestartet — {detail}",
+        "walkSkipped": "{name}: Aufgezeichnete Werte, die nicht gelesen werden konnten, wurden ausgelassen ({detail})",
+        "walkAgentOwned": "{name}: {detail} aufgezeichnete Objekte gehören dem Agenten selbst — seine SNMP-Zähler, seine Engine, seine Benutzer, Gruppen und Communities — und wurden ausgelassen",
+        "packageIgnored": "{name}: „{detail}“ ist keine Datei, die ein Paket liest, und wurde ausgelassen"
       }
     }
   }
