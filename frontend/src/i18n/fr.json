@@ -1301,6 +1301,31 @@
     "startFailed": "{name} n'a pas pu démarrer : {error}",
     "confirmDelete": "Supprimer ?",
     "deleteTitle": "Supprimer cet appareil",
+    "importDevices": "Importer des appareils…",
+    "importDevicesTitle": "Ajouter des appareils simulés depuis un fichier exporté par SnmpLens",
+    "exportAll": "Tout exporter…",
+    "exportAllTitle": "Écrire tous les appareils simulés dans un fichier, pour déplacer le banc ou le transmettre",
+    "exportDevice": "Exporter cet appareil dans un fichier",
+    "duplicate": "Dupliquer cet appareil",
+    "copyName": "{name} (copie)",
+    "duplicated": "« {name} » dupliqué en « {copy} »",
+    "restart": "Redémarrer cet appareil : uptime et compteurs à zéro, et coldStart s’il en envoie un",
+    "restarted": "{name} a redémarré",
+    "export": {
+      "title": "Exporter {count, plural, one {# appareil} other {# appareils}}",
+      "hint": "Les mots de passe — communautés et phrases secrètes — restent dans le coffre de votre système, sauf si vous les mettez dans le fichier. Ne les y mettez que pour transmettre un banc complet : quiconque a le fichier peut les lire.",
+      "without": "Sans les mots de passe",
+      "with": "Avec les mots de passe",
+      "done": "Exporté vers {path}"
+    },
+    "devices": {
+      "imported": "Appareil « {name} » importé",
+      "failed": "{name} : {error}",
+      "warning": {
+        "addressMoved": "{name} : son adresse était prise, il répond donc ailleurs ({detail})",
+        "noSecrets": "{name} : le fichier ne contient pas de mots de passe — donnez-lui sa communauté ou ses phrases secrètes avant de le démarrer"
+      }
+    },
     "loopbackHint": "Bouclage uniquement : de 127.0.0.1 à 127.255.255.254, ou ::1. Sous Linux et macOS, un port inférieur à 1024 exige des droits d'administrateur.",
     "field": {
       "name": "Nom",

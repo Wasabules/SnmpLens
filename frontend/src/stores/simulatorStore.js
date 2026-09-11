@@ -15,6 +15,10 @@ import {
   SimulatorRecordDevice,
   SimulatorCancelRecording,
   SimulatorExportModelDialog,
+  ImportSimulatedDevicesDialog,
+  SimulatorExportDevicesDialog,
+  SimulatorDuplicateDevice,
+  SimulatorRestartDevice,
   TrapListenerEngineID,
 } from '../../wailsjs/go/main/App';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
@@ -103,6 +107,16 @@ function createSimulatorStore() {
     stopRecording: () => SimulatorCancelRecording(),
     /** Writes a custom model to a ZIP the user names; resolves to where, or '' when cancelled. */
     exportModel: async (id) => (await SimulatorExportModelDialog(id)) || '',
+    /** Asks for files of simulated devices and imports them; resolves to what became of each device. */
+    importDevices: async () => (await ImportSimulatedDevicesDialog()) || [],
+    /**
+     * Writes devices — those named, or every one — to a file the user names,
+     * their passwords only when withSecrets says so; resolves to where, or ''
+     * when cancelled.
+     */
+    exportDevices: async (ids, withSecrets) => (await SimulatorExportDevicesDialog(ids || [], !!withSecrets)) || '',
+    duplicate: (id, name) => SimulatorDuplicateDevice(id, name),
+    restart: (id) => SimulatorRestartDevice(id),
     /** The engine ID SnmpLens's own trap listener stands for, in hex. */
     listenerEngineId: async () => (await TrapListenerEngineID()) || '',
   };

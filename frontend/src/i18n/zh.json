@@ -1301,6 +1301,31 @@
     "startFailed": "{name} 未能启动：{error}",
     "confirmDelete": "删除？",
     "deleteTitle": "删除此设备",
+    "importDevices": "导入设备…",
+    "importDevicesTitle": "从 SnmpLens 导出的文件添加模拟设备",
+    "exportAll": "全部导出…",
+    "exportAllTitle": "将所有模拟设备写入文件，以便迁移或分享测试环境",
+    "exportDevice": "将此设备导出到文件",
+    "duplicate": "复制此设备",
+    "copyName": "{name}（副本）",
+    "duplicated": "已将“{name}”复制为“{copy}”",
+    "restart": "重启此设备：运行时间和计数器从零开始，如会发送 coldStart 则发送",
+    "restarted": "{name} 已重启",
+    "export": {
+      "title": "导出 {count, plural, other {# 台设备}}",
+      "hint": "密码（团体名和口令）保存在系统钥匙串中，除非您把它们写入文件。仅在需要交付完整测试环境时才这样做：拿到文件的人都能读取它们。",
+      "without": "不含密码",
+      "with": "包含密码",
+      "done": "已导出到 {path}"
+    },
+    "devices": {
+      "imported": "设备“{name}”已导入",
+      "failed": "{name}：{error}",
+      "warning": {
+        "addressMoved": "{name}：其地址已被占用，因此改在别处应答（{detail}）",
+        "noSecrets": "{name}：文件中不含密码——启动前请为其设置团体名或口令"
+      }
+    },
     "loopbackHint": "仅限回环地址：127.0.0.1 至 127.255.255.254，或 ::1。在 Linux 和 macOS 上，低于 1024 的端口需要管理员权限。",
     "field": {
       "name": "名称",

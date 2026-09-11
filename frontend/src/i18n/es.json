@@ -1301,6 +1301,31 @@
     "startFailed": "{name} no pudo iniciarse: {error}",
     "confirmDelete": "¿Eliminar?",
     "deleteTitle": "Eliminar este dispositivo",
+    "importDevices": "Importar dispositivos…",
+    "importDevicesTitle": "Añadir dispositivos simulados desde un archivo exportado por SnmpLens",
+    "exportAll": "Exportar todo…",
+    "exportAllTitle": "Escribir todos los dispositivos simulados en un archivo, para mover el banco de pruebas o compartirlo",
+    "exportDevice": "Exportar este dispositivo a un archivo",
+    "duplicate": "Duplicar este dispositivo",
+    "copyName": "{name} (copia)",
+    "duplicated": "«{name}» duplicado como «{copy}»",
+    "restart": "Reiniciar este dispositivo: uptime y contadores desde cero, y coldStart si envía uno",
+    "restarted": "{name} se reinició",
+    "export": {
+      "title": "Exportar {count, plural, one {# dispositivo} other {# dispositivos}}",
+      "hint": "Las contraseñas — comunidades y frases de paso — se quedan en el llavero de su sistema, salvo que las ponga en el archivo. Hágalo solo para entregar un banco de pruebas completo: quien tenga el archivo podrá leerlas.",
+      "without": "Sin contraseñas",
+      "with": "Con contraseñas",
+      "done": "Exportado a {path}"
+    },
+    "devices": {
+      "imported": "Dispositivo «{name}» importado",
+      "failed": "{name}: {error}",
+      "warning": {
+        "addressMoved": "{name}: su dirección estaba ocupada, así que responde en otra ({detail})",
+        "noSecrets": "{name}: el archivo no trae contraseñas — dele su comunidad o sus frases de paso antes de iniciarlo"
+      }
+    },
     "loopbackHint": "Solo loopback: de 127.0.0.1 a 127.255.255.254, o ::1. En Linux y macOS, un puerto inferior a 1024 requiere permisos de administrador.",
     "field": {
       "name": "Nombre",

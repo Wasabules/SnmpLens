@@ -389,6 +389,14 @@ Everything SnmpLens writes lives in the user config directory:
 
 ---
 
+## Simulated Devices
+
+The **Simulator** indicator in the header opens the simulated devices: SNMP agents running on this machine, at loopback addresses only — `127.x.x.x` or `::1` — answering v1, v2c and v3 (the whole USM) from a catalogue of models, or from your own (below). A device can be started and stopped, **restarted** (uptime and counters from zero, and `coldStart` if it sends one on starting), **duplicated**, made to send any of its notifications on demand, and **added as a target** in one click, with its port and identifiers.
+
+A bench moves as a file. **Export all…**, or a device's export button, writes JSON, and SnmpLens asks every time whether to put the passwords in it — the communities and passphrases, which otherwise stay in the system keychain. The file says which (`"secrets": "included"` or `"omitted"`). **Import devices…** makes each device new on this machine: its own ID and engine ID, and another address when its own is taken. A device that cannot be made here — of a custom model that is not installed, say — is refused on its own; devices imported without their passwords start once they are given them in the editor.
+
+---
+
 ## Custom Simulator Models
 
 The simulator's catalogue can be extended with models of your own: a JSON file saying what a device answers, imported from the model picker (**Import models…**) on its own, or in a ZIP archive that also carries the model's icon — PNG, JPEG or GIF, up to 512 × 512 px. An archive may hold several models. A model imported again replaces the one kept, and the devices made from it restart.

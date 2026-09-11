@@ -379,6 +379,26 @@ export function firstImported(results) {
   return (results || []).find((r) => r.success)?.modelId || '';
 }
 
+/**
+ * What to say about an import of simulated devices, as i18n keys: a line per
+ * device imported or refused — or for the file, when it was refused whole —
+ * and one per warning about a device imported anyway.
+ */
+export function deviceImportReport(results) {
+  const out = [];
+  for (const r of results || []) {
+    if (!r.success) {
+      out.push({ key: 'simulator.devices.failed', values: { name: r.name, error: r.error }, level: 'error' });
+      continue;
+    }
+    out.push({ key: 'simulator.devices.imported', values: { name: r.name }, level: 'success' });
+    for (const w of r.warnings || []) {
+      out.push({ key: `simulator.devices.warning.${w.key}`, values: { name: r.name, detail: w.detail }, level: 'warning' });
+    }
+  }
+  return out;
+}
+
 /** The categories a recorded model may be filed under: Go's customCategories. */
 export const CUSTOM_CATEGORIES = Object.keys(CATEGORY_ICONS);
 

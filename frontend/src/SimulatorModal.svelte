@@ -9,7 +9,7 @@
   import {
     SIM_VERSIONS, MAX_EVERY, MAX_DESTINATIONS, MAX_SCHEDULES, blankDevice, blankV3, blankDestination, blankSchedule,
     editableDevice, deviceProblems, devicePayload, addDeviceAsTarget, notificationsOf, trapActivity, deliveryReport,
-    modelOf, modelName, modelDescription, importReport, firstImported, recordRequest, recordableTargets,
+    modelOf, modelName, modelDescription, importReport, firstImported, recordRequest, recordableTargets, deviceImportReport,
   } from './utils/simulator.js';
   import UsmFields from './settings/UsmFields.svelte';
   import ModelPicker from './simulator/ModelPicker.svelte';
@@ -62,6 +62,10 @@
   // The editor first, the dialog after: Escape backs out one level at a time.
   function onWindowKey(event) {
     if (event.key !== 'Escape') return;
+    if (exportIds) {
+      exportIds = null;
+      return;
+    }
     if (editing) {
       editing = null;
       return;
@@ -318,6 +322,70 @@
       simulatorStore.refresh().catch(() => {});
     }
   }
+
+  /** The devices whose export is being asked about — every one when empty — or null. */
+  let exportIds = null;
+  let benchBusy = false;
+
+  // What an export holds is asked every time: the passwords stay in the
+  // keychain unless the operator says to put them in the file.
+  function askExport(ids) {
+    exportIds = ids;
+  }
+
+  async function exportDevices(ids, withSecrets) {
+    exportIds = null;
+    benchBusy = true;
+    try {
+      const path = await simulatorStore.exportDevices(ids, withSecrets);
+      if (path) notificationStore.add($_('simulator.export.done', { values: { path } }), 'success');
+    } catch (e) {
+      notificationStore.add(String(e), 'error');
+    } finally {
+      benchBusy = false;
+    }
+  }
+
+  async function importDevices() {
+    benchBusy = true;
+    try {
+      const results = await simulatorStore.importDevices();
+      for (const line of deviceImportReport(results)) {
+        notificationStore.add($_(line.key, { values: line.values }), line.level);
+      }
+      await simulatorStore.refresh();
+    } catch (e) {
+      notificationStore.add(String(e), 'error');
+    } finally {
+      benchBusy = false;
+    }
+  }
+
+  async function duplicate(device) {
+    busy = { ...busy, [device.id]: true };
+    try {
+      const copy = await simulatorStore.duplicate(device.id, $_('simulator.copyName', { values: { name: device.name } }));
+      notificationStore.add($_('simulator.duplicated', { values: { name: device.name, copy: copy.name } }), 'success');
+      await simulatorStore.refresh();
+    } catch (e) {
+      notificationStore.add(String(e), 'error');
+    } finally {
+      busy = { ...busy, [device.id]: false };
+    }
+  }
+
+  async function restart(device) {
+    busy = { ...busy, [device.id]: true };
+    try {
+      await simulatorStore.restart(device.id);
+      notificationStore.add($_('simulator.restarted', { values: { name: device.name } }), 'success');
+    } catch (e) {
+      notificationStore.add($_('simulator.startFailed', { values: { name: device.name, error: String(e) } }), 'error');
+    } finally {
+      busy = { ...busy, [device.id]: false };
+      simulatorStore.refresh().catch(() => {});
+    }
+  }
 </script>
 
 <svelte:window on:keydown={onWindowKey} />
@@ -526,6 +594,22 @@
       </footer>
     {:else}
       <div class="sim-body">
+        {#if exportIds}
+          <div class="export-choice" role="alertdialog" aria-labelledby="sim-export-title" aria-describedby="sim-export-hint">
+            <h3 id="sim-export-title">
+              <Icon name="download" size={16} />
+              {$_('simulator.export.title', { values: { count: exportIds.length || $simulatorStore.devices.length } })}
+            </h3>
+            <p id="sim-export-hint"><Icon name="key-round" size={14} /> {$_('simulator.export.hint')}</p>
+            <div class="export-actions">
+              <button class="btn secondary btn-small" on:click={() => (exportIds = null)}>{$_('common.cancel')}</button>
+              <button class="btn secondary btn-small warn" on:click={() => exportDevices(exportIds, true)}>
+                <Icon name="triangle-alert" size={13} /> {$_('simulator.export.with')}
+              </button>
+              <button class="btn btn-small" on:click={() => exportDevices(exportIds, false)}>{$_('simulator.export.without')}</button>
+            </div>
+          </div>
+        {/if}
         <p class="intro">{$_('simulator.intro')}</p>
         {#if $simulatorStore.devices.length === 0}
           <div class="empty">
@@ -589,6 +673,20 @@
                   <button class="btn tertiary btn-small" title={$_('simulator.addAsTargetTitle')} on:click={() => addAsTarget(d)}>
                     <Icon name="target" size={13} /> {$_('simulator.addAsTarget')}
                   </button>
+                  {#if d.running}
+                    <button class="icon-btn" disabled={busy[d.id]} title={$_('simulator.restart')} aria-label={$_('simulator.restart')}
+                      on:click={() => restart(d)}>
+                      <Icon name="refresh-cw" size={14} />
+                    </button>
+                  {/if}
+                  <button class="icon-btn" disabled={busy[d.id]} title={$_('simulator.duplicate')} aria-label={$_('simulator.duplicate')}
+                    on:click={() => duplicate(d)}>
+                    <Icon name="copy" size={14} />
+                  </button>
+                  <button class="icon-btn" title={$_('simulator.exportDevice')} aria-label={$_('simulator.exportDevice')}
+                    on:click={() => askExport([d.id])}>
+                    <Icon name="download" size={14} />
+                  </button>
                   <button class="icon-btn" title={$_('common.edit')} aria-label={$_('common.edit')} on:click={() => edit(d)}>
                     <Icon name="pencil" size={14} />
                   </button>
@@ -603,6 +701,14 @@
         {/if}
       </div>
       <footer class="sim-footer">
+        <button class="btn tertiary" disabled={benchBusy} title={$_('simulator.importDevicesTitle')} on:click={importDevices}>
+          <Icon name="upload" size={14} /> {$_('simulator.importDevices')}
+        </button>
+        <button class="btn tertiary" disabled={benchBusy || $simulatorStore.devices.length === 0}
+          title={$_('simulator.exportAllTitle')} on:click={() => askExport([])}>
+          <Icon name="download" size={14} /> {$_('simulator.exportAll')}
+        </button>
+        <span class="footer-gap"></span>
         <button class="btn" on:click={() => newDevice($simulatorStore.models, $simulatorStore.devices)}>
           <Icon name="plus" size={14} /> {$_('simulator.new')}
         </button>
@@ -771,9 +877,68 @@
 
   .actions {
     display: flex;
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     align-items: center;
     gap: 6px;
-    flex-shrink: 0;
+  }
+
+  .icon-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  .export-choice {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 14px;
+    padding: 12px 14px;
+    background-color: var(--bg-color);
+    border: 1px solid var(--accent-border);
+    border-radius: 6px;
+  }
+
+  .export-choice h3 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    font-size: 0.95em;
+  }
+
+  .export-choice p {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin: 0;
+    font-size: 0.85em;
+    line-height: 1.45;
+    color: var(--text-muted);
+  }
+
+  .export-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .export-actions .btn,
+  .sim-footer .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .export-actions .warn {
+    color: var(--warning-color);
+    border-color: var(--warning-border);
+  }
+
+  .footer-gap {
+    flex: 1;
   }
 
   .actions .btn {
