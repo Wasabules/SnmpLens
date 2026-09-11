@@ -605,12 +605,25 @@ what keeps a previous run's messages out of the time window. Every start raises 
 the device answers. A running device that is edited restarts; nothing starts by itself at launch. The header's
 status and the modal read `simulatorStore`, which Go refreshes with `simulator:changed`.
 
-**A model is a vocabulary, not prose.** `simulator.Models()` serves an ID and a category; the name and the
-description are `simulator.model.<id>` in the five locales, and `tests/simulator.test.mjs` requires `en.json` to
-answer for every ID in `pkg/simulator`. The Linux model answers everything the "Interfaces (IF-MIB)" and "Server
-(HOST-RESOURCES-MIB)" presets poll — `TestTheLinuxModelFeedsItsPresets` expands their widgets against it — and its
-values are pure functions of time (`values.go`): counters that only go up and wrap at 32 bits as a real
+**A model is a vocabulary, not prose.** `simulator.Models()` serves an ID, a category and the notifications; the
+name and the description are `simulator.model.<id>`, and the category `simulator.category.<category>`, in the five
+locales, and `tests/simulator.test.mjs` requires `en.json` to answer for every ID and category in `pkg/simulator`.
+Values are pure functions of time (`values.go`): counters that only go up and wrap at 32 bits as a real
 interface's do, gauges that swing, nothing ticking in the background.
+
+**The catalogue is what the presets poll.** Nine models: a Linux server, a Windows server, a Catalyst 2960 with 24
+and with 48 ports, an ISR 4331 with two eBGP sessions, a Synology NAS, a three-phase APC Smart-UPS, an HP LaserJet
+and an ENTITY-SENSOR-MIB probe. Each says which bundled presets it feeds (`modelPresets`), and
+`TestEveryModelFeedsItsPresets` expands those presets' widgets against it, discovery walks included — a model
+cannot be added without saying what it answers, nor a preset grow a widget its models leave empty. Three choices
+look odd without that. The Catalyst numbers its ports from 1, because "Switch drawing (24 ports)" polls
+`ifOperStatus.1` to `.26`, where a real 2960 numbers them from 10001. The UPS is the three-phase model, because
+"UPS (RFC 1628)" charts three output lines. And interfaces, host resources and the system group are shared
+builders (`ifaces.go`, `hostres.go`, `addSystem`), so what a preset reads means the same on every model.
+`TestTheCiscoPresetClaimsTheSimulatedCiscos` holds the identification: the "Cisco (IF-MIB)" preset claims the
+Catalysts and the ISR by their CISCO-PRODUCTS-MIB OIDs, and nothing else. The NAS and the probe report net-snmp's
+Linux sysObjectID because DSM's agent is net-snmp, as most embedded probes' is; their own tables tell them apart.
+The vendor OIDs were read from the MIBs, not remembered.
 
 **A device becomes a target in the renderer** (`addDeviceAsTarget` in `utils/simulator.js`): the target in the
 list, and an override with its identifiers in the most secure version it answers — its FIRST user for v3, since a

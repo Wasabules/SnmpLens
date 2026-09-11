@@ -163,6 +163,21 @@ func (g gauge) check(t gosnmp.Asn1BER) error {
 	return nil
 }
 
+// SecondsUp answers the seconds since the agent started as a Gauge32: how long
+// something the device brought up at boot, a BGP session, has been up.
+func SecondsUp() Reading { return secondsUp{} }
+
+type secondsUp struct{}
+
+func (secondsUp) read(c clock) any { return uint32(c.now.Sub(c.started) / time.Second) }
+
+func (secondsUp) check(t gosnmp.Asn1BER) error {
+	if t != gosnmp.Gauge32 {
+		return fmt.Errorf("seconds up are a Gauge32, not a %v", t)
+	}
+	return nil
+}
+
 // engineSeconds is snmpEngineTime: the seconds since the agent started.
 type engineSeconds struct{}
 

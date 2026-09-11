@@ -1325,7 +1325,47 @@
       "engineId": "De 5 a 32 octetos, en hexadecimal.",
       "every": "De 1 a 86400 segundos."
     },
+    "category": {
+      "server": "Servidores",
+      "network": "Red",
+      "storage": "Almacenamiento",
+      "power": "Energía",
+      "printing": "Impresión",
+      "environment": "Entorno"
+    },
     "model": {
+      "windows-server": {
+        "name": "Servidor Windows",
+        "description": "Un host Windows Server 2022 con su servicio SNMP: sistema, dos adaptadores de red, recursos del host por letra de unidad. Encaja con los presets «Interfaces (IF-MIB)» y «Server (HOST-RESOURCES-MIB)»."
+      },
+      "cisco-catalyst-24": {
+        "name": "Cisco Catalyst 2960, 24 puertos",
+        "description": "Un switch de acceso: 24 puertos Fast Ethernet, dos enlaces ascendentes gigabit y la VLAN 1, con la carga de CPU y los cambios de configuración de Cisco. Se reconoce como Cisco, así que el preset «Cisco (IF-MIB)» aparece primero; también encaja con «Switch ports» y «Switch drawing (24 ports)»."
+      },
+      "cisco-catalyst-48": {
+        "name": "Cisco Catalyst 2960, 48 puertos",
+        "description": "El mismo switch de acceso con 48 puertos. Se reconoce como Cisco, así que el preset «Cisco (IF-MIB)» aparece primero; también encaja con «Switch ports»."
+      },
+      "cisco-isr-4331": {
+        "name": "Router Cisco ISR 4331",
+        "description": "Un router de sucursal: puertos WAN, LAN y de gestión, dos sesiones eBGP —una establecida y otra no— y la carga de CPU de Cisco. Envía las notificaciones BGP y los cambios de configuración."
+      },
+      "synology-nas": {
+        "name": "NAS Synology",
+        "description": "Un DS920+ con DSM: las tablas de sistema, discos y RAID de Synology junto a las interfaces y los recursos del host. Encaja con los presets «Interfaces (IF-MIB)» y «Server (HOST-RESOURCES-MIB)»."
+      },
+      "apc-smart-ups": {
+        "name": "SAI APC Smart-UPS, trifásico",
+        "description": "Un SAI de 10 kVA en su tarjeta de red, que responde a la UPS-MIB estándar: batería, entrada y salida por fase. Encaja con el preset «UPS (RFC 1628)» y envía upsTrapOnBattery."
+      },
+      "hp-laserjet": {
+        "name": "Impresora HP LaserJet",
+        "description": "Una impresora láser de red que responde a la Printer MIB: contador de páginas, un cartucho negro casi vacío y su alerta. Envía printerV2Alert."
+      },
+      "environment-probe": {
+        "name": "Sonda ambiental",
+        "description": "Una sonda de temperatura y humedad que responde a la ENTITY-SENSOR-MIB estándar, como en el pasillo frío de una sala de servidores."
+      },
       "linux-server": {
         "name": "Servidor Linux",
         "description": "Un host Ubuntu con net-snmp: sistema, tres interfaces, recursos del host. Encaja con los presets «Interfaces (IF-MIB)» y «Server (HOST-RESOURCES-MIB)»."

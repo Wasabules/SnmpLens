@@ -258,6 +258,23 @@ export function devicePayload(d) {
   };
 }
 
+/**
+ * The models grouped by category, in the order Go lists them: a category comes
+ * where its first model does.
+ */
+export function modelGroups(models) {
+  const groups = [];
+  for (const m of models || []) {
+    let group = groups.find((g) => g.category === m.category);
+    if (!group) {
+      group = { category: m.category, models: [] };
+      groups.push(group);
+    }
+    group.models.push(m);
+  }
+  return groups;
+}
+
 /** What a device of the model can send, as Go lists it. */
 export function notificationsOf(models, modelId) {
   return (models || []).find((m) => m.id === modelId)?.notifications || [];

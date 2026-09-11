@@ -1325,7 +1325,47 @@
       "engineId": "5 to 32 octets, in hex.",
       "every": "From 1 to 86400 seconds."
     },
+    "category": {
+      "server": "Servers",
+      "network": "Network",
+      "storage": "Storage",
+      "power": "Power",
+      "printing": "Printing",
+      "environment": "Environment"
+    },
     "model": {
+      "windows-server": {
+        "name": "Windows server",
+        "description": "A Windows Server 2022 host with its SNMP service: system, two network adapters, host resources by drive letter. Fits the “Interfaces (IF-MIB)” and “Server (HOST-RESOURCES-MIB)” presets."
+      },
+      "cisco-catalyst-24": {
+        "name": "Cisco Catalyst 2960, 24 ports",
+        "description": "An access switch: 24 Fast Ethernet ports, two gigabit uplinks and VLAN 1, with Cisco's CPU load and configuration changes. Recognised as a Cisco, so the “Cisco (IF-MIB)” preset comes first; also fits “Switch ports” and “Switch drawing (24 ports)”."
+      },
+      "cisco-catalyst-48": {
+        "name": "Cisco Catalyst 2960, 48 ports",
+        "description": "The same access switch with 48 ports. Recognised as a Cisco, so the “Cisco (IF-MIB)” preset comes first; also fits “Switch ports”."
+      },
+      "cisco-isr-4331": {
+        "name": "Cisco ISR 4331 router",
+        "description": "A branch router: WAN, LAN and management ports, two eBGP sessions — one established, one not — and Cisco's CPU load. Sends the BGP notifications and configuration changes."
+      },
+      "synology-nas": {
+        "name": "Synology NAS",
+        "description": "A DS920+ on DSM: Synology's system, disk and RAID tables beside interfaces and host resources. Fits the “Interfaces (IF-MIB)” and “Server (HOST-RESOURCES-MIB)” presets."
+      },
+      "apc-smart-ups": {
+        "name": "APC Smart-UPS, three-phase",
+        "description": "A 10 kVA UPS on its network card, answering the standard UPS-MIB: battery, input and output per phase. Fits the “UPS (RFC 1628)” preset and sends upsTrapOnBattery."
+      },
+      "hp-laserjet": {
+        "name": "HP LaserJet printer",
+        "description": "A network laser printer answering the Printer MIB: page count, a black cartridge running low and its alert. Sends printerV2Alert."
+      },
+      "environment-probe": {
+        "name": "Environment probe",
+        "description": "A temperature and humidity probe answering the standard ENTITY-SENSOR-MIB, as a server room's cold aisle reads."
+      },
       "linux-server": {
         "name": "Linux server",
         "description": "An Ubuntu host running net-snmp: system, three interfaces, host resources. Fits the “Interfaces (IF-MIB)” and “Server (HOST-RESOURCES-MIB)” presets."

@@ -56,6 +56,7 @@ const {
   devicePayload,
   deliveryReport,
   trapActivity,
+  modelGroups,
   preferredVersion,
   targetOf,
   addDeviceAsTarget,
@@ -271,11 +272,23 @@ check('and over the default, with no override at all', getEffectiveSettings(sett
 const en = JSON.parse(readFileSync(new URL('../src/i18n/en.json', import.meta.url), 'utf8'));
 const goDir = new URL('../../pkg/simulator/', import.meta.url);
 const ids = new Set();
+const categories = new Set();
 for (const file of readdirSync(goDir)) {
   if (!file.endsWith('.go') || file.endsWith('_test.go')) continue;
-  for (const m of readFileSync(new URL(file, goDir), 'utf8').matchAll(/ModelInfo\{ID:\s*"([^"]+)"/g)) ids.add(m[1]);
+  for (const m of readFileSync(new URL(file, goDir), 'utf8').matchAll(/ModelInfo\{ID:\s*"([^"]+)",\s*Category:\s*"([^"]+)"/g)) {
+    ids.add(m[1]);
+    categories.add(m[2]);
+  }
 }
-check('the models were found in pkg/simulator', ids.size >= 1, [...ids].join(', '));
+check('the models were found in pkg/simulator', ids.size >= 9, [...ids].join(', '));
+for (const category of categories) {
+  check(`en.json names the category ${category}`, Boolean(en.simulator?.category?.[category]));
+}
+const groups = modelGroups([
+  { id: 'a', category: 'server' }, { id: 'b', category: 'network' }, { id: 'c', category: 'server' },
+]);
+check("the models are grouped by category, in the order of each category's first model",
+  groups.map((g) => `${g.category}:${g.models.map((m) => m.id).join('+')}`).join(' ') === 'server:a+c network:b');
 for (const key of ['hostRequired', 'trapUser', 'trapNeedsV3', 'engineId', 'every']) {
   check(`en.json says simulator.problem.${key}`, Boolean(en.simulator?.problem?.[key]));
 }

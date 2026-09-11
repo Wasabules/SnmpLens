@@ -1325,7 +1325,47 @@
       "engineId": "5 bis 32 Oktette, hexadezimal.",
       "every": "Von 1 bis 86400 Sekunden."
     },
+    "category": {
+      "server": "Server",
+      "network": "Netzwerk",
+      "storage": "Speicher",
+      "power": "Stromversorgung",
+      "printing": "Druck",
+      "environment": "Umgebung"
+    },
     "model": {
+      "windows-server": {
+        "name": "Windows-Server",
+        "description": "Ein Windows-Server-2022-Host mit seinem SNMP-Dienst: System, zwei Netzwerkadapter, Host-Ressourcen nach Laufwerksbuchstaben. Passt zu den Presets „Interfaces (IF-MIB)“ und „Server (HOST-RESOURCES-MIB)“."
+      },
+      "cisco-catalyst-24": {
+        "name": "Cisco Catalyst 2960, 24 Ports",
+        "description": "Ein Access-Switch: 24 Fast-Ethernet-Ports, zwei Gigabit-Uplinks und VLAN 1, mit CPU-Last und Konfigurationsänderungen von Cisco. Als Cisco erkannt, daher steht das Preset „Cisco (IF-MIB)“ an erster Stelle; passt auch zu „Switch ports“ und „Switch drawing (24 ports)“."
+      },
+      "cisco-catalyst-48": {
+        "name": "Cisco Catalyst 2960, 48 Ports",
+        "description": "Derselbe Access-Switch mit 48 Ports. Als Cisco erkannt, daher steht das Preset „Cisco (IF-MIB)“ an erster Stelle; passt auch zu „Switch ports“."
+      },
+      "cisco-isr-4331": {
+        "name": "Cisco-Router ISR 4331",
+        "description": "Ein Filialrouter: WAN-, LAN- und Management-Ports, zwei eBGP-Sitzungen — eine aufgebaut, eine nicht — und die CPU-Last von Cisco. Sendet die BGP-Benachrichtigungen und Konfigurationsänderungen."
+      },
+      "synology-nas": {
+        "name": "Synology-NAS",
+        "description": "Eine DS920+ mit DSM: Synologys System-, Festplatten- und RAID-Tabellen neben Schnittstellen und Host-Ressourcen. Passt zu den Presets „Interfaces (IF-MIB)“ und „Server (HOST-RESOURCES-MIB)“."
+      },
+      "apc-smart-ups": {
+        "name": "APC Smart-UPS, dreiphasig",
+        "description": "Eine 10-kVA-USV an ihrer Netzwerkkarte, die die Standard-UPS-MIB beantwortet: Batterie, Eingang und Ausgang je Phase. Passt zum Preset „UPS (RFC 1628)“ und sendet upsTrapOnBattery."
+      },
+      "hp-laserjet": {
+        "name": "HP-LaserJet-Drucker",
+        "description": "Ein Netzwerk-Laserdrucker, der die Printer-MIB beantwortet: Seitenzähler, eine fast leere schwarze Kartusche und ihr Alarm. Sendet printerV2Alert."
+      },
+      "environment-probe": {
+        "name": "Umgebungssensor",
+        "description": "Ein Temperatur- und Feuchtesensor, der die Standard-ENTITY-SENSOR-MIB beantwortet, wie im Kaltgang eines Serverraums."
+      },
       "linux-server": {
         "name": "Linux-Server",
         "description": "Ein Ubuntu-Host mit net-snmp: System, drei Schnittstellen, Host-Ressourcen. Passt zu den Presets „Interfaces (IF-MIB)“ und „Server (HOST-RESOURCES-MIB)“."

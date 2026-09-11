@@ -1325,7 +1325,47 @@
       "engineId": "5 到 32 个八位组，十六进制。",
       "every": "1 到 86400 秒。"
     },
+    "category": {
+      "server": "服务器",
+      "network": "网络",
+      "storage": "存储",
+      "power": "电源",
+      "printing": "打印",
+      "environment": "环境"
+    },
     "model": {
+      "windows-server": {
+        "name": "Windows 服务器",
+        "description": "带 SNMP 服务的 Windows Server 2022 主机：系统、两块网卡、按盘符列出的主机资源。适用于“Interfaces (IF-MIB)”和“Server (HOST-RESOURCES-MIB)”预设。"
+      },
+      "cisco-catalyst-24": {
+        "name": "Cisco Catalyst 2960，24 端口",
+        "description": "一台接入交换机：24 个快速以太网端口、两个千兆上联口和 VLAN 1，带有 Cisco 的 CPU 负载和配置变更。被识别为 Cisco 设备，因此“Cisco (IF-MIB)”预设排在最前；也适用于“Switch ports”和“Switch drawing (24 ports)”。"
+      },
+      "cisco-catalyst-48": {
+        "name": "Cisco Catalyst 2960，48 端口",
+        "description": "同一款接入交换机，48 个端口。被识别为 Cisco 设备，因此“Cisco (IF-MIB)”预设排在最前；也适用于“Switch ports”。"
+      },
+      "cisco-isr-4331": {
+        "name": "Cisco ISR 4331 路由器",
+        "description": "一台分支路由器：WAN、LAN 和管理端口，两个 eBGP 会话（一个已建立，一个未建立），以及 Cisco 的 CPU 负载。发送 BGP 通知和配置变更。"
+      },
+      "synology-nas": {
+        "name": "Synology NAS",
+        "description": "运行 DSM 的 DS920+：Synology 的系统、磁盘和 RAID 表，外加接口和主机资源。适用于“Interfaces (IF-MIB)”和“Server (HOST-RESOURCES-MIB)”预设。"
+      },
+      "apc-smart-ups": {
+        "name": "APC Smart-UPS 三相 UPS",
+        "description": "一台通过网卡管理的 10 kVA UPS，响应标准 UPS-MIB：电池、各相输入和输出。适用于“UPS (RFC 1628)”预设，并发送 upsTrapOnBattery。"
+      },
+      "hp-laserjet": {
+        "name": "HP LaserJet 打印机",
+        "description": "一台响应 Printer MIB 的网络激光打印机：页数计数、即将耗尽的黑色硒鼓及其告警。发送 printerV2Alert。"
+      },
+      "environment-probe": {
+        "name": "环境探头",
+        "description": "一个响应标准 ENTITY-SENSOR-MIB 的温湿度探头，读数如同服务器机房的冷通道。"
+      },
       "linux-server": {
         "name": "Linux 服务器",
         "description": "运行 net-snmp 的 Ubuntu 主机：系统、三个接口、主机资源。适用于“Interfaces (IF-MIB)”和“Server (HOST-RESOURCES-MIB)”预设。"
