@@ -1339,59 +1339,59 @@
     "model": {
       "windows-server": {
         "name": "Windows 服务器",
-        "description": "带 SNMP 服务的 Windows Server 2022 主机：系统、两块网卡、按盘符列出的主机资源。适用于“Interfaces (IF-MIB)”和“Server (HOST-RESOURCES-MIB)”预设。"
+        "description": "带 SNMP 服务的 Windows Server 2022 主机：网卡及 Windows 的伪接口、地址、路由和套接字（RDP、SMB、IIS）、按盘符列出的驱动器、进程和已安装程序。适用于“Interfaces (IF-MIB)”和“Server (HOST-RESOURCES-MIB)”预设。"
       },
       "cisco-catalyst-24": {
         "name": "Cisco Catalyst 2960，24 端口",
-        "description": "一台接入交换机：24 个快速以太网端口、两个千兆上联口和 VLAN 1，带有 Cisco 的 CPU 负载和配置变更。被识别为 Cisco 设备，因此“Cisco (IF-MIB)”预设排在最前；也适用于“Switch ports”和“Switch drawing (24 ports)”。"
+        "description": "一台接入交换机：24 个快速以太网端口、两个千兆上联口和 VLAN 1，带 MAC 地址表、生成树、VLAN（Q-BRIDGE 和 VTP）、LLDP 和 CDP 邻居、ENTITY-MIB 硬件，以及 Cisco 的 CPU、内存和环境。被识别为 Cisco 设备，因此“Cisco (IF-MIB)”预设排在最前；也适用于“Switch ports”和“Switch drawing (24 ports)”。"
       },
       "cisco-catalyst-48": {
         "name": "Cisco Catalyst 2960，48 端口",
-        "description": "同一款接入交换机，48 个端口。被识别为 Cisco 设备，因此“Cisco (IF-MIB)”预设排在最前；也适用于“Switch ports”。"
+        "description": "同一款接入交换机的 48 端口版本，以及随之而来的一切。被识别为 Cisco 设备，因此“Cisco (IF-MIB)”预设排在最前；也适用于“Switch ports”。"
       },
       "cisco-isr-4331": {
         "name": "Cisco ISR 4331 路由器",
-        "description": "一台分支路由器：WAN、LAN 和管理端口，两个 eBGP 会话（一个已建立，一个未建立），以及 Cisco 的 CPU 负载。发送 BGP 通知和配置变更。"
+        "description": "一台分支路由器：WAN、LAN 和管理端口，两个 eBGP 会话（一个已建立，一个未建立）及第一个会话带来的路由，其 ARP 缓存和套接字、ENTITY-MIB 硬件，以及 Cisco 的 CPU、内存和环境。发送 BGP 通知和配置变更。"
       },
       "synology-nas": {
         "name": "Synology NAS",
-        "description": "运行 DSM 的 DS920+：Synology 的系统、磁盘和 RAID 表，外加接口和主机资源。适用于“Interfaces (IF-MIB)”和“Server (HOST-RESOURCES-MIB)”预设。"
+        "description": "一台运行 DSM 的 DS920+：Synology 的系统、磁盘和 RAID 表，加上接口、文件服务器的套接字（SMB、AFP、NFS）、带进程和软件包的主机资源，以及 UCD-SNMP-MIB。适用于“Interfaces (IF-MIB)”和“Server (HOST-RESOURCES-MIB)”预设。"
       },
       "apc-smart-ups": {
         "name": "APC Smart-UPS 三相 UPS",
-        "description": "一台通过网卡管理的 10 kVA UPS，响应标准 UPS-MIB：电池、各相输入和输出。适用于“UPS (RFC 1628)”预设，并发送 upsTrapOnBattery。"
+        "description": "一台通过网卡管理的 10 kVA UPS，同时响应标准 UPS-MIB（电池、各相输入和输出）和 APC 的 PowerNet-MIB，二者基于相同的读数。适用于“UPS (RFC 1628)”预设，并发送 upsTrapOnBattery。"
       },
       "hp-laserjet": {
         "name": "HP LaserJet 打印机",
-        "description": "一台响应 Printer MIB 的网络激光打印机：页数计数、即将耗尽的黑色硒鼓及其告警。发送 printerV2Alert。"
+        "description": "一台响应 Printer MIB 的网络激光打印机：纸盒、出纸槽、机盖、页数计数、即将耗尽的黑色硒鼓及其告警、支持的打印语言和面板，打印机也列在主机资源中。发送 printerV2Alert。"
       },
       "environment-probe": {
         "name": "环境探头",
-        "description": "一个响应标准 ENTITY-SENSOR-MIB 的温湿度探头，读数如同服务器机房的冷通道。"
+        "description": "一个响应标准 ENTITY-SENSOR-MIB 的温湿度探头，读数如同服务器机房的冷通道，其硬件列在 ENTITY-MIB 中。"
       },
       "linux-server": {
         "name": "Linux 服务器",
-        "description": "运行 net-snmp 的 Ubuntu 主机：系统、三个接口、主机资源。适用于“Interfaces (IF-MIB)”和“Server (HOST-RESOURCES-MIB)”预设。"
+        "description": "运行 net-snmp 的 Ubuntu 24.04 主机，与 walk 所见一致：接口、地址、路由和套接字；设备、文件系统、进程和软件包；UCD-SNMP-MIB 的内存、负载和磁盘。适用于“Interfaces (IF-MIB)”和“Server (HOST-RESOURCES-MIB)”预设。"
       },
       "dell-idrac9": {
         "name": "Dell iDRAC9（PowerEdge R750）",
-        "description": "PowerEdge R750 的带外管理控制器：整体和存储状态、电源状态、温度、风扇转速和功耗（IDRAC-MIB）。发送 alertTemperatureProbeWarning。"
+        "description": "PowerEdge R750 的带外管理控制器（IDRAC-MIB）：整体、存储和电源状态，BIOS、处理器、内存模块、电源、温度、风扇、功耗，以及 RAID 控制器及其物理磁盘和虚拟磁盘。发送 alertTemperatureProbeWarning。"
       },
       "mikrotik-rb4011": {
         "name": "MikroTik RB4011 路由器",
-        "description": "一台 RouterOS 路由器：十个千兆端口和一个空的 SFP+ 插槽，主板的电压、温度和功耗（MIKROTIK-MIB），以及主机资源。适用于“Interfaces (IF-MIB)”和“Server (HOST-RESOURCES-MIB)”预设。"
+        "description": "一台面向小型办公室的 RouterOS 路由器：十个千兆端口和一个空的 SFP+ 插槽，192.168.88.0/24 上的 LAN 网桥，其路由和服务，主板健康状况（MIKROTIK-MIB），MNDP 和 LLDP 发现的邻居，以及主机资源。适用于“Interfaces (IF-MIB)”和“Server (HOST-RESOURCES-MIB)”预设。"
       },
       "fortigate-60f": {
         "name": "Fortinet FortiGate 60F",
-        "description": "一台运行 FortiOS 7.2 的分支防火墙：两个 WAN 端口（备用端口已断开）、DMZ、LAN 和 SSL VPN 隧道，以及 FortiGate 的 CPU、内存、磁盘和会话数。发送 CPU 和内存阈值通知。"
+        "description": "一台运行 FortiOS 7.2 的分支防火墙：两个 WAN 端口（备用端口已断开）、DMZ、LAN 和 SSL VPN 隧道，其路由，以及 FortiGate 的 CPU、内存、磁盘、会话、VDOM、HA 模式、策略计数器和 IPsec 隧道。发送 CPU 和内存阈值通知。"
       },
       "unifi-u6-pro": {
         "name": "UniFi U6 Pro 无线接入点",
-        "description": "一台 Wi-Fi 6 接入点：两个射频及其信道占用率，三个 SSID 及其客户端和流量（UBNT-UniFi-MIB），另有接口和主机资源。"
+        "description": "一台 Wi-Fi 6 接入点：两个射频及其信道占用率，三个 SSID 及其客户端、流量、错误和重传（UBNT-UniFi-MIB），其 LLDP 邻居、主机资源和 UCD-SNMP-MIB。"
       },
       "apc-rack-pdu": {
         "name": "APC 可开关机架 PDU",
-        "description": "一台 AP7921B：八个插座（其中一个已关闭），相位负载（安培）和功耗（PowerNet-MIB）。发送 rPDUOutletOff 和 rPDUNearOverload。"
+        "description": "一台 AP7921B：八个插座（其中一个已关闭），相位负载（安培）和功耗（PowerNet-MIB），以及网卡的地址和服务。发送 rPDUOutletOff 和 rPDUNearOverload。"
       }
     },
     "userN": "用户 {n}",

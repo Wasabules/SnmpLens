@@ -144,20 +144,21 @@ func TestEveryModelServesAWalk(t *testing.T) {
 	for _, m := range models {
 		t.Run(m.ID, func(t *testing.T) {
 			objects := m.build(Identity{Name: "dev-01", Seed: 7})
-			readable := 0
-			for _, o := range objects {
-				if !o.NotifyOnly {
-					readable++
-				}
-			}
 			a := startAgent(t, Config{Versions: []string{"v2c"}, Community: "public", Objects: objects})
+			// Everything a request may read: the model's objects less those only a
+			// notification carries, and the agent's own.
+			readable := len(a.tree.entries)
 			g := connect(t, manager(a, gosnmp.Version2c, "public"))
 			n := 0
-			if err := g.BulkWalk(".1.3.6.1", func(gosnmp.SnmpPDU) error {
-				n++
-				return nil
-			}); err != nil {
-				t.Fatal(err)
+			// Both subtrees a device answers in: LLDP-MIB lives under
+			// iso.std.iso8802, outside .1.3.6.1, as it does on a real device.
+			for _, root := range []string{".1.0.8802", ".1.3.6.1"} {
+				if err := g.BulkWalk(root, func(gosnmp.SnmpPDU) error {
+					n++
+					return nil
+				}); err != nil {
+					t.Fatal(err)
+				}
 			}
 			if n != readable {
 				t.Errorf("walked %d objects of %d", n, readable)

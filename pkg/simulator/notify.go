@@ -458,6 +458,9 @@ func (nt *notifier) run(o *outbound) {
 				return
 			}
 			o.record(err)
+			if err == nil {
+				nt.a.stats.outTraps.Add(1)
+			}
 			if j.done != nil {
 				j.done <- o.delivery(err)
 			}
@@ -511,7 +514,7 @@ func (nt *notifier) pick(name string) (Notification, bool) {
 // deliver sends n to o now and, for an INFORM, waits for the acknowledgement.
 func (nt *notifier) deliver(o *outbound, n Notification) error {
 	a := nt.a
-	c := clock{started: a.started, now: time.Now()}
+	c := clock{started: a.started, now: time.Now(), stats: &a.stats}
 	g := &gosnmp.GoSNMP{
 		Target:    o.dial,
 		Port:      uint16(o.Port),

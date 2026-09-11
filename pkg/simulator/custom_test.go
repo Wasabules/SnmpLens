@@ -255,7 +255,9 @@ func TestCustomModelsAreRefusedForWhatIsWrong(t *testing.T) {
 		{name: "an object under another", edit: withObject(object("oid", "1.3.6.1.4.1.32473.2.1.0.1", "type", "Integer32", "value", 1)),
 			want: "lies under"},
 		{name: "an object of the agent's own", edit: withObject(object("oid", "1.3.6.1.6.3.10.2.1.1.0", "type", "OctetString", "value", "x")),
-			want: "snmpEngine is the agent's own"},
+			want: "are the agent's own"},
+		{name: "an object of the snmp group", edit: withObject(object("oid", "1.3.6.1.2.1.11.1.0", "type", "Counter32", "value", 1)),
+			want: "declared twice"},
 		{name: "more objects than a model makes", edit: func(m map[string]any) { m["objects"] = many }, want: "at most 8192"},
 		{name: "a notification carrying what is not answered", edit: func(m map[string]any) {
 			m["notifications"] = []any{object("name", "probeAlarm", "oid", "1.3.6.1.4.1.32473.0.1", "objects", []any{"1.3.6.1.4.1.32473.9.9.0"})}

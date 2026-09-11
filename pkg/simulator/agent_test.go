@@ -69,8 +69,8 @@ func TestAWalkVisitsEveryObjectInTheAgentsOrder(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		if !slices.Equal(got, sampleOrder) {
-			t.Errorf("%s walked\n%v\nwant\n%v", name, got, sampleOrder)
+		if want := walkOrder(false); !slices.Equal(got, want) {
+			t.Errorf("%s walked\n%v\nwant\n%v", name, got, want)
 		}
 	}
 }
@@ -112,7 +112,7 @@ func TestSNMPv1(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := slices.DeleteFunc(slices.Clone(sampleOrder), func(n string) bool {
+	want := slices.DeleteFunc(walkOrder(false), func(n string) bool {
 		return strings.HasPrefix(n, ".1.3.6.1.2.1.31.1.1.1.6.")
 	})
 	if !slices.Equal(walked, want) {
@@ -189,7 +189,7 @@ func TestAGetBulkIsCutToFitTheMessage(t *testing.T) {
 		t.Fatalf("%v with %d of %d varbinds; want a shorter answer that is still an answer",
 			res.Error, len(got), len(whole.Variables))
 	}
-	if !slices.Equal(got, sampleOrder[:len(got)]) {
+	if !slices.Equal(got, walkOrder(false)[:len(got)]) {
 		t.Errorf("cut somewhere other than its end: %v", got)
 	}
 }

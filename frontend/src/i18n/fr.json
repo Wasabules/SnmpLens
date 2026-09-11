@@ -1339,59 +1339,59 @@
     "model": {
       "windows-server": {
         "name": "Serveur Windows",
-        "description": "Un hôte Windows Server 2022 avec son service SNMP : système, deux cartes réseau, ressources de l’hôte par lettre de lecteur. Convient aux presets « Interfaces (IF-MIB) » et « Server (HOST-RESOURCES-MIB) »."
+        "description": "Un hôte Windows Server 2022 avec son service SNMP : cartes réseau et pseudo-interfaces de Windows, adresses, routes et sockets (RDP, SMB, IIS), lecteurs par lettre, processus et programmes installés. Convient aux presets « Interfaces (IF-MIB) » et « Server (HOST-RESOURCES-MIB) »."
       },
       "cisco-catalyst-24": {
         "name": "Cisco Catalyst 2960, 24 ports",
-        "description": "Un commutateur d’accès : 24 ports Fast Ethernet, deux liens montants gigabit et le VLAN 1, avec la charge CPU et les changements de configuration de Cisco. Reconnu comme un Cisco : le preset « Cisco (IF-MIB) » vient en premier ; convient aussi à « Switch ports » et « Switch drawing (24 ports) »."
+        "description": "Un commutateur d’accès : 24 ports Fast Ethernet, deux liens montants gigabit et le VLAN 1, avec sa table d’adresses MAC, son spanning tree, ses VLAN (Q-BRIDGE et VTP), ses voisins LLDP et CDP, son matériel dans l’ENTITY-MIB, et le CPU, la mémoire et l’environnement de Cisco. Reconnu comme un Cisco : le preset « Cisco (IF-MIB) » vient en premier ; convient aussi à « Switch ports » et « Switch drawing (24 ports) »."
       },
       "cisco-catalyst-48": {
         "name": "Cisco Catalyst 2960, 48 ports",
-        "description": "Le même commutateur d’accès, avec 48 ports. Reconnu comme un Cisco : le preset « Cisco (IF-MIB) » vient en premier ; convient aussi à « Switch ports »."
+        "description": "Le même commutateur d’accès, avec 48 ports et tout ce qui va avec. Reconnu comme un Cisco : le preset « Cisco (IF-MIB) » vient en premier ; convient aussi à « Switch ports »."
       },
       "cisco-isr-4331": {
         "name": "Routeur Cisco ISR 4331",
-        "description": "Un routeur d’agence : ports WAN, LAN et d’administration, deux sessions eBGP — l’une établie, l’autre non — et la charge CPU de Cisco. Envoie les notifications BGP et les changements de configuration."
+        "description": "Un routeur d’agence : ports WAN, LAN et d’administration, deux sessions eBGP — l’une établie, l’autre non — et les routes apportées par la première, son cache ARP et ses sockets, son matériel dans l’ENTITY-MIB, et le CPU, la mémoire et l’environnement de Cisco. Envoie les notifications BGP et les changements de configuration."
       },
       "synology-nas": {
         "name": "NAS Synology",
-        "description": "Un DS920+ sous DSM : les tables système, disques et RAID de Synology, à côté des interfaces et des ressources de l’hôte. Convient aux presets « Interfaces (IF-MIB) » et « Server (HOST-RESOURCES-MIB) »."
+        "description": "Un DS920+ sous DSM : les tables système, disques et RAID de Synology, les interfaces, les sockets d’un serveur de fichiers (SMB, AFP, NFS), les ressources de l’hôte avec processus et paquets, et l’UCD-SNMP-MIB. Convient aux presets « Interfaces (IF-MIB) » et « Server (HOST-RESOURCES-MIB) »."
       },
       "apc-smart-ups": {
         "name": "Onduleur APC Smart-UPS, triphasé",
-        "description": "Un onduleur de 10 kVA sur sa carte réseau, qui répond à l’UPS-MIB standard : batterie, entrée et sortie par phase. Convient au preset « UPS (RFC 1628) » et envoie upsTrapOnBattery."
+        "description": "Un onduleur de 10 kVA sur sa carte réseau, qui répond à l’UPS-MIB standard — batterie, entrée et sortie par phase — comme à la PowerNet-MIB d’APC, à partir des mêmes mesures. Convient au preset « UPS (RFC 1628) » et envoie upsTrapOnBattery."
       },
       "hp-laserjet": {
         "name": "Imprimante HP LaserJet",
-        "description": "Une imprimante laser réseau qui répond à la Printer MIB : compteur de pages, une cartouche noire presque vide et son alerte. Envoie printerV2Alert."
+        "description": "Une imprimante laser réseau qui répond à la Printer MIB : bacs, réceptacle, capot, compteurs de pages, une cartouche noire presque vide et son alerte, les langages qu’elle lit et son panneau, avec l’imprimante dans les ressources de l’hôte. Envoie printerV2Alert."
       },
       "environment-probe": {
         "name": "Sonde d’environnement",
-        "description": "Une sonde de température et d’humidité qui répond à l’ENTITY-SENSOR-MIB standard, comme dans l’allée froide d’une salle serveurs."
+        "description": "Une sonde de température et d’humidité qui répond à l’ENTITY-SENSOR-MIB standard, comme dans l’allée froide d’une salle serveurs, avec son matériel dans l’ENTITY-MIB."
       },
       "linux-server": {
         "name": "Serveur Linux",
-        "description": "Un hôte Ubuntu avec net-snmp : système, trois interfaces, ressources de l'hôte. Convient aux presets « Interfaces (IF-MIB) » et « Server (HOST-RESOURCES-MIB) »."
+        "description": "Un hôte Ubuntu 24.04 avec net-snmp, tel qu’un walk le montre : interfaces, adresses, routes et sockets ; périphériques, systèmes de fichiers, processus et paquets ; mémoire, charge et disques de l’UCD-SNMP-MIB. Convient aux presets « Interfaces (IF-MIB) » et « Server (HOST-RESOURCES-MIB) »."
       },
       "dell-idrac9": {
         "name": "Dell iDRAC9 (PowerEdge R750)",
-        "description": "Le contrôleur hors bande d’un PowerEdge R750 : état global et du stockage, alimentation, températures, vitesse des ventilateurs et consommation (IDRAC-MIB). Envoie alertTemperatureProbeWarning."
+        "description": "Le contrôleur hors bande d’un PowerEdge R750 (IDRAC-MIB) : état global, du stockage et de l’alimentation, BIOS, processeurs, barrettes mémoire, alimentations, températures, ventilateurs, consommation, et le contrôleur RAID avec ses disques physiques et virtuels. Envoie alertTemperatureProbeWarning."
       },
       "mikrotik-rb4011": {
         "name": "Routeur MikroTik RB4011",
-        "description": "Un routeur RouterOS : dix ports gigabit et une cage SFP+ vide, la tension, les températures et la consommation de la carte (MIKROTIK-MIB), et les ressources de l’hôte. Convient aux presets « Interfaces (IF-MIB) » et « Server (HOST-RESOURCES-MIB) »."
+        "description": "Un routeur RouterOS de petit bureau : dix ports gigabit et une cage SFP+ vide, un bridge LAN en 192.168.88.0/24, ses routes et ses services, la santé de la carte (MIKROTIK-MIB), les voisins trouvés par MNDP et LLDP, et les ressources de l’hôte. Convient aux presets « Interfaces (IF-MIB) » et « Server (HOST-RESOURCES-MIB) »."
       },
       "fortigate-60f": {
         "name": "Fortinet FortiGate 60F",
-        "description": "Un pare-feu d’agence sous FortiOS 7.2 : deux ports WAN — celui de secours en panne —, DMZ, LAN et le tunnel VPN SSL, avec la charge processeur, la mémoire, le disque et les sessions de FortiGate. Envoie les notifications de seuil processeur et mémoire."
+        "description": "Un pare-feu d’agence sous FortiOS 7.2 : deux ports WAN — celui de secours en panne —, DMZ, LAN et le tunnel VPN SSL, ses routes, et le processeur, la mémoire, le disque, les sessions, le VDOM, le mode HA, les compteurs des règles et les tunnels IPsec de FortiGate. Envoie les notifications de seuil processeur et mémoire."
       },
       "unifi-u6-pro": {
         "name": "Point d’accès UniFi U6 Pro",
-        "description": "Un point d’accès Wi-Fi 6 : deux radios et l’occupation de leur canal, trois SSID avec leurs clients et leur trafic (UBNT-UniFi-MIB), plus les interfaces et les ressources de l’hôte."
+        "description": "Un point d’accès Wi-Fi 6 : deux radios et l’occupation de leur canal, trois SSID avec leurs clients, leur trafic, leurs erreurs et leurs retransmissions (UBNT-UniFi-MIB), son voisin LLDP, les ressources de l’hôte et l’UCD-SNMP-MIB."
       },
       "apc-rack-pdu": {
         "name": "PDU APC commutable",
-        "description": "Une AP7921B : huit prises, dont une coupée, la charge de la phase en ampères et la puissance consommée (PowerNet-MIB). Envoie rPDUOutletOff et rPDUNearOverload."
+        "description": "Une AP7921B : huit prises, dont une coupée, la charge de la phase en ampères et la puissance consommée (PowerNet-MIB), plus l’adresse et les services de la carte. Envoie rPDUOutletOff et rPDUNearOverload."
       }
     },
     "userN": "Utilisateur {n}",
