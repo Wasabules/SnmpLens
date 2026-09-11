@@ -18,6 +18,12 @@ wails build -platform darwin/universal
 
 Frontend-only scripts (run from `frontend/`): `npm run dev`, `npm run build`. You normally don't invoke these directly — `wails dev`/`wails build` drive them via `wails.json`.
 
+`go run ./tools/cataloguecheck <directory>` validates a catalogue of contributed simulator models and
+dashboard presets — the shape [SnmpLens/snmplens-community](https://github.com/SnmpLens/snmplens-community)
+has — by BUILDING each one through `pkg/simulator` and `pkg/preset` rather than reimplementing their rules: a
+checker that drifts accepts what the import then refuses. That repository's workflow checks out both and runs
+it on every pull request.
+
 The Go toolchain is pinned by the `toolchain` directive in `go.mod`, and every workflow reads it with
 `go-version-file` rather than naming a version — one source of truth. It matters: Go supports only the two most
 recent majors, so a project sitting on an older one stops receiving security fixes without anything failing.
