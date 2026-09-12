@@ -257,6 +257,40 @@ jobs:
           go run ./tools/updatersign sign artifacts/SnmpLens-checksums.txt
           test -s artifacts/SnmpLens-checksums.txt.sig
 
+      # The signature is CHECKED here, with the application's own verification
+      # and the keys embedded in this very commit. `test -s` above proves a file
+      # was written and nothing more: a secret that is not one of those keys
+      # signs perfectly well and is refused by every updater it was meant to
+      # satisfy — a release nobody can install, found out by users rather than
+      # by the pipeline that published it.
+      - name: Check the signature against the embedded keys
+        run: |
+          go run ./tools/updatersign verify \
+            artifacts/SnmpLens-checksums.txt artifacts/SnmpLens-checksums.txt.sig
+
+      # A key staged for the next rotation is EXERCISED, never published: it
+      # signs a copy of the manifest, that signature is checked against the
+      # embedded keys, and the copy is thrown away. The release still carries
+      # exactly one signature, made with the key in service.
+      #
+      # Without this, a mistyped UPDATER_PRIVATE_KEY_NEXT is discovered at the
+      # moment the old key stops being used — the one moment it cannot be
+      # repaired, since the release that would fix it could no longer be signed
+      # with anything installed copies trust.
+      - name: Exercise the next signing key, if one is staged
+        env:
+          UPDATER_PRIVATE_KEY: ${{ secrets.UPDATER_PRIVATE_KEY_NEXT }}
+        run: |
+          if [ -z "$UPDATER_PRIVATE_KEY" ]; then
+            echo "No next key staged; nothing to exercise."
+            exit 0
+          fi
+          cp artifacts/SnmpLens-checksums.txt "$RUNNER_TEMP/next-manifest.txt"
+          go run ./tools/updatersign sign "$RUNNER_TEMP/next-manifest.txt"
+          go run ./tools/updatersign verify \
+            "$RUNNER_TEMP/next-manifest.txt" "$RUNNER_TEMP/next-manifest.txt.sig"
+          echo "The staged key signs a manifest the shipped binaries accept."
+
       # Signed, verifiable provenance for every published asset: which workflow,
       # which commit, which runner produced these exact bytes. It answers a
       # question the Ed25519 manifest signature does not — that signature proves

@@ -339,10 +339,15 @@ Every release includes `SnmpLens-checksums.txt` (SHA-256 of all assets) and its 
 go run ./tools/updatersign keygen
 ```
 
-1. Paste the printed **public key** into `pkg/updater/verify.go` (`updaterPublicKey`).
+1. Add the printed **public key** to `pkg/updater/verify.go` (`updaterPublicKeys`).
 2. Store the printed **private key** as the `UPDATER_PRIVATE_KEY` secret of the `release` environment (*Settings → Environments → release*). That environment should carry a protection rule — a required reviewer or a tag policy — so a run has to be admitted before the key is handed to it.
 
-Rotation is not seamless: copies already installed trust only the public key they were built with, so they refuse updates signed with a new key and have to be updated by hand once.
+**Rotating the key** takes two releases, because a copy already installed trusts only the keys embedded in the binary it is running:
+
+1. Add the new key to `updaterPublicKeys` beside the current one, and publish that release **signed with the old key** — every copy can verify it, and from then on trusts both.
+2. Wait for it to be adopted. Nothing but time provides that, and it is the whole safety of the operation.
+3. Point `UPDATER_PRIVATE_KEY` at the new key. Copies that installed step 1 accept it; copies that skipped it cannot update again and have to be reinstalled by hand.
+4. Later, drop the retired key from the list — every key in it may install software on someone's machine, so one stays only while there are copies that trust nothing else.
 
 ---
 

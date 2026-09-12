@@ -30,12 +30,12 @@ func signedManifest(t *testing.T, body string) (pub string, manifest, sig []byte
 		[]byte(base64.StdEncoding.EncodeToString(raw))
 }
 
-// withKey swaps the embedded public key for the duration of a test.
-func withKey(t *testing.T, key string) {
+// withKeys swaps the embedded public keys for the duration of a test.
+func withKeys(t *testing.T, keys ...string) {
 	t.Helper()
-	previous := updaterPublicKey
-	updaterPublicKey = key
-	t.Cleanup(func() { updaterPublicKey = previous })
+	previous := updaterPublicKeys
+	updaterPublicKeys = keys
+	t.Cleanup(func() { updaterPublicKeys = previous })
 }
 
 const manifestBody = "version v1.5.0\n" +
@@ -44,19 +44,19 @@ const manifestBody = "version v1.5.0\n" +
 
 func TestSignatureIsCheckedAgainstTheEmbeddedKey(t *testing.T) {
 	pub, manifest, sig := signedManifest(t, manifestBody)
-	withKey(t, pub)
+	withKeys(t, pub)
 
 	if !signatureEnforced() {
 		t.Fatal("a configured key must make the signature mandatory")
 	}
-	if err := verifyManifestSignature(manifest, sig); err != nil {
+	if err := VerifySignature(manifest, sig); err != nil {
 		t.Errorf("a manifest signed with the matching key must verify: %v", err)
 	}
 
 	// One byte of the manifest, changed after signing.
 	tampered := append([]byte{}, manifest...)
 	tampered[0] ^= 0x01
-	if err := verifyManifestSignature(tampered, sig); err == nil {
+	if err := VerifySignature(tampered, sig); err == nil {
 		t.Error("a modified manifest verified against its old signature")
 	}
 
@@ -65,8 +65,59 @@ func TestSignatureIsCheckedAgainstTheEmbeddedKey(t *testing.T) {
 	if otherPub == pub {
 		t.Fatal("two generated keys collided")
 	}
-	if err := verifyManifestSignature(manifest, otherSig); err == nil {
+	if err := VerifySignature(manifest, otherSig); err == nil {
 		t.Error("a signature from another key was accepted")
+	}
+}
+
+// A rotation, which is the reason the embedded key is a LIST.
+//
+// The release that introduces a new key has to be signed with the OLD one, or
+// no installed copy could verify it — including the copies the new key is meant
+// to reach. So for one release both are trusted, and the parc moves over.
+func TestARotationTrustsTheOldKeyAndTheNewOne(t *testing.T) {
+	retiring, manifest, retiringSig := signedManifest(t, manifestBody)
+	arriving, _, arrivingSig := signedManifest(t, manifestBody)
+	stranger, _, strangerSig := signedManifest(t, manifestBody)
+	if retiring == arriving || arriving == stranger {
+		t.Fatal("two generated keys collided")
+	}
+	withKeys(t, arriving, retiring)
+
+	if err := VerifySignature(manifest, retiringSig); err != nil {
+		t.Errorf("the transition release, signed with the retiring key, must verify: %v", err)
+	}
+	if err := VerifySignature(manifest, arrivingSig); err != nil {
+		t.Errorf("the release after it, signed with the arriving key, must verify: %v", err)
+	}
+	if err := VerifySignature(manifest, strangerSig); err == nil {
+		t.Error("trusting two keys must not amount to trusting any key")
+	}
+}
+
+// An entry that is not a key must not be able to refuse a manifest the next
+// entry would have accepted: a typo in the list would otherwise stop every
+// update, which is exactly the failure a second key exists to avoid.
+func TestAMalformedEntryDoesNotStopTheOthers(t *testing.T) {
+	pub, manifest, sig := signedManifest(t, manifestBody)
+	withKeys(t, "not base64 at all", "", pub)
+
+	if !signatureEnforced() {
+		t.Fatal("a configured key must make the signature mandatory")
+	}
+	if err := VerifySignature(manifest, sig); err != nil {
+		t.Errorf("a manifest signed with a listed key must verify: %v", err)
+	}
+}
+
+func TestNoKeyMeansTheSignatureIsNotEnforced(t *testing.T) {
+	withKeys(t)
+	if signatureEnforced() {
+		t.Error("an empty list enforces nothing")
+	}
+	withKeys(t, "", "   ")
+	if signatureEnforced() {
+		t.Error("blank entries are not keys")
 	}
 }
 

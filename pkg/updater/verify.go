@@ -8,39 +8,91 @@ import (
 	"strings"
 )
 
-// updaterPublicKey is the base64-encoded Ed25519 public key whose private
-// counterpart signs SnmpLens-checksums.txt during the release workflow.
+// updaterPublicKeys are the base64-encoded Ed25519 public keys a release
+// manifest may be signed with — newest first. Their private counterparts sign
+// SnmpLens-checksums.txt in the release workflow; generate a pair with
+// `go run ./tools/updatersign keygen` and store the private half in the GitHub
+// secret UPDATER_PRIVATE_KEY.
 //
-// Generate a keypair with `go run ./tools/updatersign keygen`, paste the public
-// key here, and store the private key in the GitHub secret UPDATER_PRIVATE_KEY.
+// A LIST, and not one key, because of the order a rotation has to happen in. A
+// copy already installed trusts exactly the keys embedded in the binary it is
+// running, so a release signed with a key it has never heard of is refused —
+// including the release that would have introduced that key. The way through is
+// therefore:
 //
-// While this is empty, downloads are still integrity-checked with SHA-256 but
-// NOT authenticated. Set it to enforce that updates were signed by the release
-// pipeline. (A var rather than a const so the empty-default branch is not
-// flagged as dead code before a key is configured.)
-var updaterPublicKey = "svOWbkIuFQTiebt+DKzaohFFdeANV8NjcdX3cQiybPw="
-
-// signatureEnforced reports whether a public key is configured, in which case a
-// valid signature on the checksums manifest is mandatory.
-func signatureEnforced() bool {
-	return updaterPublicKey != ""
+//  1. add the new key here, and publish that release SIGNED WITH THE OLD ONE,
+//     so every copy can install it;
+//  2. wait for it to be adopted — this is the whole safety of the operation,
+//     and nothing but time provides it;
+//  3. point UPDATER_PRIVATE_KEY at the new key. Copies that took step 1 accept
+//     it; copies that skipped it cannot update again and must be reinstalled by
+//     hand;
+//  4. later, drop the retired key from this list.
+//
+// Every entry is a key that may install software on someone's machine, so the
+// list holds what a transition needs and nothing more: a key stays only while
+// there are copies that trust nothing else.
+//
+// While the list is empty, downloads are still integrity-checked with SHA-256
+// but NOT authenticated. (A var rather than a const so the empty-default branch
+// is not flagged as dead code before a key is configured.)
+var updaterPublicKeys = []string{
+	// From the rotation of 2026-09: the key CI signs with once the release
+	// below has been adopted.
+	"TPh8H92qyRkMFpc1CXCJKp/G5jf4OTqlHd6Mx0BHljs=",
+	// The original key, which every copy published so far trusts — and the one
+	// the transition release is signed with. It goes when those copies have
+	// moved on.
+	"svOWbkIuFQTiebt+DKzaohFFdeANV8NjcdX3cQiybPw=",
 }
 
-// verifyManifestSignature checks that sigBase64 is a valid Ed25519 signature of
-// manifest under the embedded public key.
-func verifyManifestSignature(manifest, sigBase64 []byte) error {
-	pub, err := base64.StdEncoding.DecodeString(updaterPublicKey)
-	if err != nil || len(pub) != ed25519.PublicKeySize {
-		return errors.New("invalid embedded updater public key")
+// signatureEnforced reports whether any public key is configured, in which case
+// a valid signature on the checksums manifest is mandatory.
+func signatureEnforced() bool {
+	for _, key := range updaterPublicKeys {
+		if strings.TrimSpace(key) != "" {
+			return true
+		}
 	}
+	return false
+}
+
+// VerifySignature is exported because the release workflow verifies with THIS
+// function rather than a second implementation: a pipeline that checks
+// differently from the application can publish a release the application then
+// refuses, which is the one failure the signature exists to prevent.
+//
+// VerifySignature checks that sigBase64 is a valid Ed25519 signature of
+// manifest under ONE of the embedded public keys.
+//
+// A malformed entry is passed over rather than fatal: it must not be able to
+// refuse a manifest the next key would have accepted, and a list where no entry
+// is usable at all is the one case that reads as a broken build.
+func VerifySignature(manifest, sigBase64 []byte) error {
 	sig, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(sigBase64)))
 	if err != nil {
 		return fmt.Errorf("decoding signature: %w", err)
 	}
-	if !ed25519.Verify(ed25519.PublicKey(pub), manifest, sig) {
-		return errors.New("checksums signature verification failed")
+
+	usable := 0
+	for _, encoded := range updaterPublicKeys {
+		encoded = strings.TrimSpace(encoded)
+		if encoded == "" {
+			continue
+		}
+		pub, err := base64.StdEncoding.DecodeString(encoded)
+		if err != nil || len(pub) != ed25519.PublicKeySize {
+			continue
+		}
+		usable++
+		if ed25519.Verify(ed25519.PublicKey(pub), manifest, sig) {
+			return nil
+		}
 	}
-	return nil
+	if usable == 0 {
+		return errors.New("invalid embedded updater public key")
+	}
+	return errors.New("checksums signature verification failed")
 }
 
 // manifestVersionLine is the first line the release workflow writes into the

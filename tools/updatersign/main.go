@@ -5,8 +5,13 @@
 //
 //	go run ./tools/updatersign keygen
 //
-// Paste the printed public key into pkg/updater/verify.go (updaterPublicKey) and
+// Add the printed public key to pkg/updater/verify.go (updaterPublicKeys) and
 // store the private key in the GitHub Actions secret UPDATER_PRIVATE_KEY.
+//
+// ADD, not replace: a copy already installed trusts only the keys embedded in
+// the binary it is running, so the release that introduces a new key must be
+// signed with the old one. See the comment on updaterPublicKeys for the order a
+// rotation happens in.
 //
 // Sign a file (done automatically by .github/workflows/release.yml):
 //
@@ -14,6 +19,15 @@
 //
 // which writes path/to/file.sig (base64-encoded Ed25519 signature). With no
 // key set, signing is skipped so unsigned builds keep working.
+//
+// Check a signature the way the APPLICATION checks it — against the keys
+// embedded in pkg/updater, in this source tree:
+//
+//	go run ./tools/updatersign verify path/to/file path/to/file.sig
+//
+// The release workflow runs that on what it is about to publish, so a release
+// cannot go out carrying a signature the binaries built from the same commit
+// would refuse.
 //
 // Ask which public key the configured secret corresponds to:
 //
@@ -33,6 +47,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"SnmpLens/pkg/updater"
 )
 
 func main() {
@@ -47,6 +63,11 @@ func main() {
 			usage()
 		}
 		sign(os.Args[2])
+	case "verify":
+		if len(os.Args) < 4 {
+			usage()
+		}
+		verifyFile(os.Args[2], os.Args[3])
 	case "pubkey":
 		pubkey()
 	default:
@@ -59,7 +80,7 @@ func keygen() {
 	if err != nil {
 		fatal(err)
 	}
-	fmt.Println("Public key — paste into pkg/updater/verify.go (updaterPublicKey):")
+	fmt.Println("Public key — add to pkg/updater/verify.go (updaterPublicKeys):")
 	fmt.Println("  " + base64.StdEncoding.EncodeToString(pub))
 	fmt.Println()
 	fmt.Println("Private key — add as GitHub secret UPDATER_PRIVATE_KEY (keep secret!):")
@@ -68,8 +89,8 @@ func keygen() {
 
 // pubkey prints the public half of the configured private key.
 //
-// Compare it with updaterPublicKey in pkg/updater/verify.go: if they differ,
-// the secret is not the key installed copies trust, and every signature it
+// Compare it with updaterPublicKeys in pkg/updater/verify.go: if it is none of
+// them, the secret is not a key installed copies trust, and every signature it
 // makes will be refused by the updater it is meant to satisfy.
 func pubkey() {
 	key := loadKey()
@@ -118,8 +139,30 @@ func sign(path string) {
 	fmt.Printf("updatersign: wrote %s\n", out)
 }
 
+// verifyFile checks a signature through pkg/updater's own verification, against
+// the public keys embedded in this source tree.
+//
+// The point is that it is the SAME code and the SAME list the shipped binaries
+// use. A secret that is not one of those keys signs perfectly and is refused by
+// every updater it was meant to satisfy — a release nobody can install, which
+// is discovered by users rather than by the pipeline that published it.
+func verifyFile(path, sigPath string) {
+	manifest, err := os.ReadFile(path)
+	if err != nil {
+		fatal(err)
+	}
+	sig, err := os.ReadFile(sigPath)
+	if err != nil {
+		fatal(err)
+	}
+	if err := updater.VerifySignature(manifest, sig); err != nil {
+		fatal(fmt.Errorf("%s is not accepted by the keys embedded in pkg/updater: %w", sigPath, err))
+	}
+	fmt.Printf("updatersign: %s is accepted by an embedded key\n", sigPath)
+}
+
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: updatersign keygen | sign <file> | pubkey")
+	fmt.Fprintln(os.Stderr, "usage: updatersign keygen | sign <file> | verify <file> <sig> | pubkey")
 	os.Exit(2)
 }
 

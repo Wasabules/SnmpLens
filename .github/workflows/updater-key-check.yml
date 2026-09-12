@@ -1,0 +1,57 @@
+# Answers, on demand, the one question a write-only secret cannot: is the key
+# staged for the next rotation one the shipped binaries would accept?
+#
+# It signs a throwaway manifest with UPDATER_PRIVATE_KEY_NEXT and verifies that
+# signature through the application's own verification, against the public keys
+# embedded in this commit. Nothing is published, and the log carries public
+# halves only.
+#
+# Without it, a mistyped staged key is discovered when the release workflow
+# exercises it — better than at the rotation itself, but still late. This makes
+# the answer available the moment the key is deposited.
+#
+# It runs in the `keycheck` environment, which holds the STAGED key and nothing
+# else. The key in service lives in `release`, restricted to tags, and this
+# workflow must never be able to reach it.
+name: Check the staged updater key
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  staged-key:
+    name: Sign with the staged key and verify against the embedded ones
+    runs-on: ubuntu-latest
+    environment: keycheck
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Exercise the staged key
+        env:
+          UPDATER_PRIVATE_KEY: ${{ secrets.UPDATER_PRIVATE_KEY_NEXT }}
+        run: |
+          if [ -z "$UPDATER_PRIVATE_KEY" ]; then
+            echo "::error::UPDATER_PRIVATE_KEY_NEXT is not set in the keycheck environment." >&2
+            exit 1
+          fi
+
+          # The public half of the staged key, which is not a secret: it is what
+          # the binaries carry. An Ed25519 private key contains it, so this
+          # needs nothing else — and printing it is how a mismatch is READ,
+          # rather than merely reported.
+          echo "The staged key's public half:"
+          go run ./tools/updatersign pubkey
+
+          printf 'version v0.0.0-keycheck\n0000  nothing at all\n' > "$RUNNER_TEMP/manifest.txt"
+          go run ./tools/updatersign sign "$RUNNER_TEMP/manifest.txt"
+          go run ./tools/updatersign verify \
+            "$RUNNER_TEMP/manifest.txt" "$RUNNER_TEMP/manifest.txt.sig"
+
+          echo "The staged key is one the binaries built from this commit accept."
