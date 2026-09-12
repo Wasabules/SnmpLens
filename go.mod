@@ -11,8 +11,8 @@ require (
 	github.com/prometheus-community/pro-bing v0.9.1
 	github.com/sleepinggenius2/gosmi v0.4.4
 	github.com/wailsapp/wails/v2 v2.15.0
-	golang.org/x/mod v0.40.0
-	golang.org/x/sys v0.47.0
+	golang.org/x/mod v0.41.0
+	golang.org/x/sys v0.48.0
 	modernc.org/sqlite v1.57.0
 )
 
