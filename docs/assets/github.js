@@ -14,7 +14,7 @@
 (function () {
   'use strict';
 
-  var REPO = 'Wasabules/SnmpLens';
+  var REPO = 'SnmpLens/SnmpLens';
   var API = 'https://api.github.com/repos/' + REPO;
   var WEB = 'https://github.com/' + REPO;
   var TTL = 10 * 60 * 1000; // ten minutes

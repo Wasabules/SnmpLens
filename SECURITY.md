@@ -56,7 +56,7 @@ And independently of anyone holding the release key, provenance is attested by
 the workflow that built the artifacts:
 
 ```sh
-gh attestation verify SnmpLens-windows-amd64-setup.exe --repo Wasabules/SnmpLens
+gh attestation verify SnmpLens-windows-amd64-setup.exe --repo SnmpLens/SnmpLens
 ```
 
 ## Out of scope
