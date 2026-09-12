@@ -22,8 +22,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Wasabules/SnmpLens/actions/workflows/ci.yml"><img src="https://github.com/Wasabules/SnmpLens/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="https://github.com/Wasabules/SnmpLens/releases"><img src="https://img.shields.io/github/v/release/Wasabules/SnmpLens?include_prereleases" alt="Release" /></a>
+  <a href="https://github.com/SnmpLens/SnmpLens/actions/workflows/ci.yml"><img src="https://github.com/SnmpLens/SnmpLens/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/SnmpLens/SnmpLens/releases"><img src="https://img.shields.io/github/v/release/SnmpLens/SnmpLens?include_prereleases" alt="Release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" /></a>
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-brightgreen" alt="Platform" />
   <img src="https://img.shields.io/badge/SNMPv1%20%7C%20v2c%20%7C%20v3-supported-orange" alt="SNMP Versions" />
@@ -330,7 +330,7 @@ Every release includes `SnmpLens-checksums.txt` (SHA-256 of all assets) and its 
 - **Build provenance is attested**, and can be checked without trusting this repository:
 
   ```bash
-  gh attestation verify SnmpLens-windows-amd64.exe --repo Wasabules/SnmpLens
+  gh attestation verify SnmpLens-windows-amd64.exe --repo SnmpLens/SnmpLens
   ```
 
 **Rotating the signing key:**

@@ -17,10 +17,10 @@ import (
 // checksum from the signed manifest. This one has no such backstop.
 func TestOnlyAGitHubReleaseAddressIsOpened(t *testing.T) {
 	ok := []string{
-		"https://github.com/Wasabules/SnmpLens/releases/download/v1.5.0/SnmpLens-macos-universal.dmg",
+		"https://github.com/SnmpLens/SnmpLens/releases/download/v1.5.0/SnmpLens-macos-universal.dmg",
 		"https://objects.githubusercontent.com/github-production-release-asset/1/2?X-Amz-Algorithm=x",
 		"https://release-assets.githubusercontent.com/github-production-release-asset/1/2",
-		"https://GitHub.com/Wasabules/SnmpLens/releases/download/v1.5.0/x.deb",
+		"https://GitHub.com/SnmpLens/SnmpLens/releases/download/v1.5.0/x.deb",
 	}
 	for _, u := range ok {
 		if err := checkReleaseHost(u); err != nil {
@@ -32,9 +32,9 @@ func TestOnlyAGitHubReleaseAddressIsOpened(t *testing.T) {
 		url  string
 		says string
 	}{
-		{"https://github.evil.example/Wasabules/SnmpLens/releases/download/v1/x.dmg", "github.evil.example"},
+		{"https://github.evil.example/SnmpLens/SnmpLens/releases/download/v1/x.dmg", "github.evil.example"},
 		{"https://attacker.example/SnmpLens-macos-universal.dmg", "attacker.example"},
-		{"http://github.com/Wasabules/SnmpLens/releases/download/v1/x.dmg", "http"},
+		{"http://github.com/SnmpLens/SnmpLens/releases/download/v1/x.dmg", "http"},
 		{"file:///tmp/evil.dmg", "file"},
 		{"https://github.com.attacker.example/x.dmg", "github.com.attacker.example"},
 		{"://not a url", "parse"},

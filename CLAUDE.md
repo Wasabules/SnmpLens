@@ -1283,7 +1283,7 @@ replay.
 **Provenance is attested** (`actions/attest-build-provenance`), which answers what the Ed25519 signature cannot:
 that these exact bytes were built from this repository by this workflow, rather than signed by whoever holds the
 release key. Verifiable without trusting anything here:
-`gh attestation verify SnmpLens-windows-amd64.exe --repo Wasabules/SnmpLens`.
+`gh attestation verify SnmpLens-windows-amd64.exe --repo SnmpLens/SnmpLens`.
 
 ## The project site (`docs/`)
 

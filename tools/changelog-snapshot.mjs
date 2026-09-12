@@ -40,7 +40,7 @@ const esc = (s) => String(s)
 // The whole JSON, filtered here rather than with `gh -q`. A jq expression has to
 // survive the shell, and on Windows `shell: true` splits it on the spaces inside
 // the braces and reports the first field as a command that does not exist.
-const r = spawnSync('gh', ['api', 'repos/Wasabules/SnmpLens/releases?per_page=20'], {
+const r = spawnSync('gh', ['api', 'repos/SnmpLens/SnmpLens/releases?per_page=20'], {
   encoding: 'utf8',
   shell: process.platform === 'win32',
   maxBuffer: 8 << 20,
@@ -97,7 +97,7 @@ ${html}
       <p class="muted small">
         This list is a snapshot, written into the page so that it can be read without
         scripts. With a working network it is replaced by the live one from
-        <a href="https://github.com/Wasabules/SnmpLens/releases">GitHub Releases</a>.
+        <a href="https://github.com/SnmpLens/SnmpLens/releases">GitHub Releases</a>.
       </p>
       ${CLOSE}`;
 

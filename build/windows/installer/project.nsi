@@ -36,7 +36,7 @@ BrandingText "${INFO_PRODUCTNAME} v${INFO_PRODUCTVERSION} - ${INFO_COMPANYNAME}"
 !define MUI_FINISHPAGE_RUN "$INSTDIR\${PRODUCT_EXECUTABLE}"
 !define MUI_FINISHPAGE_RUN_TEXT "Launch ${INFO_PRODUCTNAME}"
 !define MUI_FINISHPAGE_LINK "Visit ${INFO_PRODUCTNAME} on GitHub"
-!define MUI_FINISHPAGE_LINK_LOCATION "https://github.com/Wasabules/SnmpLens"
+!define MUI_FINISHPAGE_LINK_LOCATION "https://github.com/SnmpLens/SnmpLens"
 
 ; =====================================================================
 ; Variables
@@ -238,7 +238,7 @@ Section "Install"
         WriteRegStr HKLM "${UNINST_KEY}" "DisplayIcon" "$INSTDIR\${PRODUCT_EXECUTABLE},0"
         WriteRegStr HKLM "${UNINST_KEY}" "DisplayVersion" "${INFO_PRODUCTVERSION}"
         WriteRegStr HKLM "${UNINST_KEY}" "Publisher" "${INFO_COMPANYNAME}"
-        WriteRegStr HKLM "${UNINST_KEY}" "URLInfoAbout" "https://github.com/Wasabules/SnmpLens"
+        WriteRegStr HKLM "${UNINST_KEY}" "URLInfoAbout" "https://github.com/SnmpLens/SnmpLens"
         WriteRegStr HKLM "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
         WriteRegStr HKLM "${UNINST_KEY}" "UninstallString" "$\"$INSTDIR\uninstall.exe$\""
         WriteRegDWORD HKLM "${UNINST_KEY}" "EstimatedSize" $0
@@ -249,7 +249,7 @@ Section "Install"
         WriteRegStr HKCU "${UNINST_KEY}" "DisplayIcon" "$INSTDIR\${PRODUCT_EXECUTABLE},0"
         WriteRegStr HKCU "${UNINST_KEY}" "DisplayVersion" "${INFO_PRODUCTVERSION}"
         WriteRegStr HKCU "${UNINST_KEY}" "Publisher" "${INFO_COMPANYNAME}"
-        WriteRegStr HKCU "${UNINST_KEY}" "URLInfoAbout" "https://github.com/Wasabules/SnmpLens"
+        WriteRegStr HKCU "${UNINST_KEY}" "URLInfoAbout" "https://github.com/SnmpLens/SnmpLens"
         WriteRegStr HKCU "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
         WriteRegStr HKCU "${UNINST_KEY}" "UninstallString" "$\"$INSTDIR\uninstall.exe$\""
         WriteRegDWORD HKCU "${UNINST_KEY}" "EstimatedSize" $0

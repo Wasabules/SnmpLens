@@ -74,7 +74,7 @@ func NewApp(mibs, presets fs.FS) *App {
 	return &App{
 		mibs:    mibs,
 		presets: presets,
-		updater: updater.NewService("Wasabules", "SnmpLens"),
+		updater: updater.NewService("SnmpLens", "SnmpLens"),
 	}
 }
 
